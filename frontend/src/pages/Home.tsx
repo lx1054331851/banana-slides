@@ -98,6 +98,11 @@ export const Home: React.FC = () => {
   const handleFileUpload = async (file: File) => {
     if (isUploadingFile) return;
 
+    // 检查是否是PPT文件，提示建议使用PDF
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    if (fileExt === 'ppt' || fileExt === 'pptx') 
+      show({  message: '💡 提示：建议将PPT转换为PDF格式上传，可获得更好的解析效果',    type: 'info' });
+    
     setIsUploadingFile(true);
     try {
       // 在 Home 页面，始终上传为全局文件
