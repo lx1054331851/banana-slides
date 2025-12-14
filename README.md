@@ -431,7 +431,7 @@ banana-slides/
 ├── uv.lock                     # uv依赖锁定文件
 ├── docker-compose.yml          # Docker Compose配置
 ├── .env.example                 # 环境变量示例
-├── LICENSE                     # MIT许可证
+├── LICENSE                     # 许可证
 └── README.md                   # 本文件
 ```
 
@@ -453,10 +453,13 @@ banana-slides/
 
 ## 📄 许可证
 
-本项目采用 CC BY-NC-SA 4.0 协议进行开源。
+本项目采用 CC BY-NC-SA 4.0 协议进行开源，
 
-**商业使用定义**
+可自由用于个人学习、研究、试验、教育或非营利科研活动等非商业用途；
 
+<details> 
+
+<summary> 详情 </summary>
 本项目开源协议为非商业许可（CC BY-NC-SA），  
 任何商业使用均需取得商业授权。
 
@@ -474,6 +477,9 @@ banana-slides/
 - 开源社区贡献、个人作品展示等不产生经济收益的用途。
 
 > 注：若对使用场景有疑问，请联系作者获取授权许可。
+
+</details>
+
 
 
 <h2>🚀 Sponsor / 赞助 </h2>
