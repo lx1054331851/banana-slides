@@ -10,6 +10,7 @@ from typing import Optional, List
 from google import genai
 from google.genai import types
 from PIL import Image
+from io import BytesIO
 from tenacity import retry, stop_after_attempt, wait_exponential
 from .base import ImageProvider
 from config import get_config
@@ -64,6 +65,33 @@ class GenAIImageProvider(ImageProvider):
             )
 
         self.model = model
+
+    @staticmethod
+    def _to_pil_image(image_obj) -> Optional[Image.Image]:
+        if isinstance(image_obj, Image.Image):
+            return image_obj
+
+        to_pil = getattr(image_obj, "to_pil", None)
+        if callable(to_pil):
+            try:
+                pil_image = to_pil()
+                if isinstance(pil_image, Image.Image):
+                    return pil_image
+            except Exception:
+                return None
+
+        pil_image = getattr(image_obj, "_pil_image", None)
+        if isinstance(pil_image, Image.Image):
+            return pil_image
+
+        image_bytes = getattr(image_obj, "image_bytes", None)
+        if image_bytes:
+            try:
+                return Image.open(BytesIO(image_bytes))
+            except Exception:
+                return None
+
+        return None
     
     @retry(
         stop=stop_after_attempt(get_config().GENAI_MAX_RETRIES + 1),
@@ -145,8 +173,12 @@ class GenAIImageProvider(ImageProvider):
                         logger.debug(f"Part {i}: Attempting to extract image...")
                         image = part.as_image()
                         if image:
-                            logger.debug(f"Successfully extracted image from part {i}")
-                            last_image = image
+                            pil_image = self._to_pil_image(image)
+                            if pil_image:
+                                logger.debug(f"Successfully extracted image from part {i}")
+                                last_image = pil_image
+                            else:
+                                logger.debug(f"Part {i}: Image extracted but could not convert to PIL")
                     except Exception as e:
                         logger.debug(f"Part {i}: Failed to extract image - {str(e)}")
             
