@@ -540,6 +540,13 @@ banana-slides/
 ```
 
 
+## 交流群
+为了方便大家沟通互助，建此微信交流群.
+
+欢迎提出新功能建议或反馈，本人也会~~佛系~~回答大家问题
+
+<img width="301" alt="image" src="https://github.com/user-attachments/assets/56fb33bb-fab7-4625-a860-ecef09f41817" />
+
 
 
 **常见问题**
