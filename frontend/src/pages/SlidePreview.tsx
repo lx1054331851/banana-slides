@@ -165,9 +165,16 @@ export const SlidePreview: React.FC = () => {
   }, [projectId, currentProject, syncProject]);
 
   // 监听警告消息
+  const lastWarningRef = React.useRef<string | null>(null);
   useEffect(() => {
     if (warningMessage) {
-      show({ message: warningMessage, type: 'warning', duration: 6000 });
+      if (warningMessage !== lastWarningRef.current) {
+        lastWarningRef.current = warningMessage;
+        show({ message: warningMessage, type: 'warning', duration: 6000 });
+      }
+    } else {
+      // warningMessage 被清空时重置 ref，以便下次能再次显示
+      lastWarningRef.current = null;
     }
   }, [warningMessage, show]);
 

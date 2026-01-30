@@ -698,7 +698,7 @@ const debouncedUpdatePage = debounce(
       }
     }
 
-    set({ error: null });
+    set({ error: null, warningMessage: null });
     
     try {
       // 调用批量生成 API
@@ -818,6 +818,11 @@ const debouncedUpdatePage = debounce(
           // 刷新项目数据以更新页面状态
           await get().syncProject();
         } else if (task.status === 'PENDING' || task.status === 'PROCESSING') {
+          // 检查警告消息
+          const newWarning = task.progress?.warning_message;
+          if (newWarning && get().warningMessage !== newWarning) {
+            set({ warningMessage: newWarning });
+          }
           // 继续轮询，同时同步项目数据以更新页面状态
           console.log(`[批量轮询] Task ${taskId} 处理中，同步项目数据...`);
           await get().syncProject();

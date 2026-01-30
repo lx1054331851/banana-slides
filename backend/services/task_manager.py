@@ -466,6 +466,9 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                         progress = task.get_progress()
                         progress['completed'] = completed
                         progress['failed'] = failed
+                        # 第一次检测到不匹配时设置警告
+                        if resolution_mismatched > 0 and 'warning_message' not in progress:
+                            progress['warning_message'] = "图片返回分辨率与设置不符，建议使用gemini格式以避免此问题"
                         task.set_progress(progress)
                         db.session.commit()
                         logger.info(f"Image Progress: {completed}/{len(pages)} pages completed")
@@ -475,12 +478,8 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
             if task:
                 task.status = 'COMPLETED'
                 task.completed_at = datetime.utcnow()
-                progress = task.get_progress()
-                # Add warning message if there are resolution mismatches
                 if resolution_mismatched > 0:
-                    progress['warning_message'] = f"{resolution_mismatched} 页图片返回分辨率与设置不符"
                     logger.warning(f"Task {task_id} has {resolution_mismatched} resolution mismatches")
-                task.set_progress(progress)
                 db.session.commit()
                 logger.info(f"Task {task_id} COMPLETED - {completed} images generated, {failed} failed")
             
