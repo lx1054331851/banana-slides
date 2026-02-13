@@ -12,6 +12,7 @@ const projectSettingsI18n = {
       title: "设置", projectConfig: "项目设置", exportConfig: "导出设置", globalConfig: "全局设置",
       projectConfigTitle: "项目级配置", projectConfigDesc: "这些设置仅应用于当前项目，不影响其他项目",
       globalConfigTitle: "全局设置", globalConfigDesc: "这些设置应用于所有项目",
+      aspectRatio: "画面比例", aspectRatioDesc: "设置生成幻灯片图片的画面比例",
       extraRequirements: "额外要求", extraRequirementsDesc: "在生成每个页面时，AI 会参考这些额外要求",
       extraRequirementsPlaceholder: "例如：使用紧凑的布局，顶部展示一级大纲标题，加入更丰富的PPT插图...",
       saveExtraRequirements: "保存额外要求",
@@ -42,6 +43,7 @@ const projectSettingsI18n = {
       title: "Settings", projectConfig: "Project Settings", exportConfig: "Export Settings", globalConfig: "Global Settings",
       projectConfigTitle: "Project-level Configuration", projectConfigDesc: "These settings only apply to the current project",
       globalConfigTitle: "Global Settings", globalConfigDesc: "These settings apply to all projects",
+      aspectRatio: "Aspect Ratio", aspectRatioDesc: "Set the aspect ratio for generated slide images",
       extraRequirements: "Extra Requirements", extraRequirementsDesc: "AI will reference these extra requirements when generating each page",
       extraRequirementsPlaceholder: "e.g., Use compact layout, show first-level outline title at top, add richer PPT illustrations...",
       saveExtraRequirements: "Save Extra Requirements",
@@ -88,6 +90,10 @@ interface ProjectSettingsModalProps {
   onExportAllowPartialChange?: (value: boolean) => void;
   onSaveExportSettings?: () => void;
   isSavingExportSettings?: boolean;
+  aspectRatio?: string;
+  onAspectRatioChange?: (value: string) => void;
+  onSaveAspectRatio?: () => void;
+  isSavingAspectRatio?: boolean;
 }
 
 type SettingsTab = 'project' | 'global' | 'export';
@@ -111,9 +117,21 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   onExportAllowPartialChange,
   onSaveExportSettings,
   isSavingExportSettings = false,
+  aspectRatio = '16:9',
+  onAspectRatioChange,
+  onSaveAspectRatio,
+  isSavingAspectRatio = false,
 }) => {
   const t = useT(projectSettingsI18n);
   const [activeTab, setActiveTab] = useState<SettingsTab>('project');
+
+  const ASPECT_RATIO_OPTIONS = [
+    { value: '16:9', label: '16:9' },
+    { value: '4:3', label: '4:3' },
+    { value: '1:1', label: '1:1' },
+    { value: '9:16', label: '9:16' },
+    { value: '3:2', label: '3:2' },
+  ];
 
   const EXTRACTOR_METHOD_OPTIONS: { value: ExportExtractorMethod; labelKey: string; descKey: string }[] = [
     { value: 'hybrid', labelKey: 'projectSettings.extractorHybrid', descKey: 'projectSettings.extractorHybridDesc' },
@@ -189,6 +207,43 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                   <p className="text-sm text-gray-600 dark:text-foreground-tertiary mb-6">
                     {t('projectSettings.projectConfigDesc')}
                   </p>
+                </div>
+
+                {/* 画面比例 */}
+                <div className="bg-gray-50 dark:bg-background-primary rounded-lg p-6 space-y-4">
+                  <div>
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-foreground-primary mb-2">{t('projectSettings.aspectRatio')}</h4>
+                    <p className="text-sm text-gray-600 dark:text-foreground-tertiary">
+                      {t('projectSettings.aspectRatioDesc')}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {ASPECT_RATIO_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => onAspectRatioChange?.(opt.value)}
+                        className={`px-4 py-2 text-sm font-medium rounded-lg border-2 transition-all ${
+                          aspectRatio === opt.value
+                            ? 'border-banana-500 bg-banana-50 dark:bg-background-secondary text-banana-700 dark:text-banana'
+                            : 'border-gray-200 dark:border-border-primary text-gray-700 dark:text-foreground-secondary hover:border-gray-300 dark:hover:border-gray-500 bg-white dark:bg-background-secondary'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  {onSaveAspectRatio && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={onSaveAspectRatio}
+                      disabled={isSavingAspectRatio}
+                      className="w-full sm:w-auto"
+                    >
+                      {isSavingAspectRatio ? t('shared.saving') : t('common.save')}
+                    </Button>
+                  )}
                 </div>
 
                 <div className="bg-gray-50 dark:bg-background-primary rounded-lg p-6 space-y-4">

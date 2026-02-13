@@ -22,6 +22,7 @@ export const createProject = async (data: CreateProjectRequest): Promise<ApiResp
     outline_text: data.outline_text,
     description_text: data.description_text,
     template_style: data.template_style,
+    image_aspect_ratio: data.image_aspect_ratio,
   });
   return response.data;
 };

@@ -23,7 +23,7 @@ interface ProjectState {
   setError: (error: string | null) => void;
   
   // 项目操作
-  initializeProject: (type: 'idea' | 'outline' | 'description', content: string, templateImage?: File, templateStyle?: string, referenceFileIds?: string[]) => Promise<void>;
+  initializeProject: (type: 'idea' | 'outline' | 'description', content: string, templateImage?: File, templateStyle?: string, referenceFileIds?: string[], aspectRatio?: string) => Promise<void>;
   syncProject: (projectId?: string) => Promise<void>;
   
   // 页面操作
@@ -120,7 +120,7 @@ const debouncedUpdatePage = debounce(
   setError: (error) => set({ error }),
 
   // 初始化项目
-  initializeProject: async (type, content, templateImage, templateStyle, referenceFileIds) => {
+  initializeProject: async (type, content, templateImage, templateStyle, referenceFileIds, aspectRatio) => {
     set({ isGlobalLoading: true, error: null });
     try {
       const request: any = {};
@@ -136,6 +136,11 @@ const debouncedUpdatePage = debounce(
       // 添加风格描述（如果有）
       if (templateStyle && templateStyle.trim()) {
         request.template_style = templateStyle.trim();
+      }
+
+      // 添加画面比例（如果有）
+      if (aspectRatio) {
+        request.image_aspect_ratio = aspectRatio;
       }
 
       // 1. 创建项目

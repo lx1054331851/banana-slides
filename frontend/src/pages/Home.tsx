@@ -183,9 +183,29 @@ export const Home: React.FC = () => {
   const [useTemplateStyle, setUseTemplateStyle] = useState(false);
   const [templateStyle, setTemplateStyle] = useState('');
   const [hoveredPresetId, setHoveredPresetId] = useState<string | null>(null);
+  const [aspectRatio, setAspectRatio] = useState('16:9');
+  const [isAspectRatioOpen, setIsAspectRatioOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const themeMenuRef = useRef<HTMLDivElement>(null);
 
+  const ASPECT_RATIO_OPTIONS = [
+    { value: '16:9', label: '16:9' },
+    { value: '4:3', label: '4:3' },
+    { value: '1:1', label: '1:1' },
+    { value: '9:16', label: '9:16' },
+    { value: '3:2', label: '3:2' },
+  ];
+
+  // 持久化草稿到 sessionStorage，确保跳转设置页后返回时内容不丢失
+  useEffect(() => {
+    if (content) {
+      sessionStorage.setItem('home-draft-content', content);
+    }
+  }, [content]);
+
+  useEffect(() => {
+    sessionStorage.setItem('home-draft-tab', activeTab);
+  }, [activeTab]);
   // 检查是否有当前项目 & 加载用户模板
   useEffect(() => {
     const projectId = localStorage.getItem('currentProjectId');
@@ -500,7 +520,7 @@ export const Home: React.FC = () => {
         .filter(f => f.parse_status === 'completed')
         .map(f => f.id);
 
-      await initializeProject(activeTab, content, templateFile || undefined, styleDesc, refFileIds.length > 0 ? refFileIds : undefined);
+      await initializeProject(activeTab, content, templateFile || undefined, styleDesc, refFileIds.length > 0 ? refFileIds : undefined, aspectRatio);
       
       // 根据类型跳转到不同页面
       const projectId = localStorage.getItem('currentProjectId');
@@ -817,14 +837,44 @@ export const Home: React.FC = () => {
               rows={activeTab === 'idea' ? 4 : 8}
               className="text-sm md:text-base border-2 border-gray-200 dark:border-border-primary dark:bg-background-tertiary dark:text-white focus-within:border-banana-400 dark:focus-within:border-banana transition-colors duration-200"
               toolbarLeft={
-                <button
-                  type="button"
-                  onClick={handlePaperclipClick}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:text-foreground-secondary dark:hover:bg-background-hover rounded transition-colors active:scale-95 touch-manipulation"
-                  title={t('home.actions.selectFile')}
-                >
-                  <Paperclip size={18} />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={handlePaperclipClick}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:text-foreground-secondary dark:hover:bg-background-hover rounded transition-colors active:scale-95 touch-manipulation"
+                    title={t('home.actions.selectFile')}
+                  >
+                    <Paperclip size={18} />
+                  </button>
+                  {/* 画面比例选择 */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsAspectRatioOpen(!isAspectRatioOpen)}
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:text-foreground-secondary dark:hover:bg-background-hover rounded transition-colors"
+                      title={i18n.language?.startsWith('zh') ? '画面比例' : 'Aspect Ratio'}
+                    >
+                      <span>{aspectRatio}</span>
+                      <ChevronDown size={12} className={`transition-transform ${isAspectRatioOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {isAspectRatioOpen && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setIsAspectRatioOpen(false)} />
+                        <div className="absolute left-0 bottom-full mb-1 z-50 bg-white dark:bg-background-elevated border border-gray-200 dark:border-border-primary rounded-lg shadow-lg dark:shadow-none py-1 min-w-[80px]">
+                          {ASPECT_RATIO_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.value}
+                              onClick={() => { setAspectRatio(opt.value); setIsAspectRatioOpen(false); }}
+                              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-background-hover transition-colors ${aspectRatio === opt.value ? 'text-banana font-semibold' : 'text-gray-700 dark:text-foreground-secondary'}`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
               }
               toolbarRight={
                 <Button
