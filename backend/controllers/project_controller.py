@@ -11,6 +11,7 @@ from pathlib import Path
 
 from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy import desc
+from utils.validators import normalize_aspect_ratio
 from sqlalchemy.orm import joinedload
 from werkzeug.exceptions import BadRequest
 from werkzeug.utils import secure_filename
@@ -192,6 +193,14 @@ def create_project():
         if creation_type not in ['idea', 'outline', 'descriptions']:
             return bad_request("Invalid creation_type")
         
+        # Validate and set aspect ratio if provided
+        image_aspect_ratio = '16:9'
+        if 'image_aspect_ratio' in data:
+            try:
+                image_aspect_ratio = normalize_aspect_ratio(data['image_aspect_ratio'])
+            except ValueError as e:
+                return bad_request(str(e))
+
         # Create project
         project = Project(
             creation_type=creation_type,
@@ -199,6 +208,7 @@ def create_project():
             outline_text=data.get('outline_text'),
             description_text=data.get('description_text'),
             template_style=data.get('template_style'),
+            image_aspect_ratio=image_aspect_ratio,
             status='DRAFT'
         )
         
@@ -289,6 +299,13 @@ def update_project(project_id):
         if 'template_style' in data:
             project.template_style = data['template_style']
         
+        # Update aspect ratio if provided
+        if 'image_aspect_ratio' in data:
+            try:
+                project.image_aspect_ratio = normalize_aspect_ratio(data['image_aspect_ratio'])
+            except ValueError as e:
+                return bad_request(str(e))
+
         # Update export settings if provided
         if 'export_extractor_method' in data:
             project.export_extractor_method = data['export_extractor_method']
@@ -760,7 +777,7 @@ def generate_images(project_id):
             outline,
             use_template,
             max_workers,
-            current_app.config['DEFAULT_ASPECT_RATIO'],
+            project.image_aspect_ratio,
             current_app.config['DEFAULT_RESOLUTION'],
             app,
             combined_requirements if combined_requirements.strip() else None,

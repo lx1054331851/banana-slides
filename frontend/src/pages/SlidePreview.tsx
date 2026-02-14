@@ -14,7 +14,7 @@ const previewI18n = {
       materialsAdded: "已添加 {{count}} 个素材", exportStarted: "导出任务已开始，可在导出任务面板查看进度",
       cannotRefresh: "无法刷新：缺少项目ID", refreshSuccess: "刷新成功",
       extraRequirementsSaved: "额外要求已保存", styleDescSaved: "风格描述已保存",
-      exportSettingsSaved: "导出设置已保存", loadTemplateFailed: "加载模板失败", templateChanged: "模板更换成功"
+      exportSettingsSaved: "导出设置已保存", aspectRatioSaved: "画面比例已保存", loadTemplateFailed: "加载模板失败", templateChanged: "模板更换成功"
     },
     preview: {
       title: "预览", pageCount: "共 {{count}} 页", export: "导出",
@@ -68,7 +68,7 @@ const previewI18n = {
       materialsAdded: "Added {{count}} material(s)", exportStarted: "Export task started, check progress in export tasks panel",
       cannotRefresh: "Cannot refresh: Missing project ID", refreshSuccess: "Refresh successful",
       extraRequirementsSaved: "Extra requirements saved", styleDescSaved: "Style description saved",
-      exportSettingsSaved: "Export settings saved", loadTemplateFailed: "Failed to load template", templateChanged: "Template changed successfully"
+      exportSettingsSaved: "Export settings saved", aspectRatioSaved: "Aspect ratio saved", loadTemplateFailed: "Failed to load template", templateChanged: "Template changed successfully"
     },
     preview: {
       title: "Preview", pageCount: "{{count}} pages", export: "Export",
@@ -229,6 +229,11 @@ export const SlidePreview: React.FC = () => {
     currentProject?.export_allow_partial || false
   );
   const [isSavingExportSettings, setIsSavingExportSettings] = useState(false);
+  // 画面比例
+  const [aspectRatio, setAspectRatio] = useState<string>(
+    currentProject?.image_aspect_ratio || '16:9'
+  );
+  const [isSavingAspectRatio, setIsSavingAspectRatio] = useState(false);
   // 1K分辨率警告对话框状态
   const [show1KWarningDialog, setShow1KWarningDialog] = useState(false);
   const [skip1KWarningChecked, setSkip1KWarningChecked] = useState(false);
@@ -307,6 +312,7 @@ export const SlidePreview: React.FC = () => {
         setExportExtractorMethod((currentProject.export_extractor_method as ExportExtractorMethod) || 'hybrid');
         setExportInpaintMethod((currentProject.export_inpaint_method as ExportInpaintMethod) || 'hybrid');
         setExportAllowPartial(currentProject.export_allow_partial || false);
+        setAspectRatio(currentProject.image_aspect_ratio || '16:9');
         lastProjectId.current = currentProject.id || null;
         isEditingRequirements.current = false;
         isEditingTemplateStyle.current = false;
@@ -1068,6 +1074,24 @@ export const SlidePreview: React.FC = () => {
       setIsSavingExportSettings(false);
     }
   }, [currentProject, projectId, exportExtractorMethod, exportInpaintMethod, exportAllowPartial, syncProject, show]);
+
+  const handleSaveAspectRatio = useCallback(async () => {
+    if (!currentProject || !projectId) return;
+
+    setIsSavingAspectRatio(true);
+    try {
+      await updateProject(projectId, { image_aspect_ratio: aspectRatio });
+      await syncProject(projectId);
+      show({ message: t('slidePreview.aspectRatioSaved'), type: 'success' });
+    } catch (error: any) {
+      show({
+        message: `保存失败: ${error.message || '未知错误'}`,
+        type: 'error'
+      });
+    } finally {
+      setIsSavingAspectRatio(false);
+    }
+  }, [currentProject, projectId, aspectRatio, syncProject, show]);
 
   const handleTemplateSelect = async (templateFile: File | null, templateId?: string) => {
     if (!projectId) return;
@@ -2029,6 +2053,11 @@ export const SlidePreview: React.FC = () => {
             onExportAllowPartialChange={setExportAllowPartial}
             onSaveExportSettings={handleSaveExportSettings}
             isSavingExportSettings={isSavingExportSettings}
+            // 画面比例
+            aspectRatio={aspectRatio}
+            onAspectRatioChange={setAspectRatio}
+            onSaveAspectRatio={handleSaveAspectRatio}
+            isSavingAspectRatio={isSavingAspectRatio}
           />
         </>
       )}

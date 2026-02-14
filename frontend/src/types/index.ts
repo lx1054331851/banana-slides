@@ -72,6 +72,7 @@ export interface Project {
   export_extractor_method?: ExportExtractorMethod; // 组件提取方法
   export_inpaint_method?: ExportInpaintMethod; // 背景图获取方法
   export_allow_partial?: boolean; // 是否允许返回半成品（导出出错时继续而非停止）
+  image_aspect_ratio?: string; // 画面比例（如 16:9, 4:3）
   status: ProjectStatus;
   pages: Page[];
   created_at: string;
@@ -107,6 +108,7 @@ export interface CreateProjectRequest {
   description_text?: string;
   template_image?: File;
   template_style?: string;
+  image_aspect_ratio?: string;
 }
 
 // API响应
