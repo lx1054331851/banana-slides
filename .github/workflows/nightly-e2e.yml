@@ -52,10 +52,6 @@ jobs:
         run: |
           chmod +x scripts/setup-env-from-secrets.sh
           ./scripts/setup-env-from-secrets.sh
-          # Clear per-model source overrides so they fall back to AI_PROVIDER_FORMAT
-          sed -i 's/^TEXT_MODEL_SOURCE=.*/#TEXT_MODEL_SOURCE=/' .env
-          sed -i 's/^IMAGE_MODEL_SOURCE=.*/#IMAGE_MODEL_SOURCE=/' .env
-          sed -i 's/^IMAGE_CAPTION_MODEL_SOURCE=.*/#IMAGE_CAPTION_MODEL_SOURCE=/' .env
         env:
           AI_PROVIDER_FORMAT: gemini
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}

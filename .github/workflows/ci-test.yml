@@ -172,10 +172,6 @@ jobs:
           # E2E tests use Gemini format (full flow testing)
           # Update .env to use Gemini format for E2E tests
           sed -i 's/^AI_PROVIDER_FORMAT=.*/AI_PROVIDER_FORMAT=gemini/' .env || echo "AI_PROVIDER_FORMAT=gemini" >> .env
-          # Clear per-model source overrides so they fall back to AI_PROVIDER_FORMAT
-          sed -i 's/^TEXT_MODEL_SOURCE=.*/#TEXT_MODEL_SOURCE=/' .env
-          sed -i 's/^IMAGE_MODEL_SOURCE=.*/#IMAGE_MODEL_SOURCE=/' .env
-          sed -i 's/^IMAGE_CAPTION_MODEL_SOURCE=.*/#IMAGE_CAPTION_MODEL_SOURCE=/' .env
           echo "E2E tests will use Gemini format"
           # Only show non-sensitive config, never print API keys
           grep "^AI_PROVIDER_FORMAT=" .env
