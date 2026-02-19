@@ -174,15 +174,22 @@ const debouncedUpdatePage = debounce(
         }
       }
 
-      // 4. 如果是 description 类型，自动生成大纲和页面描述
-      if (type === 'description') {
+      // 4. 根据类型调用 AI 生成，失败时回滚项目
+      const generateWithRollback = async (fn: () => Promise<any>, label: string) => {
         try {
-          await api.generateFromDescription(projectId, content);
-          console.log('[初始化项目] 从描述生成大纲和页面描述完成');
-        } catch (error) {
-          console.error('[初始化项目] 从描述生成失败:', error);
-          // 继续执行，让用户可以手动操作
+          await fn();
+          console.log(`[初始化项目] ${label}完成`);
+        } catch (error: any) {
+          console.error(`[初始化项目] ${label}失败:`, error);
+          try { await api.deleteProject(projectId); } catch (e: any) { console.error(`[初始化项目] 回滚失败，未能删除项目 ${projectId}:`, e); }
+          throw error;
         }
+      };
+
+      if (type === 'outline') {
+        await generateWithRollback(() => api.generateOutline(projectId), '生成大纲');
+      } else if (type === 'description') {
+        await generateWithRollback(() => api.generateFromDescription(projectId, content), '从描述生成大纲和页面描述');
       }
 
       // 5. 获取完整项目信息
