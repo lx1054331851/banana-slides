@@ -341,18 +341,16 @@ jobs:
         timeout-minutes: 5
         continue-on-error: false
       
-      - name: Run Frontend UI E2E tests (quick validation only)
+      - name: Run Frontend UI E2E tests
         if: steps.check_e2e.outputs.skip != 'true' && env.GOOGLE_API_KEY != '' && env.GOOGLE_API_KEY != 'mock-api-key-for-testing'
         run: |
-          # Run only the quick UI E2E test (verifies UI flow without waiting for AI generation)
-          # The full AI-dependent E2E test (10-20 min) runs in the nightly workflow instead
-          echo "Running quick Frontend UI E2E tests"
+          echo "Running Frontend UI E2E tests with Gemini format"
           cd frontend
-          npx playwright test ui-full-flow.spec.ts --grep "Simplified" --workers=1
+          npx playwright test ui-full-flow.spec.ts --workers=1
         env:
           CI: true
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-        timeout-minutes: 5
+        timeout-minutes: 25
         continue-on-error: false
       
       - name: Upload Frontend E2E test reports

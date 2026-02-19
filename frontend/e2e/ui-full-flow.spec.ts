@@ -28,8 +28,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 test.describe('UI-driven E2E test: From user interface to PPT export', () => {
-  // Increase timeout to 20 minutes
-  test.setTimeout(20 * 60 * 1000)
+  // Increase timeout to 25 minutes (image generation may need retries on API disconnects)
+  test.setTimeout(25 * 60 * 1000)
   
   test('User Full Flow: Create and export PPT in browser', async ({ page }) => {
     console.log('\n========================================')
@@ -444,9 +444,9 @@ test.describe('UI-driven E2E test: From user interface to PPT export', () => {
       // The frontend uses pageGeneratingTasks to track per-page generation status.
       // StatusBadge shows "生成中" (orange badge with animate-pulse) during generation.
       // We wait for export button to be enabled (hasAllImages = all pages have generated_image_path).
-      // Use 7 minutes timeout (420000ms) to cover the full generation time (typically 2-5 minutes).
+      // Use 15 minutes timeout (900000ms) to cover retries on API disconnects.
       const startTime = Date.now()
-      const maxWaitTime = 420000 // 7 minutes total
+      const maxWaitTime = 900000 // 15 minutes total
       
       // Helper: Precise selector for "生成中" StatusBadge (orange background)
       // StatusBadge structure: <span class="bg-orange-100 text-orange-600 animate-pulse ...">生成中</span>
