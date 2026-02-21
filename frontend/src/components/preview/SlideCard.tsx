@@ -63,8 +63,27 @@ export const SlideCard: React.FC<SlideCardProps> = ({
       }`}
       onClick={onClick}
     >
+      {/* 标题 */}
+      <div className="flex items-center gap-2 mb-2">
+        <span
+          className={`text-sm font-medium ${
+            isSelected ? 'text-banana-600' : 'text-gray-700 dark:text-foreground-secondary'
+          }`}
+        >
+          {index + 1}. {page.outline_content?.title}
+        </span>
+        {index === 0 && (
+          <span
+            className="text-xs px-1.5 py-0.5 bg-banana-100 dark:bg-banana-900/30 text-banana-700 dark:text-banana-400 rounded flex-shrink-0"
+            title={t('slideCard.coverPageTooltip')}
+          >
+            {t('slideCard.coverPage')}
+          </span>
+        )}
+      </div>
+
       {/* 缩略图 */}
-      <div className="relative bg-gray-100 dark:bg-background-secondary rounded-lg overflow-hidden mb-2" style={{ aspectRatio: aspectRatio.replace(':', '/') }}>
+      <div className="relative bg-gray-100 dark:bg-background-secondary rounded-lg overflow-hidden" style={{ aspectRatio: aspectRatio.replace(':', '/') }}>
         {generating ? (
           <Skeleton className="w-full h-full" />
         ) : page.generated_image_path ? (
@@ -114,27 +133,7 @@ export const SlideCard: React.FC<SlideCardProps> = ({
           <StatusBadge status={page.status} />
         </div>
       </div>
-
-      {/* 标题 */}
-      <div className="flex items-center gap-2">
-        <span
-          className={`text-sm font-medium ${
-            isSelected ? 'text-banana-600' : 'text-gray-700 dark:text-foreground-secondary'
-          }`}
-        >
-          {index + 1}. {page.outline_content?.title}
-        </span>
-        {index === 0 && (
-          <span
-            className="text-xs px-1.5 py-0.5 bg-banana-100 dark:bg-banana-900/30 text-banana-700 dark:text-banana-400 rounded flex-shrink-0"
-            title={t('slideCard.coverPageTooltip')}
-          >
-            {t('slideCard.coverPage')}
-          </span>
-        )}
-      </div>
       {ConfirmDialog}
     </div>
   );
 };
-
