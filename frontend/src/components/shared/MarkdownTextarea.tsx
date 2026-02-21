@@ -661,7 +661,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
         {/* Toolbar */}
         {hasToolbar && (
           <div
-            className="flex items-center gap-1 px-2 py-1.5 cursor-text"
+            className="flex items-center gap-1 px-2 py-1.5 cursor-text border-t border-gray-100 dark:border-border-primary"
             onMouseDown={handleToolbarMouseDown}
           >
             <div className="flex items-center gap-0.5">
