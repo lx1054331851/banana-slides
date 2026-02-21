@@ -29,6 +29,7 @@ const previewI18n = {
       noPages: "还没有页面", noPagesHint: "请先返回编辑页面添加内容", backToEdit: "返回编辑",
       generating: "正在生成中...", notGenerated: "尚未生成图片", generateThisPage: "生成此页",
       prevPage: "上一页", nextPage: "下一页", historyVersions: "历史版本",
+      fullscreen: "全屏查看", exitFullscreen: "退出全屏",
       versions: "版本", version: "版本", current: "当前", editPage: "编辑页面",
       regionSelect: "区域选图", endRegionSelect: "结束区域选图",
       pageOutline: "页面大纲（可编辑）", pageDescription: "页面描述（可编辑）",
@@ -83,6 +84,7 @@ const previewI18n = {
       noPages: "No pages yet", noPagesHint: "Please go back to editor to add content first", backToEdit: "Back to Editor",
       generating: "Generating...", notGenerated: "Image not generated yet", generateThisPage: "Generate This Page",
       prevPage: "Previous", nextPage: "Next", historyVersions: "History Versions",
+      fullscreen: "Fullscreen", exitFullscreen: "Exit Fullscreen",
       versions: "Versions", version: "Version", current: "Current", editPage: "Edit Page",
       regionSelect: "Region Select", endRegionSelect: "End Region Select",
       pageOutline: "Page Outline (Editable)", pageDescription: "Page Description (Editable)",
@@ -134,6 +136,8 @@ import {
   Check,
   FileText,
   Loader2,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { Button, Loading, Modal, Textarea, useToast, useConfirm, MaterialSelector, ProjectSettingsModal, ExportTasksPanel } from '@/components/shared';
 import { MaterialGeneratorModal } from '@/components/shared/MaterialGeneratorModal';
@@ -255,6 +259,7 @@ export const SlidePreview: React.FC = () => {
   const [isOutlineExpanded, setIsOutlineExpanded] = useState(false);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [imageVersions, setImageVersions] = useState<ImageVersion[]>([]);
   const [showVersionMenu, setShowVersionMenu] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -328,6 +333,7 @@ export const SlidePreview: React.FC = () => {
   const [isSelectingRegion, setIsSelectingRegion] = useState(false);
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const { show, ToastContainer } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
 
@@ -340,6 +346,100 @@ export const SlidePreview: React.FC = () => {
     () => currentProject?.pages?.some(p => p.generated_image_path) ?? false,
     [currentProject?.pages]
   );
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const handleFullscreenChange = () => {
+      const fullscreenElement =
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).msFullscreenElement ||
+        null;
+      setIsFullscreen(fullscreenElement === previewContainerRef.current);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener);
+    document.addEventListener('msfullscreenchange', handleFullscreenChange as EventListener);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener);
+      document.removeEventListener('msfullscreenchange', handleFullscreenChange as EventListener);
+    };
+  }, []);
+
+  const requestFullscreen = useCallback(async () => {
+    const target = previewContainerRef.current;
+    if (!target) return;
+    const request =
+      target.requestFullscreen ||
+      (target as any).webkitRequestFullscreen ||
+      (target as any).msRequestFullscreen;
+    if (!request) return;
+    try {
+      await request.call(target);
+    } catch (error) {
+      console.warn('Failed to enter fullscreen:', error);
+    }
+  }, []);
+
+  const exitFullscreen = useCallback(async () => {
+    if (typeof document === 'undefined') return;
+    const exit =
+      document.exitFullscreen ||
+      (document as any).webkitExitFullscreen ||
+      (document as any).msExitFullscreen;
+    if (!exit) return;
+    try {
+      await exit.call(document);
+    } catch (error) {
+      console.warn('Failed to exit fullscreen:', error);
+    }
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    const fullscreenElement =
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).msFullscreenElement ||
+      null;
+    if (fullscreenElement) {
+      void exitFullscreen();
+    } else {
+      void requestFullscreen();
+    }
+  }, [exitFullscreen, requestFullscreen]);
+
+  const goPrevPage = useCallback(() => {
+    setSelectedIndex((prev) => Math.max(0, prev - 1));
+  }, []);
+
+  const goNextPage = useCallback(() => {
+    setSelectedIndex((prev) => Math.min(currentProject.pages.length - 1, prev + 1));
+  }, [currentProject.pages.length]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!isFullscreen) return;
+      const target = event.target as HTMLElement | null;
+      const isTyping =
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable);
+      if (isTyping) return;
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        goPrevPage();
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        goNextPage();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [goNextPage, goPrevPage, isFullscreen]);
 
   // 加载项目数据 & 用户模板
   useEffect(() => {
@@ -1631,6 +1731,18 @@ export const SlidePreview: React.FC = () => {
             >
               <span className="hidden lg:inline">{t('preview.refresh')}</span>
             </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={isFullscreen ? <Minimize2 size={16} className="md:w-[18px] md:h-[18px]" /> : <Maximize2 size={16} className="md:w-[18px] md:h-[18px]" />}
+              onClick={toggleFullscreen}
+              className="hidden md:inline-flex"
+              title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
+            >
+              <span className="hidden lg:inline">
+                {isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
+              </span>
+            </Button>
           
           {/* 导出任务按钮 */}
           {exportTasks.filter(t => t.projectId === projectId).length > 0 && (
@@ -1891,13 +2003,55 @@ export const SlidePreview: React.FC = () => {
             <>
               {/* 预览区 */}
               <div className="flex-1 overflow-y-auto min-h-0 flex items-center justify-center p-4 md:p-8">
-                <div className="max-w-5xl w-full">
-                  <div className="relative bg-white dark:bg-background-secondary rounded-lg shadow-xl overflow-hidden touch-manipulation" style={{ aspectRatio: aspectRatioStyle }}>
+                <div className={`w-full ${isFullscreen ? 'max-w-none' : 'max-w-5xl'}`}>
+                  <div
+                    ref={previewContainerRef}
+                    className={`relative overflow-hidden touch-manipulation ${
+                      isFullscreen
+                        ? 'w-screen h-screen max-w-none max-h-none bg-black rounded-none shadow-none'
+                        : 'bg-white dark:bg-background-secondary rounded-lg shadow-xl'
+                    }`}
+                    style={isFullscreen ? undefined : { aspectRatio: aspectRatioStyle }}
+                  >
+                    <button
+                      type="button"
+                      onClick={toggleFullscreen}
+                      className="absolute top-3 right-3 z-10 inline-flex items-center justify-center h-9 w-9 rounded-full bg-white/85 text-gray-700 hover:bg-banana-50 shadow-md border border-gray-200/70 dark:bg-background-secondary/80 dark:text-foreground-secondary dark:hover:bg-background-hover"
+                      title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
+                    >
+                      {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                    </button>
+                    {isFullscreen && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={goPrevPage}
+                          disabled={selectedIndex === 0}
+                          className={`absolute left-3 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center h-10 w-10 rounded-full bg-white/85 text-gray-700 hover:bg-banana-50 shadow-md border border-gray-200/70 dark:bg-background-secondary/80 dark:text-foreground-secondary dark:hover:bg-background-hover ${
+                            selectedIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                          title={t('preview.prevPage')}
+                        >
+                          <ChevronLeft size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={goNextPage}
+                          disabled={selectedIndex === currentProject.pages.length - 1}
+                          className={`absolute right-3 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center h-10 w-10 rounded-full bg-white/85 text-gray-700 hover:bg-banana-50 shadow-md border border-gray-200/70 dark:bg-background-secondary/80 dark:text-foreground-secondary dark:hover:bg-background-hover ${
+                            selectedIndex === currentProject.pages.length - 1 ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                          title={t('preview.nextPage')}
+                        >
+                          <ChevronRight size={18} />
+                        </button>
+                      </>
+                    )}
                     {selectedPage?.generated_image_path ? (
                       <img
                         src={imageUrl}
                         alt={`Slide ${selectedIndex + 1}`}
-                        className="w-full h-full object-cover select-none"
+                        className={`w-full h-full select-none ${isFullscreen ? 'object-contain' : 'object-cover'}`}
                         draggable={false}
                       />
                     ) : (
@@ -1992,6 +2146,14 @@ export const SlidePreview: React.FC = () => {
                       disabled={isRefreshing}
                       className="md:hidden text-xs"
                       title="刷新"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                      onClick={toggleFullscreen}
+                      className="md:hidden text-xs"
+                      title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
                     />
                     {imageVersions.length > 1 && (
                       <div className="relative">
