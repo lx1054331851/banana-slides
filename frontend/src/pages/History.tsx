@@ -9,7 +9,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useT } from '@/hooks/useT';
 import * as api from '@/api/endpoints';
 import { normalizeProject } from '@/utils';
-import { getProjectTitle, getProjectRoute } from '@/utils/projectUtils';
+import { getProjectTitle } from '@/utils/projectUtils';
 import type { Project } from '@/types';
 
 // 页面特有翻译 - AI 可以直接看到所有文案
@@ -113,7 +113,7 @@ export const History: React.FC = () => {
 
   // ===== 项目选择与导航 =====
 
-  const handleSelectProject = useCallback(async (project: Project) => {
+  const openProject = useCallback(async (project: Project, target: 'preview' | 'outline' | 'detail') => {
     const projectId = project.id || project.project_id;
     if (!projectId) return;
 
@@ -135,9 +135,8 @@ export const History: React.FC = () => {
       // 同步项目数据
       await syncProject(projectId);
       
-      // 根据项目状态跳转到不同页面
-      const route = getProjectRoute(project);
-      navigate(route, { state: { from: 'history' } });
+      // 跳转到指定页面
+      navigate(`/project/${projectId}/${target}`, { state: { from: 'history' } });
     } catch (err: any) {
       console.error('打开项目失败:', err);
       show({
@@ -145,8 +144,21 @@ export const History: React.FC = () => {
         type: 'error'
       });
     }
-   
-  }, [selectedProjects, editingProjectId, setCurrentProject, syncProject, navigate, show]);
+  }, [selectedProjects, editingProjectId, setCurrentProject, syncProject, navigate, show, t]);
+
+  const handlePreviewProject = useCallback((project: Project) => {
+    openProject(project, 'preview');
+  }, [openProject]);
+
+  const handleOpenOutline = useCallback((e: React.MouseEvent, project: Project) => {
+    e.stopPropagation();
+    openProject(project, 'outline');
+  }, [openProject]);
+
+  const handleOpenDetail = useCallback((e: React.MouseEvent, project: Project) => {
+    e.stopPropagation();
+    openProject(project, 'detail');
+  }, [openProject]);
 
   // ===== 批量选择操作 =====
 
@@ -468,7 +480,9 @@ export const History: React.FC = () => {
                   isSelected={selectedProjects.has(projectId)}
                   isEditing={editingProjectId === projectId}
                   editingTitle={editingTitle}
-                  onSelect={handleSelectProject}
+                  onPreview={handlePreviewProject}
+                  onOpenOutline={handleOpenOutline}
+                  onOpenDetail={handleOpenDetail}
                   onToggleSelect={handleToggleSelect}
                   onDelete={handleDeleteProject}
                   onStartEdit={handleStartEdit}
@@ -487,4 +501,3 @@ export const History: React.FC = () => {
     </div>
   );
 };
-

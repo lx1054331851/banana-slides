@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, FileText, ChevronRight, Trash2 } from 'lucide-react';
+import { Clock, FileText, Trash2 } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 import { Card } from '@/components/shared';
 import { getProjectTitle, getFirstPageImage, formatDate, getStatusText, getStatusColor } from '@/utils/projectUtils';
@@ -8,10 +8,10 @@ import type { Project } from '@/types';
 // ProjectCard 组件自包含翻译
 const projectCardI18n = {
   zh: {
-    projectCard: { pages: "{{count}} 页", page: "第 {{num}} 页" }
+    projectCard: { pages: "{{count}} 页", page: "第 {{num}} 页", outline: "大纲", detail: "细化" }
   },
   en: {
-    projectCard: { pages: "{{count}} pages", page: "Page {{num}}" }
+    projectCard: { pages: "{{count}} pages", page: "Page {{num}}", outline: "Outline", detail: "Detail" }
   }
 };
 
@@ -20,7 +20,9 @@ export interface ProjectCardProps {
   isSelected: boolean;
   isEditing: boolean;
   editingTitle: string;
-  onSelect: (project: Project) => void;
+  onPreview: (project: Project) => void;
+  onOpenOutline: (e: React.MouseEvent, project: Project) => void;
+  onOpenDetail: (e: React.MouseEvent, project: Project) => void;
   onToggleSelect: (projectId: string) => void;
   onDelete: (e: React.MouseEvent, project: Project) => void;
   onStartEdit: (e: React.MouseEvent, project: Project) => void;
@@ -35,7 +37,9 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   isSelected,
   isEditing,
   editingTitle,
-  onSelect,
+  onPreview,
+  onOpenOutline,
+  onOpenDetail,
   onToggleSelect,
   onDelete,
   onStartEdit,
@@ -77,7 +81,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
           ? 'border-2 border-banana-500 bg-banana-50 dark:bg-background-secondary' 
           : 'hover:shadow-lg border border-gray-200 dark:border-border-primary'
       } ${isBatchMode ? 'cursor-default' : 'cursor-pointer'}`}
-      onClick={() => onSelect(project)}
+      onClick={() => onPreview(project)}
     >
       <div className="flex items-start gap-3 md:gap-4">
         {/* 复选框 */}
@@ -151,16 +155,40 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
         {/* 右侧：操作按钮 */}
         <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 flex-shrink-0">
           <button
+            type="button"
+            onClick={(e) => onOpenOutline(e, project)}
+            disabled={isBatchMode || isEditing}
+            className={`px-2.5 py-1.5 text-xs md:text-sm font-medium rounded-md border border-gray-200 dark:border-border-primary text-gray-700 dark:text-foreground-secondary transition-colors ${
+              isBatchMode || isEditing
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-banana-50 dark:hover:bg-background-hover'
+            }`}
+            title={t('projectCard.outline')}
+          >
+            {t('projectCard.outline')}
+          </button>
+          <button
+            type="button"
+            onClick={(e) => onOpenDetail(e, project)}
+            disabled={isBatchMode || isEditing}
+            className={`px-2.5 py-1.5 text-xs md:text-sm font-medium rounded-md border border-gray-200 dark:border-border-primary text-gray-700 dark:text-foreground-secondary transition-colors ${
+              isBatchMode || isEditing
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-banana-50 dark:hover:bg-background-hover'
+            }`}
+            title={t('projectCard.detail')}
+          >
+            {t('projectCard.detail')}
+          </button>
+          <button
             onClick={(e) => onDelete(e, project)}
             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title={t('common.delete')}
           >
             <Trash2 size={16} className="md:w-[18px] md:h-[18px]" />
           </button>
-          <ChevronRight size={18} className="text-gray-400 md:w-5 md:h-5" />
         </div>
       </div>
     </Card>
   );
 };
-
