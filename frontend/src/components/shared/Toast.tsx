@@ -65,6 +65,7 @@ export const Toast: React.FC<ToastProps> = ({
 // Toast 管理器
 export const useToast = () => {
   const [toasts, setToasts] = React.useState<Array<{ id: string; props: Omit<ToastProps, 'onClose'> }>>([]);
+  const timersRef = useRef<Map<string, number>>(new Map());
 
   const show = (props: Omit<ToastProps, 'onClose'>) => {
     const id = Math.random().toString(36);
@@ -73,11 +74,28 @@ export const useToast = () => {
       // 最多保留5个toast，超过则移除最早的
       return newToasts.length > 5 ? newToasts.slice(-5) : newToasts;
     });
+    const duration = props.duration ?? 3000;
+    if (duration > 0) {
+      const timer = window.setTimeout(() => {
+        remove(id);
+      }, duration);
+      timersRef.current.set(id, timer);
+    }
   };
 
   const remove = (id: string) => {
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      window.clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
+
+  useEffect(() => () => {
+    timersRef.current.forEach((timer) => window.clearTimeout(timer));
+    timersRef.current.clear();
+  }, []);
 
   return {
     show,
