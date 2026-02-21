@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Sparkles, FileText, MessageSquare, Download, ChevronRight, Github, ChevronLeft } from 'lucide-react';
-import { Button, Footer } from '@/components/shared';
+import { Button } from '@/components/shared';
 import { useT } from '@/hooks/useT';
 
 // 组件内翻译
@@ -280,7 +280,6 @@ export const Landing: React.FC = () => {
         ))}
       </div>
 
-      <Footer />
     </div>
   );
 };
