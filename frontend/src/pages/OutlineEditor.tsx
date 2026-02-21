@@ -299,10 +299,6 @@ export const OutlineEditor: React.FC = () => {
     return <Loading fullscreen message={t('outline.messages.loadingProject')} />;
   }
 
-  if (isGlobalLoading) {
-    return <Loading fullscreen message={t('outline.messages.generatingOutline')} />;
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-background-primary flex flex-col">
       {/* 顶栏 */}
@@ -549,48 +545,57 @@ export const OutlineEditor: React.FC = () => {
         </div>
 
         {/* 右侧：大纲列表 */}
-        <div className="flex-1 min-w-0">
-          {currentProject.pages.length === 0 ? (
-            <div className="text-center py-12 md:py-20">
-              <div className="flex justify-center mb-4">
-                <FileText size={48} className="text-gray-300" />
+        <div className="flex-1 min-w-0 relative">
+          {isGlobalLoading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 dark:bg-background-primary/70 backdrop-blur-sm">
+              <div className="rounded-2xl border border-banana-100/80 dark:border-border-primary bg-white/90 dark:bg-background-secondary/90 shadow-lg px-6 py-5">
+                <Loading message={t('outline.messages.generatingOutline')} />
               </div>
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-foreground-primary mb-2">
-                {t('outline.noPages')}
-              </h3>
-              <p className="text-gray-500 dark:text-foreground-tertiary mb-6">
-                {t('outline.noPagesHint')}
-              </p>
             </div>
-          ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={currentProject.pages.map((p, idx) => p.id || `page-${idx}`)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="space-y-3 md:space-y-4">
-                  {currentProject.pages.map((page, index) => (
-                    <SortableCard
-                      key={page.id || `page-${index}`}
-                      page={page}
-                      index={index}
-                      projectId={projectId}
-                      showToast={show}
-                      onUpdate={(data) => page.id && updatePageLocal(page.id, data)}
-                      onDelete={() => page.id && deletePageById(page.id)}
-                      onClick={() => setSelectedPageId(page.id || null)}
-                      isSelected={selectedPageId === page.id}
-                      isAiRefining={isAiRefining}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
           )}
+          <div className={isGlobalLoading ? 'opacity-60 pointer-events-none' : ''}>
+            {currentProject.pages.length === 0 ? (
+              <div className="text-center py-12 md:py-20">
+                <div className="flex justify-center mb-4">
+                  <FileText size={48} className="text-gray-300" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-foreground-primary mb-2">
+                  {t('outline.noPages')}
+                </h3>
+                <p className="text-gray-500 dark:text-foreground-tertiary mb-6">
+                  {t('outline.noPagesHint')}
+                </p>
+              </div>
+            ) : (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={currentProject.pages.map((p, idx) => p.id || `page-${idx}`)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-3 md:space-y-4">
+                    {currentProject.pages.map((page, index) => (
+                      <SortableCard
+                        key={page.id || `page-${index}`}
+                        page={page}
+                        index={index}
+                        projectId={projectId}
+                        showToast={show}
+                        onUpdate={(data) => page.id && updatePageLocal(page.id, data)}
+                        onDelete={() => page.id && deletePageById(page.id)}
+                        onClick={() => setSelectedPageId(page.id || null)}
+                        isSelected={selectedPageId === page.id}
+                        isAiRefining={isAiRefining}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            )}
+          </div>
         </div>
       </main>
       {ConfirmDialog}
