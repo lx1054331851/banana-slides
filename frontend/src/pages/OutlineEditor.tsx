@@ -99,25 +99,35 @@ const SortableCard: React.FC<{
   isSelected: boolean;
   isAiRefining?: boolean;
   viewMode?: 'list' | 'grid';
+  isExpanded?: boolean;
+  onToggleExpand?: (next: boolean) => void;
 }> = (props) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: props.page.id || `page-${props.index}`,
+    disabled: props.isExpanded,
   });
 
   const style = {
     // 只使用位移变换，不使用缩放，避免拖拽时元素被拉伸
-    transform: transform ? CSS.Translate.toString(transform) : undefined,
-    transition,
+    transform: props.isExpanded ? undefined : (transform ? CSS.Translate.toString(transform) : undefined),
+    transition: props.isExpanded ? undefined : transition,
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={props.viewMode === 'grid' ? 'h-full' : ''}
+      className={
+        props.isExpanded
+          ? 'absolute left-3 right-3 md:left-4 md:right-4 top-6 md:top-8 z-30 min-h-[560px] max-h-[calc(100vh-200px)] h-auto overflow-auto'
+          : (props.viewMode === 'grid' ? 'h-full' : '')
+      }
       {...attributes}
     >
-      <OutlineCard {...props} dragHandleProps={listeners} />
+      <OutlineCard
+        {...props}
+        dragHandleProps={props.isExpanded ? undefined : listeners}
+      />
     </div>
   );
 };
@@ -144,6 +154,7 @@ export const OutlineEditor: React.FC = () => {
   const [isAiRefining, setIsAiRefining] = useState(false);
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
     try {
       const stored = localStorage.getItem('outlineViewMode');
@@ -228,6 +239,14 @@ export const OutlineEditor: React.FC = () => {
     const key = type === 'descriptions' ? 'description' : type;
     return t(`outline.inputPlaceholder.${key}` as any) || '';
   }, [currentProject?.creation_type, t]);
+
+  useEffect(() => {
+    if (!expandedCardId || !currentProject) return;
+    const exists = currentProject.pages.some((p) => p.id === expandedCardId);
+    if (!exists) {
+      setExpandedCardId(null);
+    }
+  }, [expandedCardId, currentProject]);
 
   // 加载项目数据
   useEffect(() => {
@@ -314,6 +333,9 @@ export const OutlineEditor: React.FC = () => {
 
   const handleViewModeChange = useCallback((mode: 'list' | 'grid') => {
     setViewMode(mode);
+    if (mode !== 'grid') {
+      setExpandedCardId(null);
+    }
     try {
       localStorage.setItem('outlineViewMode', mode);
     } catch {
@@ -607,6 +629,9 @@ export const OutlineEditor: React.FC = () => {
               </div>
             </div>
           )}
+          {expandedCardId && (
+            <div className="absolute inset-0 z-20 bg-white/70 dark:bg-background-primary/70 backdrop-blur-sm rounded-card" />
+          )}
           <div className={isGlobalLoading ? 'opacity-60 pointer-events-none' : ''}>
             {currentProject.pages.length === 0 ? (
               <div className="text-center py-12 md:py-20">
@@ -647,6 +672,8 @@ export const OutlineEditor: React.FC = () => {
                       isSelected={selectedPageId === page.id}
                       isAiRefining={isAiRefining}
                       viewMode={viewMode}
+                      isExpanded={expandedCardId === page.id}
+                      onToggleExpand={(next) => setExpandedCardId(next ? (page.id || null) : null)}
                     />
                   ))}
                   </div>

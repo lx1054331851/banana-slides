@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { GripVertical, Edit2, Trash2, Check, X } from 'lucide-react';
+import { GripVertical, Edit2, Trash2, Check, X, Maximize2, Minimize2 } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 import { useImagePaste } from '@/hooks/useImagePaste';
 import { Card, useConfirm, Markdown, ShimmerOverlay } from '@/components/shared';
@@ -15,7 +15,9 @@ const outlineCardI18n = {
       confirmDeleteTitle: "确认删除",
       uploadingImage: "正在上传图片...",
       coverPage: "封面",
-      coverPageTooltip: "第一页为封面页，通常包含标题和副标题"
+      coverPageTooltip: "第一页为封面页，通常包含标题和副标题",
+      expandEdit: "放大编辑",
+      collapseEdit: "缩小"
     }
   },
   en: {
@@ -25,7 +27,9 @@ const outlineCardI18n = {
       confirmDeleteTitle: "Confirm Delete",
       uploadingImage: "Uploading image...",
       coverPage: "Cover",
-      coverPageTooltip: "This is the cover page, usually containing the title and subtitle"
+      coverPageTooltip: "This is the cover page, usually containing the title and subtitle",
+      expandEdit: "Expand editor",
+      collapseEdit: "Collapse"
     }
   }
 };
@@ -42,6 +46,8 @@ interface OutlineCardProps {
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
   isAiRefining?: boolean;
   viewMode?: 'list' | 'grid';
+  isExpanded?: boolean;
+  onToggleExpand?: (next: boolean) => void;
 }
 
 export const OutlineCard: React.FC<OutlineCardProps> = ({
@@ -56,6 +62,8 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
   dragHandleProps,
   isAiRefining = false,
   viewMode = 'list',
+  isExpanded = false,
+  onToggleExpand,
 }) => {
   const t = useT(outlineCardI18n);
   const { confirm, ConfirmDialog } = useConfirm();
@@ -67,6 +75,7 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
   const textareaRef = useRef<MarkdownTextareaRef>(null);
   const isGridView = viewMode === 'grid';
   const previewText = outline.points.join('\n');
+  const showExpandControl = isGridView && isEditing && !!onToggleExpand;
 
   // Callback to insert at cursor position in the textarea
   const insertAtCursor = useCallback((markdown: string) => {
@@ -107,11 +116,17 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
     setIsEditing(false);
   };
 
+  useEffect(() => {
+    if (isExpanded && !isEditing) {
+      onToggleExpand?.(false);
+    }
+  }, [isExpanded, isEditing, onToggleExpand]);
+
   return (
     <Card
       className={`p-4 relative ${
         isSelected ? 'border-2 border-banana-500 shadow-yellow' : ''
-      } ${isGridView && !isEditing ? 'h-72' : ''}`}
+      } ${isExpanded ? 'h-full' : (isGridView && !isEditing ? 'h-72' : '')}`}
       onClick={!isEditing ? onClick : undefined}
     >
       <ShimmerOverlay show={isAiRefining} />
@@ -146,7 +161,9 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
                 value={editPart}
                 onChange={(e) => setEditPart(e.target.value)}
                 onClick={(e) => e.stopPropagation()}
-                className="text-xs px-2 py-0.5 w-24 border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className={`text-xs px-2 py-0.5 border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                  isExpanded ? 'flex-1 min-w-0 max-w-md' : 'w-24'
+                }`}
                 placeholder={t('outlineCard.chapter')}
               />
             ) : (
@@ -155,6 +172,19 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
                   {page.part}
                 </span>
               )
+            )}
+            {showExpandControl && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleExpand?.(!isExpanded);
+                }}
+                className="ml-auto p-1.5 text-gray-500 dark:text-foreground-tertiary hover:text-banana-600 hover:bg-banana-50 dark:hover:bg-background-hover rounded transition-colors"
+                title={isExpanded ? t('outlineCard.collapseEdit') : t('outlineCard.expandEdit')}
+              >
+                {isExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              </button>
             )}
           </div>
 

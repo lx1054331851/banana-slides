@@ -47,6 +47,8 @@ interface MarkdownTextareaProps {
   toolbarRight?: React.ReactNode;
   /** Show compact image preview strip. Default: true */
   showImagePreview?: boolean;
+  /** Allow manual vertical resize. Default: true */
+  resizable?: boolean;
 }
 
 /** Ref handle for MarkdownTextarea */
@@ -248,6 +250,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   toolbarLeft,
   toolbarRight,
   showImagePreview = true,
+  resizable = true,
 }, ref) => {
   const t = useT(markdownTextareaI18n);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -613,7 +616,10 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
             onDragOver={handleDragOver}
             onDrop={handleDrop}
             style={{ minHeight: `${minHeight}px` }}
-            className="w-full px-4 py-3 outline-none overflow-y-auto resize-y whitespace-pre-wrap break-words text-gray-900 dark:text-foreground-primary"
+            className={cn(
+              "w-full px-4 py-3 outline-none overflow-y-auto whitespace-pre-wrap break-words text-gray-900 dark:text-foreground-primary",
+              resizable ? 'resize-y' : 'resize-none'
+            )}
           />
 
           {/* Placeholder */}
