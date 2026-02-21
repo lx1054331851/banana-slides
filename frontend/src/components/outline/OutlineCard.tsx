@@ -41,6 +41,7 @@ interface OutlineCardProps {
   isSelected: boolean;
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
   isAiRefining?: boolean;
+  viewMode?: 'list' | 'grid';
 }
 
 export const OutlineCard: React.FC<OutlineCardProps> = ({
@@ -54,6 +55,7 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
   isSelected,
   dragHandleProps,
   isAiRefining = false,
+  viewMode = 'list',
 }) => {
   const t = useT(outlineCardI18n);
   const { confirm, ConfirmDialog } = useConfirm();
@@ -63,6 +65,8 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
   const [editPoints, setEditPoints] = useState(outline.points.join('\n'));
   const [editPart, setEditPart] = useState(page.part || '');
   const textareaRef = useRef<MarkdownTextareaRef>(null);
+  const isGridView = viewMode === 'grid';
+  const previewText = outline.points.join('\n');
 
   // Callback to insert at cursor position in the textarea
   const insertAtCursor = useCallback((markdown: string) => {
@@ -107,12 +111,12 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
     <Card
       className={`p-4 relative ${
         isSelected ? 'border-2 border-banana-500 shadow-yellow' : ''
-      }`}
+      } ${isGridView && !isEditing ? 'h-72' : ''}`}
       onClick={!isEditing ? onClick : undefined}
     >
       <ShimmerOverlay show={isAiRefining} />
 
-      <div className="flex items-start gap-3 relative z-10">
+      <div className="flex items-start gap-3 relative z-10 h-full">
         {/* 拖拽手柄 */}
         <div
           {...dragHandleProps}
@@ -122,7 +126,7 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
         </div>
 
         {/* 内容区 */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex flex-col min-h-0">
           {/* 页码和章节 */}
           <div className="flex items-center gap-2 mb-2">
             <span className="text-sm font-semibold text-gray-900 dark:text-foreground-primary">
@@ -195,12 +199,18 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
             </div>
           ) : (
             /* 查看模式 */
-            <div>
-              <h4 className="font-semibold text-gray-900 dark:text-foreground-primary mb-2">
+            <div className={isGridView ? 'flex-1 min-h-0' : ''}>
+              <h4 className={`font-semibold text-gray-900 dark:text-foreground-primary mb-2 ${isGridView ? 'line-clamp-2' : ''}`}>
                 {outline.title}
               </h4>
               <div className="text-gray-600 dark:text-foreground-tertiary">
-                <Markdown>{outline.points.join('\n')}</Markdown>
+                {isGridView ? (
+                  <div className="text-sm leading-relaxed line-clamp-6 whitespace-pre-line">
+                    {previewText}
+                  </div>
+                ) : (
+                  <Markdown>{outline.points.join('\n')}</Markdown>
+                )}
               </div>
             </div>
           )}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, ArrowRight, Plus, FileText, Sparkle, Download, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ArrowLeft, Save, ArrowRight, Plus, FileText, Sparkle, Download, PanelLeftClose, PanelLeftOpen, LayoutGrid, List } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 
 // 组件内翻译
@@ -19,6 +19,7 @@ const outlineI18n = {
       reParseOutline: "重新解析大纲", reGenerate: "重新生成大纲", export: "导出大纲",
       aiPlaceholder: "例如：增加一页关于XXX的内容、删除第3页、合并前两页... · Ctrl+Enter提交",
       aiPlaceholderShort: "例如：增加/删除页面... · Ctrl+Enter",
+      viewMode: { list: "列表", grid: "网格" },
       contextLabels: { idea: "PPT构想", outline: "大纲", description: "描述" },
       inputLabel: { idea: "PPT 构想", outline: "原始大纲", description: "页面描述", ppt_renovation: "原始 PPT 内容" },
       inputPlaceholder: { idea: "输入你的 PPT 构想...", outline: "输入大纲内容...", description: "输入页面描述...", ppt_renovation: "已从 PDF 中提取内容" },
@@ -45,6 +46,7 @@ const outlineI18n = {
       reParseOutline: "Re-parse Outline", reGenerate: "Regenerate Outline", export: "Export Outline",
       aiPlaceholder: "e.g., Add a page about XXX, delete page 3, merge first two pages... · Ctrl+Enter to submit",
       aiPlaceholderShort: "e.g., Add/delete pages... · Ctrl+Enter",
+      viewMode: { list: "List", grid: "Grid" },
       contextLabels: { idea: "PPT Idea", outline: "Outline", description: "Description" },
       inputLabel: { idea: "PPT Idea", outline: "Original Outline", description: "Page Descriptions", ppt_renovation: "Original PPT Content" },
       inputPlaceholder: { idea: "Enter your PPT idea...", outline: "Enter outline content...", description: "Enter page descriptions...", ppt_renovation: "Content extracted from PDF" },
@@ -72,6 +74,7 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
+  rectSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -95,6 +98,7 @@ const SortableCard: React.FC<{
   onClick: () => void;
   isSelected: boolean;
   isAiRefining?: boolean;
+  viewMode?: 'list' | 'grid';
 }> = (props) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: props.page.id || `page-${props.index}`,
@@ -107,7 +111,12 @@ const SortableCard: React.FC<{
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={props.viewMode === 'grid' ? 'h-full' : ''}
+      {...attributes}
+    >
       <OutlineCard {...props} dragHandleProps={listeners} />
     </div>
   );
@@ -135,6 +144,14 @@ export const OutlineEditor: React.FC = () => {
   const [isAiRefining, setIsAiRefining] = useState(false);
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(true);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
+    try {
+      const stored = localStorage.getItem('outlineViewMode');
+      return stored === 'grid' ? 'grid' : 'list';
+    } catch {
+      return 'list';
+    }
+  });
   const { confirm, ConfirmDialog } = useConfirm();
   const { show, ToastContainer } = useToast();
 
@@ -295,6 +312,15 @@ export const OutlineEditor: React.FC = () => {
     show({ message: t('outline.messages.exportSuccess'), type: 'success' });
   }, [currentProject, show]);
 
+  const handleViewModeChange = useCallback((mode: 'list' | 'grid') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('outlineViewMode', mode);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
   if (!currentProject) {
     return <Loading fullscreen message={t('outline.messages.loadingProject')} />;
   }
@@ -432,6 +458,34 @@ export const OutlineEditor: React.FC = () => {
             <span className="text-xs md:text-sm text-gray-500 dark:text-foreground-tertiary whitespace-nowrap">
               {t('outline.pageCount', { count: String(currentProject.pages.length) })}
             </span>
+          </div>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('list')}
+              className={`h-8 px-2.5 rounded-lg border text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                viewMode === 'list'
+                  ? 'border-banana-500 bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
+                  : 'border-gray-200 dark:border-border-primary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
+              }`}
+              title={t('outline.viewMode.list')}
+            >
+              <List size={16} />
+              <span className="hidden md:inline">{t('outline.viewMode.list')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('grid')}
+              className={`h-8 px-2.5 rounded-lg border text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                viewMode === 'grid'
+                  ? 'border-banana-500 bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
+                  : 'border-gray-200 dark:border-border-primary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
+              }`}
+              title={t('outline.viewMode.grid')}
+            >
+              <LayoutGrid size={16} />
+              <span className="hidden md:inline">{t('outline.viewMode.grid')}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -572,25 +626,29 @@ export const OutlineEditor: React.FC = () => {
                 collisionDetection={closestCenter}
                 onDragEnd={handleDragEnd}
               >
-                <SortableContext
-                  items={currentProject.pages.map((p, idx) => p.id || `page-${idx}`)}
-                  strategy={verticalListSortingStrategy}
+              <SortableContext
+                items={currentProject.pages.map((p, idx) => p.id || `page-${idx}`)}
+                strategy={viewMode === 'grid' ? rectSortingStrategy : verticalListSortingStrategy}
+              >
+                <div className={viewMode === 'grid'
+                  ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4'
+                  : 'space-y-3 md:space-y-4'}
                 >
-                  <div className="space-y-3 md:space-y-4">
-                    {currentProject.pages.map((page, index) => (
-                      <SortableCard
-                        key={page.id || `page-${index}`}
-                        page={page}
-                        index={index}
-                        projectId={projectId}
-                        showToast={show}
-                        onUpdate={(data) => page.id && updatePageLocal(page.id, data)}
-                        onDelete={() => page.id && deletePageById(page.id)}
-                        onClick={() => setSelectedPageId(page.id || null)}
-                        isSelected={selectedPageId === page.id}
-                        isAiRefining={isAiRefining}
-                      />
-                    ))}
+                  {currentProject.pages.map((page, index) => (
+                    <SortableCard
+                      key={page.id || `page-${index}`}
+                      page={page}
+                      index={index}
+                      projectId={projectId}
+                      showToast={show}
+                      onUpdate={(data) => page.id && updatePageLocal(page.id, data)}
+                      onDelete={() => page.id && deletePageById(page.id)}
+                      onClick={() => setSelectedPageId(page.id || null)}
+                      isSelected={selectedPageId === page.id}
+                      isAiRefining={isAiRefining}
+                      viewMode={viewMode}
+                    />
+                  ))}
                   </div>
                 </SortableContext>
               </DndContext>
