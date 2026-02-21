@@ -353,12 +353,17 @@ export const History: React.FC = () => {
       {/* 导航栏 */}
       <nav className="h-14 md:h-16 bg-white dark:bg-background-secondary shadow-sm dark:shadow-background-primary/30 border-b border-gray-100 dark:border-border-primary">
         <div className="max-w-7xl mx-auto px-3 md:px-4 h-full flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2"
+            title={t('nav.home')}
+          >
             <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-banana-500 to-banana-600 rounded-lg flex items-center justify-center text-xl md:text-2xl">
               🍌
             </div>
             <span className="text-lg md:text-xl font-bold text-gray-900 dark:text-foreground-primary">{t('home.title')}</span>
-          </div>
+          </button>
           <div className="flex items-center gap-2 md:gap-4">
             <Button
               variant="ghost"
