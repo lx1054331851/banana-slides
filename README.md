@@ -244,6 +244,8 @@ MINIMAX_API_KEY=your-minimax-api-key          # MiniMax
 ...
 ```
 
+可选：设置 `LOG_IMAGE_PROMPTS=true` 可在后端日志打印发送给 Gemini 的图片提示词。
+
 **使用新版可编辑导出配置方法，获得更好的可编辑导出效果**: 需在[百度智能云平台](https://console.bce.baidu.com/iam/#/iam/apikey/list)（点击此处进入）中获取API KEY，填写在.env文件中的BAIDU_OCR_API_KEY字段（有充足的免费使用额度）。详见https://github.com/Anionex/banana-slides/issues/121 中的说明
 
 
