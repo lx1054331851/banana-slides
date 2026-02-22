@@ -373,6 +373,8 @@ export const SlidePreview: React.FC = () => {
   const lastSelectedPageKeyRef = useRef<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showExportTasksPanel, setShowExportTasksPanel] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
+  const exportTasksPanelRef = useRef<HTMLDivElement | null>(null);
   // 多选导出相关状态
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
@@ -446,6 +448,23 @@ export const SlidePreview: React.FC = () => {
       uploadedFiles: File[];
     };
   }>>({});
+
+  useEffect(() => {
+    if (!showExportMenu && !showExportTasksPanel) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      const clickedMenu = exportMenuRef.current?.contains(target);
+      const clickedTasks = exportTasksPanelRef.current?.contains(target);
+      if (!clickedMenu && !clickedTasks) {
+        setShowExportMenu(false);
+        setShowExportTasksPanel(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showExportMenu, showExportTasksPanel]);
 
   // 预览图矩形选择状态（编辑弹窗内）
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -1872,7 +1891,7 @@ export const SlidePreview: React.FC = () => {
           
           {/* 导出任务按钮 */}
           {exportTasks.filter(t => t.projectId === projectId).length > 0 && (
-            <div className="relative">
+            <div className="relative" ref={exportTasksPanelRef}>
               <Button
                 variant="ghost"
                 size="sm"
@@ -1903,7 +1922,7 @@ export const SlidePreview: React.FC = () => {
             </div>
           )}
           
-          <div className="relative">
+          <div className="relative" ref={exportMenuRef}>
             <Button
               variant="primary"
               size="sm"
