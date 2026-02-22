@@ -419,6 +419,27 @@ export const SlidePreview: React.FC = () => {
   const [exportAllowPartial, setExportAllowPartial] = useState<boolean>(
     currentProject?.export_allow_partial || false
   );
+  const [exportCompressEnabled, setExportCompressEnabled] = useState<boolean>(
+    currentProject?.export_compress_enabled || false
+  );
+  const [exportCompressMode, setExportCompressMode] = useState<'auto' | 'manual'>(
+    (currentProject?.export_compress_mode as 'auto' | 'manual') || 'auto'
+  );
+  const [exportCompressQuality, setExportCompressQuality] = useState<number>(
+    currentProject?.export_compress_quality || 92
+  );
+  const [exportCompressAutoTarget, setExportCompressAutoTarget] = useState<number>(
+    currentProject?.export_compress_auto_target || 1.0
+  );
+  const [exportCompressAutoMinQuality, setExportCompressAutoMinQuality] = useState<number>(
+    currentProject?.export_compress_auto_min_quality || 60
+  );
+  const [exportCompressAutoMaxQuality, setExportCompressAutoMaxQuality] = useState<number>(
+    currentProject?.export_compress_auto_max_quality || 95
+  );
+  const [exportCompressAutoMaxTrials, setExportCompressAutoMaxTrials] = useState<number>(
+    currentProject?.export_compress_auto_max_trials || 6
+  );
   const [isSavingExportSettings, setIsSavingExportSettings] = useState(false);
   // 画面比例
   const [aspectRatio, setAspectRatio] = useState<string>(
@@ -549,13 +570,18 @@ export const SlidePreview: React.FC = () => {
     }
   }, [exitFullscreen, requestFullscreen]);
 
+  const pageCount = currentProject?.pages?.length ?? 0;
+
   const goPrevPage = useCallback(() => {
     setSelectedIndex((prev) => Math.max(0, prev - 1));
   }, []);
 
   const goNextPage = useCallback(() => {
-    setSelectedIndex((prev) => Math.min(currentProject.pages.length - 1, prev + 1));
-  }, [currentProject.pages.length]);
+    setSelectedIndex((prev) => {
+      const maxIndex = Math.max(0, pageCount - 1);
+      return Math.min(maxIndex, prev + 1);
+    });
+  }, [pageCount]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -630,6 +656,13 @@ export const SlidePreview: React.FC = () => {
         setExportExtractorMethod((currentProject.export_extractor_method as ExportExtractorMethod) || 'hybrid');
         setExportInpaintMethod((currentProject.export_inpaint_method as ExportInpaintMethod) || 'hybrid');
         setExportAllowPartial(currentProject.export_allow_partial || false);
+        setExportCompressEnabled(currentProject.export_compress_enabled || false);
+        setExportCompressMode((currentProject.export_compress_mode as 'auto' | 'manual') || 'auto');
+        setExportCompressQuality(currentProject.export_compress_quality || 92);
+        setExportCompressAutoTarget(currentProject.export_compress_auto_target || 1.0);
+        setExportCompressAutoMinQuality(currentProject.export_compress_auto_min_quality || 60);
+        setExportCompressAutoMaxQuality(currentProject.export_compress_auto_max_quality || 95);
+        setExportCompressAutoMaxTrials(currentProject.export_compress_auto_max_trials || 6);
         setAspectRatio(currentProject.image_aspect_ratio || '16:9');
         lastProjectId.current = currentProject.id || null;
         isEditingRequirements.current = false;
@@ -647,10 +680,17 @@ export const SlidePreview: React.FC = () => {
         setExportExtractorMethod((currentProject.export_extractor_method as ExportExtractorMethod) || 'hybrid');
         setExportInpaintMethod((currentProject.export_inpaint_method as ExportInpaintMethod) || 'hybrid');
         setExportAllowPartial(currentProject.export_allow_partial || false);
+        setExportCompressEnabled(currentProject.export_compress_enabled || false);
+        setExportCompressMode((currentProject.export_compress_mode as 'auto' | 'manual') || 'auto');
+        setExportCompressQuality(currentProject.export_compress_quality || 92);
+        setExportCompressAutoTarget(currentProject.export_compress_auto_target || 1.0);
+        setExportCompressAutoMinQuality(currentProject.export_compress_auto_min_quality || 60);
+        setExportCompressAutoMaxQuality(currentProject.export_compress_auto_max_quality || 95);
+        setExportCompressAutoMaxTrials(currentProject.export_compress_auto_max_trials || 6);
       }
       // 如果用户正在编辑，则不更新本地状态
     }
-  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial]);
+  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_mode, currentProject?.export_compress_quality, currentProject?.export_compress_auto_target, currentProject?.export_compress_auto_min_quality, currentProject?.export_compress_auto_max_quality, currentProject?.export_compress_auto_max_trials]);
 
   // 加载当前页面的历史版本
   useEffect(() => {
@@ -1391,7 +1431,17 @@ export const SlidePreview: React.FC = () => {
       await updateProject(projectId, {
         export_extractor_method: exportExtractorMethod,
         export_inpaint_method: exportInpaintMethod,
-        export_allow_partial: exportAllowPartial
+        export_allow_partial: exportAllowPartial,
+        export_compress_enabled: exportCompressEnabled,
+        export_compress_mode: exportCompressMode,
+        export_compress_format: 'jpeg',
+        export_compress_quality: exportCompressQuality,
+        export_compress_subsampling: 0,
+        export_compress_progressive: true,
+        export_compress_auto_target: exportCompressAutoTarget,
+        export_compress_auto_min_quality: exportCompressAutoMinQuality,
+        export_compress_auto_max_quality: exportCompressAutoMaxQuality,
+        export_compress_auto_max_trials: exportCompressAutoMaxTrials,
       });
       // 更新本地项目状态
       await syncProject(projectId);
@@ -1404,7 +1454,7 @@ export const SlidePreview: React.FC = () => {
     } finally {
       setIsSavingExportSettings(false);
     }
-  }, [currentProject, projectId, exportExtractorMethod, exportInpaintMethod, exportAllowPartial, syncProject, show]);
+  }, [currentProject, projectId, exportExtractorMethod, exportInpaintMethod, exportAllowPartial, exportCompressEnabled, exportCompressMode, exportCompressQuality, exportCompressAutoTarget, exportCompressAutoMinQuality, exportCompressAutoMaxQuality, exportCompressAutoMaxTrials, syncProject, show]);
 
   const handleSaveAspectRatio = useCallback(async () => {
     if (!currentProject || !projectId) return;
@@ -2593,9 +2643,23 @@ export const SlidePreview: React.FC = () => {
             exportExtractorMethod={exportExtractorMethod}
             exportInpaintMethod={exportInpaintMethod}
             exportAllowPartial={exportAllowPartial}
+            exportCompressEnabled={exportCompressEnabled}
+            exportCompressMode={exportCompressMode}
+            exportCompressQuality={exportCompressQuality}
+            exportCompressAutoTarget={exportCompressAutoTarget}
+            exportCompressAutoMinQuality={exportCompressAutoMinQuality}
+            exportCompressAutoMaxQuality={exportCompressAutoMaxQuality}
+            exportCompressAutoMaxTrials={exportCompressAutoMaxTrials}
             onExportExtractorMethodChange={setExportExtractorMethod}
             onExportInpaintMethodChange={setExportInpaintMethod}
             onExportAllowPartialChange={setExportAllowPartial}
+            onExportCompressEnabledChange={setExportCompressEnabled}
+            onExportCompressModeChange={setExportCompressMode}
+            onExportCompressQualityChange={setExportCompressQuality}
+            onExportCompressAutoTargetChange={setExportCompressAutoTarget}
+            onExportCompressAutoMinQualityChange={setExportCompressAutoMinQuality}
+            onExportCompressAutoMaxQualityChange={setExportCompressAutoMaxQuality}
+            onExportCompressAutoMaxTrialsChange={setExportCompressAutoMaxTrials}
             onSaveExportSettings={handleSaveExportSettings}
             isSavingExportSettings={isSavingExportSettings}
             // 画面比例
