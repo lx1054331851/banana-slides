@@ -201,6 +201,38 @@ export const SlidePreview: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  useEffect(() => {
+    if (!currentProject) return;
+    const page = currentProject.pages[selectedIndex];
+    if (!page) {
+      if (lastSelectedPageKeyRef.current !== null) {
+        lastSelectedPageKeyRef.current = null;
+        setEditOutlineTitle('');
+        setEditOutlinePoints('');
+        setEditDescription('');
+      }
+      return;
+    }
+
+    const pageKey = page.id ?? `index-${selectedIndex}`;
+    if (pageKey === lastSelectedPageKeyRef.current) return;
+    lastSelectedPageKeyRef.current = pageKey;
+
+    setEditOutlineTitle(page.outline_content?.title || '');
+    setEditOutlinePoints(page.outline_content?.points?.join('\n') || '');
+
+    const descContent = page.description_content;
+    let descText = '';
+    if (descContent) {
+      if ('text' in descContent) {
+        descText = descContent.text as string;
+      } else if ('text_content' in descContent && Array.isArray(descContent.text_content)) {
+        descText = descContent.text_content.join('\n');
+      }
+    }
+    setEditDescription(descText);
+  }, [currentProject, selectedIndex]);
+
   const drawerMinWidth = 360;
   const drawerMaxWidth = Math.min(960, Math.round(viewportWidth * 0.75));
   const drawerWidthPx = Math.min(
@@ -251,6 +283,7 @@ export const SlidePreview: React.FC = () => {
   const [editOutlineTitle, setEditOutlineTitle] = useState('');
   const [editOutlinePoints, setEditOutlinePoints] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const lastSelectedPageKeyRef = useRef<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showExportTasksPanel, setShowExportTasksPanel] = useState(false);
   // 多选导出相关状态
