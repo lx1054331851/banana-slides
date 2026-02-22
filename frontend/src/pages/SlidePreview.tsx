@@ -41,6 +41,8 @@ const previewI18n = {
       editPromptLabel: "输入修改指令(将自动添加页面描述)",
       editPromptPlaceholder: "例如：将框选区域内的素材移除、把背景改成蓝色、增大标题字号、更改文本框样式为虚线...",
       saveOutlineOnly: "仅保存大纲/描述", generateImage: "生成图片",
+      collapseSidebar: "收起左侧导航",
+      expandSidebar: "展开左侧导航",
       templateModalDesc: "选择一个新的模板将应用到后续PPT页面生成（不影响已经生成的页面）。你可以选择预设模板、已有模板或上传新模板。",
       uploadingTemplate: "正在上传模板...",
       resolution1KWarning: "1K分辨率警告",
@@ -96,6 +98,8 @@ const previewI18n = {
       editPromptLabel: "Enter edit instructions (page description will be auto-added)",
       editPromptPlaceholder: "e.g., Remove elements in selected area, change background to blue, increase title font size, change text box style to dashed...",
       saveOutlineOnly: "Save Outline/Description Only", generateImage: "Generate Image",
+      collapseSidebar: "Collapse sidebar",
+      expandSidebar: "Expand sidebar",
       templateModalDesc: "Selecting a new template will apply to future PPT page generation (won't affect already generated pages). You can choose preset templates, existing templates, or upload a new one.",
       uploadingTemplate: "Uploading template...",
       resolution1KWarning: "1K Resolution Warning",
@@ -158,6 +162,7 @@ export const SlidePreview: React.FC = () => {
   const location = useLocation();
   const t = useT(previewI18n);
   const { projectId } = useParams<{ projectId: string }>();
+  const sidebarDefaultWidth = 320;
   const fromHistory = (location.state as any)?.from === 'history';
   const {
     currentProject,
@@ -186,7 +191,13 @@ export const SlidePreview: React.FC = () => {
   });
   const [drawerWidthPct, setDrawerWidthPct] = useState(0.4);
   const [isResizingDrawer, setIsResizingDrawer] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const [sidebarWidthPxExpanded, setSidebarWidthPxExpanded] = useState(sidebarDefaultWidth);
   const resizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const sidebarResizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const sidebarResizeRafRef = useRef<number | null>(null);
+  const sidebarResizePendingRef = useRef<number | null>(null);
   // 页面挂载时恢复正在进行的导出任务（页面刷新后）
   useEffect(() => {
     restoreActiveTasks();
@@ -200,6 +211,13 @@ export const SlidePreview: React.FC = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    if (isMobileView && isSidebarCollapsed) {
+      setSidebarWidthPxExpanded(sidebarDefaultWidth);
+      setIsSidebarCollapsed(false);
+    }
+  }, [isMobileView, isSidebarCollapsed, sidebarDefaultWidth]);
 
   useEffect(() => {
     if (!currentProject) return;
@@ -239,6 +257,10 @@ export const SlidePreview: React.FC = () => {
     Math.max(Math.round(viewportWidth * drawerWidthPct), drawerMinWidth),
     drawerMaxWidth
   );
+  const sidebarCollapsedWidth = 72;
+  const sidebarMinWidth = sidebarCollapsedWidth;
+  const sidebarMaxWidth = Math.min(520, Math.round(viewportWidth * 0.5));
+  const sidebarWidthPx = isSidebarCollapsed ? sidebarCollapsedWidth : sidebarWidthPxExpanded;
 
   useEffect(() => {
     if (!viewportWidth) return;
@@ -246,6 +268,13 @@ export const SlidePreview: React.FC = () => {
     const maxPct = drawerMaxWidth / viewportWidth;
     setDrawerWidthPct((prev) => Math.min(Math.max(prev, minPct), maxPct));
   }, [viewportWidth, drawerMinWidth, drawerMaxWidth]);
+
+  useEffect(() => {
+    if (!viewportWidth) return;
+    setSidebarWidthPxExpanded((prev) =>
+      Math.min(Math.max(prev, sidebarMinWidth), sidebarMaxWidth)
+    );
+  }, [viewportWidth, sidebarMinWidth, sidebarMaxWidth]);
 
   useEffect(() => {
     if (!isResizingDrawer) return;
@@ -269,6 +298,56 @@ export const SlidePreview: React.FC = () => {
     };
   }, [isResizingDrawer, drawerMinWidth, drawerMaxWidth, viewportWidth]);
 
+  useEffect(() => {
+    if (!isResizingSidebar) return;
+    const handleMove = (e: MouseEvent) => {
+      if (!sidebarResizeStartRef.current) return;
+      const delta = e.clientX - sidebarResizeStartRef.current.startX;
+      const nextWidth = sidebarResizeStartRef.current.startWidth + delta;
+      sidebarResizePendingRef.current = nextWidth;
+      if (sidebarResizeRafRef.current !== null) return;
+      sidebarResizeRafRef.current = window.requestAnimationFrame(() => {
+        sidebarResizeRafRef.current = null;
+        const pendingWidth = sidebarResizePendingRef.current;
+        sidebarResizePendingRef.current = null;
+        if (pendingWidth === null) return;
+        const clampedWidth = Math.min(
+          Math.max(pendingWidth, sidebarMinWidth),
+          sidebarMaxWidth
+        );
+        if (clampedWidth <= sidebarCollapsedWidth) {
+          if (!isSidebarCollapsed) {
+            setIsSidebarCollapsed(true);
+          }
+        } else if (isSidebarCollapsed) {
+          setIsSidebarCollapsed(false);
+        }
+        setSidebarWidthPxExpanded((prev) => (prev === clampedWidth ? prev : clampedWidth));
+      });
+    };
+    const handleUp = () => {
+      setIsResizingSidebar(false);
+    };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    document.body.style.userSelect = 'none';
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+      document.body.style.userSelect = '';
+      if (sidebarResizeRafRef.current !== null) {
+        cancelAnimationFrame(sidebarResizeRafRef.current);
+        sidebarResizeRafRef.current = null;
+      }
+      sidebarResizePendingRef.current = null;
+    };
+  }, [
+    isResizingSidebar,
+    sidebarMinWidth,
+    sidebarMaxWidth,
+    isSidebarCollapsed,
+  ]);
+
   const handleDrawerResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
     resizeStartRef.current = {
@@ -276,6 +355,14 @@ export const SlidePreview: React.FC = () => {
       startWidth: drawerWidthPx,
     };
     setIsResizingDrawer(true);
+  };
+  const handleSidebarResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    sidebarResizeStartRef.current = {
+      startX: e.clientX,
+      startWidth: isSidebarCollapsed ? sidebarCollapsedWidth : sidebarWidthPxExpanded,
+    };
+    setIsResizingSidebar(true);
   };
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [editPrompt, setEditPrompt] = useState('');
@@ -1404,6 +1491,12 @@ export const SlidePreview: React.FC = () => {
   const hasAllImages = currentProject.pages.every(
     (p) => p.generated_image_path
   );
+  const isSidebarCompact = !isMobileView && !isSidebarCollapsed && sidebarWidthPx <= 200;
+  const generateButtonText =
+    isMultiSelectMode && selectedPageIds.size > 0
+      ? t('preview.generateSelected', { count: selectedPageIds.size })
+      : t('preview.batchGenerate', { count: currentProject.pages.length });
+  const isGenerateDisabled = isMultiSelectMode && selectedPageIds.size === 0;
 
   const editPageContent = (
     <div className="space-y-4">
@@ -1873,142 +1966,245 @@ export const SlidePreview: React.FC = () => {
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-w-0 min-h-0">
         {/* 左侧：缩略图列表 */}
-        <aside className="w-full md:w-80 bg-white dark:bg-background-secondary border-b md:border-b-0 md:border-r border-gray-200 dark:border-border-primary flex flex-col flex-shrink-0">
-          <div className="p-3 md:p-4 border-b border-gray-200 dark:border-border-primary flex-shrink-0 space-y-2 md:space-y-3">
-            <Button
-              variant="primary"
-              icon={<Sparkles size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={handleGenerateAll}
-              className="w-full text-sm md:text-base"
-              disabled={isMultiSelectMode && selectedPageIds.size === 0}
-            >
-              {isMultiSelectMode && selectedPageIds.size > 0
-                ? t('preview.generateSelected', { count: selectedPageIds.size })
-                : t('preview.batchGenerate', { count: currentProject.pages.length })}
-            </Button>
-          </div>
-          
-          {/* 缩略图列表：桌面端垂直，移动端横向滚动 */}
-          <div className="flex-1 overflow-y-auto md:overflow-y-auto overflow-x-auto md:overflow-x-visible p-3 md:p-4 min-h-0">
-            {/* 多选模式切换 - 紧凑布局 */}
-            <div className="flex items-center gap-2 text-xs mb-3">
-              <button
-                onClick={toggleMultiSelectMode}
-                className={`px-2 py-1 rounded transition-colors flex items-center gap-1 ${
-                  isMultiSelectMode 
-                    ? 'bg-banana-100 text-banana-700 hover:bg-banana-200' 
-                    : 'text-gray-500 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover'
-                }`}
-              >
-                {isMultiSelectMode ? <CheckSquare size={14} /> : <Square size={14} />}
-                <span>{isMultiSelectMode ? t('preview.cancelMultiSelect') : t('preview.multiSelect')}</span>
-              </button>
-              {isMultiSelectMode && (
-                <>
-                  <button
-                    onClick={selectedPageIds.size === pagesWithImages.length ? deselectAllPages : selectAllPages}
-                    className="text-gray-500 dark:text-foreground-tertiary hover:text-banana-600 transition-colors"
-                  >
-                    {selectedPageIds.size === pagesWithImages.length ? t('common.deselectAll') : t('common.selectAll')}
-                  </button>
-                  {selectedPageIds.size > 0 && (
-                    <span className="text-banana-600 font-medium">
-                      ({selectedPageIds.size}{t('preview.pagesUnit')})
-                    </span>
-                  )}
-                </>
+        <aside
+          className={`relative w-full md:w-auto bg-white dark:bg-background-secondary border-b md:border-b-0 md:border-r border-gray-200 dark:border-border-primary flex flex-col flex-shrink-0 ${
+            isResizingSidebar ? 'transition-none' : 'transition-[width] duration-300 ease-out'
+          } ${isSidebarCollapsed ? 'md:items-center' : ''}`}
+          style={isMobileView ? undefined : { width: sidebarWidthPx }}
+        >
+          {!isMobileView && (
+            <div
+              className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-banana-100/60"
+              onMouseDown={handleSidebarResizeStart}
+            />
+          )}
+          <div
+            className={`border-b border-gray-200 dark:border-border-primary flex-shrink-0 space-y-2 md:space-y-3 ${
+              isSidebarCollapsed ? 'px-2 py-3' : 'p-3 md:p-4'
+            }`}
+          >
+            <div className={`flex items-center gap-2 ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+              {!isSidebarCollapsed && !isSidebarCompact && (
+                <span className="text-xs font-semibold text-gray-600 dark:text-foreground-tertiary">
+                  {t('preview.pageCount', { count: currentProject.pages.length })}
+                </span>
+              )}
+              {!isMobileView && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isSidebarCollapsed) {
+                      setSidebarWidthPxExpanded(sidebarDefaultWidth);
+                      setIsSidebarCollapsed(false);
+                    } else {
+                      setIsSidebarCollapsed(true);
+                    }
+                  }}
+                  title={isSidebarCollapsed ? t('preview.expandSidebar') : t('preview.collapseSidebar')}
+                  className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:text-foreground-secondary dark:hover:bg-background-hover transition-colors"
+                >
+                  {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+                </button>
               )}
             </div>
-            <div className="flex md:flex-col gap-2 md:gap-4 min-w-max md:min-w-0">
+            {(isSidebarCollapsed || isSidebarCompact) && !isMobileView ? (
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Sparkles size={16} />}
+                onClick={handleGenerateAll}
+                className="w-10 h-10 p-0"
+                disabled={isGenerateDisabled}
+                title={generateButtonText}
+              />
+            ) : (
+              <Button
+                variant="primary"
+                icon={<Sparkles size={16} className="md:w-[18px] md:h-[18px]" />}
+                onClick={handleGenerateAll}
+                className="w-full text-sm md:text-base"
+                disabled={isGenerateDisabled}
+              >
+                {generateButtonText}
+              </Button>
+            )}
+          </div>
+
+          {isSidebarCollapsed && !isMobileView ? (
+            <div className="flex-1 overflow-y-auto py-3 flex flex-col items-center gap-2 min-h-0">
               {currentProject.pages.map((page, index) => (
-                <div key={page.id} className="md:w-full flex-shrink-0 relative">
-                  {/* 移动端：简化缩略图 */}
-                  <div className="md:hidden relative">
-                    <button
-                      onClick={() => {
-                        if (isMultiSelectMode && page.id && page.generated_image_path) {
-                          togglePageSelection(page.id);
-                        } else {
-                          setSelectedIndex(index);
-                        }
-                      }}
-                      className={`w-20 h-14 rounded border-2 transition-all ${
-                        selectedIndex === index
-                          ? 'border-banana-500 shadow-md'
-                          : 'border-gray-200 dark:border-border-primary'
-                      } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
-                    >
-                      {page.generated_image_path ? (
-                        <img
-                          src={getImageUrl(page.generated_image_path, page.updated_at)}
-                          alt={`Slide ${index + 1}`}
-                          className="w-full h-full object-cover rounded"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gray-100 dark:bg-background-secondary rounded flex items-center justify-center text-xs text-gray-400">
-                          {index + 1}
-                        </div>
-                      )}
-                    </button>
-                    {/* 多选复选框（移动端） */}
-                    {isMultiSelectMode && page.id && page.generated_image_path && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          togglePageSelection(page.id!);
-                        }}
-                        className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center transition-all ${
-                          selectedPageIds.has(page.id)
-                            ? 'bg-banana-500 text-white'
-                            : 'bg-white dark:bg-background-secondary border-2 border-gray-300 dark:border-border-primary'
-                        }`}
-                      >
-                        {selectedPageIds.has(page.id) && <Check size={12} />}
-                      </button>
+                <div key={page.id || `collapsed-${index}`} className="relative">
+                  <button
+                    onClick={() => {
+                      if (isMultiSelectMode && page.id && page.generated_image_path) {
+                        togglePageSelection(page.id);
+                      } else {
+                        setSelectedIndex(index);
+                      }
+                    }}
+                    title={t('preview.page', { num: index + 1 })}
+                    className={`w-12 h-9 rounded border-2 transition-all ${
+                      selectedIndex === index
+                        ? 'border-banana-500 shadow-md'
+                        : 'border-gray-200 dark:border-border-primary'
+                    } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
+                  >
+                    {page.generated_image_path ? (
+                      <img
+                        src={getImageUrl(page.generated_image_path, page.updated_at)}
+                        alt={`Slide ${index + 1}`}
+                        className="w-full h-full object-cover rounded"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-100 dark:bg-background-secondary rounded flex items-center justify-center text-[10px] text-gray-400">
+                        {index + 1}
+                      </div>
                     )}
-                  </div>
-                  {/* 桌面端：完整卡片 */}
-                  <div className="hidden md:block relative">
-                    {/* 多选复选框（桌面端） */}
-                    {isMultiSelectMode && page.id && page.generated_image_path && (
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto md:overflow-y-auto overflow-x-auto md:overflow-x-visible p-3 md:p-4 min-h-0">
+              {/* 多选模式切换 - 紧凑布局 */}
+              <div className="flex items-center gap-2 text-xs mb-3">
+                {isSidebarCompact ? (
+                  <button
+                    onClick={toggleMultiSelectMode}
+                    title={isMultiSelectMode ? t('preview.cancelMultiSelect') : t('preview.multiSelect')}
+                    className={`w-8 h-8 rounded transition-colors inline-flex items-center justify-center ${
+                      isMultiSelectMode
+                        ? 'bg-banana-100 text-banana-700 hover:bg-banana-200'
+                        : 'text-gray-500 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover'
+                    }`}
+                  >
+                    {isMultiSelectMode ? <CheckSquare size={16} /> : <Square size={16} />}
+                  </button>
+                ) : (
+                  <button
+                    onClick={toggleMultiSelectMode}
+                    className={`px-2 py-1 rounded transition-colors flex items-center gap-1 ${
+                      isMultiSelectMode
+                        ? 'bg-banana-100 text-banana-700 hover:bg-banana-200'
+                        : 'text-gray-500 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover'
+                    }`}
+                  >
+                    {isMultiSelectMode ? <CheckSquare size={14} /> : <Square size={14} />}
+                    <span>{isMultiSelectMode ? t('preview.cancelMultiSelect') : t('preview.multiSelect')}</span>
+                  </button>
+                )}
+                {isMultiSelectMode && !isSidebarCompact && (
+                  <>
+                    <button
+                      onClick={selectedPageIds.size === pagesWithImages.length ? deselectAllPages : selectAllPages}
+                      className="text-gray-500 dark:text-foreground-tertiary hover:text-banana-600 transition-colors"
+                    >
+                      {selectedPageIds.size === pagesWithImages.length ? t('common.deselectAll') : t('common.selectAll')}
+                    </button>
+                    {selectedPageIds.size > 0 && (
+                      <span className="text-banana-600 font-medium">
+                        ({selectedPageIds.size}{t('preview.pagesUnit')})
+                      </span>
+                    )}
+                  </>
+                )}
+                {isMultiSelectMode && isSidebarCompact && selectedPageIds.size > 0 && (
+                  <span className="text-banana-600 font-medium">
+                    {selectedPageIds.size}
+                  </span>
+                )}
+              </div>
+              <div className="flex md:flex-col gap-2 md:gap-4 min-w-max md:min-w-0">
+                {currentProject.pages.map((page, index) => (
+                  <div key={page.id} className="md:w-full flex-shrink-0 relative">
+                    {/* 移动端：简化缩略图 */}
+                    <div className="md:hidden relative">
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          togglePageSelection(page.id!);
+                        onClick={() => {
+                          if (isMultiSelectMode && page.id && page.generated_image_path) {
+                            togglePageSelection(page.id);
+                          } else {
+                            setSelectedIndex(index);
+                          }
                         }}
-                        className={`absolute top-2 left-2 z-10 w-6 h-6 rounded flex items-center justify-center transition-all ${
+                        className={`w-20 h-14 rounded border-2 transition-all ${
+                          selectedIndex === index
+                            ? 'border-banana-500 shadow-md'
+                            : 'border-gray-200 dark:border-border-primary'
+                        } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
+                      >
+                        {page.generated_image_path ? (
+                          <img
+                            src={getImageUrl(page.generated_image_path, page.updated_at)}
+                            alt={`Slide ${index + 1}`}
+                            className="w-full h-full object-cover rounded"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-100 dark:bg-background-secondary rounded flex items-center justify-center text-xs text-gray-400">
+                            {index + 1}
+                          </div>
+                        )}
+                      </button>
+                      {/* 多选复选框（移动端） */}
+                      {isMultiSelectMode && page.id && page.generated_image_path && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            togglePageSelection(page.id!);
+                          }}
+                          className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                            selectedPageIds.has(page.id)
+                              ? 'bg-banana-500 text-white'
+                              : 'bg-white dark:bg-background-secondary border-2 border-gray-300 dark:border-border-primary'
+                          }`}
+                        >
+                          {selectedPageIds.has(page.id) && <Check size={12} />}
+                        </button>
+                      )}
+                    </div>
+                    {/* 桌面端：完整卡片 */}
+                    <div className="hidden md:block relative">
+                      {/* 多选复选框（桌面端） */}
+                      {isMultiSelectMode && page.id && page.generated_image_path && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            togglePageSelection(page.id!);
+                          }}
+                        className={`absolute top-2 right-2 z-10 w-6 h-6 rounded flex items-center justify-center transition-all ${
                           selectedPageIds.has(page.id)
                             ? 'bg-banana-500 text-white shadow-md'
                             : 'bg-white/90 border-2 border-gray-300 dark:border-border-primary hover:border-banana-400'
                         }`}
-                      >
-                        {selectedPageIds.has(page.id) && <Check size={14} />}
-                      </button>
-                    )}
-                    <SlideCard
-                      page={page}
-                      index={index}
-                      isSelected={selectedIndex === index}
-                      onClick={() => {
-                        if (isMultiSelectMode && page.id && page.generated_image_path) {
-                          togglePageSelection(page.id);
-                        } else {
+                        >
+                          {selectedPageIds.has(page.id) && <Check size={14} />}
+                        </button>
+                      )}
+                      <SlideCard
+                        page={page}
+                        index={index}
+                        isSelected={selectedIndex === index}
+                        onClick={() => {
+                          if (isMultiSelectMode && page.id && page.generated_image_path) {
+                            togglePageSelection(page.id);
+                          } else {
+                            setSelectedIndex(index);
+                          }
+                        }}
+                        onEdit={() => {
                           setSelectedIndex(index);
-                        }
-                      }}
-                      onEdit={() => {
-                        setSelectedIndex(index);
-                        handleEditPage();
-                      }}
-                      onDelete={() => page.id && deletePageById(page.id)}
-                      isGenerating={page.id ? !!pageGeneratingTasks[page.id] : false}
-                      aspectRatio={aspectRatio}
-                    />
+                          handleEditPage();
+                        }}
+                        onDelete={() => page.id && deletePageById(page.id)}
+                        isGenerating={page.id ? !!pageGeneratingTasks[page.id] : false}
+                        aspectRatio={aspectRatio}
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </aside>
 
         {/* 右侧：大图预览 */}

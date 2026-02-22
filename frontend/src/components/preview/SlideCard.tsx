@@ -58,32 +58,62 @@ export const SlideCard: React.FC<SlideCardProps> = ({
 
   return (
     <div
-      className={`group cursor-pointer transition-all ${
-        isSelected ? 'ring-2 ring-banana-500' : ''
+      className={`group relative cursor-pointer rounded-xl border bg-white dark:bg-background-secondary p-2.5 transition-shadow ${
+        isSelected
+          ? 'border-banana-300 shadow-md ring-2 ring-banana-400'
+          : 'border-gray-200 dark:border-border-primary hover:border-banana-200 hover:shadow-sm'
       }`}
       onClick={onClick}
     >
+      <span
+        className={`pointer-events-none absolute inset-y-2 left-0 w-1 rounded-full ${
+          isSelected ? 'bg-banana-500' : 'bg-transparent'
+        }`}
+      />
+
       {/* 标题 */}
-      <div className="flex items-center gap-2 mb-2">
-        <span
-          className={`text-sm font-medium ${
-            isSelected ? 'text-banana-600' : 'text-gray-700 dark:text-foreground-secondary'
+      <div className="flex items-start gap-2 pl-3">
+        <div
+          className={`flex h-6 w-6 items-center justify-center rounded-md text-xs font-semibold ${
+            isSelected
+              ? 'bg-banana-100 text-banana-700'
+              : 'bg-gray-100 text-gray-600 dark:bg-background-hover dark:text-foreground-tertiary'
           }`}
         >
-          {index + 1}. {page.outline_content?.title}
-        </span>
-        {index === 0 && (
-          <span
-            className="text-xs px-1.5 py-0.5 bg-banana-100 dark:bg-banana-900/30 text-banana-700 dark:text-banana-400 rounded flex-shrink-0"
-            title={t('slideCard.coverPageTooltip')}
-          >
-            {t('slideCard.coverPage')}
-          </span>
-        )}
+          {index + 1}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div
+              className={`min-w-0 text-[13px] font-medium leading-snug ${
+                isSelected ? 'text-banana-700' : 'text-gray-800 dark:text-foreground-primary'
+              }`}
+              style={{
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
+              {page.outline_content?.title || t('slideCard.notGenerated')}
+            </div>
+            {index === 0 && (
+              <span
+                className="text-[10px] px-1.5 py-0.5 bg-banana-100 dark:bg-banana-900/30 text-banana-700 dark:text-banana-400 rounded flex-shrink-0"
+                title={t('slideCard.coverPageTooltip')}
+              >
+                {t('slideCard.coverPage')}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* 缩略图 */}
-      <div className="relative bg-gray-100 dark:bg-background-secondary rounded-lg overflow-hidden" style={{ aspectRatio: aspectRatio.replace(':', '/') }}>
+      <div
+        className="relative mt-2 ml-3 bg-gray-50 dark:bg-background-primary rounded-lg overflow-hidden border border-gray-100 dark:border-border-primary"
+        style={{ aspectRatio: aspectRatio.replace(':', '/') }}
+      >
         {generating ? (
           <Skeleton className="w-full h-full" />
         ) : page.generated_image_path ? (
@@ -122,14 +152,14 @@ export const SlideCard: React.FC<SlideCardProps> = ({
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-400">
             <div className="text-center">
-              <div className="text-3xl mb-1">🍌</div>
-              <div className="text-xs">{t('slideCard.notGenerated')}</div>
+              <div className="text-2xl mb-1">🍌</div>
+              <div className="text-[10px]">{t('slideCard.notGenerated')}</div>
             </div>
           </div>
         )}
         
         {/* 状态标签 */}
-        <div className="absolute bottom-2 right-2">
+        <div className="absolute bottom-2 right-2 scale-90 origin-bottom-right">
           <StatusBadge status={page.status} />
         </div>
       </div>
