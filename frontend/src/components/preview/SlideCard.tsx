@@ -124,16 +124,7 @@ export const SlideCard: React.FC<SlideCardProps> = ({
               className="w-full h-full object-cover"
             />
             {/* 悬停操作 */}
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit();
-                }}
-                className="p-2 bg-white dark:bg-background-secondary rounded-lg hover:bg-banana-50 dark:hover:bg-background-hover transition-colors"
-              >
-                <Edit2 size={18} />
-              </button>
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -143,10 +134,23 @@ export const SlideCard: React.FC<SlideCardProps> = ({
                     { title: t('slideCard.confirmDeleteTitle'), variant: 'danger' }
                   );
                 }}
-                className="p-2 bg-white dark:bg-background-secondary rounded-lg hover:bg-red-50 transition-colors"
+                className="absolute top-2 right-2 p-2 bg-white dark:bg-background-secondary rounded-lg hover:bg-red-50 transition-colors"
+                aria-label={t('slideCard.confirmDeleteTitle')}
               >
                 <Trash2 size={18} className="text-red-600" />
               </button>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }}
+                  className="p-2 bg-white dark:bg-background-secondary rounded-lg hover:bg-banana-50 dark:hover:bg-background-hover transition-colors"
+                  aria-label="Edit"
+                >
+                  <Edit2 size={18} />
+                </button>
+              </div>
             </div>
           </>
         ) : (
