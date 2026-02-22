@@ -85,6 +85,7 @@ class Config:
     # 图片生成配置
     DEFAULT_ASPECT_RATIO = "16:9"
     DEFAULT_RESOLUTION = "2K"
+    LOG_IMAGE_PROMPTS = os.getenv('LOG_IMAGE_PROMPTS', 'false').lower() in ('1', 'true', 'yes', 'y', 'on')
     
     # 日志配置
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()

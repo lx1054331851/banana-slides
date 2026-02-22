@@ -474,6 +474,11 @@ class AIService:
             Exception with detailed error message if generation fails
         """
         try:
+            if get_config().LOG_IMAGE_PROMPTS:
+                logger.info(
+                    "Image prompt (aspect_ratio=%s, resolution=%s):\n%s",
+                    aspect_ratio, resolution, prompt
+                )
             logger.debug(f"Reference image: {ref_image_path}")
             if additional_ref_images:
                 logger.debug(f"Additional reference images: {len(additional_ref_images)}")
@@ -724,4 +729,3 @@ class AIService:
     def extract_style_description(self, image_path: str) -> str:
         """从图片中提取风格描述"""
         return self._generate_text_from_image(get_style_extraction_prompt(), image_path)
-
