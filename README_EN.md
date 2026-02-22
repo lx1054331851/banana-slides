@@ -252,6 +252,8 @@ MINIMAX_API_KEY=your-minimax-api-key          # MiniMax
 ...
 ```
 
+Optional: set `LOG_IMAGE_PROMPTS=true` to print image prompts sent to Gemini in the backend logs.
+
 **Use the new version of editable export configuration to achieve better editable export effects**: You need to obtain an API KEY from the [Baidu Intelligent Cloud Platform](https://console.bce.baidu.com/iam/#/iam/apikey/list) (click here to enter), and fill it in the `BAIDU_OCR_API_KEY` field in the `.env` file (there is a generous free usage quota). See the instructions in https://github.com/Anionex/banana-slides/issues/121 for details.
 
 
