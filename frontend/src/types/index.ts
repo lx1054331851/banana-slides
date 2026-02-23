@@ -76,10 +76,11 @@ export interface Project {
   export_inpaint_method?: ExportInpaintMethod; // 背景图获取方法
   export_allow_partial?: boolean; // 是否允许返回半成品（导出出错时继续而非停止）
   export_compress_enabled?: boolean;
-  export_compress_format?: 'jpeg';
+  export_compress_format?: 'jpeg' | 'png' | 'webp';
   export_compress_quality?: number;
   export_compress_subsampling?: number;
   export_compress_progressive?: boolean;
+  export_compress_png_quantize_enabled?: boolean;
   image_aspect_ratio?: string; // 画面比例（如 16:9, 4:3）
   status: ProjectStatus;
   pages: Page[];

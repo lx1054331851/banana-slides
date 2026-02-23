@@ -895,6 +895,17 @@ def _test_oxipng():
     return result, "oxipng 可用"
 
 
+def _test_pngquant():
+    """测试 pngquant 是否可用"""
+    svc = ImageCompressionService()
+    if not svc.has_pngquant():
+        raise ValueError("未检测到 pngquant")
+    result = {
+        "pngquant_path": svc.pngquant_bin,
+    }
+    return result, "pngquant 可用"
+
+
 # 测试函数映射
 TEST_FUNCTIONS = {
     "baidu-ocr": _test_baidu_ocr,
@@ -905,6 +916,7 @@ TEST_FUNCTIONS = {
     "mineru-pdf": _test_mineru_pdf,
     "mozjpeg": _test_mozjpeg,
     "oxipng": _test_oxipng,
+    "pngquant": _test_pngquant,
 }
 
 

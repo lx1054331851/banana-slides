@@ -78,7 +78,8 @@ const settingsI18n = {
           imageModel: { title: "图像生成模型", description: "基于测试图片生成演示文稿背景图（固定分辨率，可能需要 20-40 秒）" },
           mineruPdf: { title: "MinerU 解析 PDF", description: "上传测试 PDF 并等待解析结果返回（可能需要 30-60 秒）" },
           mozjpeg: { title: "mozjpeg (cjpeg)", description: "检测导出压缩依赖是否已安装（Squoosh 风格 JPEG 压缩）" },
-          oxipng: { title: "oxipng", description: "检测 PNG 无损压缩工具是否可用（Squoosh 的 PNG 优化器）" }
+          oxipng: { title: "oxipng", description: "检测 PNG 无损压缩工具是否可用（Squoosh 的 PNG 优化器）" },
+          pngquant: { title: "pngquant", description: "检测 PNG 有损调色板压缩工具是否可用（Squoosh Reduce palette）" }
         },
         results: {
           recognizedText: "识别结果：{{text}}", modelReply: "模型回复：{{reply}}",
@@ -88,6 +89,8 @@ const settingsI18n = {
           mozjpegInstallHint: "安装教程：macOS 运行 `brew install mozjpeg`；Linux 可用 `apt-get install mozjpeg`（按发行版选择对应包管理器）",
           oxipngPath: "oxipng 路径：{{path}}",
           oxipngInstallHint: "安装教程：macOS 运行 `brew install oxipng`；Linux 可用 `apt-get install oxipng`（按发行版选择对应包管理器）",
+          pngquantPath: "pngquant 路径：{{path}}",
+          pngquantInstallHint: "安装教程：macOS 运行 `brew install pngquant`；Linux 可用 `apt-get install pngquant`（按发行版选择对应包管理器）",
           parsePreview: "解析预览：{{preview}}"
         }
       },
@@ -173,7 +176,8 @@ const settingsI18n = {
           imageModel: { title: "Image Generation Model", description: "Generate presentation background from test image (fixed resolution, may take 20-40 seconds)" },
           mineruPdf: { title: "MinerU PDF Parsing", description: "Upload test PDF and wait for parsing result (may take 30-60 seconds)" },
           mozjpeg: { title: "mozjpeg (cjpeg)", description: "Check export compression dependency (Squoosh-style JPEG compression)" },
-          oxipng: { title: "oxipng", description: "Check PNG lossless optimizer (Squoosh PNG optimizer)" }
+          oxipng: { title: "oxipng", description: "Check PNG lossless optimizer (Squoosh PNG optimizer)" },
+          pngquant: { title: "pngquant", description: "Check PNG lossy palette optimizer (Squoosh Reduce palette)" }
         },
         results: {
           recognizedText: "Recognized: {{text}}", modelReply: "Model reply: {{reply}}",
@@ -183,6 +187,8 @@ const settingsI18n = {
           mozjpegInstallHint: "Install guide: macOS `brew install mozjpeg`; Linux `apt-get install mozjpeg` (use your distro package manager)",
           oxipngPath: "oxipng path: {{path}}",
           oxipngInstallHint: "Install guide: macOS `brew install oxipng`; Linux `apt-get install oxipng` (use your distro package manager)",
+          pngquantPath: "pngquant path: {{path}}",
+          pngquantInstallHint: "Install guide: macOS `brew install pngquant`; Linux `apt-get install pngquant` (use your distro package manager)",
           parsePreview: "Parse preview: {{preview}}"
         }
       },
@@ -1201,6 +1207,17 @@ export const Settings: React.FC = () => {
                   ? t('settings.serviceTest.results.oxipngPath', { path: data.oxipng_path })
                   : ''),
                 installHintKey: 'settings.serviceTest.results.oxipngInstallHint',
+              },
+              {
+                key: 'pngquant',
+                titleKey: 'settings.serviceTest.tests.pngquant.title',
+                descriptionKey: 'settings.serviceTest.tests.pngquant.description',
+                resultKey: 'settings.serviceTest.results.pngquantPath',
+                action: api.testPngquant,
+                formatDetail: (data: any) => (data?.pngquant_path
+                  ? t('settings.serviceTest.results.pngquantPath', { path: data.pngquant_path })
+                  : ''),
+                installHintKey: 'settings.serviceTest.results.pngquantInstallHint',
               },
             ].map((item) => {
               const testState = serviceTestStates[item.key] || { status: 'idle' as TestStatus };

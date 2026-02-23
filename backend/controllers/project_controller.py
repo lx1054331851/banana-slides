@@ -376,6 +376,8 @@ def update_project(project_id):
                 return bad_request("export_compress_subsampling must be an integer")
         if 'export_compress_progressive' in data:
             project.export_compress_progressive = bool(data['export_compress_progressive'])
+        if 'export_compress_png_quantize_enabled' in data:
+            project.export_compress_png_quantize_enabled = bool(data['export_compress_png_quantize_enabled'])
         # auto mode removed
         
         # Update page order if provided

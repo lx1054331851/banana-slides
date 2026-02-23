@@ -35,6 +35,8 @@ const projectSettingsI18n = {
       exportCompressQualityHint: "数值越高越清晰、体积越大；越低越小但细节损失",
       exportCompressQualityHintPng: "0-9，数值越高压缩越强、体积越小（可能更慢）",
       exportCompressQualityHintWebp: "数值越高越清晰、体积越大；越低越小但细节损失",
+      exportCompressPngQuantize: "PNG 有损压缩（调色板）",
+      exportCompressPngQuantizeDesc: "减少颜色数显著减小体积，可能有轻微色带或抖动，需要安装 pngquant",
       exportCompressFormatNote: "支持 JPEG / PNG / WEBP（PPTX/PDF 导出会强制为 JPEG）",
       extractorMethod: "组件提取方法", extractorMethodDesc: "选择如何从PPT图片中提取文字、表格等可编辑组件",
       extractorHybrid: "混合提取（推荐）", extractorHybridDesc: "MinerU版面分析 + 百度高精度OCR，文字识别更精确",
@@ -80,6 +82,8 @@ const projectSettingsI18n = {
       exportCompressQualityHint: "Higher = clearer & larger; lower = smaller but more detail loss.",
       exportCompressQualityHintPng: "0-9, higher = smaller but slower.",
       exportCompressQualityHintWebp: "Higher = clearer & larger; lower = smaller but more detail loss.",
+      exportCompressPngQuantize: "PNG lossy (palette)",
+      exportCompressPngQuantizeDesc: "Reduce colors to shrink size, may introduce slight banding/dither; requires pngquant.",
       exportCompressFormatNote: "Supports JPEG/PNG/WEBP (PPTX/PDF will be forced to JPEG)",
       extractorMethod: "Component Extraction Method", extractorMethodDesc: "Choose how to extract editable components like text and tables from PPT images",
       extractorHybrid: "Hybrid Extraction (Recommended)", extractorHybridDesc: "MinerU layout analysis + Baidu high-precision OCR for more accurate text recognition",
@@ -117,12 +121,14 @@ interface ProjectSettingsModalProps {
   exportCompressEnabled?: boolean;
   exportCompressFormat?: 'jpeg' | 'png' | 'webp';
   exportCompressQuality?: number;
+  exportCompressPngQuantizeEnabled?: boolean;
   onExportExtractorMethodChange?: (value: ExportExtractorMethod) => void;
   onExportInpaintMethodChange?: (value: ExportInpaintMethod) => void;
   onExportAllowPartialChange?: (value: boolean) => void;
   onExportCompressEnabledChange?: (value: boolean) => void;
   onExportCompressFormatChange?: (value: 'jpeg' | 'png' | 'webp') => void;
   onExportCompressQualityChange?: (value: number) => void;
+  onExportCompressPngQuantizeEnabledChange?: (value: boolean) => void;
   onSaveExportSettings?: () => void;
   isSavingExportSettings?: boolean;
   aspectRatio?: string;
@@ -151,12 +157,14 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   exportCompressEnabled = false,
   exportCompressFormat = 'jpeg',
   exportCompressQuality = 92,
+  exportCompressPngQuantizeEnabled = false,
   onExportExtractorMethodChange,
   onExportInpaintMethodChange,
   onExportAllowPartialChange,
   onExportCompressEnabledChange,
   onExportCompressFormatChange,
   onExportCompressQualityChange,
+  onExportCompressPngQuantizeEnabledChange,
   onSaveExportSettings,
   isSavingExportSettings = false,
   aspectRatio = '16:9',
@@ -526,6 +534,24 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {exportCompressFormat === 'png' && (
+                          <label className="flex items-start gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={exportCompressPngQuantizeEnabled}
+                              onChange={(e) => onExportCompressPngQuantizeEnabledChange?.(e.target.checked)}
+                              className="mt-1 w-4 h-4 text-emerald-500 focus:ring-emerald-500 rounded"
+                            />
+                            <div className="flex-1">
+                              <div className="text-sm font-medium text-gray-900 dark:text-foreground-primary">
+                                {t('projectSettings.exportCompressPngQuantize')}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-foreground-tertiary mt-1">
+                                {t('projectSettings.exportCompressPngQuantizeDesc')}
+                              </div>
+                            </div>
+                          </label>
+                        )}
                         <div>
                           <div className="text-sm font-medium text-gray-900 dark:text-foreground-primary mb-2">
                             {exportCompressFormat === 'png' ? 'PNG 压缩等级' : exportCompressFormat === 'webp' ? 'WEBP 质量' : t('projectSettings.exportCompressQuality')}

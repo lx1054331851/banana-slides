@@ -444,6 +444,9 @@ export const SlidePreview: React.FC = () => {
   const [exportCompressQuality, setExportCompressQuality] = useState<number>(
     currentProject?.export_compress_quality || 92
   );
+  const [exportCompressPngQuantizeEnabled, setExportCompressPngQuantizeEnabled] = useState<boolean>(
+    currentProject?.export_compress_png_quantize_enabled || false
+  );
   const [isSavingExportSettings, setIsSavingExportSettings] = useState(false);
   // 画面比例
   const [aspectRatio, setAspectRatio] = useState<string>(
@@ -663,6 +666,7 @@ export const SlidePreview: React.FC = () => {
         setExportCompressEnabled(currentProject.export_compress_enabled || false);
         setExportCompressFormat((currentProject.export_compress_format as 'jpeg' | 'png' | 'webp') || 'jpeg');
         setExportCompressQuality(currentProject.export_compress_quality || 92);
+        setExportCompressPngQuantizeEnabled(currentProject.export_compress_png_quantize_enabled || false);
         setAspectRatio(currentProject.image_aspect_ratio || '16:9');
         lastProjectId.current = currentProject.id || null;
         isEditingRequirements.current = false;
@@ -683,10 +687,11 @@ export const SlidePreview: React.FC = () => {
         setExportCompressEnabled(currentProject.export_compress_enabled || false);
         setExportCompressFormat((currentProject.export_compress_format as 'jpeg' | 'png' | 'webp') || 'jpeg');
         setExportCompressQuality(currentProject.export_compress_quality || 92);
+        setExportCompressPngQuantizeEnabled(currentProject.export_compress_png_quantize_enabled || false);
       }
       // 如果用户正在编辑，则不更新本地状态
     }
-  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality]);
+  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality, currentProject?.export_compress_png_quantize_enabled]);
 
   // 加载当前页面的历史版本
   useEffect(() => {
@@ -1427,6 +1432,7 @@ export const SlidePreview: React.FC = () => {
         export_compress_enabled: exportCompressEnabled,
         export_compress_format: exportCompressFormat,
         export_compress_quality: exportCompressQuality,
+        export_compress_png_quantize_enabled: exportCompressPngQuantizeEnabled,
       });
       // 更新本地项目状态
       await syncProject(projectId);
@@ -1439,7 +1445,7 @@ export const SlidePreview: React.FC = () => {
     } finally {
       setIsSavingExportSettings(false);
     }
-  }, [currentProject, projectId, exportExtractorMethod, exportInpaintMethod, exportAllowPartial, exportCompressEnabled, exportCompressFormat, exportCompressQuality, syncProject, show]);
+  }, [currentProject, projectId, exportExtractorMethod, exportInpaintMethod, exportAllowPartial, exportCompressEnabled, exportCompressFormat, exportCompressQuality, exportCompressPngQuantizeEnabled, syncProject, show]);
 
   const handleSaveAspectRatio = useCallback(async () => {
     if (!currentProject || !projectId) return;
@@ -2680,12 +2686,14 @@ export const SlidePreview: React.FC = () => {
             exportCompressEnabled={exportCompressEnabled}
             exportCompressFormat={exportCompressFormat}
             exportCompressQuality={exportCompressQuality}
+            exportCompressPngQuantizeEnabled={exportCompressPngQuantizeEnabled}
             onExportExtractorMethodChange={setExportExtractorMethod}
             onExportInpaintMethodChange={setExportInpaintMethod}
             onExportAllowPartialChange={setExportAllowPartial}
             onExportCompressEnabledChange={setExportCompressEnabled}
             onExportCompressFormatChange={setExportCompressFormat}
             onExportCompressQualityChange={setExportCompressQuality}
+            onExportCompressPngQuantizeEnabledChange={setExportCompressPngQuantizeEnabled}
             onSaveExportSettings={handleSaveExportSettings}
             isSavingExportSettings={isSavingExportSettings}
             // 画面比例

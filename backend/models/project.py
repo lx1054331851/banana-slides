@@ -31,6 +31,7 @@ class Project(db.Model):
     export_compress_quality = db.Column(db.Integer, nullable=True, default=92)  # manual quality
     export_compress_subsampling = db.Column(db.Integer, nullable=True, default=0)  # 0=4:4:4,1=4:2:2,2=4:2:0
     export_compress_progressive = db.Column(db.Boolean, nullable=True, default=True)
+    export_compress_png_quantize_enabled = db.Column(db.Boolean, nullable=True, default=False)
     image_aspect_ratio = db.Column(db.String(10), nullable=False, server_default='16:9', default='16:9')
     status = db.Column(db.String(50), nullable=False, default='DRAFT')
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -74,6 +75,7 @@ class Project(db.Model):
             'export_compress_quality': self.export_compress_quality or 92,
             'export_compress_subsampling': self.export_compress_subsampling if self.export_compress_subsampling is not None else 0,
             'export_compress_progressive': self.export_compress_progressive if self.export_compress_progressive is not None else True,
+            'export_compress_png_quantize_enabled': self.export_compress_png_quantize_enabled or False,
             'image_aspect_ratio': self.image_aspect_ratio,
             'status': self.status,
             'created_at': created_at_str,

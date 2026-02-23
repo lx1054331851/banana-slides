@@ -47,6 +47,14 @@ def _default_bin_paths(name: str) -> list[str]:
             "/usr/local/bin/oxipng",
             "/usr/bin/oxipng",
         ]
+    if name == "pngquant":
+        return [
+            "/opt/homebrew/opt/pngquant/bin/pngquant",
+            "/usr/local/opt/pngquant/bin/pngquant",
+            "/opt/homebrew/bin/pngquant",
+            "/usr/local/bin/pngquant",
+            "/usr/bin/pngquant",
+        ]
     return []
 
 
@@ -71,10 +79,12 @@ class ImageCompressionService:
         mozjpeg_bin: Optional[str] = None,
         butteraugli_bin: Optional[str] = None,
         oxipng_bin: Optional[str] = None,
+        pngquant_bin: Optional[str] = None,
     ):
         self.mozjpeg_bin = _resolve_bin(mozjpeg_bin or os.getenv('MOZJPEG_BIN', 'cjpeg'))
         self.butteraugli_bin = _resolve_bin(butteraugli_bin or os.getenv('BUTTERAUGLI_BIN', 'butteraugli'))
         self.oxipng_bin = _resolve_bin(oxipng_bin or os.getenv('OXIPNG_BIN', 'oxipng'))
+        self.pngquant_bin = _resolve_bin(pngquant_bin or os.getenv('PNGQUANT_BIN', 'pngquant'))
 
     def has_mozjpeg(self) -> bool:
         return bool(self.mozjpeg_bin)
@@ -84,6 +94,9 @@ class ImageCompressionService:
 
     def has_oxipng(self) -> bool:
         return bool(self.oxipng_bin)
+
+    def has_pngquant(self) -> bool:
+        return bool(self.pngquant_bin)
 
     def _prepare_ppm(self, src_path: str, out_path: str) -> None:
         image = Image.open(src_path)
@@ -196,6 +209,55 @@ class ImageCompressionService:
             return os.path.exists(dst_path)
         except Exception as exc:
             logger.warning(f"oxipng compress failed: {exc}")
+            return False
+
+    def compress_png_quantize(
+        self,
+        src_path: str,
+        dst_path: str,
+        colors: int = 256,
+        dithering: float = 1.0,
+        speed: int = 3,
+        timeout: int = 120,
+    ) -> bool:
+        if not self.pngquant_bin:
+            return False
+        color_count = max(2, min(int(colors), 256))
+        try:
+            dither_val = float(dithering)
+        except (TypeError, ValueError):
+            dither_val = 1.0
+        dither_val = max(0.0, min(dither_val, 1.0))
+        speed_val = max(1, min(int(speed), 11))
+
+        try:
+            cmd = [
+                self.pngquant_bin,
+                "--force",
+                "--output",
+                dst_path,
+                "--speed",
+                str(speed_val),
+                "--colors",
+                str(color_count),
+            ]
+            if dither_val <= 0:
+                cmd.append("--nofs")
+            cmd.append(src_path)
+
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout,
+                check=False,
+            )
+            if result.returncode != 0:
+                logger.warning(f"pngquant failed: {result.stderr.decode('utf-8', 'ignore')}")
+                return False
+            return os.path.exists(dst_path)
+        except Exception as exc:
+            logger.warning(f"pngquant compress failed: {exc}")
             return False
 
     def _parse_butteraugli_score(self, output: str) -> Optional[float]:

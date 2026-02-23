@@ -1,6 +1,7 @@
 """
 Shared helpers for export flows (sync/async).
 """
+import logging
 import os
 import tempfile
 from contextlib import contextmanager
@@ -9,6 +10,9 @@ from typing import Callable, Iterator, Optional
 
 from models import Project
 from .image_compression_service import ImageCompressionService
+
+
+logger = logging.getLogger(__name__)
 
 
 def _coerce_int(value, default: int) -> int:
@@ -71,10 +75,27 @@ def maybe_compress_export_images(
             elif fmt == 'png':
                 # map quality (1-100) to compress_level (0-9) if needed
                 level = quality if 0 <= quality <= 9 else round((max(1, min(quality, 100)) / 100) * 9)
+                src_for_png = src
+                if bool(getattr(project, 'export_compress_png_quantize_enabled', False)):
+                    if service.has_pngquant():
+                        quant_path = os.path.join(tmpdir, f"{stem}.quant.png")
+                        quant_ok = service.compress_png_quantize(
+                            src,
+                            quant_path,
+                            colors=256,
+                            dithering=1.0,
+                            speed=3,
+                        )
+                        if quant_ok:
+                            src_for_png = quant_path
+                        else:
+                            logger.warning("pngquant failed; fallback to lossless png compression")
+                    else:
+                        logger.warning("pngquant not found; skip lossy png quantization")
                 if service.has_oxipng():
-                    ok = service.compress_png_oxipng(src, out_path, level=level)
+                    ok = service.compress_png_oxipng(src_for_png, out_path, level=level)
                 else:
-                    ok = service.compress_with_pillow(src, out_path, "PNG", level)
+                    ok = service.compress_with_pillow(src_for_png, out_path, "PNG", level)
             elif fmt == 'webp':
                 ok = service.compress_with_pillow(src, out_path, "WEBP", quality)
             if ok:
