@@ -249,6 +249,20 @@ export const Home: React.FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (!isThemeMenuOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (themeMenuRef.current && !themeMenuRef.current.contains(target)) {
+        setIsThemeMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isThemeMenuOpen]);
+
   const handleOpenMaterialModal = () => {
     // 在主页始终生成全局素材，不关联任何项目
     setIsMaterialModalOpen(true);
