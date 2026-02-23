@@ -11,13 +11,13 @@ class Settings(db.Model):
     __tablename__ = 'settings'
 
     id = db.Column(db.Integer, primary_key=True, default=1)
-    ai_provider_format = db.Column(db.String(20), nullable=False, default='gemini')  # AI提供商格式: openai, gemini
-    api_base_url = db.Column(db.String(500), nullable=True)  # API基础URL
-    api_key = db.Column(db.String(500), nullable=True)  # API密钥
-    image_resolution = db.Column(db.String(20), nullable=False, default='2K')  # 图像清晰度: 1K, 2K, 4K
-    image_aspect_ratio = db.Column(db.String(10), nullable=False, default='16:9')  # 图像比例: 16:9, 4:3, 1:1
-    max_description_workers = db.Column(db.Integer, nullable=False, default=5)  # 描述生成最大工作线程数
-    max_image_workers = db.Column(db.Integer, nullable=False, default=8)  # 图像生成最大工作线程数
+    ai_provider_format = db.Column(db.String(20), nullable=True)   # AI提供商格式: openai, gemini (NULL=use .env)
+    api_base_url = db.Column(db.String(500), nullable=True)        # API基础URL
+    api_key = db.Column(db.String(500), nullable=True)             # API密钥
+    image_resolution = db.Column(db.String(20), nullable=True)     # 图像清晰度: 1K, 2K, 4K (NULL=use .env)
+    image_aspect_ratio = db.Column(db.String(10), nullable=True)   # 图像比例: 16:9, 4:3, 1:1 (NULL=use .env)
+    max_description_workers = db.Column(db.Integer, nullable=True)  # 描述生成最大工作线程数 (NULL=use .env)
+    max_image_workers = db.Column(db.Integer, nullable=True)        # 图像生成最大工作线程数 (NULL=use .env)
 
     # 新增：大模型与 MinerU 相关可视化配置（可在设置页中编辑）
     text_model = db.Column(db.String(100), nullable=True)  # 文本大模型名称（覆盖 Config.TEXT_MODEL）
@@ -25,7 +25,7 @@ class Settings(db.Model):
     mineru_api_base = db.Column(db.String(255), nullable=True)  # MinerU 服务地址（覆盖 Config.MINERU_API_BASE）
     mineru_token = db.Column(db.String(500), nullable=True)  # MinerU API Token（覆盖 Config.MINERU_TOKEN）
     image_caption_model = db.Column(db.String(100), nullable=True)  # 图片识别模型（覆盖 Config.IMAGE_CAPTION_MODEL）
-    output_language = db.Column(db.String(10), nullable=False, default='zh')  # 输出语言偏好（zh, en, ja, auto）
+    output_language = db.Column(db.String(10), nullable=True)  # 输出语言偏好（zh, en, ja, auto）(NULL=use .env)
     
     # 推理模式配置（分别控制文本和图像生成）
     enable_text_reasoning = db.Column(db.Boolean, nullable=False, default=False)  # 文本生成是否开启推理
@@ -53,48 +53,61 @@ class Settings(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+    def _val(self, attr, defaults):
+        """Return DB value, falling back to .env default when None."""
+        v = getattr(self, attr)
+        return v if v is not None else defaults.get(attr)
+
     def to_dict(self):
-        """Convert to dictionary"""
+        """Convert to dictionary, merging .env defaults for None fields."""
+        d = Settings._get_config_defaults()
+        api_key = self._val('api_key', d)
+        mineru_token = self._val('mineru_token', d)
+        baidu_ocr_api_key = self._val('baidu_ocr_api_key', d)
+        text_api_key = self._val('text_api_key', d)
+        image_api_key = self._val('image_api_key', d)
+        image_caption_api_key = self._val('image_caption_api_key', d)
         return {
             'id': self.id,
-            'ai_provider_format': self.ai_provider_format,
-            'api_base_url': self.api_base_url,
-            'api_key_length': len(self.api_key) if self.api_key else 0,
-            'image_resolution': self.image_resolution,
-            'image_aspect_ratio': self.image_aspect_ratio,
-            'max_description_workers': self.max_description_workers,
-            'max_image_workers': self.max_image_workers,
-            'text_model': self.text_model,
-            'image_model': self.image_model,
-            'mineru_api_base': self.mineru_api_base,
-            'mineru_token_length': len(self.mineru_token) if self.mineru_token else 0,
-            'image_caption_model': self.image_caption_model,
-            'output_language': self.output_language,
+            'ai_provider_format': self._val('ai_provider_format', d),
+            'api_base_url': self._val('api_base_url', d),
+            'api_key_length': len(api_key) if api_key else 0,
+            'image_resolution': self._val('image_resolution', d),
+            'image_aspect_ratio': self._val('image_aspect_ratio', d),
+            'max_description_workers': self._val('max_description_workers', d),
+            'max_image_workers': self._val('max_image_workers', d),
+            'text_model': self._val('text_model', d),
+            'image_model': self._val('image_model', d),
+            'mineru_api_base': self._val('mineru_api_base', d),
+            'mineru_token_length': len(mineru_token) if mineru_token else 0,
+            'image_caption_model': self._val('image_caption_model', d),
+            'output_language': self._val('output_language', d),
             'enable_text_reasoning': self.enable_text_reasoning,
             'text_thinking_budget': self.text_thinking_budget,
             'enable_image_reasoning': self.enable_image_reasoning,
             'image_thinking_budget': self.image_thinking_budget,
-            'baidu_ocr_api_key_length': len(self.baidu_ocr_api_key) if self.baidu_ocr_api_key else 0,
-            'text_model_source': self.text_model_source,
-            'image_model_source': self.image_model_source,
-            'image_caption_model_source': self.image_caption_model_source,
-            'lazyllm_api_keys_info': self._get_lazyllm_api_keys_info(),
-            'text_api_key_length': len(self.text_api_key) if self.text_api_key else 0,
-            'text_api_base_url': self.text_api_base_url,
-            'image_api_key_length': len(self.image_api_key) if self.image_api_key else 0,
-            'image_api_base_url': self.image_api_base_url,
-            'image_caption_api_key_length': len(self.image_caption_api_key) if self.image_caption_api_key else 0,
-            'image_caption_api_base_url': self.image_caption_api_base_url,
+            'baidu_ocr_api_key_length': len(baidu_ocr_api_key) if baidu_ocr_api_key else 0,
+            'text_model_source': self._val('text_model_source', d),
+            'image_model_source': self._val('image_model_source', d),
+            'image_caption_model_source': self._val('image_caption_model_source', d),
+            'lazyllm_api_keys_info': self._get_lazyllm_api_keys_info(self._val('lazyllm_api_keys', d)),
+            'text_api_key_length': len(text_api_key) if text_api_key else 0,
+            'text_api_base_url': self._val('text_api_base_url', d),
+            'image_api_key_length': len(image_api_key) if image_api_key else 0,
+            'image_api_base_url': self._val('image_api_base_url', d),
+            'image_caption_api_key_length': len(image_caption_api_key) if image_caption_api_key else 0,
+            'image_caption_api_base_url': self._val('image_caption_api_base_url', d),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
 
-    def _get_lazyllm_api_keys_info(self):
+    def _get_lazyllm_api_keys_info(self, raw=None):
         """Return vendor names and key lengths (no plaintext) for frontend display."""
-        if not self.lazyllm_api_keys:
+        data = raw if raw is not None else self.lazyllm_api_keys
+        if not data:
             return {}
         try:
-            keys = json.loads(self.lazyllm_api_keys)
+            keys = json.loads(data)
             return {vendor: len(key) for vendor, key in keys.items() if key}
         except (json.JSONDecodeError, TypeError):
             return {}
@@ -151,28 +164,17 @@ class Settings(db.Model):
         """
         Get or create the single settings instance.
 
-        - 首次创建时，用 Config（也就是 .env）里的值初始化，作为"系统默认值"
-        - 已有记录时，用 Config 值回填仍为 None 的字段（应对新增列或后配置 env 的场景）
-        - 之后所有读写都只走数据库，env 只影响初始化/重置逻辑
+        Returns the ORM object as-is from the database.  ``.env``
+        defaults for ``None`` fields are merged only at serialisation
+        time in ``to_dict()``, so this method has no write side-effects.
         """
-        defaults = Settings._get_config_defaults()
         settings = Settings.query.first()
 
-        if settings:
-            # 回填：仅当数据库字段为 None 时才用 Config 默认值填充
-            dirty = False
-            for attr, default in defaults.items():
-                if getattr(settings, attr) is None and default is not None:
-                    setattr(settings, attr, default)
-                    dirty = True
-            if dirty:
-                db.session.commit()
-            return settings
+        if settings is None:
+            settings = Settings(id=1)
+            db.session.add(settings)
+            db.session.commit()
 
-        settings = Settings(**defaults)
-        settings.id = 1
-        db.session.add(settings)
-        db.session.commit()
         return settings
 
     def __repr__(self):

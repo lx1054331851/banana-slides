@@ -34,6 +34,7 @@ interface MarkdownTextareaProps {
   onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
   /** Called when files are dropped or selected via upload button */
   onFiles?: (files: File[]) => void;
+  onBlur?: () => void;
   placeholder?: string;
   label?: string;
   error?: string;
@@ -241,6 +242,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   onChange,
   onPaste,
   onFiles,
+  onBlur,
   placeholder,
   label,
   error,
@@ -615,6 +617,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
             onDragLeave={handleDragLeave}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
+            onBlur={onBlur}
             style={{ minHeight: `${minHeight}px` }}
             className={cn(
               "w-full px-4 py-3 outline-none overflow-y-auto whitespace-pre-wrap break-words text-gray-900 dark:text-foreground-primary",

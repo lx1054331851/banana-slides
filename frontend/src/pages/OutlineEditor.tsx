@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, ArrowRight, Plus, FileText, Sparkle, Download, PanelLeftClose, PanelLeftOpen, LayoutGrid, List } from 'lucide-react';
+import { ArrowLeft, Save, ArrowRight, Plus, FileText, Sparkle, Download, Upload, PanelLeftClose, PanelLeftOpen, LayoutGrid, List } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 
 // 组件内翻译
@@ -16,7 +16,7 @@ const outlineI18n = {
       preview: "预览", clickToPreview: "点击左侧卡片查看详情",
       noPages: "还没有页面", noPagesHint: "点击「添加页面」手动创建，或「自动生成大纲」让 AI 帮你完成",
       parseOutline: "解析大纲", autoGenerate: "自动生成大纲",
-      reParseOutline: "重新解析大纲", reGenerate: "重新生成大纲", export: "导出大纲",
+      reParseOutline: "重新解析大纲", reGenerate: "重新生成大纲", export: "导出大纲", import: "导入",
       aiPlaceholder: "例如：增加一页关于XXX的内容、删除第3页、合并前两页... · Ctrl+Enter提交",
       aiPlaceholderShort: "例如：增加/删除页面... · Ctrl+Enter",
       viewMode: { list: "列表", grid: "网格" },
@@ -28,6 +28,7 @@ const outlineI18n = {
         confirmRegenerate: "已有大纲内容，重新生成将覆盖现有内容，确定继续吗？",
         confirmRegenerateTitle: "确认重新生成", refineSuccess: "大纲修改成功",
         refineFailed: "修改失败，请稍后重试", exportSuccess: "导出成功",
+        importSuccess: "导入成功", importFailed: "导入失败，请检查文件格式", importEmpty: "文件中未找到有效页面",
         loadingProject: "加载项目中...", generatingOutline: "生成大纲中...",
       }
     }
@@ -43,7 +44,7 @@ const outlineI18n = {
       preview: "Preview", clickToPreview: "Click a card on the left to view details",
       noPages: "No pages yet", noPagesHint: "Click \"Add Page\" to create manually, or \"Auto Generate\" to let AI help you",
       parseOutline: "Parse Outline", autoGenerate: "Auto Generate Outline",
-      reParseOutline: "Re-parse Outline", reGenerate: "Regenerate Outline", export: "Export Outline",
+      reParseOutline: "Re-parse Outline", reGenerate: "Regenerate Outline", export: "Export Outline", import: "Import",
       aiPlaceholder: "e.g., Add a page about XXX, delete page 3, merge first two pages... · Ctrl+Enter to submit",
       aiPlaceholderShort: "e.g., Add/delete pages... · Ctrl+Enter",
       viewMode: { list: "List", grid: "Grid" },
@@ -55,6 +56,7 @@ const outlineI18n = {
         confirmRegenerate: "Existing outline will be overwritten. Continue?",
         confirmRegenerateTitle: "Confirm Regenerate", refineSuccess: "Outline modified successfully",
         refineFailed: "Modification failed, please try again", exportSuccess: "Export successful",
+        importSuccess: "Import successful", importFailed: "Import failed, please check file format", importEmpty: "No valid pages found in file",
         loadingProject: "Loading project...", generatingOutline: "Generating outline...",
       }
     }
@@ -82,9 +84,9 @@ import { Button, Loading, useConfirm, useToast, AiRefineInput, FilePreviewModal,
 import { MarkdownTextarea, type MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
 import { OutlineCard } from '@/components/outline/OutlineCard';
 import { useProjectStore } from '@/store/useProjectStore';
-import { refineOutline, updateProject } from '@/api/endpoints';
+import { refineOutline, updateProject, addPage } from '@/api/endpoints';
 import { useImagePaste } from '@/hooks/useImagePaste';
-import { exportOutlineToMarkdown } from '@/utils/projectUtils';
+import { exportProjectToMarkdown, parseMarkdownPages } from '@/utils/projectUtils';
 import type { Page } from '@/types';
 
 // 可排序的卡片包装器
@@ -170,6 +172,7 @@ export const OutlineEditor: React.FC = () => {
   // the shared-ref bug where insertAtCursor targets the wrong (hidden) instance.
   const desktopTextareaRef = useRef<MarkdownTextareaRef>(null);
   const mobileTextareaRef = useRef<MarkdownTextareaRef>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
   const getInputText = useCallback((project: typeof currentProject) => {
     if (!project) return '';
     if (project.creation_type === 'outline' || project.creation_type === 'ppt_renovation') return project.outline_text || project.idea_prompt || '';
@@ -179,7 +182,6 @@ export const OutlineEditor: React.FC = () => {
 
   const [inputText, setInputText] = useState('');
   const [isInputDirty, setIsInputDirty] = useState(false);
-  const [isSavingInput, setIsSavingInput] = useState(false);
 
   // 项目切换时：强制加载文本
   useEffect(() => {
@@ -189,26 +191,36 @@ export const OutlineEditor: React.FC = () => {
     }
   }, [currentProject?.id]);
 
-  const handleSaveInputText = useCallback(async () => {
-    if (!projectId || !currentProject || !isInputDirty) return;
-    setIsSavingInput(true);
+  const saveInputText = useCallback(async (text: string, creationType: string | undefined) => {
+    if (!projectId || !creationType) return;
     try {
-      const field = currentProject.creation_type === 'outline'
+      const field = creationType === 'outline'
         ? 'outline_text'
-        : currentProject.creation_type === 'descriptions'
+        : creationType === 'descriptions'
           ? 'description_text'
           : 'idea_prompt';
-      await updateProject(projectId, { [field]: inputText } as any);
+      await updateProject(projectId, { [field]: text } as any);
       await syncProject(projectId);
       setIsInputDirty(false);
-      show({ message: '已保存', type: 'success' });
     } catch (e) {
       console.error('保存输入文本失败:', e);
       show({ message: '保存失败', type: 'error' });
-    } finally {
-      setIsSavingInput(false);
     }
-  }, [projectId, currentProject?.creation_type, inputText, isInputDirty, show, syncProject]);
+  }, [projectId, show, syncProject]);
+
+  // Debounced auto-save: save 1s after user stops typing
+  useEffect(() => {
+    if (!isInputDirty) return;
+    const timer = setTimeout(() => {
+      saveInputText(inputText, currentProject?.creation_type);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [inputText, isInputDirty, saveInputText, currentProject?.creation_type]);
+
+  const handleSaveInputText = useCallback(() => {
+    if (!isInputDirty) return;
+    saveInputText(inputText, currentProject?.creation_type);
+  }, [inputText, isInputDirty, saveInputText, currentProject?.creation_type]);
 
   const handleInputChange = useCallback((text: string) => {
     setInputText(text);
@@ -327,10 +339,37 @@ export const OutlineEditor: React.FC = () => {
   // 导出大纲为 Markdown 文件
   const handleExportOutline = useCallback(() => {
     if (!currentProject) return;
-    exportOutlineToMarkdown(currentProject);
+    exportProjectToMarkdown(currentProject, { outline: true, description: false });
     show({ message: t('outline.messages.exportSuccess'), type: 'success' });
   }, [currentProject, show]);
 
+  // 导入大纲 Markdown 文件（追加新页面）
+  const handleImportOutline = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (importFileRef.current) importFileRef.current.value = '';
+    if (!file || !currentProject || !projectId) return;
+    try {
+      const text = await file.text();
+      const parsed = parseMarkdownPages(text);
+      if (parsed.length === 0) {
+        show({ message: t('outline.messages.importEmpty'), type: 'error' });
+        return;
+      }
+      const startIndex = currentProject.pages.reduce((max, p) => Math.max(max, (p.order_index ?? 0) + 1), 0);
+      await Promise.all(parsed.map(({ title, points, text: desc, part }, i) =>
+        addPage(projectId, {
+          outline_content: { title, points },
+          description_content: desc ? { text: desc } : undefined,
+          part,
+          order_index: startIndex + i,
+        })
+      ));
+      await syncProject(projectId);
+      show({ message: t('outline.messages.importSuccess'), type: 'success' });
+    } catch {
+      show({ message: t('outline.messages.importFailed'), type: 'error' });
+    }
+  }, [currentProject, projectId, syncProject, show, t]);
   const handleViewModeChange = useCallback((mode: 'list' | 'grid') => {
     setViewMode(mode);
     if (mode !== 'grid') {
@@ -468,6 +507,15 @@ export const OutlineEditor: React.FC = () => {
             >
               {t('outline.export')}
             </Button>
+            <Button
+              variant="secondary"
+              icon={<Upload size={16} className="md:w-[18px] md:h-[18px]" />}
+              onClick={() => importFileRef.current?.click()}
+              className="flex-1 sm:flex-initial text-sm md:text-base"
+            >
+              {t('outline.import')}
+            </Button>
+            <input ref={importFileRef} type="file" accept=".md,.txt" className="hidden" onChange={handleImportOutline} />
             {/* 手机端：保存按钮 */}
             <Button
               variant="secondary"
@@ -536,15 +584,6 @@ export const OutlineEditor: React.FC = () => {
                 <div className="ml-auto flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={handleSaveInputText}
-                    disabled={!isInputDirty || isSavingInput}
-                    className={`p-1 rounded transition-colors ${isInputDirty ? 'text-banana-500 hover:text-banana-600 hover:bg-banana-50 dark:hover:bg-banana-900/30' : 'text-gray-300 dark:text-gray-600 cursor-default'}`}
-                    title={isInputDirty ? '保存' : '无更改'}
-                  >
-                    <Save size={14} />
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setIsPanelOpen(false)}
                     className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-foreground-secondary rounded hover:bg-gray-100 dark:hover:bg-background-hover transition-colors"
                   >
@@ -556,6 +595,7 @@ export const OutlineEditor: React.FC = () => {
                 ref={desktopTextareaRef}
                 value={inputText}
                 onChange={handleInputChange}
+                onBlur={handleSaveInputText}
                 onPaste={handleImagePaste}
                 onFiles={handleImageFiles}
                 placeholder={inputPlaceholder}
@@ -591,20 +631,12 @@ export const OutlineEditor: React.FC = () => {
                 ? <Sparkle size={14} className="text-banana-500 flex-shrink-0" />
                 : <FileText size={14} className="text-banana-500 flex-shrink-0" />}
               <span className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{inputLabel}</span>
-              <button
-                type="button"
-                onClick={handleSaveInputText}
-                disabled={!isInputDirty || isSavingInput}
-                className={`ml-auto p-1 rounded transition-colors ${isInputDirty ? 'text-banana-500 hover:text-banana-600 hover:bg-banana-50 dark:hover:bg-banana-900/30' : 'text-gray-300 dark:text-gray-600 cursor-default'}`}
-                title={isInputDirty ? '保存' : '无更改'}
-              >
-                <Save size={14} />
-              </button>
             </div>
             <MarkdownTextarea
               ref={mobileTextareaRef}
               value={inputText}
               onChange={handleInputChange}
+              onBlur={handleSaveInputText}
               onPaste={handleImagePaste}
               onFiles={handleImageFiles}
               placeholder={inputPlaceholder}

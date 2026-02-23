@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useT } from '@/hooks/useT';
+import { devLog } from '@/utils/logger';
 
 // 组件内翻译
 const previewI18n = {
@@ -44,6 +45,9 @@ const previewI18n = {
       collapseSidebar: "收起左侧导航",
       expandSidebar: "展开左侧导航",
       templateModalDesc: "选择一个新的模板将应用到后续PPT页面生成（不影响已经生成的页面）。你可以选择预设模板、已有模板或上传新模板。",
+      useTextStyle: "使用文字描述风格",
+      applyStyle: "应用风格",
+      styleSaved: "风格描述已保存",
       uploadingTemplate: "正在上传模板...",
       resolution1KWarning: "1K分辨率警告",
       resolution1KWarningText: "当前使用 1K 分辨率 生成图片，可能导致渲染的文字乱码或模糊。",
@@ -101,6 +105,9 @@ const previewI18n = {
       collapseSidebar: "Collapse sidebar",
       expandSidebar: "Expand sidebar",
       templateModalDesc: "Selecting a new template will apply to future PPT page generation (won't affect already generated pages). You can choose preset templates, existing templates, or upload a new one.",
+      useTextStyle: "Use text description for style",
+      applyStyle: "Apply Style",
+      styleSaved: "Style description saved",
       uploadingTemplate: "Uploading template...",
       resolution1KWarning: "1K Resolution Warning",
       resolution1KWarningText: "Currently using 1K resolution for image generation, which may cause garbled or blurry text.",
@@ -143,7 +150,7 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react';
-import { Button, Loading, Modal, Textarea, useToast, useConfirm, MaterialSelector, ProjectSettingsModal, ExportTasksPanel } from '@/components/shared';
+import { Button, Loading, Modal, Textarea, useToast, useConfirm, MaterialSelector, ProjectSettingsModal, ExportTasksPanel, TextStyleSelector } from '@/components/shared';
 import { MaterialGeneratorModal } from '@/components/shared/MaterialGeneratorModal';
 import { TemplateSelector, getTemplateFile } from '@/components/shared/TemplateSelector';
 import { listUserTemplates, type UserTemplate } from '@/api/endpoints';
@@ -372,6 +379,8 @@ export const SlidePreview: React.FC = () => {
     setIsResizingSidebar(true);
   };
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [useTextStyleMode, setUseTextStyleMode] = useState(false);
+  const [draftTemplateStyle, setDraftTemplateStyle] = useState('');
   const [editPrompt, setEditPrompt] = useState('');
   // 大纲和描述编辑状态
   const [editOutlineTitle, setEditOutlineTitle] = useState('');
@@ -798,12 +807,12 @@ export const SlidePreview: React.FC = () => {
             errorMessage = error.message;
           }
 
-          console.log('提取的错误消息:', errorMessage);
+          devLog('提取的错误消息:', errorMessage);
 
           // 使用统一的错误消息规范化函数
           errorMessage = normalizeErrorMessage(errorMessage);
 
-          console.log('规范化后的错误消息:', errorMessage);
+          devLog('规范化后的错误消息:', errorMessage);
 
           show({
             message: errorMessage,
@@ -1869,7 +1878,7 @@ export const SlidePreview: React.FC = () => {
               variant="ghost"
               size="sm"
               icon={<Upload size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={() => setIsTemplateModalOpen(true)}
+              onClick={() => { setDraftTemplateStyle(templateStyle); setIsTemplateModalOpen(true); }}
               className="hidden lg:inline-flex"
             >
               <span className="hidden xl:inline">{t('preview.changeTemplate')}</span>
@@ -2398,7 +2407,7 @@ export const SlidePreview: React.FC = () => {
                       variant="ghost"
                       size="sm"
                       icon={<Upload size={16} />}
-                      onClick={() => setIsTemplateModalOpen(true)}
+                      onClick={() => { setDraftTemplateStyle(templateStyle); setIsTemplateModalOpen(true); }}
                       className="lg:hidden text-xs"
                       title="更换模板"
                     />
@@ -2558,23 +2567,72 @@ export const SlidePreview: React.FC = () => {
           <p className="text-sm text-gray-600 dark:text-foreground-tertiary mb-4">
             {t('preview.templateModalDesc')}
           </p>
-          <TemplateSelector
-            onSelect={handleTemplateSelect}
-            selectedTemplateId={selectedTemplateId}
-            selectedPresetTemplateId={selectedPresetTemplateId}
-            showUpload={false} // 在预览页面上传的模板直接应用到项目，不上传到用户模板库
-            projectId={projectId || null}
-          />
-          {isUploadingTemplate && (
-            <div className="text-center py-2 text-sm text-gray-500 dark:text-foreground-tertiary">
-              {t('preview.uploadingTemplate')}
+          {/* 图片模板 / 文字风格 切换 */}
+          <label className="flex items-center gap-2 cursor-pointer group">
+            <span className="text-sm text-gray-600 dark:text-foreground-tertiary group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+              {t('preview.useTextStyle')}
+            </span>
+            <div className="relative">
+              <input
+                type="checkbox"
+                checked={useTextStyleMode}
+                onChange={(e) => setUseTextStyleMode(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 dark:bg-background-hover peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-banana-300 dark:peer-focus:ring-banana/30 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white dark:after:bg-foreground-secondary after:border-gray-300 dark:after:border-border-hover after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-banana"></div>
             </div>
+          </label>
+          {useTextStyleMode ? (
+            <TextStyleSelector
+              value={draftTemplateStyle}
+              onChange={setDraftTemplateStyle}
+              onToast={show}
+            />
+          ) : (
+            <>
+              <TemplateSelector
+                onSelect={handleTemplateSelect}
+                selectedTemplateId={selectedTemplateId}
+                selectedPresetTemplateId={selectedPresetTemplateId}
+                showUpload={false}
+                projectId={projectId || null}
+              />
+              {isUploadingTemplate && (
+                <div className="text-center py-2 text-sm text-gray-500 dark:text-foreground-tertiary">
+                  {t('preview.uploadingTemplate')}
+                </div>
+              )}
+            </>
           )}
           <div className="flex justify-end gap-3 pt-4 border-t">
+            {useTextStyleMode && (
+              <Button
+                variant="primary"
+                loading={isSavingTemplateStyle}
+                onClick={async () => {
+                  isEditingTemplateStyle.current = true;
+                  setTemplateStyle(draftTemplateStyle);
+                  setIsSavingTemplateStyle(true);
+                  try {
+                    await updateProject(projectId!, { template_style: draftTemplateStyle || '' });
+                    isEditingTemplateStyle.current = false;
+                    await syncProject(projectId!);
+                    show({ message: t('slidePreview.styleDescSaved'), type: 'success' });
+                    setIsTemplateModalOpen(false);
+                  } catch (error: any) {
+                    show({ message: `保存失败: ${error.message || '未知错误'}`, type: 'error' });
+                  } finally {
+                    setIsSavingTemplateStyle(false);
+                  }
+                }}
+              >
+                {t('preview.applyStyle')}
+              </Button>
+            )}
             <Button
               variant="ghost"
               onClick={() => setIsTemplateModalOpen(false)}
-              disabled={isUploadingTemplate}
+              disabled={isUploadingTemplate || isSavingTemplateStyle}
             >
               {t('common.close')}
             </Button>
