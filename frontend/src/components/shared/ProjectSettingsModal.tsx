@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, FileText, Settings as SettingsIcon, Download, Sparkles, AlertTriangle, HelpCircle } from 'lucide-react';
-import { Button, Textarea } from '@/components/shared';
+import { Button, Textarea, Input } from '@/components/shared';
 import { useT } from '@/hooks/useT';
 import { Settings } from '@/pages/Settings';
 import type { ExportExtractorMethod, ExportInpaintMethod } from '@/types';
@@ -24,6 +24,18 @@ const projectSettingsI18n = {
       saveStyleDescription: "保存风格描述",
       styleTip: "风格描述会在生成图片时自动添加到提示词中。如果同时上传了模板图片，风格描述会作为补充说明。",
       editablePptxExport: "可编辑 PPTX 导出设置", editablePptxExportDesc: "配置「导出可编辑 PPTX」功能的处理方式。这些设置影响导出质量和API调用成本。",
+      exportImageCompress: "导出图片压缩",
+      exportImageCompressDesc: "仅在导出时压缩图片，原始生成图不变。开启后可显著减小导出文件体积。",
+      exportCompressEnable: "启用导出压缩",
+      exportCompressFormat: "导出格式",
+      exportCompressFormatJpeg: "JPEG（推荐）",
+      exportCompressFormatPng: "PNG（无损）",
+      exportCompressFormatWebp: "WEBP（体积更小）",
+      exportCompressQuality: "JPEG 质量",
+      exportCompressQualityHint: "数值越高越清晰、体积越大；越低越小但细节损失",
+      exportCompressQualityHintPng: "0-9，数值越高压缩越强、体积越小（可能更慢）",
+      exportCompressQualityHintWebp: "数值越高越清晰、体积越大；越低越小但细节损失",
+      exportCompressFormatNote: "支持 JPEG / PNG / WEBP（PPTX/PDF 导出会强制为 JPEG）",
       extractorMethod: "组件提取方法", extractorMethodDesc: "选择如何从PPT图片中提取文字、表格等可编辑组件",
       extractorHybrid: "混合提取（推荐）", extractorHybridDesc: "MinerU版面分析 + 百度高精度OCR，文字识别更精确",
       extractorMineru: "MinerU提取", extractorMineruDesc: "仅使用MinerU进行版面分析和文字识别",
@@ -57,6 +69,18 @@ const projectSettingsI18n = {
       saveStyleDescription: "Save Style Description",
       styleTip: "Style description will be automatically added to the prompt when generating images. If a template image is also uploaded, the style description will serve as supplementary notes.",
       editablePptxExport: "Editable PPTX Export Settings", editablePptxExportDesc: "Configure how \"Export Editable PPTX\" works. These settings affect export quality and API call costs.",
+      exportImageCompress: "Export Image Compression",
+      exportImageCompressDesc: "Only compress on export. Original generated images remain unchanged.",
+      exportCompressEnable: "Enable export compression",
+      exportCompressFormat: "Export format",
+      exportCompressFormatJpeg: "JPEG (recommended)",
+      exportCompressFormatPng: "PNG (lossless)",
+      exportCompressFormatWebp: "WEBP (smaller)",
+      exportCompressQuality: "JPEG quality",
+      exportCompressQualityHint: "Higher = clearer & larger; lower = smaller but more detail loss.",
+      exportCompressQualityHintPng: "0-9, higher = smaller but slower.",
+      exportCompressQualityHintWebp: "Higher = clearer & larger; lower = smaller but more detail loss.",
+      exportCompressFormatNote: "Supports JPEG/PNG/WEBP (PPTX/PDF will be forced to JPEG)",
       extractorMethod: "Component Extraction Method", extractorMethodDesc: "Choose how to extract editable components like text and tables from PPT images",
       extractorHybrid: "Hybrid Extraction (Recommended)", extractorHybridDesc: "MinerU layout analysis + Baidu high-precision OCR for more accurate text recognition",
       extractorMineru: "MinerU Extraction", extractorMineruDesc: "Use only MinerU for layout analysis and text recognition",
@@ -90,9 +114,15 @@ interface ProjectSettingsModalProps {
   exportExtractorMethod?: ExportExtractorMethod;
   exportInpaintMethod?: ExportInpaintMethod;
   exportAllowPartial?: boolean;
+  exportCompressEnabled?: boolean;
+  exportCompressFormat?: 'jpeg' | 'png' | 'webp';
+  exportCompressQuality?: number;
   onExportExtractorMethodChange?: (value: ExportExtractorMethod) => void;
   onExportInpaintMethodChange?: (value: ExportInpaintMethod) => void;
   onExportAllowPartialChange?: (value: boolean) => void;
+  onExportCompressEnabledChange?: (value: boolean) => void;
+  onExportCompressFormatChange?: (value: 'jpeg' | 'png' | 'webp') => void;
+  onExportCompressQualityChange?: (value: number) => void;
   onSaveExportSettings?: () => void;
   isSavingExportSettings?: boolean;
   aspectRatio?: string;
@@ -118,9 +148,15 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   exportExtractorMethod = 'hybrid',
   exportInpaintMethod = 'hybrid',
   exportAllowPartial = false,
+  exportCompressEnabled = false,
+  exportCompressFormat = 'jpeg',
+  exportCompressQuality = 92,
   onExportExtractorMethodChange,
   onExportInpaintMethodChange,
   onExportAllowPartialChange,
+  onExportCompressEnabledChange,
+  onExportCompressFormatChange,
+  onExportCompressQualityChange,
   onSaveExportSettings,
   isSavingExportSettings = false,
   aspectRatio = '16:9',
@@ -131,6 +167,14 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
 }) => {
   const t = useT(projectSettingsI18n);
   const [activeTab, setActiveTab] = useState<SettingsTab>('project');
+  const handleCompressFormatChange = (fmt: 'jpeg' | 'png' | 'webp') => {
+    onExportCompressFormatChange?.(fmt);
+    if (fmt === 'png' && exportCompressQuality > 9) {
+      onExportCompressQualityChange?.(6);
+    } else if ((fmt === 'jpeg' || fmt === 'webp') && exportCompressQuality <= 9) {
+      onExportCompressQualityChange?.(92);
+    }
+  };
 
   const EXTRACTOR_METHOD_OPTIONS: { value: ExportExtractorMethod; labelKey: string; descKey: string }[] = [
     { value: 'hybrid', labelKey: 'projectSettings.extractorHybrid', descKey: 'projectSettings.extractorHybridDesc' },
@@ -431,6 +475,79 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                       <strong>{t('common.warning')}：</strong>{t('projectSettings.allowPartialResultWarning')}
                     </p>
                   </div>
+                </div>
+
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-6 space-y-4">
+                  <div>
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-foreground-primary mb-2">{t('projectSettings.exportImageCompress')}</h4>
+                    <p className="text-sm text-gray-600 dark:text-foreground-tertiary">
+                      {t('projectSettings.exportImageCompressDesc')}
+                    </p>
+                  </div>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={exportCompressEnabled}
+                      onChange={(e) => onExportCompressEnabledChange?.(e.target.checked)}
+                      className="mt-1 w-4 h-4 text-emerald-500 focus:ring-emerald-500 rounded"
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900 dark:text-foreground-primary">{t('projectSettings.exportCompressEnable')}</div>
+                      <div className="text-sm text-gray-600 dark:text-foreground-tertiary mt-1">
+                        {t('projectSettings.exportCompressFormatNote')}
+                      </div>
+                    </div>
+                  </label>
+
+                  {exportCompressEnabled && (
+                    <>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900 dark:text-foreground-primary mb-2">{t('projectSettings.exportCompressFormat')}</div>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { value: 'jpeg', labelKey: 'projectSettings.exportCompressFormatJpeg' },
+                            { value: 'png', labelKey: 'projectSettings.exportCompressFormatPng' },
+                            { value: 'webp', labelKey: 'projectSettings.exportCompressFormatWebp' },
+                          ].map(opt => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => handleCompressFormatChange(opt.value as 'jpeg' | 'png' | 'webp')}
+                              className={`px-3 py-2 text-sm font-medium rounded-lg border-2 transition-all ${
+                                exportCompressFormat === opt.value
+                                  ? 'border-emerald-500 bg-white dark:bg-background-secondary text-emerald-700 dark:text-emerald-300'
+                                  : 'border-gray-200 dark:border-border-primary text-gray-700 dark:text-foreground-secondary hover:border-gray-300 dark:hover:border-gray-500 bg-white dark:bg-background-secondary'
+                              }`}
+                            >
+                              {t(opt.labelKey)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-foreground-primary mb-2">
+                            {exportCompressFormat === 'png' ? 'PNG 压缩等级' : exportCompressFormat === 'webp' ? 'WEBP 质量' : t('projectSettings.exportCompressQuality')}
+                          </div>
+                          <Input
+                            type="number"
+                            min={exportCompressFormat === 'png' ? 0 : 1}
+                            max={exportCompressFormat === 'png' ? 9 : 100}
+                            value={exportCompressQuality}
+                            onChange={(e) => onExportCompressQualityChange?.(Number(e.target.value))}
+                          />
+                          <div className="text-xs text-gray-500 dark:text-foreground-tertiary mt-2">
+                            {exportCompressFormat === 'png'
+                              ? t('projectSettings.exportCompressQualityHintPng')
+                              : exportCompressFormat === 'webp'
+                                ? t('projectSettings.exportCompressQualityHintWebp')
+                                : t('projectSettings.exportCompressQualityHint')}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {onSaveExportSettings && (

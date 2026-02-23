@@ -30,10 +30,10 @@ export const getFirstPageImage = (project: Project): string | null => {
     return null;
   }
 
-  // 找到第一页有图片的页面，优先使用 generated_image_url（已包含缩略图逻辑）
-  const firstPageWithImage = project.pages.find(p => p.generated_image_url);
-  if (firstPageWithImage?.generated_image_url) {
-    return getImageUrl(firstPageWithImage.generated_image_url, firstPageWithImage.updated_at);
+  // 找到第一页有图片的页面，优先使用 preview_image_url
+  const firstPageWithImage = project.pages.find(p => p.preview_image_url || p.generated_image_url);
+  if (firstPageWithImage?.preview_image_url || firstPageWithImage?.generated_image_url) {
+    return getImageUrl(firstPageWithImage.preview_image_url || firstPageWithImage.generated_image_url, firstPageWithImage.updated_at);
   }
 
   return null;
@@ -196,4 +196,3 @@ export const exportDescriptionsToMarkdown = (project: Project): void => {
   const filename = `页面描述_${project.id?.slice(0, 8) || 'export'}.md`;
   downloadFile(blob, filename);
 };
-

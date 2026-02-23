@@ -25,10 +25,13 @@ export function normalizeProject(data: any): Project {
  * 标准化后端返回的页面数据
  */
 export function normalizePage(data: any): Page {
+  const original = data.generated_image_url || data.generated_image_path;
+  const preview = data.preview_image_url || data.cached_image_url || original;
   return {
     ...data,
     id: data.page_id || data.id,
-    generated_image_path: data.generated_image_url || data.generated_image_path,
+    generated_image_path: original,
+    preview_image_path: preview,
   };
 }
 
@@ -153,4 +156,3 @@ export function normalizeErrorMessage(errorMessage: string | null | undefined): 
 
   return errorMessage;
 }
-

@@ -43,7 +43,10 @@ export interface Page {
   outline_content: OutlineContent | null;
   description_content?: DescriptionContent;
   generated_image_url?: string; // 后端返回 generated_image_url
+  preview_image_url?: string; // 后端返回 preview_image_url
+  cached_image_url?: string; // 后端返回 cached_image_url
   generated_image_path?: string; // 前端使用的别名
+  preview_image_path?: string; // 前端使用的预览图别名
   status: PageStatus;
   created_at?: string;
   updated_at?: string;
@@ -72,6 +75,11 @@ export interface Project {
   export_extractor_method?: ExportExtractorMethod; // 组件提取方法
   export_inpaint_method?: ExportInpaintMethod; // 背景图获取方法
   export_allow_partial?: boolean; // 是否允许返回半成品（导出出错时继续而非停止）
+  export_compress_enabled?: boolean;
+  export_compress_format?: 'jpeg';
+  export_compress_quality?: number;
+  export_compress_subsampling?: number;
+  export_compress_progressive?: boolean;
   image_aspect_ratio?: string; // 画面比例（如 16:9, 4:3）
   status: ProjectStatus;
   pages: Page[];
@@ -157,4 +165,3 @@ export interface Settings {
   created_at?: string;
   updated_at?: string;
 }
-

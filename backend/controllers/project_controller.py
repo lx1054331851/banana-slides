@@ -351,6 +351,32 @@ def update_project(project_id):
             project.export_extractor_method = data['export_extractor_method']
         if 'export_inpaint_method' in data:
             project.export_inpaint_method = data['export_inpaint_method']
+        if 'export_allow_partial' in data:
+            project.export_allow_partial = bool(data['export_allow_partial'])
+
+        # Export image compression settings (project-level)
+        if 'export_compress_enabled' in data:
+            project.export_compress_enabled = bool(data['export_compress_enabled'])
+        if 'export_compress_mode' in data:
+            project.export_compress_mode = 'manual'
+        if 'export_compress_format' in data:
+            fmt = (data['export_compress_format'] or 'jpeg').strip().lower()
+            if fmt not in ('jpeg', 'png', 'webp'):
+                return bad_request("export_compress_format must be jpeg, png, or webp")
+            project.export_compress_format = fmt
+        if 'export_compress_quality' in data:
+            try:
+                project.export_compress_quality = int(data['export_compress_quality'])
+            except (TypeError, ValueError):
+                return bad_request("export_compress_quality must be an integer")
+        if 'export_compress_subsampling' in data:
+            try:
+                project.export_compress_subsampling = int(data['export_compress_subsampling'])
+            except (TypeError, ValueError):
+                return bad_request("export_compress_subsampling must be an integer")
+        if 'export_compress_progressive' in data:
+            project.export_compress_progressive = bool(data['export_compress_progressive'])
+        # auto mode removed
         
         # Update page order if provided
         if 'pages_order' in data:

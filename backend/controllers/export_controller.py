@@ -7,6 +7,9 @@ import io
 import shutil
 import time
 import zipfile
+import tempfile
+from contextlib import contextmanager
+from pathlib import Path
 
 from flask import Blueprint, request, current_app
 from werkzeug.utils import secure_filename
@@ -15,12 +18,82 @@ from utils import (
     error_response, not_found, bad_request, success_response,
     parse_page_ids_from_query, parse_page_ids_from_body, get_filtered_pages
 )
-from services import ExportService, FileService
+from services import ExportService, FileService, ImageCompressionService
 from services.ai_service_manager import get_ai_service
 
 logger = logging.getLogger(__name__)
 
 export_bp = Blueprint('export', __name__, url_prefix='/api/projects')
+
+
+def _coerce_int(value, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_float(value, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+@contextmanager
+def _maybe_compress_export_images(project: Project, image_paths: list[str], allow_webp: bool = False):
+    """
+    Optionally compress images for export (project-level settings).
+    Returns a list of image paths; uses a temp dir for compressed outputs.
+    """
+    enabled = bool(project.export_compress_enabled)
+    if not enabled:
+        yield image_paths
+        return
+
+    fmt = (project.export_compress_format or 'jpeg').lower()
+    if fmt == 'webp' and not allow_webp:
+        fmt = 'jpeg'
+
+    service = ImageCompressionService()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        compressed = []
+        for src in image_paths:
+            stem = Path(src).stem
+            ext_map = {'jpeg': 'jpg', 'png': 'png', 'webp': 'webp'}
+            out_ext = ext_map.get(fmt, 'jpg')
+            out_path = os.path.join(tmpdir, f"{stem}.{out_ext}")
+
+            subsampling = _coerce_int(project.export_compress_subsampling, 0)
+            progressive = project.export_compress_progressive if project.export_compress_progressive is not None else True
+
+            result_path = None
+            quality = _coerce_int(project.export_compress_quality, 92)
+            ok = False
+            if fmt == 'jpeg':
+                if service.has_mozjpeg():
+                    ok = service.compress_jpeg_mozjpeg(
+                        src,
+                        out_path,
+                        quality=quality,
+                        subsampling=subsampling,
+                        progressive=progressive,
+                        optimize=True,
+                    )
+                if not ok:
+                    ok = service.compress_with_pillow(src, out_path, "JPEG", quality)
+            elif fmt == 'png':
+                # map quality (1-100) to compress_level (0-9) if needed
+                level = quality if 0 <= quality <= 9 else round((max(1, min(quality, 100)) / 100) * 9)
+                ok = service.compress_with_pillow(src, out_path, "PNG", level)
+            elif fmt == 'webp':
+                ok = service.compress_with_pillow(src, out_path, "WEBP", quality)
+            if ok:
+                result_path = out_path
+
+            compressed.append(result_path or src)
+
+        yield compressed
 
 
 @export_bp.route('/<project_id>/export/pptx', methods=['GET'])
@@ -80,8 +153,9 @@ def export_pptx(project_id):
 
         output_path = os.path.join(exports_dir, filename)
 
-        # Generate PPTX file on disk
-        ExportService.create_pptx_from_images(image_paths, output_file=output_path, aspect_ratio=project.image_aspect_ratio)
+        # Generate PPTX file on disk (optional export-time compression)
+        with _maybe_compress_export_images(project, image_paths, allow_webp=False) as export_paths:
+            ExportService.create_pptx_from_images(export_paths, output_file=output_path, aspect_ratio=project.image_aspect_ratio)
 
         # Build download URLs
         download_path = f"/files/{project_id}/exports/{filename}"
@@ -154,8 +228,9 @@ def export_pdf(project_id):
 
         output_path = os.path.join(exports_dir, filename)
 
-        # Generate PDF file on disk
-        ExportService.create_pdf_from_images(image_paths, output_file=output_path, aspect_ratio=project.image_aspect_ratio)
+        # Generate PDF file on disk (optional export-time compression)
+        with _maybe_compress_export_images(project, image_paths, allow_webp=False) as export_paths:
+            ExportService.create_pdf_from_images(export_paths, output_file=output_path, aspect_ratio=project.image_aspect_ratio)
 
         # Build download URLs
         download_path = f"/files/{project_id}/exports/{filename}"
@@ -213,19 +288,22 @@ def export_images(project_id):
         exports_dir = file_service._get_exports_dir(s_project_id)
         timestamp = int(time.time())
 
-        if len(image_items) == 1:
-            page, path = image_items[0]
-            ext = os.path.splitext(path)[1] or '.png'
-            filename = f'slide_{page.id}_{timestamp}{ext}'
-            output_path = os.path.join(exports_dir, filename)
-            shutil.copy2(path, output_path)
-        else:
-            filename = f'slides_{s_project_id}_{timestamp}.zip'
-            output_path = os.path.join(exports_dir, filename)
-            with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-                for page, path in image_items:
-                    ext = os.path.splitext(path)[1] or '.png'
-                    zf.write(path, f'slide_{page.order_index + 1:03d}{ext}')
+        with _maybe_compress_export_images(project, [p for _, p in image_items], allow_webp=True) as export_paths:
+            export_items = list(zip([p for p, _ in image_items], export_paths))
+
+            if len(export_items) == 1:
+                page, path = export_items[0]
+                ext = os.path.splitext(path)[1] or '.png'
+                filename = f'slide_{page.id}_{timestamp}{ext}'
+                output_path = os.path.join(exports_dir, filename)
+                shutil.copy2(path, output_path)
+            else:
+                filename = f'slides_{s_project_id}_{timestamp}.zip'
+                output_path = os.path.join(exports_dir, filename)
+                with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    for page, path in export_items:
+                        ext = os.path.splitext(path)[1] or '.png'
+                        zf.write(path, f'slide_{page.order_index + 1:03d}{ext}')
 
         download_path = f"/files/{s_project_id}/exports/{filename}"
         base_url = request.url_root.rstrip("/")

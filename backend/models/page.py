@@ -66,12 +66,15 @@ class Page(db.Model):
     
     def to_dict(self, include_versions=False):
         """Convert to dictionary"""
-        # Use cached image for frontend display, fallback to original if no cache
-        display_image_path = self.cached_image_path or self.generated_image_path
-        display_image_url = None
-        if display_image_path:
-            filename = Path(display_image_path).name
-            display_image_url = f'/files/{self.project_id}/pages/{filename}'
+        original_url = None
+        cached_url = None
+        if self.generated_image_path:
+            filename = Path(self.generated_image_path).name
+            original_url = f'/files/{self.project_id}/pages/{filename}'
+        if self.cached_image_path:
+            filename = Path(self.cached_image_path).name
+            cached_url = f'/files/{self.project_id}/pages/{filename}'
+        display_image_url = cached_url or original_url
 
         data = {
             'page_id': self.id,
@@ -79,7 +82,9 @@ class Page(db.Model):
             'part': self.part,
             'outline_content': self.get_outline_content(),
             'description_content': self.get_description_content(),
-            'generated_image_url': display_image_url,
+            'generated_image_url': original_url or display_image_url,
+            'cached_image_url': cached_url,
+            'preview_image_url': display_image_url,
             'status': self.status,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
@@ -92,4 +97,3 @@ class Page(db.Model):
     
     def __repr__(self):
         return f'<Page {self.id}: {self.order_index} - {self.status}>'
-

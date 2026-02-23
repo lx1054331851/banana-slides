@@ -422,23 +422,11 @@ export const SlidePreview: React.FC = () => {
   const [exportCompressEnabled, setExportCompressEnabled] = useState<boolean>(
     currentProject?.export_compress_enabled || false
   );
-  const [exportCompressMode, setExportCompressMode] = useState<'auto' | 'manual'>(
-    (currentProject?.export_compress_mode as 'auto' | 'manual') || 'auto'
+  const [exportCompressFormat, setExportCompressFormat] = useState<'jpeg' | 'png' | 'webp'>(
+    (currentProject?.export_compress_format as 'jpeg' | 'png' | 'webp') || 'jpeg'
   );
   const [exportCompressQuality, setExportCompressQuality] = useState<number>(
     currentProject?.export_compress_quality || 92
-  );
-  const [exportCompressAutoTarget, setExportCompressAutoTarget] = useState<number>(
-    currentProject?.export_compress_auto_target || 1.0
-  );
-  const [exportCompressAutoMinQuality, setExportCompressAutoMinQuality] = useState<number>(
-    currentProject?.export_compress_auto_min_quality || 60
-  );
-  const [exportCompressAutoMaxQuality, setExportCompressAutoMaxQuality] = useState<number>(
-    currentProject?.export_compress_auto_max_quality || 95
-  );
-  const [exportCompressAutoMaxTrials, setExportCompressAutoMaxTrials] = useState<number>(
-    currentProject?.export_compress_auto_max_trials || 6
   );
   const [isSavingExportSettings, setIsSavingExportSettings] = useState(false);
   // 画面比例
@@ -499,11 +487,11 @@ export const SlidePreview: React.FC = () => {
 
   // Memoize pages with generated images to avoid re-computing in multiple places
   const pagesWithImages = useMemo(() => {
-    return currentProject?.pages.filter(p => p.id && p.generated_image_path) || [];
+    return currentProject?.pages.filter(p => p.id && (p.generated_image_path || p.preview_image_path)) || [];
   }, [currentProject?.pages]);
 
   const hasImages = useMemo(
-    () => currentProject?.pages?.some(p => p.generated_image_path) ?? false,
+    () => currentProject?.pages?.some(p => p.generated_image_path || p.preview_image_path) ?? false,
     [currentProject?.pages]
   );
 
@@ -657,12 +645,8 @@ export const SlidePreview: React.FC = () => {
         setExportInpaintMethod((currentProject.export_inpaint_method as ExportInpaintMethod) || 'hybrid');
         setExportAllowPartial(currentProject.export_allow_partial || false);
         setExportCompressEnabled(currentProject.export_compress_enabled || false);
-        setExportCompressMode((currentProject.export_compress_mode as 'auto' | 'manual') || 'auto');
+        setExportCompressFormat((currentProject.export_compress_format as 'jpeg' | 'png' | 'webp') || 'jpeg');
         setExportCompressQuality(currentProject.export_compress_quality || 92);
-        setExportCompressAutoTarget(currentProject.export_compress_auto_target || 1.0);
-        setExportCompressAutoMinQuality(currentProject.export_compress_auto_min_quality || 60);
-        setExportCompressAutoMaxQuality(currentProject.export_compress_auto_max_quality || 95);
-        setExportCompressAutoMaxTrials(currentProject.export_compress_auto_max_trials || 6);
         setAspectRatio(currentProject.image_aspect_ratio || '16:9');
         lastProjectId.current = currentProject.id || null;
         isEditingRequirements.current = false;
@@ -681,16 +665,12 @@ export const SlidePreview: React.FC = () => {
         setExportInpaintMethod((currentProject.export_inpaint_method as ExportInpaintMethod) || 'hybrid');
         setExportAllowPartial(currentProject.export_allow_partial || false);
         setExportCompressEnabled(currentProject.export_compress_enabled || false);
-        setExportCompressMode((currentProject.export_compress_mode as 'auto' | 'manual') || 'auto');
+        setExportCompressFormat((currentProject.export_compress_format as 'jpeg' | 'png' | 'webp') || 'jpeg');
         setExportCompressQuality(currentProject.export_compress_quality || 92);
-        setExportCompressAutoTarget(currentProject.export_compress_auto_target || 1.0);
-        setExportCompressAutoMinQuality(currentProject.export_compress_auto_min_quality || 60);
-        setExportCompressAutoMaxQuality(currentProject.export_compress_auto_max_quality || 95);
-        setExportCompressAutoMaxTrials(currentProject.export_compress_auto_max_trials || 6);
       }
       // 如果用户正在编辑，则不更新本地状态
     }
-  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_mode, currentProject?.export_compress_quality, currentProject?.export_compress_auto_target, currentProject?.export_compress_auto_min_quality, currentProject?.export_compress_auto_max_quality, currentProject?.export_compress_auto_max_trials]);
+  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality]);
 
   // 加载当前页面的历史版本
   useEffect(() => {
@@ -783,7 +763,7 @@ export const SlidePreview: React.FC = () => {
       const pagesToGenerate = isPartialGenerate
         ? currentProject?.pages.filter(p => p.id && selectedPageIds.has(p.id))
         : currentProject?.pages;
-      const hasImages = pagesToGenerate?.some((p) => p.generated_image_path);
+      const hasImages = pagesToGenerate?.some((p) => p.generated_image_path || p.preview_image_path);
 
       const executeGenerate = async () => {
         try {
@@ -1433,15 +1413,8 @@ export const SlidePreview: React.FC = () => {
         export_inpaint_method: exportInpaintMethod,
         export_allow_partial: exportAllowPartial,
         export_compress_enabled: exportCompressEnabled,
-        export_compress_mode: exportCompressMode,
-        export_compress_format: 'jpeg',
+        export_compress_format: exportCompressFormat,
         export_compress_quality: exportCompressQuality,
-        export_compress_subsampling: 0,
-        export_compress_progressive: true,
-        export_compress_auto_target: exportCompressAutoTarget,
-        export_compress_auto_min_quality: exportCompressAutoMinQuality,
-        export_compress_auto_max_quality: exportCompressAutoMaxQuality,
-        export_compress_auto_max_trials: exportCompressAutoMaxTrials,
       });
       // 更新本地项目状态
       await syncProject(projectId);
@@ -1454,7 +1427,7 @@ export const SlidePreview: React.FC = () => {
     } finally {
       setIsSavingExportSettings(false);
     }
-  }, [currentProject, projectId, exportExtractorMethod, exportInpaintMethod, exportAllowPartial, exportCompressEnabled, exportCompressMode, exportCompressQuality, exportCompressAutoTarget, exportCompressAutoMinQuality, exportCompressAutoMaxQuality, exportCompressAutoMaxTrials, syncProject, show]);
+  }, [currentProject, projectId, exportExtractorMethod, exportInpaintMethod, exportAllowPartial, exportCompressEnabled, exportCompressFormat, exportCompressQuality, syncProject, show]);
 
   const handleSaveAspectRatio = useCallback(async () => {
     if (!currentProject || !projectId) return;
@@ -1553,12 +1526,12 @@ export const SlidePreview: React.FC = () => {
   }
 
   const selectedPage = currentProject.pages[selectedIndex];
-  const imageUrl = selectedPage?.generated_image_path
-    ? getImageUrl(selectedPage.generated_image_path, selectedPage.updated_at)
+  const imageUrl = (selectedPage?.generated_image_path || selectedPage?.preview_image_path)
+    ? getImageUrl(selectedPage.generated_image_path || selectedPage.preview_image_path, selectedPage.updated_at)
     : '';
 
   const hasAllImages = currentProject.pages.every(
-    (p) => p.generated_image_path
+    (p) => p.generated_image_path || p.preview_image_path
   );
   const isSidebarCompact = !isMobileView && !isSidebarCollapsed && sidebarWidthPx <= 200;
   const generateButtonText =
@@ -2105,7 +2078,7 @@ export const SlidePreview: React.FC = () => {
                 <div key={page.id || `collapsed-${index}`} className="relative">
                   <button
                     onClick={() => {
-                      if (isMultiSelectMode && page.id && page.generated_image_path) {
+                      if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                         togglePageSelection(page.id);
                       } else {
                         setSelectedIndex(index);
@@ -2118,9 +2091,9 @@ export const SlidePreview: React.FC = () => {
                         : 'border-gray-200 dark:border-border-primary'
                     } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
                   >
-                    {page.generated_image_path ? (
+                    {(page.preview_image_path || page.generated_image_path) ? (
                       <img
-                        src={getImageUrl(page.generated_image_path, page.updated_at)}
+                        src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
                         alt={`Slide ${index + 1}`}
                         className="w-full h-full object-cover rounded"
                       />
@@ -2190,7 +2163,7 @@ export const SlidePreview: React.FC = () => {
                     <div className="md:hidden relative">
                       <button
                         onClick={() => {
-                          if (isMultiSelectMode && page.id && page.generated_image_path) {
+                          if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                             togglePageSelection(page.id);
                           } else {
                             setSelectedIndex(index);
@@ -2202,9 +2175,9 @@ export const SlidePreview: React.FC = () => {
                             : 'border-gray-200 dark:border-border-primary'
                         } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
                       >
-                        {page.generated_image_path ? (
+                        {(page.preview_image_path || page.generated_image_path) ? (
                           <img
-                            src={getImageUrl(page.generated_image_path, page.updated_at)}
+                            src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
                             alt={`Slide ${index + 1}`}
                             className="w-full h-full object-cover rounded"
                           />
@@ -2215,7 +2188,7 @@ export const SlidePreview: React.FC = () => {
                         )}
                       </button>
                       {/* 多选复选框（移动端） */}
-                      {isMultiSelectMode && page.id && page.generated_image_path && (
+                      {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -2234,7 +2207,7 @@ export const SlidePreview: React.FC = () => {
                     {/* 桌面端：完整卡片 */}
                     <div className="hidden md:block relative">
                       {/* 多选复选框（桌面端） */}
-                      {isMultiSelectMode && page.id && page.generated_image_path && (
+                      {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -2254,7 +2227,7 @@ export const SlidePreview: React.FC = () => {
                         index={index}
                         isSelected={selectedIndex === index}
                         onClick={() => {
-                          if (isMultiSelectMode && page.id && page.generated_image_path) {
+                          if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                             togglePageSelection(page.id);
                           } else {
                             setSelectedIndex(index);
@@ -2345,7 +2318,7 @@ export const SlidePreview: React.FC = () => {
                         </button>
                       </>
                     )}
-                    {selectedPage?.generated_image_path ? (
+                    {(selectedPage?.generated_image_path || selectedPage?.preview_image_path) ? (
                       <img
                         src={imageUrl}
                         alt={`Slide ${selectedIndex + 1}`}
@@ -2504,7 +2477,7 @@ export const SlidePreview: React.FC = () => {
                       variant="secondary"
                       size="sm"
                       onClick={handleEditPage}
-                      disabled={!selectedPage?.generated_image_path}
+                      disabled={!(selectedPage?.generated_image_path || selectedPage?.preview_image_path)}
                       className="text-xs md:text-sm flex-1 sm:flex-initial"
                     >
                       {t('common.edit')}
@@ -2644,22 +2617,14 @@ export const SlidePreview: React.FC = () => {
             exportInpaintMethod={exportInpaintMethod}
             exportAllowPartial={exportAllowPartial}
             exportCompressEnabled={exportCompressEnabled}
-            exportCompressMode={exportCompressMode}
+            exportCompressFormat={exportCompressFormat}
             exportCompressQuality={exportCompressQuality}
-            exportCompressAutoTarget={exportCompressAutoTarget}
-            exportCompressAutoMinQuality={exportCompressAutoMinQuality}
-            exportCompressAutoMaxQuality={exportCompressAutoMaxQuality}
-            exportCompressAutoMaxTrials={exportCompressAutoMaxTrials}
             onExportExtractorMethodChange={setExportExtractorMethod}
             onExportInpaintMethodChange={setExportInpaintMethod}
             onExportAllowPartialChange={setExportAllowPartial}
             onExportCompressEnabledChange={setExportCompressEnabled}
-            onExportCompressModeChange={setExportCompressMode}
+            onExportCompressFormatChange={setExportCompressFormat}
             onExportCompressQualityChange={setExportCompressQuality}
-            onExportCompressAutoTargetChange={setExportCompressAutoTarget}
-            onExportCompressAutoMinQualityChange={setExportCompressAutoMinQuality}
-            onExportCompressAutoMaxQualityChange={setExportCompressAutoMaxQuality}
-            onExportCompressAutoMaxTrialsChange={setExportCompressAutoMaxTrials}
             onSaveExportSettings={handleSaveExportSettings}
             isSavingExportSettings={isSavingExportSettings}
             // 画面比例

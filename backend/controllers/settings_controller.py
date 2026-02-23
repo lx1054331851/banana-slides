@@ -18,6 +18,7 @@ from services.file_parser_service import FileParserService
 from services.ai_providers.ocr.baidu_accurate_ocr_provider import create_baidu_accurate_ocr_provider
 from services.ai_providers.image.baidu_inpainting_provider import create_baidu_inpainting_provider
 from services.task_manager import task_manager
+from services.image_compression_service import ImageCompressionService
 
 logger = logging.getLogger(__name__)
 ALLOWED_PROVIDER_FORMATS = {"openai", "gemini", "lazyllm"}
@@ -888,6 +889,20 @@ def _test_mineru_pdf():
             tmp_file.unlink()
 
 
+def _test_mozjpeg():
+    """测试 mozjpeg(cjpeg) 是否可用"""
+    svc = ImageCompressionService()
+    if not svc.has_mozjpeg():
+        raise ValueError("未检测到 cjpeg（mozjpeg）")
+    result = {
+        "cjpeg_path": svc.mozjpeg_bin,
+        "butteraugli_path": svc.butteraugli_bin,
+        "butteraugli_available": bool(svc.butteraugli_bin),
+    }
+    msg = "cjpeg 可用" + ("，Butteraugli 已就绪" if svc.butteraugli_bin else "（未检测到 Butteraugli）")
+    return result, msg
+
+
 # 测试函数映射
 TEST_FUNCTIONS = {
     "baidu-ocr": _test_baidu_ocr,
@@ -896,7 +911,10 @@ TEST_FUNCTIONS = {
     "baidu-inpaint": _test_baidu_inpaint,
     "image-model": _test_image_model,
     "mineru-pdf": _test_mineru_pdf,
+    "mozjpeg": _test_mozjpeg,
 }
+
+
 
 
 def _run_test_async(task_id: str, test_name: str, test_settings: dict, app):

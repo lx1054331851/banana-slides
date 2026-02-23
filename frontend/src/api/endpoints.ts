@@ -1000,6 +1000,14 @@ export const testMineruPdf = async (settings?: TestSettingsOverride): Promise<Ap
 };
 
 /**
+ * 测试 mozjpeg (cjpeg) 是否可用
+ */
+export const testMozjpeg = async (settings?: TestSettingsOverride): Promise<ApiResponse<{ task_id: string; status: string }>> => {
+  const response = await apiClient.post<ApiResponse<{ task_id: string; status: string }>>('/api/settings/tests/mozjpeg', settings || {});
+  return response.data;
+};
+
+/**
  * 查询测试任务状态
  * @param taskId 任务ID
  * @returns 任务状态信息
