@@ -1367,20 +1367,43 @@ def export_pptx_task(
             return
 
         try:
+            progress_messages = ["🚀 开始导出PPTX..."]
+            last_percent = -1
+            last_message = ""
+
+            def update_progress(step: str, message: str, percent: int, force: bool = False):
+                nonlocal last_percent, last_message, progress_messages
+                if not force and percent == last_percent:
+                    return
+                if message:
+                    tagged = f"[{step}] {message}" if step else message
+                    if not progress_messages or progress_messages[-1] != tagged:
+                        progress_messages.append(tagged)
+                        if len(progress_messages) > 10:
+                            progress_messages = progress_messages[-10:]
+                task_obj = Task.query.get(task_id)
+                if task_obj:
+                    task_obj.set_progress({
+                        "total": 100,
+                        "completed": percent,
+                        "failed": 0,
+                        "current_step": message,
+                        "percent": percent,
+                        "messages": progress_messages
+                    })
+                    db.session.commit()
+                last_percent = percent
+                last_message = message
+
             task.status = 'PROCESSING'
-            task.set_progress({
-                "total": 100,
-                "completed": 0,
-                "failed": 0,
-                "current_step": "准备中...",
-                "percent": 0,
-                "messages": ["🚀 开始导出PPTX..."]
-            })
             db.session.commit()
+            update_progress("准备", "初始化导出任务", 0, force=True)
 
             project = Project.query.get(project_id)
             if not project:
                 raise ValueError(f"Project {project_id} not found")
+
+            update_progress("准备", "加载页面数据", 5, force=True)
 
             pages = get_filtered_pages(project_id, page_ids)
             if not pages:
@@ -1396,15 +1419,7 @@ def export_pptx_task(
             if not image_paths:
                 raise ValueError('No generated images found for project')
 
-            task.set_progress({
-                "total": 100,
-                "completed": 5,
-                "failed": 0,
-                "current_step": f"找到 {len(image_paths)} 张图片",
-                "percent": 5,
-                "messages": ["🚀 开始导出PPTX...", f"准备图片: {len(image_paths)} 张"]
-            })
-            db.session.commit()
+            update_progress("准备", f"找到 {len(image_paths)} 张图片", 10, force=True)
 
             exports_dir = file_service._get_exports_dir(project_id)
             if not filename.endswith('.pptx'):
@@ -1416,20 +1431,31 @@ def export_pptx_task(
                 filename = f"{base_name}_{timestamp}.pptx"
                 output_path = os.path.join(exports_dir, filename)
 
-            task.set_progress({
-                "total": 100,
-                "completed": 25,
-                "failed": 0,
-                "current_step": "正在生成PPTX...",
-                "percent": 25,
-                "messages": ["🚀 开始导出PPTX...", f"准备图片: {len(image_paths)} 张", "生成PPTX..."]
-            })
-            db.session.commit()
+            update_progress("压缩", "准备压缩图片", 20, force=True)
 
-            with maybe_compress_export_images(project, image_paths, allow_webp=False) as export_paths:
+            compress_enabled = bool(project.export_compress_enabled)
+
+            def compress_progress(idx: int, total: int, _src: str):
+                if total <= 0:
+                    return
+                percent = 20 + int((idx / total) * 40)
+                update_progress("压缩", f"压缩图片 {idx}/{total}", percent)
+
+            if not compress_enabled:
+                update_progress("压缩", "未开启压缩，跳过", 60, force=True)
+
+            with maybe_compress_export_images(
+                project,
+                image_paths,
+                allow_webp=False,
+                progress_cb=compress_progress if compress_enabled else None
+            ) as export_paths:
+                update_progress("生成", "正在生成PPTX...", 70, force=True)
                 ExportService.create_pptx_from_images(export_paths, output_file=output_path, aspect_ratio=project.image_aspect_ratio)
 
             download_path = f"/files/{project_id}/exports/{filename}"
+
+            update_progress("整理", "生成下载链接", 90, force=True)
 
             task.status = 'COMPLETED'
             task.completed_at = datetime.utcnow()
@@ -1439,7 +1465,7 @@ def export_pptx_task(
                 "failed": 0,
                 "current_step": "✓ 导出完成",
                 "percent": 100,
-                "messages": ["🚀 开始导出PPTX...", "生成完成"],
+                "messages": progress_messages + ["✅ 导出完成"],
                 "download_url": download_path,
                 "filename": filename
             })
@@ -1478,20 +1504,43 @@ def export_pdf_task(
             return
 
         try:
+            progress_messages = ["🚀 开始导出PDF..."]
+            last_percent = -1
+            last_message = ""
+
+            def update_progress(step: str, message: str, percent: int, force: bool = False):
+                nonlocal last_percent, last_message, progress_messages
+                if not force and percent == last_percent:
+                    return
+                if message:
+                    tagged = f"[{step}] {message}" if step else message
+                    if not progress_messages or progress_messages[-1] != tagged:
+                        progress_messages.append(tagged)
+                        if len(progress_messages) > 10:
+                            progress_messages = progress_messages[-10:]
+                task_obj = Task.query.get(task_id)
+                if task_obj:
+                    task_obj.set_progress({
+                        "total": 100,
+                        "completed": percent,
+                        "failed": 0,
+                        "current_step": message,
+                        "percent": percent,
+                        "messages": progress_messages
+                    })
+                    db.session.commit()
+                last_percent = percent
+                last_message = message
+
             task.status = 'PROCESSING'
-            task.set_progress({
-                "total": 100,
-                "completed": 0,
-                "failed": 0,
-                "current_step": "准备中...",
-                "percent": 0,
-                "messages": ["🚀 开始导出PDF..."]
-            })
             db.session.commit()
+            update_progress("准备", "初始化导出任务", 0, force=True)
 
             project = Project.query.get(project_id)
             if not project:
                 raise ValueError(f"Project {project_id} not found")
+
+            update_progress("准备", "加载页面数据", 5, force=True)
 
             pages = get_filtered_pages(project_id, page_ids)
             if not pages:
@@ -1507,15 +1556,7 @@ def export_pdf_task(
             if not image_paths:
                 raise ValueError('No generated images found for project')
 
-            task.set_progress({
-                "total": 100,
-                "completed": 5,
-                "failed": 0,
-                "current_step": f"找到 {len(image_paths)} 张图片",
-                "percent": 5,
-                "messages": ["🚀 开始导出PDF...", f"准备图片: {len(image_paths)} 张"]
-            })
-            db.session.commit()
+            update_progress("准备", f"找到 {len(image_paths)} 张图片", 10, force=True)
 
             exports_dir = file_service._get_exports_dir(project_id)
             if not filename.endswith('.pdf'):
@@ -1527,20 +1568,31 @@ def export_pdf_task(
                 filename = f"{base_name}_{timestamp}.pdf"
                 output_path = os.path.join(exports_dir, filename)
 
-            task.set_progress({
-                "total": 100,
-                "completed": 25,
-                "failed": 0,
-                "current_step": "正在生成PDF...",
-                "percent": 25,
-                "messages": ["🚀 开始导出PDF...", f"准备图片: {len(image_paths)} 张", "生成PDF..."]
-            })
-            db.session.commit()
+            update_progress("压缩", "准备压缩图片", 20, force=True)
 
-            with maybe_compress_export_images(project, image_paths, allow_webp=False) as export_paths:
+            compress_enabled = bool(project.export_compress_enabled)
+
+            def compress_progress(idx: int, total: int, _src: str):
+                if total <= 0:
+                    return
+                percent = 20 + int((idx / total) * 40)
+                update_progress("压缩", f"压缩图片 {idx}/{total}", percent)
+
+            if not compress_enabled:
+                update_progress("压缩", "未开启压缩，跳过", 60, force=True)
+
+            with maybe_compress_export_images(
+                project,
+                image_paths,
+                allow_webp=False,
+                progress_cb=compress_progress if compress_enabled else None
+            ) as export_paths:
+                update_progress("生成", "正在生成PDF...", 70, force=True)
                 ExportService.create_pdf_from_images(export_paths, output_file=output_path, aspect_ratio=project.image_aspect_ratio)
 
             download_path = f"/files/{project_id}/exports/{filename}"
+
+            update_progress("整理", "生成下载链接", 90, force=True)
 
             task.status = 'COMPLETED'
             task.completed_at = datetime.utcnow()
@@ -1550,7 +1602,7 @@ def export_pdf_task(
                 "failed": 0,
                 "current_step": "✓ 导出完成",
                 "percent": 100,
-                "messages": ["🚀 开始导出PDF...", "生成完成"],
+                "messages": progress_messages + ["✅ 导出完成"],
                 "download_url": download_path,
                 "filename": filename
             })
@@ -1589,20 +1641,43 @@ def export_images_task(
             return
 
         try:
+            progress_messages = ["🚀 开始导出图片..."]
+            last_percent = -1
+            last_message = ""
+
+            def update_progress(step: str, message: str, percent: int, force: bool = False):
+                nonlocal last_percent, last_message, progress_messages
+                if not force and percent == last_percent:
+                    return
+                if message:
+                    tagged = f"[{step}] {message}" if step else message
+                    if not progress_messages or progress_messages[-1] != tagged:
+                        progress_messages.append(tagged)
+                        if len(progress_messages) > 10:
+                            progress_messages = progress_messages[-10:]
+                task_obj = Task.query.get(task_id)
+                if task_obj:
+                    task_obj.set_progress({
+                        "total": 100,
+                        "completed": percent,
+                        "failed": 0,
+                        "current_step": message,
+                        "percent": percent,
+                        "messages": progress_messages
+                    })
+                    db.session.commit()
+                last_percent = percent
+                last_message = message
+
             task.status = 'PROCESSING'
-            task.set_progress({
-                "total": 100,
-                "completed": 0,
-                "failed": 0,
-                "current_step": "准备中...",
-                "percent": 0,
-                "messages": ["🚀 开始导出图片..."]
-            })
             db.session.commit()
+            update_progress("准备", "初始化导出任务", 0, force=True)
 
             project = Project.query.get(project_id)
             if not project:
                 raise ValueError(f"Project {project_id} not found")
+
+            update_progress("准备", "加载页面数据", 5, force=True)
 
             pages = get_filtered_pages(project_id, page_ids)
             if not pages:
@@ -1618,42 +1693,46 @@ def export_images_task(
             if not image_items:
                 raise ValueError('No generated images found for project')
 
-            task.set_progress({
-                "total": 100,
-                "completed": 5,
-                "failed": 0,
-                "current_step": f"找到 {len(image_items)} 张图片",
-                "percent": 5,
-                "messages": ["🚀 开始导出图片...", f"准备图片: {len(image_items)} 张"]
-            })
-            db.session.commit()
+            update_progress("准备", f"找到 {len(image_items)} 张图片", 10, force=True)
 
             exports_dir = file_service._get_exports_dir(project_id)
             timestamp = int(datetime.utcnow().timestamp())
 
-            task.set_progress({
-                "total": 100,
-                "completed": 25,
-                "failed": 0,
-                "current_step": "正在打包图片...",
-                "percent": 25,
-                "messages": ["🚀 开始导出图片...", f"准备图片: {len(image_items)} 张", "打包图片..."]
-            })
-            db.session.commit()
+            update_progress("压缩", "准备压缩图片", 20, force=True)
 
-            with maybe_compress_export_images(project, [p for _, p in image_items], allow_webp=True) as export_paths:
+            compress_enabled = bool(project.export_compress_enabled)
+
+            def compress_progress(idx: int, total: int, _src: str):
+                if total <= 0:
+                    return
+                percent = 20 + int((idx / total) * 40)
+                update_progress("压缩", f"压缩图片 {idx}/{total}", percent)
+
+            if not compress_enabled:
+                update_progress("压缩", "未开启压缩，跳过", 60, force=True)
+
+            with maybe_compress_export_images(
+                project,
+                [p for _, p in image_items],
+                allow_webp=True,
+                progress_cb=compress_progress if compress_enabled else None
+            ) as export_paths:
                 export_items = list(zip([p for p, _ in image_items], export_paths))
                 if len(export_items) == 1:
+                    update_progress("打包", "导出单张图片", 80, force=True)
                     page, path = export_items[0]
                     ext = os.path.splitext(path)[1] or '.png'
                     filename = f'slide_{page.id}_{timestamp}{ext}'
                     output_path = os.path.join(exports_dir, filename)
                     shutil.copy2(path, output_path)
                 else:
+                    total_items = len(export_items)
                     filename = f'slides_{project_id}_{timestamp}.zip'
                     output_path = os.path.join(exports_dir, filename)
                     with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-                        for page, path in export_items:
+                        for idx, (page, path) in enumerate(export_items, start=1):
+                            percent = 60 + int((idx / total_items) * 30)
+                            update_progress("打包", f"写入压缩包 {idx}/{total_items}", percent)
                             ext = os.path.splitext(path)[1] or '.png'
                             zf.write(path, f'slide_{page.order_index + 1:03d}{ext}')
 
@@ -1667,7 +1746,7 @@ def export_images_task(
                 "failed": 0,
                 "current_step": "✓ 导出完成",
                 "percent": 100,
-                "messages": ["🚀 开始导出图片...", "生成完成"],
+                "messages": progress_messages + ["✅ 导出完成"],
                 "download_url": download_path,
                 "filename": filename
             })

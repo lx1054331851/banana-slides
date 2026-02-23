@@ -5,7 +5,7 @@ import os
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator, Optional
 
 from models import Project
 from .image_compression_service import ImageCompressionService
@@ -19,7 +19,12 @@ def _coerce_int(value, default: int) -> int:
 
 
 @contextmanager
-def maybe_compress_export_images(project: Project, image_paths: list[str], allow_webp: bool = False) -> Iterator[list[str]]:
+def maybe_compress_export_images(
+    project: Project,
+    image_paths: list[str],
+    allow_webp: bool = False,
+    progress_cb: Optional[Callable[[int, int, str], None]] = None
+) -> Iterator[list[str]]:
     """
     Optionally compress images for export (project-level settings).
     Returns a list of image paths; uses a temp dir for compressed outputs.
@@ -34,9 +39,12 @@ def maybe_compress_export_images(project: Project, image_paths: list[str], allow
         fmt = 'jpeg'
 
     service = ImageCompressionService()
+    total = len(image_paths)
     with tempfile.TemporaryDirectory() as tmpdir:
         compressed: list[str] = []
-        for src in image_paths:
+        for idx, src in enumerate(image_paths, start=1):
+            if progress_cb:
+                progress_cb(idx, total, src)
             stem = Path(src).stem
             ext_map = {'jpeg': 'jpg', 'png': 'png', 'webp': 'webp'}
             out_ext = ext_map.get(fmt, 'jpg')
