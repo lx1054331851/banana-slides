@@ -153,7 +153,7 @@ import { SlideCard } from '@/components/preview/SlideCard';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useExportTasksStore, type ExportTaskType } from '@/store/useExportTasksStore';
 import { getImageUrl } from '@/api/client';
-import { getPageImageVersions, setCurrentImageVersion, updateProject, uploadTemplate, exportPPTX as apiExportPPTX, exportPDF as apiExportPDF, exportImages as apiExportImages, exportEditablePPTX as apiExportEditablePPTX, getSettings } from '@/api/endpoints';
+import { getPageImageVersions, setCurrentImageVersion, updateProject, uploadTemplate, exportPPTXTask as apiExportPPTXTask, exportPDFTask as apiExportPDFTask, exportImagesTask as apiExportImagesTask, exportEditablePPTX as apiExportEditablePPTX, getSettings } from '@/api/endpoints';
 import type { ImageVersion, DescriptionContent, ExportExtractorMethod, ExportInpaintMethod, Page } from '@/types';
 import { normalizeErrorMessage } from '@/utils';
 
@@ -178,6 +178,13 @@ export const SlidePreview: React.FC = () => {
   } = useProjectStore();
   
   const { addTask, pollTask: pollExportTask, tasks: exportTasks, restoreActiveTasks } = useExportTasksStore();
+  const activeExportTasks = useMemo(
+    () => exportTasks.filter(
+      task => task.projectId === projectId && (task.status === 'PROCESSING' || task.status === 'RUNNING' || task.status === 'PENDING')
+    ),
+    [exportTasks, projectId]
+  );
+  const isExporting = activeExportTasks.length > 0;
 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -1277,54 +1284,50 @@ export const SlidePreview: React.FC = () => {
     const exportTaskId = `export-${Date.now()}`;
 
     try {
-      if (type === 'pptx' || type === 'pdf' || type === 'images') {
-        // Synchronous export - direct download, create completed task directly
-        const exportApi = { pptx: apiExportPPTX, pdf: apiExportPDF, images: apiExportImages };
-        const response = await exportApi[type](projectId, pageIds);
-        const downloadUrl = response.data?.download_url || response.data?.download_url_absolute;
-        if (downloadUrl) {
-          addTask({
-            id: exportTaskId,
-            taskId: '',
-            projectId,
-            type: type as ExportTaskType,
-            status: 'COMPLETED',
-            downloadUrl,
-            pageIds: pageIds,
-          });
-          window.open(downloadUrl, '_blank');
-        }
+      // Create a local task immediately for instant UI feedback
+      addTask({
+        id: exportTaskId,
+        taskId: '',
+        projectId,
+        type: type as ExportTaskType,
+        status: 'PROCESSING',
+        pageIds: pageIds,
+        progress: { total: 100, completed: 0, percent: 0 },
+      });
+
+      setShowExportTasksPanel(true);
+      show({ message: t('slidePreview.exportStarted'), type: 'success' });
+
+      let response: { data?: { task_id?: string } } | undefined;
+      if (type === 'pptx') {
+        response = await apiExportPPTXTask(projectId, undefined, pageIds);
+      } else if (type === 'pdf') {
+        response = await apiExportPDFTask(projectId, undefined, pageIds);
+      } else if (type === 'images') {
+        response = await apiExportImagesTask(projectId, pageIds);
       } else if (type === 'editable-pptx') {
-        // Async export - create processing task and start polling
-        addTask({
-          id: exportTaskId,
-          taskId: '', // Will be updated below
-          projectId,
-          type: 'editable-pptx',
-          status: 'PROCESSING',
-          pageIds: pageIds,
-        });
-        
-        show({ message: t('slidePreview.exportStarted'), type: 'success' });
-        
-        const response = await apiExportEditablePPTX(projectId, undefined, pageIds);
-        const taskId = response.data?.task_id;
-        
-        if (taskId) {
-          // Update task with real taskId
-          addTask({
-            id: exportTaskId,
-            taskId,
-            projectId,
-            type: 'editable-pptx',
-            status: 'PROCESSING',
-            pageIds: pageIds,
-          });
-          
-          // Start polling in background (non-blocking)
-          pollExportTask(exportTaskId, projectId, taskId);
-        }
+        response = await apiExportEditablePPTX(projectId, undefined, pageIds);
       }
+
+      const taskId = response?.data?.task_id;
+
+      if (!taskId) {
+        throw new Error('导出任务创建失败');
+      }
+
+      // Update task with real taskId
+      addTask({
+        id: exportTaskId,
+        taskId,
+        projectId,
+        type: type as ExportTaskType,
+        status: 'PROCESSING',
+        pageIds: pageIds,
+        progress: { total: 100, completed: 0, percent: 0 },
+      });
+      
+      // Start polling in background (non-blocking)
+      pollExportTask(exportTaskId, projectId, taskId);
     } catch (error: any) {
       // Update task as failed
       addTask({
@@ -1949,7 +1952,7 @@ export const SlidePreview: React.FC = () => {
             <Button
               variant="primary"
               size="sm"
-              icon={<Download size={16} className="md:w-[18px] md:h-[18px]" />}
+              icon={isExporting ? <Loader2 size={16} className="md:w-[18px] md:h-[18px] animate-spin text-banana-500" /> : <Download size={16} className="md:w-[18px] md:h-[18px]" />}
               onClick={() => {
                 setShowExportMenu(!showExportMenu);
                 setShowExportTasksPanel(false);

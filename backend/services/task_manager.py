@@ -15,6 +15,7 @@ from utils import get_filtered_pages
 from utils.image_utils import check_image_resolution
 from pathlib import Path
 from services.pdf_service import split_pdf_to_pages
+from services.export_helpers import maybe_compress_export_images
 
 logger = logging.getLogger(__name__)
 
@@ -1339,3 +1340,342 @@ def export_editable_pptx_with_recursive_analysis_task(
                 task.error_message = str(e)
                 task.completed_at = datetime.utcnow()
                 db.session.commit()
+
+
+def export_pptx_task(
+    task_id: str,
+    project_id: str,
+    filename: str,
+    file_service,
+    page_ids: list = None,
+    app=None
+):
+    """
+    Background task for exporting PPTX with progress updates.
+    """
+    if app is None:
+        raise ValueError("Flask app instance must be provided")
+
+    with app.app_context():
+        from datetime import datetime
+        from services.export_service import ExportService
+        from models import Project
+
+        task = Task.query.get(task_id)
+        if not task:
+            logger.error(f"Task {task_id} not found")
+            return
+
+        try:
+            task.status = 'PROCESSING'
+            task.set_progress({
+                "total": 100,
+                "completed": 0,
+                "failed": 0,
+                "current_step": "准备中...",
+                "percent": 0,
+                "messages": ["🚀 开始导出PPTX..."]
+            })
+            db.session.commit()
+
+            project = Project.query.get(project_id)
+            if not project:
+                raise ValueError(f"Project {project_id} not found")
+
+            pages = get_filtered_pages(project_id, page_ids)
+            if not pages:
+                raise ValueError('No pages found for project')
+
+            image_paths = []
+            for page in pages:
+                if page.generated_image_path:
+                    abs_path = file_service.get_absolute_path(page.generated_image_path)
+                    if os.path.exists(abs_path):
+                        image_paths.append(abs_path)
+
+            if not image_paths:
+                raise ValueError('No generated images found for project')
+
+            task.set_progress({
+                "total": 100,
+                "completed": 5,
+                "failed": 0,
+                "current_step": f"找到 {len(image_paths)} 张图片",
+                "percent": 5,
+                "messages": ["🚀 开始导出PPTX...", f"准备图片: {len(image_paths)} 张"]
+            })
+            db.session.commit()
+
+            exports_dir = file_service._get_exports_dir(project_id)
+            if not filename.endswith('.pptx'):
+                filename += '.pptx'
+            output_path = os.path.join(exports_dir, filename)
+            if os.path.exists(output_path):
+                base_name = filename.rsplit('.', 1)[0]
+                timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+                filename = f"{base_name}_{timestamp}.pptx"
+                output_path = os.path.join(exports_dir, filename)
+
+            task.set_progress({
+                "total": 100,
+                "completed": 25,
+                "failed": 0,
+                "current_step": "正在生成PPTX...",
+                "percent": 25,
+                "messages": ["🚀 开始导出PPTX...", f"准备图片: {len(image_paths)} 张", "生成PPTX..."]
+            })
+            db.session.commit()
+
+            with maybe_compress_export_images(project, image_paths, allow_webp=False) as export_paths:
+                ExportService.create_pptx_from_images(export_paths, output_file=output_path, aspect_ratio=project.image_aspect_ratio)
+
+            download_path = f"/files/{project_id}/exports/{filename}"
+
+            task.status = 'COMPLETED'
+            task.completed_at = datetime.utcnow()
+            task.set_progress({
+                "total": 100,
+                "completed": 100,
+                "failed": 0,
+                "current_step": "✓ 导出完成",
+                "percent": 100,
+                "messages": ["🚀 开始导出PPTX...", "生成完成"],
+                "download_url": download_path,
+                "filename": filename
+            })
+            db.session.commit()
+
+        except Exception as e:
+            logger.error(f"✗ 任务 {task_id} 失败: {e}", exc_info=True)
+            task.status = 'FAILED'
+            task.error_message = str(e)
+            task.completed_at = datetime.utcnow()
+            db.session.commit()
+
+
+def export_pdf_task(
+    task_id: str,
+    project_id: str,
+    filename: str,
+    file_service,
+    page_ids: list = None,
+    app=None
+):
+    """
+    Background task for exporting PDF with progress updates.
+    """
+    if app is None:
+        raise ValueError("Flask app instance must be provided")
+
+    with app.app_context():
+        from datetime import datetime
+        from services.export_service import ExportService
+        from models import Project
+
+        task = Task.query.get(task_id)
+        if not task:
+            logger.error(f"Task {task_id} not found")
+            return
+
+        try:
+            task.status = 'PROCESSING'
+            task.set_progress({
+                "total": 100,
+                "completed": 0,
+                "failed": 0,
+                "current_step": "准备中...",
+                "percent": 0,
+                "messages": ["🚀 开始导出PDF..."]
+            })
+            db.session.commit()
+
+            project = Project.query.get(project_id)
+            if not project:
+                raise ValueError(f"Project {project_id} not found")
+
+            pages = get_filtered_pages(project_id, page_ids)
+            if not pages:
+                raise ValueError('No pages found for project')
+
+            image_paths = []
+            for page in pages:
+                if page.generated_image_path:
+                    abs_path = file_service.get_absolute_path(page.generated_image_path)
+                    if os.path.exists(abs_path):
+                        image_paths.append(abs_path)
+
+            if not image_paths:
+                raise ValueError('No generated images found for project')
+
+            task.set_progress({
+                "total": 100,
+                "completed": 5,
+                "failed": 0,
+                "current_step": f"找到 {len(image_paths)} 张图片",
+                "percent": 5,
+                "messages": ["🚀 开始导出PDF...", f"准备图片: {len(image_paths)} 张"]
+            })
+            db.session.commit()
+
+            exports_dir = file_service._get_exports_dir(project_id)
+            if not filename.endswith('.pdf'):
+                filename += '.pdf'
+            output_path = os.path.join(exports_dir, filename)
+            if os.path.exists(output_path):
+                base_name = filename.rsplit('.', 1)[0]
+                timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+                filename = f"{base_name}_{timestamp}.pdf"
+                output_path = os.path.join(exports_dir, filename)
+
+            task.set_progress({
+                "total": 100,
+                "completed": 25,
+                "failed": 0,
+                "current_step": "正在生成PDF...",
+                "percent": 25,
+                "messages": ["🚀 开始导出PDF...", f"准备图片: {len(image_paths)} 张", "生成PDF..."]
+            })
+            db.session.commit()
+
+            with maybe_compress_export_images(project, image_paths, allow_webp=False) as export_paths:
+                ExportService.create_pdf_from_images(export_paths, output_file=output_path, aspect_ratio=project.image_aspect_ratio)
+
+            download_path = f"/files/{project_id}/exports/{filename}"
+
+            task.status = 'COMPLETED'
+            task.completed_at = datetime.utcnow()
+            task.set_progress({
+                "total": 100,
+                "completed": 100,
+                "failed": 0,
+                "current_step": "✓ 导出完成",
+                "percent": 100,
+                "messages": ["🚀 开始导出PDF...", "生成完成"],
+                "download_url": download_path,
+                "filename": filename
+            })
+            db.session.commit()
+
+        except Exception as e:
+            logger.error(f"✗ 任务 {task_id} 失败: {e}", exc_info=True)
+            task.status = 'FAILED'
+            task.error_message = str(e)
+            task.completed_at = datetime.utcnow()
+            db.session.commit()
+
+
+def export_images_task(
+    task_id: str,
+    project_id: str,
+    file_service,
+    page_ids: list = None,
+    app=None
+):
+    """
+    Background task for exporting images (single or ZIP) with progress updates.
+    """
+    if app is None:
+        raise ValueError("Flask app instance must be provided")
+
+    with app.app_context():
+        from datetime import datetime
+        import zipfile
+        import shutil
+        from models import Project
+
+        task = Task.query.get(task_id)
+        if not task:
+            logger.error(f"Task {task_id} not found")
+            return
+
+        try:
+            task.status = 'PROCESSING'
+            task.set_progress({
+                "total": 100,
+                "completed": 0,
+                "failed": 0,
+                "current_step": "准备中...",
+                "percent": 0,
+                "messages": ["🚀 开始导出图片..."]
+            })
+            db.session.commit()
+
+            project = Project.query.get(project_id)
+            if not project:
+                raise ValueError(f"Project {project_id} not found")
+
+            pages = get_filtered_pages(project_id, page_ids)
+            if not pages:
+                raise ValueError('No pages found for project')
+
+            image_items = []
+            for page in pages:
+                if page.generated_image_path:
+                    abs_path = file_service.get_absolute_path(page.generated_image_path)
+                    if os.path.exists(abs_path):
+                        image_items.append((page, abs_path))
+
+            if not image_items:
+                raise ValueError('No generated images found for project')
+
+            task.set_progress({
+                "total": 100,
+                "completed": 5,
+                "failed": 0,
+                "current_step": f"找到 {len(image_items)} 张图片",
+                "percent": 5,
+                "messages": ["🚀 开始导出图片...", f"准备图片: {len(image_items)} 张"]
+            })
+            db.session.commit()
+
+            exports_dir = file_service._get_exports_dir(project_id)
+            timestamp = int(datetime.utcnow().timestamp())
+
+            task.set_progress({
+                "total": 100,
+                "completed": 25,
+                "failed": 0,
+                "current_step": "正在打包图片...",
+                "percent": 25,
+                "messages": ["🚀 开始导出图片...", f"准备图片: {len(image_items)} 张", "打包图片..."]
+            })
+            db.session.commit()
+
+            with maybe_compress_export_images(project, [p for _, p in image_items], allow_webp=True) as export_paths:
+                export_items = list(zip([p for p, _ in image_items], export_paths))
+                if len(export_items) == 1:
+                    page, path = export_items[0]
+                    ext = os.path.splitext(path)[1] or '.png'
+                    filename = f'slide_{page.id}_{timestamp}{ext}'
+                    output_path = os.path.join(exports_dir, filename)
+                    shutil.copy2(path, output_path)
+                else:
+                    filename = f'slides_{project_id}_{timestamp}.zip'
+                    output_path = os.path.join(exports_dir, filename)
+                    with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                        for page, path in export_items:
+                            ext = os.path.splitext(path)[1] or '.png'
+                            zf.write(path, f'slide_{page.order_index + 1:03d}{ext}')
+
+            download_path = f"/files/{project_id}/exports/{filename}"
+
+            task.status = 'COMPLETED'
+            task.completed_at = datetime.utcnow()
+            task.set_progress({
+                "total": 100,
+                "completed": 100,
+                "failed": 0,
+                "current_step": "✓ 导出完成",
+                "percent": 100,
+                "messages": ["🚀 开始导出图片...", "生成完成"],
+                "download_url": download_path,
+                "filename": filename
+            })
+            db.session.commit()
+
+        except Exception as e:
+            logger.error(f"✗ 任务 {task_id} 失败: {e}", exc_info=True)
+            task.status = 'FAILED'
+            task.error_message = str(e)
+            task.completed_at = datetime.utcnow()
+            db.session.commit()

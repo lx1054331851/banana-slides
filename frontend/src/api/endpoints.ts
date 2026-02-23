@@ -494,6 +494,63 @@ export const exportImages = async (
 };
 
 /**
+ * 导出为PPTX（异步任务）
+ * @param projectId 项目ID
+ * @param filename 可选的文件名
+ * @param pageIds 可选的页面ID列表，如果不提供则导出所有页面
+ */
+export const exportPPTXTask = async (
+  projectId: string,
+  filename?: string,
+  pageIds?: string[]
+): Promise<ApiResponse<{ task_id: string; status?: string }>> => {
+  const response = await apiClient.post<
+    ApiResponse<{ task_id: string; status?: string }>
+  >(`/api/projects/${projectId}/export/pptx`, {
+    filename,
+    page_ids: pageIds
+  });
+  return response.data;
+};
+
+/**
+ * 导出为PDF（异步任务）
+ * @param projectId 项目ID
+ * @param filename 可选的文件名
+ * @param pageIds 可选的页面ID列表，如果不提供则导出所有页面
+ */
+export const exportPDFTask = async (
+  projectId: string,
+  filename?: string,
+  pageIds?: string[]
+): Promise<ApiResponse<{ task_id: string; status?: string }>> => {
+  const response = await apiClient.post<
+    ApiResponse<{ task_id: string; status?: string }>
+  >(`/api/projects/${projectId}/export/pdf`, {
+    filename,
+    page_ids: pageIds
+  });
+  return response.data;
+};
+
+/**
+ * 导出为图片（异步任务）
+ * @param projectId 项目ID
+ * @param pageIds 可选的页面ID列表，如果不提供则导出所有页面
+ */
+export const exportImagesTask = async (
+  projectId: string,
+  pageIds?: string[]
+): Promise<ApiResponse<{ task_id: string; status?: string }>> => {
+  const response = await apiClient.post<
+    ApiResponse<{ task_id: string; status?: string }>
+  >(`/api/projects/${projectId}/export/images`, {
+    page_ids: pageIds
+  });
+  return response.data;
+};
+
+/**
  * 导出为可编辑PPTX（异步任务）
  * @param projectId 项目ID
  * @param filename 可选的文件名
