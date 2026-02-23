@@ -151,7 +151,6 @@ export const OutlineEditor: React.FC = () => {
 
   const [inputText, setInputText] = useState('');
   const [isInputDirty, setIsInputDirty] = useState(false);
-  const [isSavingInput, setIsSavingInput] = useState(false);
 
   // 项目切换时：强制加载文本
   useEffect(() => {
@@ -161,26 +160,36 @@ export const OutlineEditor: React.FC = () => {
     }
   }, [currentProject?.id]);
 
-  const handleSaveInputText = useCallback(async () => {
-    if (!projectId || !currentProject || !isInputDirty) return;
-    setIsSavingInput(true);
+  const saveInputText = useCallback(async (text: string, creationType: string | undefined) => {
+    if (!projectId || !creationType) return;
     try {
-      const field = currentProject.creation_type === 'outline'
+      const field = creationType === 'outline'
         ? 'outline_text'
-        : currentProject.creation_type === 'descriptions'
+        : creationType === 'descriptions'
           ? 'description_text'
           : 'idea_prompt';
-      await updateProject(projectId, { [field]: inputText } as any);
+      await updateProject(projectId, { [field]: text } as any);
       await syncProject(projectId);
       setIsInputDirty(false);
-      show({ message: '已保存', type: 'success' });
     } catch (e) {
       console.error('保存输入文本失败:', e);
       show({ message: '保存失败', type: 'error' });
-    } finally {
-      setIsSavingInput(false);
     }
-  }, [projectId, currentProject?.creation_type, inputText, isInputDirty, show, syncProject]);
+  }, [projectId, show, syncProject]);
+
+  // Debounced auto-save: save 1s after user stops typing
+  useEffect(() => {
+    if (!isInputDirty) return;
+    const timer = setTimeout(() => {
+      saveInputText(inputText, currentProject?.creation_type);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [inputText, isInputDirty, saveInputText, currentProject?.creation_type]);
+
+  const handleSaveInputText = useCallback(() => {
+    if (!isInputDirty) return;
+    saveInputText(inputText, currentProject?.creation_type);
+  }, [inputText, isInputDirty, saveInputText, currentProject?.creation_type]);
 
   const handleInputChange = useCallback((text: string) => {
     setInputText(text);
@@ -464,15 +473,6 @@ export const OutlineEditor: React.FC = () => {
                 <div className="ml-auto flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={handleSaveInputText}
-                    disabled={!isInputDirty || isSavingInput}
-                    className={`p-1 rounded transition-colors ${isInputDirty ? 'text-banana-500 hover:text-banana-600 hover:bg-banana-50 dark:hover:bg-banana-900/30' : 'text-gray-300 dark:text-gray-600 cursor-default'}`}
-                    title={isInputDirty ? '保存' : '无更改'}
-                  >
-                    <Save size={14} />
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setIsPanelOpen(false)}
                     className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-foreground-secondary rounded hover:bg-gray-100 dark:hover:bg-background-hover transition-colors"
                   >
@@ -484,6 +484,7 @@ export const OutlineEditor: React.FC = () => {
                 ref={desktopTextareaRef}
                 value={inputText}
                 onChange={handleInputChange}
+                onBlur={handleSaveInputText}
                 onPaste={handleImagePaste}
                 onFiles={handleImageFiles}
                 placeholder={inputPlaceholder}
@@ -519,20 +520,12 @@ export const OutlineEditor: React.FC = () => {
                 ? <Sparkle size={14} className="text-banana-500 flex-shrink-0" />
                 : <FileText size={14} className="text-banana-500 flex-shrink-0" />}
               <span className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{inputLabel}</span>
-              <button
-                type="button"
-                onClick={handleSaveInputText}
-                disabled={!isInputDirty || isSavingInput}
-                className={`ml-auto p-1 rounded transition-colors ${isInputDirty ? 'text-banana-500 hover:text-banana-600 hover:bg-banana-50 dark:hover:bg-banana-900/30' : 'text-gray-300 dark:text-gray-600 cursor-default'}`}
-                title={isInputDirty ? '保存' : '无更改'}
-              >
-                <Save size={14} />
-              </button>
             </div>
             <MarkdownTextarea
               ref={mobileTextareaRef}
               value={inputText}
               onChange={handleInputChange}
+              onBlur={handleSaveInputText}
               onPaste={handleImagePaste}
               onFiles={handleImageFiles}
               placeholder={inputPlaceholder}
