@@ -903,6 +903,17 @@ def _test_mozjpeg():
     return result, msg
 
 
+def _test_oxipng():
+    """测试 oxipng 是否可用"""
+    svc = ImageCompressionService()
+    if not svc.has_oxipng():
+        raise ValueError("未检测到 oxipng")
+    result = {
+        "oxipng_path": svc.oxipng_bin,
+    }
+    return result, "oxipng 可用"
+
+
 # 测试函数映射
 TEST_FUNCTIONS = {
     "baidu-ocr": _test_baidu_ocr,
@@ -912,6 +923,7 @@ TEST_FUNCTIONS = {
     "image-model": _test_image_model,
     "mineru-pdf": _test_mineru_pdf,
     "mozjpeg": _test_mozjpeg,
+    "oxipng": _test_oxipng,
 }
 
 

@@ -85,7 +85,10 @@ def _maybe_compress_export_images(project: Project, image_paths: list[str], allo
             elif fmt == 'png':
                 # map quality (1-100) to compress_level (0-9) if needed
                 level = quality if 0 <= quality <= 9 else round((max(1, min(quality, 100)) / 100) * 9)
-                ok = service.compress_with_pillow(src, out_path, "PNG", level)
+                if service.has_oxipng():
+                    ok = service.compress_png_oxipng(src, out_path, level=level)
+                else:
+                    ok = service.compress_with_pillow(src, out_path, "PNG", level)
             elif fmt == 'webp':
                 ok = service.compress_with_pillow(src, out_path, "WEBP", quality)
             if ok:

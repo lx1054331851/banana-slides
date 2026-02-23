@@ -39,6 +39,14 @@ def _default_bin_paths(name: str) -> list[str]:
             "/usr/local/bin/butteraugli",
             "/usr/bin/butteraugli",
         ]
+    if name == "oxipng":
+        return [
+            "/opt/homebrew/opt/oxipng/bin/oxipng",
+            "/usr/local/opt/oxipng/bin/oxipng",
+            "/opt/homebrew/bin/oxipng",
+            "/usr/local/bin/oxipng",
+            "/usr/bin/oxipng",
+        ]
     return []
 
 
@@ -62,15 +70,20 @@ class ImageCompressionService:
         self,
         mozjpeg_bin: Optional[str] = None,
         butteraugli_bin: Optional[str] = None,
+        oxipng_bin: Optional[str] = None,
     ):
         self.mozjpeg_bin = _resolve_bin(mozjpeg_bin or os.getenv('MOZJPEG_BIN', 'cjpeg'))
         self.butteraugli_bin = _resolve_bin(butteraugli_bin or os.getenv('BUTTERAUGLI_BIN', 'butteraugli'))
+        self.oxipng_bin = _resolve_bin(oxipng_bin or os.getenv('OXIPNG_BIN', 'oxipng'))
 
     def has_mozjpeg(self) -> bool:
         return bool(self.mozjpeg_bin)
 
     def has_butteraugli(self) -> bool:
         return bool(self.butteraugli_bin)
+
+    def has_oxipng(self) -> bool:
+        return bool(self.oxipng_bin)
 
     def _prepare_ppm(self, src_path: str, out_path: str) -> None:
         image = Image.open(src_path)
@@ -154,6 +167,35 @@ class ImageCompressionService:
             return os.path.exists(dst_path)
         except Exception as exc:
             logger.warning(f"Pillow compress failed for {fmt_upper}: {exc}")
+            return False
+
+    def compress_png_oxipng(self, src_path: str, dst_path: str, level: int = 4, timeout: int = 60) -> bool:
+        if not self.oxipng_bin:
+            return False
+        lvl = max(0, min(int(level), 6))
+        try:
+            cmd = [
+                self.oxipng_bin,
+                f"-o{lvl}",
+                "--strip",
+                "safe",
+                "--out",
+                dst_path,
+                src_path,
+            ]
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout,
+                check=False,
+            )
+            if result.returncode != 0:
+                logger.warning(f"oxipng failed: {result.stderr.decode('utf-8', 'ignore')}")
+                return False
+            return os.path.exists(dst_path)
+        except Exception as exc:
+            logger.warning(f"oxipng compress failed: {exc}")
             return False
 
     def _parse_butteraugli_score(self, output: str) -> Optional[float]:

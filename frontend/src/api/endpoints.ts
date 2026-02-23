@@ -1007,6 +1007,11 @@ export const testMozjpeg = async (settings?: TestSettingsOverride): Promise<ApiR
   return response.data;
 };
 
+export const testOxipng = async (settings?: TestSettingsOverride): Promise<ApiResponse<{ task_id: string; status: string }>> => {
+  const response = await apiClient.post<ApiResponse<{ task_id: string; status: string }>>('/api/settings/tests/oxipng', settings || {});
+  return response.data;
+};
+
 /**
  * 查询测试任务状态
  * @param taskId 任务ID
