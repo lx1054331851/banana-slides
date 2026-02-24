@@ -39,6 +39,7 @@
 !.github/**/*.md
 *.pyc
 .env
+.worktrees/
 
 # GCP service-account key (sensitive — never commit)
 gcp-service-account.json
