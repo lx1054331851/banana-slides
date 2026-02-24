@@ -342,7 +342,7 @@ docker compose up -d
 ### 从源码部署
 
 #### 环境要求
-- Python 3.10 或更高版本
+- Python 3.10 - 3.13（推荐 3.13，暂不支持 3.14）
 - [uv](https://github.com/astral-sh/uv) - Python 包管理器
 - Node.js 16+ 和 npm
 - 有效的 Google Gemini API 密钥
@@ -459,7 +459,7 @@ npm run dev
 - **HTTP客户端**：Axios
 
 ### 后端技术栈
-- **语言**：Python 3.10+
+- **语言**：Python 3.10 - 3.13
 - **框架**：Flask 3.0
 - **包管理**：uv
 - **数据库**：SQLite + Flask-SQLAlchemy
