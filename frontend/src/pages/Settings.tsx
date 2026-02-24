@@ -16,7 +16,7 @@ const settingsI18n = {
         modelConfig: "模型配置", mineruConfig: "MinerU 配置", imageConfig: "图像生成配置",
         performanceConfig: "性能配置", outputLanguage: "输出语言设置",
         textReasoning: "文本推理模式", imageReasoning: "图像推理模式",
-        baiduOcr: "百度 OCR 配置", serviceTest: "服务测试", lazyllmConfig: "LazyLLM 厂商配置",
+        baiduOcr: "百度配置", serviceTest: "服务测试", lazyllmConfig: "LazyLLM 厂商配置",
         vendorApiKeys: "厂商 API Key 配置"
       },
       theme: { label: "主题模式", light: "浅色", dark: "深色", system: "跟随系统" },
@@ -49,8 +49,9 @@ const settingsI18n = {
         textThinkingBudget: "文本思考负载", textThinkingBudgetDesc: "文本推理的思考 token 预算 (1-8192)，数值越大推理越深入",
         enableImageReasoning: "启用图像推理", enableImageReasoningDesc: "开启后，图像生成会使用思考链模式，可能获得更好的构图效果",
         imageThinkingBudget: "图像思考负载", imageThinkingBudgetDesc: "图像推理的思考 token 预算 (1-8192)，数值越大推理越深入",
-        baiduOcrApiKey: "百度 OCR API Key", baiduOcrApiKeyPlaceholder: "输入百度 OCR API Key",
+        baiduOcrApiKey: "百度 API Key", baiduOcrApiKeyPlaceholder: "输入百度 API Key",
         baiduOcrApiKeyDesc: "用于可编辑 PPTX 导出时的文字识别功能，留空则保持当前设置不变",
+        applyLink: "，请点击此处申请",
         textModelSource: "文本模型提供商格式", textModelSourceDesc: "选择文本生成使用的提供商格式", textModelSourcePlaceholder: "-- 请选择 --",
         imageModelSource: "图片模型提供商格式", imageModelSourceDesc: "选择图片生成使用的提供商格式", imageModelSourcePlaceholder: "-- 请选择 --",
         imageCaptionModelSource: "图片识别模型提供商格式", imageCaptionModelSourceDesc: "选择图片识别使用的提供商格式", imageCaptionModelSourcePlaceholder: "-- 请选择 --",
@@ -65,7 +66,8 @@ const settingsI18n = {
         perModelApiKeyDesc: "留空则保持当前设置不变",
         perModelApiKeySet: "已设置（长度: {{length}}）",
       },
-      apiKeyTip: "API 密匙获取可前往 {{link}}, 减小迁移成本",
+      apiKeyTip: { before: "推荐使用 ", after: " 中转，支持 Gemini 和 OpenAI 双格式，高并发文生图稳定可靠。" },
+      apiKeyApplyLink: "，请点击此处申请密钥",
       serviceTest: {
         title: "服务测试", description: "提前验证关键服务配置是否可用，避免使用期间异常。",
         tip: "提示：图像生成和 MinerU 测试可能需要 30-60 秒，请耐心等待。",
@@ -114,7 +116,7 @@ const settingsI18n = {
         modelConfig: "Model Configuration", mineruConfig: "MinerU Configuration", imageConfig: "Image Generation Configuration",
         performanceConfig: "Performance Configuration", outputLanguage: "Output Language Settings",
         textReasoning: "Text Reasoning Mode", imageReasoning: "Image Reasoning Mode",
-        baiduOcr: "Baidu OCR Configuration", serviceTest: "Service Test", lazyllmConfig: "LazyLLM Provider Configuration",
+        baiduOcr: "Baidu Configuration", serviceTest: "Service Test", lazyllmConfig: "LazyLLM Provider Configuration",
         vendorApiKeys: "Vendor API Key Configuration"
       },
       theme: { label: "Theme", light: "Light", dark: "Dark", system: "System" },
@@ -147,8 +149,9 @@ const settingsI18n = {
         textThinkingBudget: "Text Thinking Budget", textThinkingBudgetDesc: "Token budget for text reasoning (1-8192), higher values enable deeper reasoning",
         enableImageReasoning: "Enable Image Reasoning", enableImageReasoningDesc: "When enabled, image generation uses chain-of-thought mode for better composition",
         imageThinkingBudget: "Image Thinking Budget", imageThinkingBudgetDesc: "Token budget for image reasoning (1-8192), higher values enable deeper reasoning",
-        baiduOcrApiKey: "Baidu OCR API Key", baiduOcrApiKeyPlaceholder: "Enter Baidu OCR API Key",
+        baiduOcrApiKey: "Baidu API Key", baiduOcrApiKeyPlaceholder: "Enter Baidu API Key",
         baiduOcrApiKeyDesc: "For text recognition in editable PPTX export, leave empty to keep current setting",
+        applyLink: ", click here to apply",
         textModelSource: "Text Model Provider Format", textModelSourceDesc: "Select the provider format for text generation", textModelSourcePlaceholder: "-- Select --",
         imageModelSource: "Image Model Provider Format", imageModelSourceDesc: "Select the provider format for image generation", imageModelSourcePlaceholder: "-- Select --",
         imageCaptionModelSource: "Image Caption Model Provider Format", imageCaptionModelSourceDesc: "Select the provider format for image captioning", imageCaptionModelSourcePlaceholder: "-- Select --",
@@ -163,7 +166,8 @@ const settingsI18n = {
         perModelApiKeyDesc: "Leave empty to keep current setting",
         perModelApiKeySet: "Set (length: {{length}})",
       },
-      apiKeyTip: "Get API keys from {{link}} for easier migration",
+      apiKeyTip: { before: "Recommended: ", after: " proxy — supports both Gemini and OpenAI formats with stable high-concurrency image generation." },
+      apiKeyApplyLink: ", click here to apply",
       serviceTest: {
         title: "Service Test", description: "Verify key service configurations before use to avoid issues.",
         tip: "Tip: Image generation and MinerU tests may take 30-60 seconds, please be patient.",
@@ -222,6 +226,7 @@ interface FieldConfig {
   options?: { value: string; label: string }[];  // select 类型的选项
   min?: number;
   max?: number;
+  link?: string;  // 申请链接 URL
 }
 
 interface SectionConfig {
@@ -404,6 +409,7 @@ export const Settings: React.FC = () => {
           sensitiveField: true,
           lengthKey: 'mineru_token_length',
           description: t('settings.fields.mineruTokenDesc'),
+          link: 'https://mineru.net/apiManage/token',
         },
       ],
     },
@@ -511,6 +517,7 @@ export const Settings: React.FC = () => {
           sensitiveField: true,
           lengthKey: 'baidu_ocr_api_key_length',
           description: t('settings.fields.baiduOcrApiKeyDesc'),
+          link: 'https://console.bce.baidu.com/iam/#/iam/apikey/list',
         },
       ],
     },
@@ -857,8 +864,13 @@ export const Settings: React.FC = () => {
           max={field.max}
           disabled={isDisabled}
         />
-        {field.description && (
-          <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">{field.description}</p>
+        {(field.description || field.link) && (
+          <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
+            {field.description}
+            {field.link && (
+              <a href={field.link} target="_blank" rel="noopener noreferrer" className="text-banana-500 hover:underline">{t('settings.fields.applyLink')}</a>
+            )}
+          </p>
         )}
       </div>
     );
@@ -1080,9 +1092,10 @@ export const Settings: React.FC = () => {
           {/* AIHubmix 提示 */}
           <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
             <p className="text-sm text-gray-700 dark:text-foreground-secondary">
-              {t('settings.apiKeyTip', { link: '' }).split('{{link}}')[0]}
+              {t('settings.apiKeyTip.before')}
               <a href="https://aihubmix.com/?aff=17EC" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline font-medium">AIHubmix</a>
-              {t('settings.apiKeyTip', { link: '' }).split('{{link}}')[1]}
+              {t('settings.apiKeyTip.after')}
+              <a href="https://aihubmix.com/token?aff=17EC" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline font-medium">{t('settings.apiKeyApplyLink')}</a>
             </p>
           </div>
         </div>

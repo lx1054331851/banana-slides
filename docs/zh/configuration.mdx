@@ -70,16 +70,35 @@ SENSENOVA_API_KEY=your-key    # 商汤日日新
 MINIMAX_API_KEY=your-key      # MiniMax
 ```
 
-## 可编辑 PPTX 导出
+## AIHubMix（推荐中转）
 
-配置百度 OCR 以获得更好的可编辑导出效果（有充足免费额度）：
+[AIHubMix](https://aihubmix.com/?aff=17EC) 是推荐的 API 中转服务，同时支持 Gemini 和 OpenAI 两种接口格式，且能稳定进行高并发文生图操作。[点击此处申请 AIHubMix API Key](https://aihubmix.com/token?aff=17EC)。
 
 ```env
-BAIDU_OCR_API_KEY=your-baidu-ocr-key
+AI_PROVIDER_FORMAT=openai
+OPENAI_API_KEY=your-aihubmix-key
+OPENAI_API_BASE=https://aihubmix.com/v1
 ```
 
-从[百度智能云平台](https://console.bce.baidu.com/iam/#/iam/apikey/list)获取 API Key。
+## MinerU（PDF 解析）
+
+[MinerU](https://mineru.net) 提供高质量的 PDF 解析服务，用于参考文件上传时的内容提取。[点击此处申请 MinerU Token](https://mineru.net/apiManage/token)。
+
+```env
+MINERU_API_BASE=https://mineru.net
+MINERU_TOKEN=your-mineru-token
+```
+
+## 百度 API Key
+
+配置百度 API Key 以获得更好的可编辑 PPTX 导出效果（有充足免费额度）：
+
+```env
+BAIDU_OCR_API_KEY=your-baidu-api-key
+```
+
+从百度智能云[申请 IAM API Key](https://console.bce.baidu.com/iam/#/iam/apikey/list)。
 
 ## 运行时设置覆盖
 
-通过网页设置页面配置的参数会存储在数据库中，优先级高于 `.env`。点击"还原默认设置"可恢复为 `.env` 中的值。
+以上所有配置也可通过网页设置页面进行配置。通过设置页面配置的参数会存储在数据库中，优先级高于 `.env`。点击"还原默认设置"可恢复为 `.env` 中的值。
