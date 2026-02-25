@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Save, ArrowRight, Plus, FileText, Sparkle, Download, Upload, PanelLeftClose, PanelLeftOpen, LayoutGrid, List } from 'lucide-react';
 import { useT } from '@/hooks/useT';
+import mammoth from 'mammoth/mammoth.browser';
 
 // 组件内翻译
 const outlineI18n = {
@@ -23,6 +24,11 @@ const outlineI18n = {
       contextLabels: { idea: "PPT构想", outline: "大纲", description: "描述" },
       inputLabel: { idea: "PPT 构想", outline: "原始大纲", description: "页面描述", ppt_renovation: "原始 PPT 内容" },
       inputPlaceholder: { idea: "输入你的 PPT 构想...", outline: "输入大纲内容...", description: "输入页面描述...", ppt_renovation: "已从 PDF 中提取内容" },
+      rawInputLabel: "原文内容",
+      rawInputPlaceholder: "上传文档后会在这里显示原文，也可以直接粘贴",
+      selectSourceFile: "选择文件",
+      parseSource: "解析文档",
+      parsingSource: "解析中...",
       messages: {
         outlineEmpty: "大纲不能为空", generateSuccess: "描述生成完成", generateFailed: "生成描述失败",
         confirmRegenerate: "已有大纲内容，重新生成将覆盖现有内容，确定继续吗？",
@@ -30,6 +36,10 @@ const outlineI18n = {
         refineFailed: "修改失败，请稍后重试", exportSuccess: "导出成功",
         importSuccess: "导入成功", importFailed: "导入失败，请检查文件格式", importEmpty: "文件中未找到有效页面",
         loadingProject: "加载项目中...", generatingOutline: "生成大纲中...",
+        parseSourceSuccess: "解析完成",
+        parseSourceFailed: "解析失败",
+        parseSourceEmpty: "请先选择文件或粘贴原文",
+        unsupportedFile: "仅支持 .docx / .txt / .md 文件",
       }
     }
   },
@@ -51,6 +61,11 @@ const outlineI18n = {
       contextLabels: { idea: "PPT Idea", outline: "Outline", description: "Description" },
       inputLabel: { idea: "PPT Idea", outline: "Original Outline", description: "Page Descriptions", ppt_renovation: "Original PPT Content" },
       inputPlaceholder: { idea: "Enter your PPT idea...", outline: "Enter outline content...", description: "Enter page descriptions...", ppt_renovation: "Content extracted from PDF" },
+      rawInputLabel: "Source Text",
+      rawInputPlaceholder: "Upload a document to show the source text, or paste it here",
+      selectSourceFile: "Choose File",
+      parseSource: "Parse Document",
+      parsingSource: "Parsing...",
       messages: {
         outlineEmpty: "Outline cannot be empty", generateSuccess: "Descriptions generated successfully", generateFailed: "Failed to generate descriptions",
         confirmRegenerate: "Existing outline will be overwritten. Continue?",
@@ -58,6 +73,10 @@ const outlineI18n = {
         refineFailed: "Modification failed, please try again", exportSuccess: "Export successful",
         importSuccess: "Import successful", importFailed: "Import failed, please check file format", importEmpty: "No valid pages found in file",
         loadingProject: "Loading project...", generatingOutline: "Generating outline...",
+        parseSourceSuccess: "Parsing complete",
+        parseSourceFailed: "Parsing failed",
+        parseSourceEmpty: "Please choose a file or paste source text first",
+        unsupportedFile: "Only .docx, .txt, or .md files are supported",
       }
     }
   }
@@ -84,7 +103,7 @@ import { Button, Loading, useConfirm, useToast, AiRefineInput, FilePreviewModal,
 import { MarkdownTextarea, type MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
 import { OutlineCard } from '@/components/outline/OutlineCard';
 import { useProjectStore } from '@/store/useProjectStore';
-import { refineOutline, updateProject, addPage } from '@/api/endpoints';
+import { refineOutline, updateProject, addPage, parseDescriptionToPages } from '@/api/endpoints';
 import { useImagePaste } from '@/hooks/useImagePaste';
 import { exportProjectToMarkdown, parseMarkdownPages } from '@/utils/projectUtils';
 import type { Page } from '@/types';
@@ -173,6 +192,7 @@ export const OutlineEditor: React.FC = () => {
   const desktopTextareaRef = useRef<MarkdownTextareaRef>(null);
   const mobileTextareaRef = useRef<MarkdownTextareaRef>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const sourceFileRef = useRef<HTMLInputElement>(null);
   const getInputText = useCallback((project: typeof currentProject) => {
     if (!project) return '';
     if (project.creation_type === 'outline' || project.creation_type === 'ppt_renovation') return project.outline_text || project.idea_prompt || '';
@@ -182,12 +202,17 @@ export const OutlineEditor: React.FC = () => {
 
   const [inputText, setInputText] = useState('');
   const [isInputDirty, setIsInputDirty] = useState(false);
+  const [sourceText, setSourceText] = useState('');
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [isParsingSource, setIsParsingSource] = useState(false);
 
   // 项目切换时：强制加载文本
   useEffect(() => {
     if (currentProject) {
       setInputText(getInputText(currentProject));
       setIsInputDirty(false);
+      setSourceText('');
+      setSourceFile(null);
     }
   }, [currentProject?.id]);
 
@@ -251,6 +276,7 @@ export const OutlineEditor: React.FC = () => {
     const key = type === 'descriptions' ? 'description' : type;
     return t(`outline.inputPlaceholder.${key}` as any) || '';
   }, [currentProject?.creation_type, t]);
+  const isDescriptionsProject = currentProject?.creation_type === 'descriptions';
 
   useEffect(() => {
     if (!expandedCardId || !currentProject) return;
@@ -370,6 +396,89 @@ export const OutlineEditor: React.FC = () => {
       show({ message: t('outline.messages.importFailed'), type: 'error' });
     }
   }, [currentProject, projectId, syncProject, show, t]);
+
+  const formatPageDescriptions = useCallback((pageDescriptions: string[]) => {
+    const cleaned = pageDescriptions.map((desc) => desc.trim()).filter(Boolean);
+    return cleaned.join('\n\n---\n\n');
+  }, []);
+
+  const readSourceFileText = useCallback(async (file: File) => {
+    const filename = file.name.toLowerCase();
+    if (filename.endsWith('.txt') || filename.endsWith('.md') || filename.endsWith('.markdown')) {
+      return await file.text();
+    }
+    if (filename.endsWith('.docx')) {
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      return result.value || '';
+    }
+    throw new Error('UNSUPPORTED_FILE');
+  }, []);
+
+  const handleSourceFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    if (sourceFileRef.current) {
+      sourceFileRef.current.value = '';
+    }
+    setSourceFile(file);
+  }, []);
+
+  const handleParseSource = useCallback(async () => {
+    if (!currentProject || !projectId) return;
+    if (isParsingSource) return;
+
+    let rawText = sourceText;
+    let trimmedText = rawText.trim();
+    if (!trimmedText && sourceFile) {
+      try {
+        rawText = await readSourceFileText(sourceFile);
+        setSourceText(rawText);
+        trimmedText = rawText.trim();
+      } catch (error: any) {
+        const message = error?.message === 'UNSUPPORTED_FILE'
+          ? t('outline.messages.unsupportedFile')
+          : t('outline.messages.parseSourceFailed');
+        show({ message, type: 'error' });
+        return;
+      }
+    }
+
+    if (!trimmedText) {
+      show({ message: t('outline.messages.parseSourceEmpty'), type: 'warning' });
+      return;
+    }
+
+    setIsParsingSource(true);
+    try {
+      const response = await parseDescriptionToPages(rawText, { projectId });
+      const pageDescriptions = response.data?.page_descriptions || [];
+      if (!pageDescriptions.length) {
+        throw new Error('EMPTY_PAGE_DESCRIPTIONS');
+      }
+      const formatted = formatPageDescriptions(pageDescriptions);
+      setInputText(formatted);
+      setIsInputDirty(true);
+      show({ message: t('outline.messages.parseSourceSuccess'), type: 'success' });
+    } catch (error: any) {
+      const message = error?.response?.data?.error?.message
+        || (error?.message === 'EMPTY_PAGE_DESCRIPTIONS' ? t('outline.messages.parseSourceFailed') : error?.message)
+        || t('outline.messages.parseSourceFailed');
+      show({ message, type: 'error' });
+    } finally {
+      setIsParsingSource(false);
+    }
+  }, [
+    currentProject,
+    projectId,
+    isParsingSource,
+    sourceText,
+    sourceFile,
+    readSourceFileText,
+    formatPageDescriptions,
+    t,
+    show
+  ]);
+
   const handleViewModeChange = useCallback((mode: 'list' | 'grid') => {
     setViewMode(mode);
     if (mode !== 'grid') {
@@ -468,6 +577,14 @@ export const OutlineEditor: React.FC = () => {
           />
         </div>
       </header>
+
+      <input
+        ref={sourceFileRef}
+        type="file"
+        accept=".docx,.txt,.md,.markdown"
+        className="hidden"
+        onChange={handleSourceFileChange}
+      />
 
       {/* 操作栏 - 与 DetailEditor 风格一致 */}
       <div className="bg-white dark:bg-background-secondary border-b border-gray-200 dark:border-border-primary px-3 md:px-6 py-3 md:py-4 flex-shrink-0">
@@ -575,7 +692,55 @@ export const OutlineEditor: React.FC = () => {
               pointerEvents: isPanelOpen ? 'auto' : 'none',
             }}
           >
-            <div className="bg-white dark:bg-background-secondary rounded-card shadow-md border border-gray-100 dark:border-border-primary overflow-hidden">
+            {isDescriptionsProject && (
+              <div className="bg-white dark:bg-background-secondary rounded-card shadow-md border border-gray-100 dark:border-border-primary overflow-hidden">
+                <div className="px-4 py-2.5 flex items-center gap-2 border-b border-gray-100 dark:border-border-secondary">
+                  <FileText size={14} className="text-banana-500 flex-shrink-0" />
+                  <span className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">
+                    {t('outline.rawInputLabel')}
+                  </span>
+                  {sourceFile?.name && (
+                    <span className="text-[11px] text-gray-400 dark:text-foreground-tertiary truncate max-w-[140px]">
+                      {sourceFile.name}
+                    </span>
+                  )}
+                  <div className="ml-auto flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<Upload size={14} />}
+                      onClick={() => sourceFileRef.current?.click()}
+                      className="h-7 px-2 text-xs"
+                    >
+                      {t('outline.selectSourceFile')}
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      loading={isParsingSource}
+                      onClick={handleParseSource}
+                      className="h-7 px-2 text-xs"
+                      disabled={isParsingSource || (!sourceText.trim() && !sourceFile)}
+                    >
+                      {isParsingSource ? t('outline.parsingSource') : t('outline.parseSource')}
+                    </Button>
+                  </div>
+                </div>
+                <MarkdownTextarea
+                  value={sourceText}
+                  onChange={setSourceText}
+                  placeholder={t('outline.rawInputPlaceholder')}
+                  rows={8}
+                  showUploadButton={false}
+                  className="border-0 rounded-none shadow-none"
+                />
+              </div>
+            )}
+            <div
+              className={`bg-white dark:bg-background-secondary rounded-card shadow-md border border-gray-100 dark:border-border-primary overflow-hidden${
+                isDescriptionsProject ? ' mt-3' : ''
+              }`}
+            >
               <div className="px-4 py-2.5 flex items-center gap-2 border-b border-gray-100 dark:border-border-secondary">
                 {currentProject.creation_type === 'idea'
                   ? <Sparkle size={14} className="text-banana-500 flex-shrink-0" />
@@ -625,7 +790,51 @@ export const OutlineEditor: React.FC = () => {
 
         {/* 移动端：始终显示卡片 */}
         <div className="md:hidden w-full flex-shrink-0">
-          <div className="bg-white dark:bg-background-secondary rounded-card shadow-md border border-gray-100 dark:border-border-primary overflow-hidden">
+          {isDescriptionsProject && (
+            <div className="bg-white dark:bg-background-secondary rounded-card shadow-md border border-gray-100 dark:border-border-primary overflow-hidden">
+              <div className="px-4 py-2.5 flex items-center gap-2 border-b border-gray-100 dark:border-border-secondary">
+                <FileText size={14} className="text-banana-500 flex-shrink-0" />
+                <span className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">
+                  {t('outline.rawInputLabel')}
+                </span>
+                {sourceFile?.name && (
+                  <span className="text-[11px] text-gray-400 dark:text-foreground-tertiary truncate max-w-[120px]">
+                    {sourceFile.name}
+                  </span>
+                )}
+                <div className="ml-auto flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<Upload size={14} />}
+                    onClick={() => sourceFileRef.current?.click()}
+                    className="h-7 px-2 text-xs"
+                  >
+                    {t('outline.selectSourceFile')}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    loading={isParsingSource}
+                    onClick={handleParseSource}
+                    className="h-7 px-2 text-xs"
+                    disabled={isParsingSource || (!sourceText.trim() && !sourceFile)}
+                  >
+                    {isParsingSource ? t('outline.parsingSource') : t('outline.parseSource')}
+                  </Button>
+                </div>
+              </div>
+              <MarkdownTextarea
+                value={sourceText}
+                onChange={setSourceText}
+                placeholder={t('outline.rawInputPlaceholder')}
+                rows={6}
+                showUploadButton={false}
+                className="border-0 rounded-none shadow-none"
+              />
+            </div>
+          )}
+          <div className={`bg-white dark:bg-background-secondary rounded-card shadow-md border border-gray-100 dark:border-border-primary overflow-hidden${isDescriptionsProject ? ' mt-3' : ''}`}>
             <div className="px-4 py-2.5 flex items-center gap-2 border-b border-gray-100 dark:border-border-secondary">
               {currentProject.creation_type === 'idea'
                 ? <Sparkle size={14} className="text-banana-500 flex-shrink-0" />

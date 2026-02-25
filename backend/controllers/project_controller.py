@@ -9,7 +9,7 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, Response, stream_with_context
 from sqlalchemy import desc
 from utils.validators import normalize_aspect_ratio
 from sqlalchemy.orm import joinedload
@@ -18,6 +18,7 @@ from werkzeug.utils import secure_filename
 
 from models import db, Project, Page, Task, ReferenceFile
 from services import ProjectContext, FileService
+from services.prompts import get_long_report_split_prompt
 from services.ai_service_manager import get_ai_service
 from services.task_manager import (
     task_manager,
@@ -59,6 +60,45 @@ def _get_project_reference_files_content(project_id: str) -> list:
             })
     
     return files_content
+
+
+def _get_reference_files_content_by_ids(file_ids: list) -> list:
+    """
+    Get reference files content by IDs (only completed files)
+
+    Args:
+        file_ids: List of reference file IDs
+
+    Returns:
+        List of dicts with 'filename' and 'content' keys
+    """
+    if not file_ids:
+        return []
+
+    reference_files = ReferenceFile.query.filter(
+        ReferenceFile.id.in_(file_ids),
+        ReferenceFile.parse_status == 'completed'
+    ).all()
+
+    files_content = []
+    for ref_file in reference_files:
+        if ref_file.markdown_content:
+            files_content.append({
+                'filename': ref_file.filename,
+                'content': ref_file.markdown_content
+            })
+
+    return files_content
+
+
+def _format_sse_data(data: str) -> str:
+    """
+    Format data for SSE. Ensures each line is prefixed with 'data:'.
+    """
+    if data is None:
+        data = ""
+    lines = str(data).splitlines() or [""]
+    return "\n".join([f"data: {line}" for line in lines]) + "\n\n"
 
 
 def _reconstruct_outline_from_pages(pages: list) -> list:
@@ -642,6 +682,52 @@ def generate_from_description(project_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"generate_from_description failed: {str(e)}", exc_info=True)
+        return error_response('AI_SERVICE_ERROR', str(e), 503)
+
+
+@project_bp.route('/<project_id>/parse/description', methods=['POST'])
+def parse_description_text(project_id):
+    """
+    POST /api/projects/{project_id}/parse/description - Parse description text into page descriptions (no pages created)
+
+    Request body:
+    {
+        "description_text": "...",  # required unless project has description_text
+        "language": "zh"  # output language: zh, en, ja, auto
+    }
+    """
+    try:
+        project = Project.query.get(project_id)
+
+        if not project:
+            return not_found('Project')
+
+        if project.creation_type != 'descriptions':
+            return bad_request("This endpoint is only for descriptions type projects")
+
+        data = request.get_json() or {}
+        description_text = data.get('description_text') or project.description_text
+        language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+
+        if not description_text:
+            return bad_request("description_text is required")
+
+        ai_service = get_ai_service()
+
+        reference_files_content = _get_project_reference_files_content(project_id)
+        project_dict = project.to_dict()
+        project_dict['description_text'] = description_text
+        project_context = ProjectContext(project_dict, reference_files_content)
+
+        outline = ai_service.parse_description_to_outline(project_context, language=language)
+        page_descriptions = ai_service.parse_description_to_page_descriptions(project_context, outline, language=language)
+
+        return success_response({
+            'page_descriptions': page_descriptions
+        })
+
+    except Exception as e:
+        logger.error(f"parse_description_text failed: {str(e)}", exc_info=True)
         return error_response('AI_SERVICE_ERROR', str(e), 503)
 
 
@@ -1346,3 +1432,128 @@ def extract_style():
     except Exception as e:
         logger.error(f"extract_style failed: {str(e)}", exc_info=True)
         return error_response('AI_SERVICE_ERROR', str(e), 503)
+
+
+@style_bp.route('/parse/description', methods=['POST'])
+def parse_description_without_project():
+    """
+    POST /api/parse/description - Parse description text into page descriptions (no project required)
+
+    Request body:
+    {
+        "description_text": "...",  # required
+        "language": "zh",  # output language: zh, en, ja, auto
+        "reference_file_ids": ["id1", "id2"]  # optional
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        description_text = data.get('description_text')
+        language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+        reference_file_ids = data.get('reference_file_ids') or []
+
+        if not description_text:
+            return bad_request("description_text is required")
+
+        if not isinstance(reference_file_ids, list):
+            reference_file_ids = []
+
+        ai_service = get_ai_service()
+        reference_files_content = _get_reference_files_content_by_ids(reference_file_ids)
+        project_context = ProjectContext({
+            'description_text': description_text,
+            'creation_type': 'descriptions'
+        }, reference_files_content)
+
+        outline = ai_service.parse_description_to_outline(project_context, language=language)
+        page_descriptions = ai_service.parse_description_to_page_descriptions(project_context, outline, language=language)
+
+        return success_response({
+            'page_descriptions': page_descriptions
+        })
+
+    except Exception as e:
+        logger.error(f"parse_description_without_project failed: {str(e)}", exc_info=True)
+        return error_response('AI_SERVICE_ERROR', str(e), 503)
+
+
+@style_bp.route('/parse/report', methods=['POST'])
+def split_report_without_project():
+    """
+    POST /api/parse/report - Split long report into PPT JSON (no project required)
+
+    Request body:
+    {
+        "report_text": "...",  # required
+        "language": "zh",  # output language: zh, en, ja, auto (optional)
+        "reference_file_ids": ["id1", "id2"]  # optional
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        report_text = data.get('report_text')
+        reference_file_ids = data.get('reference_file_ids') or []
+
+        if not report_text:
+            return bad_request("report_text is required")
+
+        if not isinstance(reference_file_ids, list):
+            reference_file_ids = []
+
+        ai_service = get_ai_service()
+        reference_files_content = _get_reference_files_content_by_ids(reference_file_ids)
+        prompt = get_long_report_split_prompt(report_text, reference_files_content)
+        result_text = ai_service.text_provider.generate_text(prompt, thinking_budget=1000).strip()
+
+        return success_response({
+            'result': result_text
+        })
+
+    except Exception as e:
+        logger.error(f"split_report_without_project failed: {str(e)}", exc_info=True)
+        return error_response('AI_SERVICE_ERROR', str(e), 503)
+
+
+@style_bp.route('/parse/report/stream', methods=['POST'])
+def split_report_without_project_stream():
+    """
+    POST /api/parse/report/stream - Stream split report result via SSE
+
+    Request body:
+    {
+        "report_text": "...",  # required
+        "language": "zh",  # output language: zh, en, ja, auto (optional)
+        "reference_file_ids": ["id1", "id2"]  # optional
+    }
+    """
+    data = request.get_json() or {}
+    report_text = data.get('report_text')
+    reference_file_ids = data.get('reference_file_ids') or []
+
+    if not report_text:
+        return bad_request("report_text is required")
+
+    if not isinstance(reference_file_ids, list):
+        reference_file_ids = []
+
+    def generate():
+        try:
+            ai_service = get_ai_service()
+            reference_files_content = _get_reference_files_content_by_ids(reference_file_ids)
+            prompt = get_long_report_split_prompt(report_text, reference_files_content)
+            provider = ai_service.text_provider
+            for chunk in provider.stream_text(prompt, thinking_budget=1000):
+                if chunk:
+                    yield _format_sse_data(chunk)
+            yield _format_sse_data('[DONE]')
+        except Exception as e:
+            logger.error(f"split_report_without_project_stream failed: {str(e)}", exc_info=True)
+            yield "event: error\n" + _format_sse_data(str(e))
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+        "Content-Type": "text/event-stream",
+        "Connection": "keep-alive",
+    }
+    return Response(stream_with_context(generate()), headers=headers)

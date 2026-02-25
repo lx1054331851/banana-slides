@@ -12,6 +12,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useImagePaste } from '@/hooks/useImagePaste';
 import { useT } from '@/hooks/useT';
 import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
+import mammoth from 'mammoth/mammoth.browser';
 
 type CreationType = 'idea' | 'outline' | 'description' | 'ppt_renovation';
 
@@ -53,6 +54,15 @@ const homeI18n = {
         outline: '粘贴你的 PPT 大纲...',
         description: '粘贴你的完整页面描述...',
       },
+      descriptionTools: {
+        sourceLabel: '原文内容',
+        sourcePlaceholder: '上传文档后会在这里显示原文，也可以直接粘贴',
+        selectSourceFile: '选择文件',
+        parseSource: '拆分文档',
+        parsingSource: '拆分中...',
+        collapse: '收起',
+        expand: '展开',
+      },
       examples: {
         outline: '格式示例：\n\n第一页：AI 的起源\n- 1956年达特茅斯会议\n- 早期研究者的愿景\n\n第二页：机器学习的发展\n- 从规则驱动到数据驱动\n- 经典算法介绍\n\n第三页：未来展望\n- 趋势与挑战\n\n支持标题+要点的形式，也可以只写标题。AI 会自动切分为结构化大纲。',
         description: '格式示例：\n\n第一页：AI 的起源\n介绍人工智能概念的诞生，从1956年达特茅斯会议讲起。页面采用左文右图布局，左侧展示时间线，右侧配一张复古风格的计算机插画。\n\n第二页：机器学习的发展\n讲解从规则驱动到数据驱动的转变。使用深蓝色背景，中央放置算法对比图表，底部列出关键里程碑。\n\n每页可包含内容描述、排版布局、视觉风格等，用空行分隔各页。',
@@ -90,6 +100,10 @@ const homeI18n = {
         serviceTestTip: '建议先到设置页底部进行服务测试，避免后续功能异常',
         verifying: '正在验证 API 配置...',
         verifyFailed: '请在设置页配置正确的 API Key，并在页面底部点击「服务测试」验证',
+        parseSourceSuccess: '拆分完成',
+        parseSourceFailed: '拆分失败',
+        parseSourceEmpty: '请先选择文件或粘贴原文',
+        unsupportedSourceFile: '仅支持 .docx / .txt / .md 文件',
       },
     },
   },
@@ -129,6 +143,15 @@ const homeI18n = {
         outline: 'Paste your PPT outline...',
         description: 'Paste your complete page descriptions...',
       },
+      descriptionTools: {
+        sourceLabel: 'Source Text',
+        sourcePlaceholder: 'Upload a document to show the source text, or paste it here',
+        selectSourceFile: 'Choose File',
+        parseSource: 'Split Document',
+        parsingSource: 'Splitting...',
+        collapse: 'Collapse',
+        expand: 'Expand',
+      },
       examples: {
         outline: 'Format example:\n\nSlide 1: The Origins of AI\n- 1956 Dartmouth Conference\n- Vision of early researchers\n\nSlide 2: The Rise of Machine Learning\n- From rule-based to data-driven\n- Classic algorithms overview\n\nSlide 3: Future Outlook\n- Trends and challenges\n\nTitles with bullet points, or titles only. AI will split it into a structured outline.',
         description: 'Format example:\n\nSlide 1: The Origins of AI\nIntroduce the birth of AI, starting from the 1956 Dartmouth Conference. Use a left-text right-image layout with a timeline on the left and a retro-style computer illustration on the right.\n\nSlide 2: The Rise of Machine Learning\nExplain the shift from rule-based to data-driven approaches. Dark blue background, algorithm comparison chart in the center, key milestones at the bottom.\n\nEach slide can include content, layout, and visual style. Separate slides with blank lines.',
@@ -166,6 +189,10 @@ const homeI18n = {
         serviceTestTip: 'Test services in Settings first to avoid issues',
         verifying: 'Verifying API configuration...',
         verifyFailed: 'Please configure a valid API Key in Settings and click "Service Test" at the bottom to verify',
+        parseSourceSuccess: 'Split complete',
+        parseSourceFailed: 'Split failed',
+        parseSourceEmpty: 'Please choose a file or paste source text first',
+        unsupportedSourceFile: 'Only .docx, .txt, or .md files are supported',
       },
     },
   },
@@ -201,7 +228,14 @@ export const Home: React.FC = () => {
   const [isAspectRatioOpen, setIsAspectRatioOpen] = useState(false);
   const [renovationFile, setRenovationFile] = useState<File | null>(null);
   const [keepLayout, setKeepLayout] = useState(false);
+  const [sourceText, setSourceText] = useState('');
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [isParsingSource, setIsParsingSource] = useState(false);
+  const [isSourceCollapsed, setIsSourceCollapsed] = useState(false);
+  const [isReadingSource, setIsReadingSource] = useState(false);
+  const [isContentCollapsed, setIsContentCollapsed] = useState(false);
   const renovationFileInputRef = useRef<HTMLInputElement>(null);
+  const sourceFileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const themeMenuRef = useRef<HTMLDivElement>(null);
 
@@ -456,6 +490,166 @@ export const Home: React.FC = () => {
     // 清空 input，允许重复选择同一文件
     e.target.value = '';
   };
+
+  const readSourceFileText = useCallback(async (file: File) => {
+    const filename = file.name.toLowerCase();
+    if (filename.endsWith('.txt') || filename.endsWith('.md') || filename.endsWith('.markdown')) {
+      return await file.text();
+    }
+    if (filename.endsWith('.docx')) {
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      return result.value || '';
+    }
+    throw new Error('UNSUPPORTED_FILE');
+  }, []);
+
+  const handleSourceFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setSourceFile(file);
+    e.target.value = '';
+
+    if (!file) return;
+
+    setIsReadingSource(true);
+    try {
+      const rawText = await readSourceFileText(file);
+      setSourceText(rawText);
+      setIsSourceCollapsed(false);
+    } catch (error: any) {
+      const message = error?.message === 'UNSUPPORTED_FILE'
+        ? t('home.messages.unsupportedSourceFile')
+        : t('home.messages.parseSourceFailed');
+      show({ message, type: 'error' });
+    } finally {
+      setIsReadingSource(false);
+    }
+  }, [readSourceFileText, show, t]);
+
+  const handleParseSource = useCallback(async () => {
+    if (activeTab !== 'description' || isParsingSource) return;
+
+    let rawText = sourceText;
+    let trimmedText = rawText.trim();
+
+    if (!trimmedText && sourceFile) {
+      try {
+        rawText = await readSourceFileText(sourceFile);
+        setSourceText(rawText);
+        trimmedText = rawText.trim();
+      } catch (error: any) {
+        const message = error?.message === 'UNSUPPORTED_FILE'
+          ? t('home.messages.unsupportedSourceFile')
+          : t('home.messages.parseSourceFailed');
+        show({ message, type: 'error' });
+        return;
+      }
+    }
+
+    if (!trimmedText) {
+      show({ message: t('home.messages.parseSourceEmpty'), type: 'warning' });
+      return;
+    }
+
+    setIsParsingSource(true);
+    try {
+      const referenceFileIds = referenceFiles
+        .filter((file) => file.parse_status === 'completed')
+        .map((file) => file.id);
+
+      const accessCode = localStorage.getItem('banana-access-code');
+      const response = await fetch('/api/parse/report/stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+          ...(accessCode ? { 'X-Access-Code': accessCode } : {}),
+        },
+        body: JSON.stringify({
+          report_text: trimmedText,
+          reference_file_ids: referenceFileIds.length ? referenceFileIds : undefined,
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP_${response.status}`);
+      }
+
+      setContent('');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      let accumulated = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let idx = buffer.indexOf('\n\n');
+        while (idx !== -1) {
+          const chunk = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+
+          const lines = chunk.split('\n');
+          let eventType = '';
+          const dataLines: string[] = [];
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              eventType = line.slice(6).trim();
+              continue;
+            }
+            if (line.startsWith('data:')) {
+              let dataLine = line.slice(5);
+              if (dataLine.startsWith(' ')) dataLine = dataLine.slice(1);
+              dataLines.push(dataLine);
+            }
+          }
+
+          const data = dataLines.join('\n');
+          if (eventType === 'error') {
+            throw new Error(data || 'Stream error');
+          }
+          if (data === '[DONE]') {
+            buffer = '';
+            break;
+          }
+          if (data) {
+            accumulated += data;
+            setContent(accumulated);
+          }
+          idx = buffer.indexOf('\n\n');
+        }
+      }
+
+      if (!accumulated.trim()) {
+        throw new Error('EMPTY_SPLIT_RESULT');
+      }
+
+      const cleaned = accumulated
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/```$/i, '')
+        .trim();
+      setContent(cleaned);
+      show({ message: t('home.messages.parseSourceSuccess'), type: 'success' });
+    } catch (error: any) {
+      const message = error?.response?.data?.error?.message
+        || error?.message
+        || t('home.messages.parseSourceFailed');
+      show({ message, type: 'error' });
+    } finally {
+      setIsParsingSource(false);
+    }
+  }, [
+    activeTab,
+    isParsingSource,
+    sourceText,
+    sourceFile,
+    readSourceFileText,
+    referenceFiles,
+    t,
+    show
+  ]);
 
   const tabConfig = {
     idea: {
@@ -952,77 +1146,151 @@ export const Home: React.FC = () => {
                 </div>
               </div>
             ) : (
-            <MarkdownTextarea
-              ref={textareaRef}
-              placeholder={tabConfig[activeTab].placeholder}
-              value={content}
-              onChange={setContent}
-              onPaste={handlePaste}
-              onFiles={handleImageFiles}
-              rows={activeTab === 'idea' ? 4 : 8}
-              className="text-sm md:text-base border-2 border-gray-200 dark:border-border-primary dark:bg-background-tertiary dark:text-white focus-within:border-banana-400 dark:focus-within:border-banana transition-colors duration-200"
-              toolbarLeft={
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={handlePaperclipClick}
-                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:text-foreground-secondary dark:hover:bg-background-hover rounded transition-colors active:scale-95 touch-manipulation"
-                    title={t('home.actions.selectFile')}
-                  >
-                    <Paperclip size={18} />
-                  </button>
-                  {/* 画面比例选择 */}
-                  <div className="relative">
+            <>
+              {activeTab === 'description' && (
+                <div className="mb-3 bg-white dark:bg-background-tertiary border-2 border-gray-200 dark:border-border-primary rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-4 py-2.5 flex items-center gap-2 border-b border-gray-100 dark:border-border-secondary">
+                    <FileText size={14} className="text-banana-500 flex-shrink-0" />
+                    <span className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">
+                      {t('home.descriptionTools.sourceLabel')}
+                    </span>
+                    {sourceFile?.name && (
+                      <span className="text-[11px] text-gray-400 dark:text-foreground-tertiary truncate max-w-[160px]">
+                        {sourceFile.name}
+                      </span>
+                    )}
+                    <div className="ml-auto flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsSourceCollapsed((prev) => !prev)}
+                        className="text-xs text-gray-400 hover:text-gray-600 dark:text-foreground-tertiary dark:hover:text-foreground-secondary px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-background-hover transition-colors"
+                      >
+                        {isSourceCollapsed ? t('home.descriptionTools.expand') : t('home.descriptionTools.collapse')}
+                      </button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<Upload size={14} />}
+                        onClick={() => sourceFileInputRef.current?.click()}
+                        className="h-7 px-2 text-xs"
+                      >
+                        {t('home.descriptionTools.selectSourceFile')}
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        loading={isParsingSource}
+                        onClick={handleParseSource}
+                        className="h-7 px-2 text-xs"
+                        disabled={isParsingSource || isReadingSource || (!sourceText.trim() && !sourceFile)}
+                      >
+                        {isParsingSource ? t('home.descriptionTools.parsingSource') : t('home.descriptionTools.parseSource')}
+                      </Button>
+                    </div>
+                  </div>
+                  {!isSourceCollapsed && (
+                    <MarkdownTextarea
+                      value={sourceText}
+                      onChange={setSourceText}
+                      placeholder={t('home.descriptionTools.sourcePlaceholder')}
+                      rows={6}
+                      maxHeight={240}
+                      showUploadButton={false}
+                      className="text-sm md:text-base border-0 rounded-none shadow-none"
+                    />
+                  )}
+                </div>
+              )}
+              <MarkdownTextarea
+                ref={textareaRef}
+                placeholder={tabConfig[activeTab].placeholder}
+                value={content}
+                onChange={setContent}
+                onPaste={handlePaste}
+                onFiles={handleImageFiles}
+                rows={activeTab === 'idea' ? 4 : 8}
+                maxHeight={360}
+                collapsed={activeTab === 'description' && isContentCollapsed}
+                className="text-sm md:text-base border-2 border-gray-200 dark:border-border-primary dark:bg-background-tertiary dark:text-white focus-within:border-banana-400 dark:focus-within:border-banana transition-colors duration-200"
+                toolbarLeft={
+                  <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => setIsAspectRatioOpen(!isAspectRatioOpen)}
-                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:text-foreground-secondary dark:hover:bg-background-hover rounded transition-colors"
-                      title={i18n.language?.startsWith('zh') ? '画面比例' : 'Aspect Ratio'}
+                      onClick={handlePaperclipClick}
+                      className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:text-foreground-secondary dark:hover:bg-background-hover rounded transition-colors active:scale-95 touch-manipulation"
+                      title={t('home.actions.selectFile')}
                     >
-                      <span>{aspectRatio}</span>
-                      <ChevronDown size={12} className={`transition-transform ${isAspectRatioOpen ? 'rotate-180' : ''}`} />
+                      <Paperclip size={18} />
                     </button>
-                    {isAspectRatioOpen && (
-                      <>
-                        <div className="fixed inset-0 z-40" onClick={() => setIsAspectRatioOpen(false)} />
-                        <div className="absolute left-0 bottom-full mb-1 z-50 bg-white dark:bg-background-elevated border border-gray-200 dark:border-border-primary rounded-lg shadow-lg dark:shadow-none py-1 min-w-[80px]">
-                          {ASPECT_RATIO_OPTIONS.map((opt) => (
-                            <button
-                              key={opt.value}
-                              onClick={() => { setAspectRatio(opt.value); setIsAspectRatioOpen(false); }}
-                              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-background-hover transition-colors ${aspectRatio === opt.value ? 'text-banana font-semibold' : 'text-gray-700 dark:text-foreground-secondary'}`}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
+                    {/* 画面比例选择 */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsAspectRatioOpen(!isAspectRatioOpen)}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:text-foreground-secondary dark:hover:bg-background-hover rounded transition-colors"
+                        title={i18n.language?.startsWith('zh') ? '画面比例' : 'Aspect Ratio'}
+                      >
+                        <span>{aspectRatio}</span>
+                        <ChevronDown size={12} className={`transition-transform ${isAspectRatioOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {isAspectRatioOpen && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setIsAspectRatioOpen(false)} />
+                          <div className="absolute left-0 bottom-full mb-1 z-50 bg-white dark:bg-background-elevated border border-gray-200 dark:border-border-primary rounded-lg shadow-lg dark:shadow-none py-1 min-w-[80px]">
+                            {ASPECT_RATIO_OPTIONS.map((opt) => (
+                              <button
+                                key={opt.value}
+                                onClick={() => { setAspectRatio(opt.value); setIsAspectRatioOpen(false); }}
+                                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-background-hover transition-colors ${aspectRatio === opt.value ? 'text-banana font-semibold' : 'text-gray-700 dark:text-foreground-secondary'}`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
                         </div>
                       </>
                     )}
                   </div>
+                  {activeTab === 'description' && (
+                    <button
+                      type="button"
+                      onClick={() => setIsContentCollapsed((prev) => !prev)}
+                      className="px-2 py-1 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:text-foreground-secondary dark:hover:bg-background-hover rounded transition-colors"
+                    >
+                      {isContentCollapsed ? t('home.descriptionTools.expand') : t('home.descriptionTools.collapse')}
+                    </button>
+                  )}
                 </div>
               }
-              toolbarRight={
-                <Button
-                  size="sm"
-                  onClick={handleSubmit}
-                  loading={isSubmitting || isGlobalLoading}
-                  disabled={
-                    !content.trim() ||
-                    isUploadingImage ||
-                    referenceFiles.some(f => f.parse_status === 'pending' || f.parse_status === 'parsing')
-                  }
-                  className="shadow-sm dark:shadow-background-primary/30 text-xs md:text-sm px-3 md:px-4"
-                >
-                  {referenceFiles.some(f => f.parse_status === 'pending' || f.parse_status === 'parsing')
-                    ? t('home.actions.parsing')
-                    : t('common.next')}
-                </Button>
-              }
-            />
+                toolbarRight={
+                  <Button
+                    size="sm"
+                    onClick={handleSubmit}
+                    loading={isSubmitting || isGlobalLoading}
+                    disabled={
+                      !content.trim() ||
+                      isUploadingImage ||
+                      referenceFiles.some(f => f.parse_status === 'pending' || f.parse_status === 'parsing')
+                    }
+                    className="shadow-sm dark:shadow-background-primary/30 text-xs md:text-sm px-3 md:px-4"
+                  >
+                    {referenceFiles.some(f => f.parse_status === 'pending' || f.parse_status === 'parsing')
+                      ? t('home.actions.parsing')
+                      : t('common.next')}
+                  </Button>
+                }
+              />
+            </>
             )}
           </div>
 
           {/* 隐藏的文件输入 */}
+          <input
+            ref={sourceFileInputRef}
+            type="file"
+            accept=".docx,.txt,.md,.markdown"
+            onChange={handleSourceFileChange}
+            className="hidden"
+          />
           <input
             ref={fileInputRef}
             type="file"

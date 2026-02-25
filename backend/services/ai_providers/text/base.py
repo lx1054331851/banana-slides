@@ -28,3 +28,13 @@ class TextProvider(ABC):
             Generated text content
         """
         pass
+
+    def stream_text(self, prompt: str, thinking_budget: int = 1000):
+        """
+        Stream text content from prompt.
+        Default implementation falls back to full generation.
+
+        Yields:
+            text chunks
+        """
+        yield self.generate_text(prompt, thinking_budget=thinking_budget)

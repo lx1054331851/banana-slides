@@ -86,6 +86,53 @@ class GenAITextProvider(TextProvider):
             config=types.GenerateContentConfig(**config_params) if config_params else None,
         )
         return _validate_response(response)
+
+    @retry(
+        stop=stop_after_attempt(get_config().GENAI_MAX_RETRIES + 1),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True,
+        before_sleep=_log_retry
+    )
+    def stream_text(self, prompt: str, thinking_budget: int = 0):
+        """
+        Stream text using Google GenAI SDK when supported.
+        Falls back to full generation if streaming is unavailable.
+        """
+        config_params = {}
+        if thinking_budget > 0:
+            config_params['thinking_config'] = types.ThinkingConfig(thinking_budget=thinking_budget)
+
+        stream_fn = getattr(self.client.models, 'generate_content_stream', None)
+        if not stream_fn:
+            yield _validate_response(
+                self.client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(**config_params) if config_params else None,
+                )
+            )
+            return
+
+        stream = stream_fn(
+            model=self.model,
+            contents=prompt,
+            config=types.GenerateContentConfig(**config_params) if config_params else None,
+        )
+        for chunk in stream:
+            text = getattr(chunk, 'text', None)
+            if text:
+                yield text
+                continue
+            candidates = getattr(chunk, 'candidates', None)
+            if candidates:
+                for candidate in candidates:
+                    content = getattr(candidate, 'content', None)
+                    parts = getattr(content, 'parts', None)
+                    if parts:
+                        for part in parts:
+                            part_text = getattr(part, 'text', None)
+                            if part_text:
+                                yield part_text
     
     @retry(
         stop=stop_after_attempt(get_config().GENAI_MAX_RETRIES + 1),

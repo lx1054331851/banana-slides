@@ -40,6 +40,10 @@ interface MarkdownTextareaProps {
   error?: string;
   className?: string;
   rows?: number;
+  /** Maximum editor height (px or CSS value) */
+  maxHeight?: number | string;
+  /** Collapse editor area, keeping toolbar visible */
+  collapsed?: boolean;
   /** Show the inline image upload button. Default: true when onFiles is provided */
   showUploadButton?: boolean;
   /** Extra content rendered on the left side of the toolbar (after built-in buttons) */
@@ -248,6 +252,8 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   error,
   className,
   rows = 4,
+  maxHeight,
+  collapsed = false,
   showUploadButton,
   toolbarLeft,
   toolbarRight,
@@ -307,6 +313,14 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
       lastValueRef.current = value;
     }
   }, [value]);
+
+  // Rebuild editor when expanding from collapsed state
+  useEffect(() => {
+    if (!collapsed && editorRef.current) {
+      buildDOM(editorRef.current, parseSegments(value), chipTooltipsRef.current);
+      lastValueRef.current = value;
+    }
+  }, [collapsed, value]);
 
   // Focus edit input when editing chip
   useEffect(() => {
@@ -582,6 +596,13 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
 
   const minHeight = rows * 24;
   const isEmpty = !value.trim();
+  const editorStyle: React.CSSProperties = {
+    minHeight: `${minHeight}px`,
+  };
+
+  if (maxHeight !== undefined) {
+    editorStyle.maxHeight = typeof maxHeight === 'number' ? `${maxHeight}px` : maxHeight;
+  }
 
   return (
     <div className="w-full">
@@ -599,73 +620,74 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
         error && 'border-red-500 focus-within:ring-red-500',
         className
       )}>
-        {/* Editor area */}
-        <div className="relative">
-          <div
-            ref={editorRef}
-            contentEditable
-            role="textbox"
-            aria-multiline="true"
-            onKeyDown={handleKeyDown}
-            onInput={handleInput}
-            onPaste={handlePaste}
-            onCopy={handleCopy}
-            onCut={handleCut}
-            onClick={handleClick}
-            onDoubleClick={handleDoubleClick}
-            onDragEnter={handleDragEnter}
-            onDragLeave={handleDragLeave}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onBlur={onBlur}
-            style={{ minHeight: `${minHeight}px` }}
-            className={cn(
-              "w-full px-4 py-3 outline-none overflow-y-auto whitespace-pre-wrap break-words text-gray-900 dark:text-foreground-primary",
-              resizable ? 'resize-y' : 'resize-none'
-            )}
-          />
-
-          {/* Placeholder */}
-          {isEmpty && placeholder && !isDragging && (
-            <div className="absolute top-0 left-0 right-0 px-4 py-3 text-gray-400 dark:text-gray-500 pointer-events-none select-none">
-              {placeholder}
-            </div>
-          )}
-
-          {/* Drag overlay */}
-          {isDragging && (
-            <div className="absolute inset-0 flex items-center justify-center rounded-lg pointer-events-none">
-              <div className="flex items-center gap-2 px-4 py-2 bg-banana-100 dark:bg-banana-900/50 rounded-full text-sm font-medium text-banana-700 dark:text-banana-300">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
-                </svg>
-                {t('markdownTextarea.dropImages')}
-              </div>
-            </div>
-          )}
-
-          {/* Chip edit popover */}
-          {editingChip && (
+        {!collapsed && (
+          <div className="relative">
             <div
-              className="absolute z-20 flex items-center gap-1 bg-white dark:bg-background-secondary border border-gray-300 dark:border-border-primary rounded-lg shadow-lg p-1"
-              style={{ left: editingChip.rect.left, top: editingChip.rect.top }}
-            >
-              <input
-                ref={editInputRef}
-                type="text"
-                value={editAlt}
-                onChange={(e) => setEditAlt(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') { e.preventDefault(); commitChipEdit(); }
-                  if (e.key === 'Escape') cancelChipEdit();
-                }}
-                onBlur={commitChipEdit}
-                className="px-2 py-1 text-xs border-none outline-none bg-transparent w-36 text-gray-900 dark:text-foreground-primary"
-                placeholder={t('markdownTextarea.imageDescription')}
-              />
-            </div>
-          )}
-        </div>
+              ref={editorRef}
+              contentEditable
+              role="textbox"
+              aria-multiline="true"
+              onKeyDown={handleKeyDown}
+              onInput={handleInput}
+              onPaste={handlePaste}
+              onCopy={handleCopy}
+              onCut={handleCut}
+              onClick={handleClick}
+              onDoubleClick={handleDoubleClick}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onBlur={onBlur}
+              style={editorStyle}
+              className={cn(
+                "w-full px-4 py-3 outline-none overflow-y-auto whitespace-pre-wrap break-words text-gray-900 dark:text-foreground-primary",
+                resizable ? 'resize-y' : 'resize-none'
+              )}
+            />
+
+            {/* Placeholder */}
+            {isEmpty && placeholder && !isDragging && (
+              <div className="absolute top-0 left-0 right-0 px-4 py-3 text-gray-400 dark:text-gray-500 pointer-events-none select-none">
+                {placeholder}
+              </div>
+            )}
+
+            {/* Drag overlay */}
+            {isDragging && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-lg pointer-events-none">
+                <div className="flex items-center gap-2 px-4 py-2 bg-banana-100 dark:bg-banana-900/50 rounded-full text-sm font-medium text-banana-700 dark:text-banana-300">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
+                  </svg>
+                  {t('markdownTextarea.dropImages')}
+                </div>
+              </div>
+            )}
+
+            {/* Chip edit popover */}
+            {editingChip && (
+              <div
+                className="absolute z-20 flex items-center gap-1 bg-white dark:bg-background-secondary border border-gray-300 dark:border-border-primary rounded-lg shadow-lg p-1"
+                style={{ left: editingChip.rect.left, top: editingChip.rect.top }}
+              >
+                <input
+                  ref={editInputRef}
+                  type="text"
+                  value={editAlt}
+                  onChange={(e) => setEditAlt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); commitChipEdit(); }
+                    if (e.key === 'Escape') cancelChipEdit();
+                  }}
+                  onBlur={commitChipEdit}
+                  className="px-2 py-1 text-xs border-none outline-none bg-transparent w-36 text-gray-900 dark:text-foreground-primary"
+                  placeholder={t('markdownTextarea.imageDescription')}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Toolbar */}
         {hasToolbar && (
@@ -698,7 +720,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
         )}
 
         {/* Compact image preview strip — below toolbar */}
-        {showImagePreview && images.length > 0 && (
+        {showImagePreview && images.length > 0 && !collapsed && (
           <div className="flex items-center gap-2 px-3 py-2 overflow-x-auto border-t border-gray-100 dark:border-border-primary">
             {images.map((img, i) => {
               const uploading = isUploadingUrl(img.url);

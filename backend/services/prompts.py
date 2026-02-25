@@ -607,10 +607,10 @@ You are a helpful assistant that modifies PPT outlines based on user requirement
 
 
 def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_requirement: str,
-                                       project_context: 'ProjectContext',
-                                       outline: List[Dict] = None,
-                                       previous_requirements: Optional[List[str]] = None,
-                                       language: str = None) -> str:
+                                   project_context: 'ProjectContext',
+                                   outline: List[Dict] = None,
+                                   previous_requirements: Optional[List[str]] = None,
+                                   language: str = None) -> str:
     """
     根据用户要求修改已有页面描述的 prompt
     
@@ -710,6 +710,150 @@ You are a helpful assistant that modifies PPT page descriptions based on user re
     
     final_prompt = files_xml + prompt
     logger.debug(f"[get_descriptions_refinement_prompt] Final prompt:\n{final_prompt}")
+    return final_prompt
+
+
+def get_long_report_split_prompt(report_text: str,
+                                 reference_files_content: Optional[List[Dict[str, str]]] = None) -> str:
+    """
+    将长篇分析报告拆解为结构化PPT JSON的 prompt
+
+    Args:
+        report_text: 原始报告文本
+        reference_files_content: 参考文件内容（可选）
+
+    Returns:
+        格式化后的 prompt 字符串
+    """
+    files_xml = _format_reference_files_xml(reference_files_content)
+    prompt = dedent("""\
+# Role
+你是一位麦肯锡/波士顿咨询风格的高级商业分析师兼PPT架构师。你的任务是将一份【长篇分析报告】拆解为【结构化的PPT JSON数据】。
+
+# Core Objective
+目标是将文稿转化为视觉化的演示文稿。
+**关键要求：宁可拆分多页，绝不压缩细节。** 这种报告通常需要 **20-30页** 的篇幅才能完整承载，不要试图用10-15页讲完。
+
+# ⚡️ STRICT Deconstruction Rules (核心拆解法则 - 必须遵守)
+
+## 1. 强制子章节拆分 (Subsection = Slide)
+- **绝对禁止合并子章节**：如果原文有 `1.1`, `1.2`, `1.3` 这样的结构，**每一个子标题必须至少对应一张独立的Slide**。
+- **示例**：原文第三章有3.1, 3.2, 3.3，你必须生成至少3张Slide来分别详细阐述，严禁将其合并为一张“第三章总述”。
+
+## 2. 严控过渡页泛滥 (Strict Control on Transition Slides)
+- **切勿按原文章节机械生成过渡页**：如果原报告有8个章节，**绝对不要**生成8张 Section_Header。
+- **模块化聚合**：请将整份报告在逻辑上整合为 3 到 4 个核心大模块（例如：市场现状、核心归因分析、应对策略、未来展望），**只在这些大模块切换时使用过渡页**。
+- **强制指标**：整份PPT的 `Section_Header` 数量应严格控制在 **3-5 张以内**。遇到小章节请直接跳过过渡，生成详情页进入正题。
+
+## 3. 实体与数据保留 (Entity & Data Preservation)
+- **专有名词不丢失**：原文中出现的法律名称（如“ICCA法案”）、特定品牌/组织名（如“8000Kicks”, "Hemp Foundation"）、特定技术名（如“Phytoremediation”），必须完整保留在 `detail` 或 `note` 字段中。
+- **长尾数据保留**：不要只保留最大值。如果表格中有“爱沙尼亚/立陶宛”这样的长尾数据，也要体现在图表配置中，展示分析的全面性。
+
+## 4. 文本纯净度要求 (Text Cleanliness & Citation Removal)
+- **彻底去除引用标记**：原文中如果包含类似 ``, `` 或 `(作者, 年份)` 等学术引用标记，在提取文案填入 JSON 的视觉展示字段时，**必须将其彻底删除**。
+- **数据来源归档**：如果你认为某个数据来源非常重要，请将其单独放置在 `note`（演讲者备注）字段中。
+
+## 5. 关键信息视觉高亮 (Visual Highlighting of Key Metrics)
+- **提取高亮词汇**：在一段详细的描述中，观众没有耐心读完所有字。你必须从 `detail` 或 `evidence` 中提取出最核心的**数据（如 286.2亿美元、36.5%）、痛点词汇或极端形容词（如“断崖式下跌”、“致命漏洞”）**。
+- **填入指定数组**：将这些需要用特殊颜色、加粗或放大字号渲染的词汇，放入 `highlight_phrases` 数组中。前端渲染引擎将根据该数组对正文进行精准匹配和高亮。
+
+## 6. 页面类型与布局映射
+- `cover`: 封面
+- `catalog`: 目录（必须在封面后紧接一页，列出整合后的大模块）
+- `section_header`: **大模块过渡页**
+- `detail_text_split`: 纯文字详情页
+- `detail_case`: 案例深挖页
+- `detail_chart`: 数据图表页
+- `strategy_roadmap`: 路径规划页
+- `closing`: **结束/致谢页**
+
+## 7. 结尾页强制规则 (Closing Slide Rule)
+- 报告的最后一页**必须**是 `closing` 类型，包含全篇一句话总结、行业/品牌愿景（Vision）、有感染力的 Slogan，以及感谢信息。
+
+以下是需要拆解的报告原文：
+<<<REPORT_TEXT>>>
+
+# Output Format (JSON Structure)
+
+请严格按照以下 JSON 结构输出。
+
+```json
+{
+  "meta": {
+    "report_title": "报告标题",
+    "total_slides": "自动计算(预计>20页)",
+    "theme": "professional_business"
+  },
+  "slides": [
+    {
+      "id": 1,
+      "type": "cover",
+      "title": "封面标题",
+      "content": {
+        "headline": "主标题",
+        "sub_headline": "副标题",
+        "presenter_info": "汇报人或机构信息"
+      }
+    },
+    {
+      "id": 2,
+      "type": "catalog",
+      "title": "目录 / AGENDA",
+      "content": {
+        "sections": [
+          "Part 1: [提炼的大模块名称1]",
+          "Part 2: [提炼的大模块名称2]",
+          "Part 3: [提炼的大模块名称3]"
+        ]
+      },
+      "note": "开场向观众展示今天的核心议题"
+    },
+    {
+      "id": 3,
+      "type": "section_header",
+      "title": "Part 1: [提炼的大模块名称1]",
+      "content": {
+        "headline_summary": "该模块的核心导读"
+      }
+    },
+    {
+      "id": "N",
+      "source_ref": "对应原文章节号(如 3.1)",
+      "type": "detail_text_split",
+      "title": "直接使用原文子标题，或提炼为观点句",
+      "content": {
+        "headline_summary": "核心结论，注意删除标记",
+        "detailed_items": [
+          {
+            "point": "关键点标题",
+            "detail": "此处包含原文详细描述，不少于30字。如：市场规模预计将增长至286.2亿美元，复合年增长率高达36.5%。",
+            "evidence": "引用原文的数据或案例",
+            "highlight_phrases": ["286.2亿美元", "36.5%"]
+          }
+        ]
+      },
+      "note": "演讲者备注"
+    },
+    {
+      "id": "LAST",
+      "type": "closing",
+      "title": "总结与展望",
+      "content": {
+        "headline_summary": "【一句话高度概括全篇核心结论】",
+        "vision": "【基于报告内容的未来愿景】",
+        "slogan": "【精炼、有煽动力的口号】",
+        "thank_you_text": "感谢聆听 | Q&A",
+        "contact_info": "your.email@example.com"
+      },
+      "note": "升华主题，号召行动(CTA)"
+    }
+  ]
+}
+```
+""")
+    prompt = prompt.replace("<<<REPORT_TEXT>>>", report_text)
+    final_prompt = files_xml + prompt
+    logger.debug(f"[get_long_report_split_prompt] Final prompt:\n{final_prompt}")
     return final_prompt
 
 

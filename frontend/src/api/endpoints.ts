@@ -148,6 +148,67 @@ export const generateFromDescription = async (projectId: string, descriptionText
 };
 
 /**
+ * 解析描述文本为分页描述（不直接生成页面）
+ * @param projectId 项目ID
+ * @param descriptionText 描述文本
+ * @param language 输出语言（可选，默认从 sessionStorage 获取）
+ */
+export const parseDescriptionToPages = async (
+  descriptionText: string,
+  options?: {
+    projectId?: string;
+    language?: OutputLanguage;
+    referenceFileIds?: string[];
+  }
+): Promise<ApiResponse<{ page_descriptions: string[] }>> => {
+  const lang = options?.language || await getStoredOutputLanguage();
+  const payload: Record<string, any> = {
+    description_text: descriptionText,
+    language: lang
+  };
+  if (options?.referenceFileIds?.length) {
+    payload.reference_file_ids = options.referenceFileIds;
+  }
+
+  const url = options?.projectId
+    ? `/api/projects/${options.projectId}/parse/description`
+    : `/api/parse/description`;
+
+  const response = await apiClient.post<ApiResponse<{ page_descriptions: string[] }>>(
+    url,
+    payload
+  );
+  return response.data;
+};
+
+/**
+ * 将长篇报告拆分为 PPT JSON
+ * @param reportText 报告原文
+ * @param options 可选参数（参考文件等）
+ */
+export const splitReportToPptJson = async (
+  reportText: string,
+  options?: {
+    language?: OutputLanguage;
+    referenceFileIds?: string[];
+  }
+): Promise<ApiResponse<{ result: string }>> => {
+  const lang = options?.language || await getStoredOutputLanguage();
+  const payload: Record<string, any> = {
+    report_text: reportText,
+    language: lang
+  };
+  if (options?.referenceFileIds?.length) {
+    payload.reference_file_ids = options.referenceFileIds;
+  }
+  const response = await apiClient.post<ApiResponse<{ result: string }>>(
+    `/api/parse/report`,
+    payload
+  );
+  return response.data;
+};
+
+/**
  * 批量生成描述
  * @param projectId 项目ID
  * @param language 输出语言（可选，默认从 sessionStorage 获取）

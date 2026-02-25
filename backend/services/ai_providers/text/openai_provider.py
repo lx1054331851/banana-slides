@@ -47,3 +47,20 @@ class OpenAITextProvider(TextProvider):
             ]
         )
         return strip_think_tags(response.choices[0].message.content)
+
+    def stream_text(self, prompt: str, thinking_budget: int = 0):
+        """
+        Stream text using OpenAI SDK
+        """
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            stream=True
+        )
+        for chunk in response:
+            if not chunk or not getattr(chunk, "choices", None):
+                continue
+            delta = chunk.choices[0].delta
+            content = getattr(delta, "content", None)
+            if content:
+                yield content
