@@ -58,3 +58,6 @@ uploads/
 _local_backup/
 !CLA.md 
 !CONTRIBUTING.md
+
+# VS Code workspace settings
+.vscode/
