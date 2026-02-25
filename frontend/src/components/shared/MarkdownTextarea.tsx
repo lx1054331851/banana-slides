@@ -112,6 +112,25 @@ function serializeDOM(element: HTMLElement): string {
   return result;
 }
 
+function serializeEditor(editor: HTMLElement): string {
+  // If there are no chips, prefer the browser's plain-text extraction for speed.
+  // `serializeDOM` walks many nodes (often one DIV/BR per line after paste), which can freeze the UI for large text.
+  const hasChip = !!editor.querySelector('.' + CHIP_CLASS);
+  if (!hasChip) {
+    let text = ((editor as any).innerText || editor.textContent || '').replace(/\u200B/g, '');
+    text = text.replace(/\r\n/g, '\n');
+    // When empty, contentEditable often returns "\n" due to a placeholder <br>
+    if (text === '\n') return '';
+    // Avoid a spurious trailing newline if the DOM ends with a BR
+    const last = editor.lastChild as any;
+    if (last && last.nodeType === Node.ELEMENT_NODE && last.tagName === 'BR') {
+      text = text.endsWith('\n') ? text.slice(0, -1) : text;
+    }
+    return text;
+  }
+  return serializeDOM(editor);
+}
+
 function getDisplayName(alt: string, url: string): string {
   if (alt && alt !== 'image') return alt;
   const filename = url.split('/').pop() || 'image';
@@ -332,7 +351,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
 
   const emitChange = useCallback(() => {
     if (!editorRef.current) return;
-    const markdown = serializeDOM(editorRef.current);
+    const markdown = serializeEditor(editorRef.current);
     isInternalRef.current = true;
     lastValueRef.current = markdown;
     onChange(markdown);
@@ -482,12 +501,23 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
     onPaste?.(e);
-    if (!e.defaultPrevented) {
-      e.preventDefault();
-      const text = e.clipboardData.getData('text/plain');
-      // Use insertContentAtCursor to properly handle markdown images as chips
-      insertContentAtCursor(text);
-    }
+    if (e.defaultPrevented) return;
+
+    const text = e.clipboardData.getData('text/plain');
+
+    // Performance: for large plain-text pastes, let the browser handle it natively.
+    // Our chip-aware insertion does a lot of DOM operations (per-line) and can freeze the UI
+    // when pasting big chunks (e.g. 20k+ JSON / report text).
+    //
+    // Only intercept paste when the clipboard contains markdown image syntax that we want to
+    // convert into chips immediately.
+    const maybeHasImageMarkdown = text.includes('![') && text.includes('](');
+    const hasImageMarkdown = maybeHasImageMarkdown && /!\[[^\]]*\]\([^)]+\)/.test(text);
+    if (!hasImageMarkdown) return;
+
+    e.preventDefault();
+    // Use insertContentAtCursor to properly handle markdown images as chips
+    insertContentAtCursor(text);
   }, [onPaste, insertContentAtCursor]);
 
   const handleCopy = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {

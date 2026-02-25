@@ -6,6 +6,7 @@ import { History } from './pages/History';
 import { OutlineEditor } from './pages/OutlineEditor';
 import { DetailEditor } from './pages/DetailEditor';
 import { SlidePreview } from './pages/SlidePreview';
+import { StyleWorkflow } from './pages/StyleWorkflow';
 import { SettingsPage } from './pages/Settings';
 import { useProjectStore } from './store/useProjectStore';
 import { useToast, AccessCodeGuard } from './components/shared';
@@ -40,6 +41,7 @@ function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/project/:projectId/outline" element={<OutlineEditor />} />
           <Route path="/project/:projectId/detail" element={<DetailEditor />} />
+          <Route path="/project/:projectId/style" element={<StyleWorkflow />} />
           <Route path="/project/:projectId/preview" element={<SlidePreview />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

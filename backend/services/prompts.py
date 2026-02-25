@@ -327,6 +327,10 @@ def get_image_generation_prompt(page_desc: str, outline_text: str,
     template_style_guideline = "- 配色和设计语言和模板图片严格相似。" if has_template else "- 严格按照风格描述进行设计。"
     forbidden_template_text_guidline = "- 只参考风格设计，禁止出现模板中的文字。\n" if has_template else ""
 
+    style_json_guideline = ""
+    if extra_requirements and "<style_json>" in extra_requirements:
+        style_json_guideline = "- 若额外要求中提供了 style_json（见 <style_json>...</style_json>），所有配色/字体/布局/装饰需以 style_json 为最高优先级执行。\n"
+
     # 该处参考了@歸藏的A工具箱
     prompt = (f"""\
 你是一位专家级UI UX演示设计师，专注于生成设计良好的PPT页面。
@@ -338,6 +342,7 @@ def get_image_generation_prompt(page_desc: str, outline_text: str,
 <design_guidelines>
 - 要求文字清晰锐利, 画面为4K分辨率，16:9比例。
 {template_style_guideline}
+{style_json_guideline}
 - 根据内容自动设计最完美的构图，不重不漏地渲染"页面描述"中的文本。
 - 如非必要，禁止出现 markdown 格式符号（如 # 和 * 等）。
 {forbidden_template_text_guidline}- 使用大小恰当的装饰性图形或插画对空缺位置进行填补。
@@ -1174,3 +1179,115 @@ Only output the style description text, no other content.
 """
     logger.debug(f"[get_style_extraction_prompt] Final prompt:\n{prompt}")
     return prompt
+
+
+def get_style_recommendations_prompt(project_dict: Dict,
+                                     reference_files_content: Optional[List[Dict[str, str]]],
+                                     template_json_text: str,
+                                     style_requirements: str = "",
+                                     language: str = None) -> str:
+    """
+    基于原始内容 + 用户提供的风格模板 JSON 骨架 + 附加风格要求，推荐 3 组风格指导 JSON，并为每组给出 4 个样例页面描述。
+
+    Returns:
+        一段用于文本模型的 prompt（要求只输出 JSON，不带代码块）。
+    """
+    def _truncate(text: str, limit: int) -> str:
+        if not text:
+            return ""
+        s = str(text)
+        if len(s) <= limit:
+            return s
+        return s[:limit] + f"\n...(内容过长，已截断，原长度={len(s)})"
+
+    # Limit uploaded files content to avoid huge prompts causing timeouts.
+    # Keep structure compatible with other prompts (uploaded_files XML), but truncate aggressively.
+    files_xml = ""
+    if reference_files_content:
+        max_total = 24000
+        max_per_file = 6000
+        total = 0
+        parts = ["<uploaded_files>"]
+        for file_info in reference_files_content:
+            if total >= max_total:
+                break
+            filename = file_info.get('filename', 'unknown')
+            content = file_info.get('content', '') or ''
+            truncated = _truncate(content, max_per_file)
+            # guard total length
+            remain = max_total - total
+            if len(truncated) > remain:
+                truncated = _truncate(truncated, remain)
+            parts.append(f'  <file name="{filename}">')
+            parts.append('    <content>')
+            parts.append(truncated)
+            parts.append('    </content>')
+            parts.append('  </file>')
+            total += len(truncated)
+        parts.append('</uploaded_files>')
+        parts.append('')
+        files_xml = '\n'.join(parts)
+
+    creation_type = (project_dict.get('creation_type') or '').strip()
+    idea_prompt = _truncate(project_dict.get('idea_prompt') or "", 4000)
+    outline_text = _truncate(project_dict.get('outline_text') or "", 8000)
+    description_text = _truncate(project_dict.get('description_text') or "", 8000)
+
+    style_req = (style_requirements or "").strip()
+
+    prompt = f"""\
+你是一位顶级 PPT 视觉设计总监 + 风格系统设计师。你的任务是：
+1) 阅读用户的原始内容（主题/大纲/描述/上传文件内容）
+2) 阅读用户提供的「风格模板 JSON 骨架」
+3) 结合用户的「附加风格要求」
+4) 输出 3 组不同但都适配内容的「风格指导 JSON」（必须严格遵循模板骨架的结构与字段）
+5) 为每组风格提供 4 个用于预览的 PPT 页面描述（封面/目录/详情/结尾），用于生成样例图片
+
+<project_context>
+creation_type: {creation_type}
+idea_prompt:
+{idea_prompt}
+
+outline_text:
+{outline_text}
+
+description_text:
+{description_text}
+</project_context>
+
+<style_template_json_skeleton>
+{template_json_text}
+</style_template_json_skeleton>
+
+<style_requirements>
+{style_req}
+</style_requirements>
+
+输出必须是一个 JSON 对象，且只输出 JSON（不要 markdown，不要解释文字），格式如下：
+{{
+  "recommendations": [
+    {{
+      "name": "风格名称（短）",
+      "rationale": "为什么适配本内容（短）",
+      "style_json": {{ /* 必须严格遵循模板骨架结构（同 key / 同层级），填满占位符/空值 */ }},
+      "sample_pages": {{
+        "cover": "封面页页面描述（含标题/副标题/演讲者信息等文字要求）",
+        "toc": "目录页页面描述（含目录结构文字要求）",
+        "detail": "详情页页面描述（含若干要点/图表/布局说明等文字要求）",
+        "ending": "结尾页页面描述（致谢/Q&A/联系方式等文字要求）"
+      }}
+    }}
+  ]
+}}
+
+强约束：
+- recommendations 必须刚好 3 个。
+- 每个 style_json 必须是合法 JSON 对象，且结构必须与模板骨架完全一致（字段不能少，不能多，不能改名）。
+- sample_pages 必须包含 cover/toc/detail/ending 四个键，值为中文页面描述文本，且要能直接用于生成 PPT 页面。
+- 只输出 JSON。
+{get_language_instruction(language)}
+"""
+
+    final_prompt = files_xml + prompt
+    logger.debug(f"[get_style_recommendations_prompt] Final prompt:\n{final_prompt}")
+    return final_prompt

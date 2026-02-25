@@ -26,6 +26,10 @@ from services.task_manager import (
     generate_images_task,
     process_ppt_renovation_task
 )
+from services.style_preview_service import (
+    generate_style_recommendations_and_previews_task,
+    regenerate_single_style_previews_task
+)
 from utils import (
     success_response, error_response, not_found, bad_request,
     parse_page_ids_from_body, get_filtered_pages
@@ -288,6 +292,7 @@ def create_project():
             outline_text=data.get('outline_text'),
             description_text=data.get('description_text'),
             template_style=data.get('template_style'),
+            template_style_json=data.get('template_style_json'),
             image_aspect_ratio=image_aspect_ratio,
             status='DRAFT'
         )
@@ -378,6 +383,10 @@ def update_project(project_id):
         # Update template_style if provided
         if 'template_style' in data:
             project.template_style = data['template_style']
+
+        # Update template_style_json if provided
+        if 'template_style_json' in data:
+            project.template_style_json = data['template_style_json']
         
         # Update aspect ratio if provided
         if 'image_aspect_ratio' in data:
@@ -856,15 +865,17 @@ def generate_images(project_id):
         if not pages:
             return bad_request("No pages found for project")
         
-        # 检查是否有模板图片或风格描述
+        # 检查是否有模板图片或风格描述/风格JSON
         from services import FileService
         file_service = FileService(current_app.config['UPLOAD_FOLDER'])
-        use_template = data.get('use_template', True)
+        use_template_requested = data.get('use_template', True)
         ref_image_path = None
-        if use_template:
+        if use_template_requested:
             ref_image_path = file_service.get_template_path(project_id)
+        has_template = bool(ref_image_path)
+        use_template = has_template  # use actual template presence for prompt/runtime
         
-        if not ref_image_path and not project.template_style:
+        if not has_template and not project.template_style and not project.template_style_json:
             return bad_request("请先上传模板图片或添加风格描述。")
         
         # Reconstruct outline from pages with part structure
@@ -872,7 +883,7 @@ def generate_images(project_id):
         
         # 从配置中读取默认并发数，如果请求中提供了则使用请求的值
         max_workers = data.get('max_workers', current_app.config.get('MAX_IMAGE_WORKERS', 8))
-        use_template = data.get('use_template', True)
+        # use_template already normalized by actual presence
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
         
         # Create task
@@ -895,9 +906,10 @@ def generate_images(project_id):
         
         # 合并额外要求和风格描述
         combined_requirements = project.extra_requirements or ""
+        if project.template_style_json:
+            combined_requirements = combined_requirements + f"\n\nppt页面风格指导(JSON)：\n<style_json>\n{project.template_style_json}\n</style_json>\n"
         if project.template_style:
-            style_requirement = f"\n\nppt页面风格描述：\n\n{project.template_style}"
-            combined_requirements = combined_requirements + style_requirement
+            combined_requirements = combined_requirements + f"\n\n附加风格要求：\n{project.template_style}"
         
         # Get app instance for background task
         app = current_app._get_current_object()
@@ -936,6 +948,148 @@ def generate_images(project_id):
         return error_response('SERVER_ERROR', str(e), 500)
 
 
+@project_bp.route('/<project_id>/style/recommendations', methods=['POST'])
+def generate_style_recommendations(project_id):
+    """
+    POST /api/projects/{project_id}/style/recommendations - Recommend 3 style_json and generate 12 preview images
+
+    Body:
+    {
+      "template_json": "...",        # required (JSON string)
+      "style_requirements": "...",   # optional
+      "language": "zh",              # optional
+      "generate_previews": true      # optional, default false. If false, only return 3 recommended style_json (no images)
+    }
+    """
+    try:
+        project = Project.query.get(project_id)
+        if not project:
+            return not_found('Project')
+
+        data = request.get_json() or {}
+        template_json_text = (data.get('template_json') or '').strip()
+        if not template_json_text:
+            return bad_request("template_json is required")
+        try:
+            template_json_obj = json.loads(template_json_text)
+        except Exception as e:
+            return bad_request(f"template_json must be valid JSON: {str(e)}")
+
+        style_requirements = (data.get('style_requirements') or '').strip()
+        language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+        generate_previews = data.get('generate_previews', False)
+        if generate_previews is None:
+            generate_previews = False
+        if not isinstance(generate_previews, bool):
+            return bad_request("generate_previews must be a boolean")
+
+        # Compact JSON skeleton for prompt to reduce token/whitespace overhead.
+        # This keeps the exact same structure/values but strips formatting spaces/newlines.
+        template_json_text_compact = json.dumps(template_json_obj, ensure_ascii=False, separators=(',', ':'))
+
+        task = Task(project_id=project_id, task_type='STYLE_RECOMMENDATIONS', status='PENDING')
+        task.set_progress({
+            'mode': 'recommendations_and_previews' if generate_previews else 'recommendations_only',
+            'total': 12 if generate_previews else 3,
+            'completed': 0,
+            'failed': 0,
+            'recommendations': []
+        })
+        db.session.add(task)
+        db.session.commit()
+
+        app = current_app._get_current_object()
+        task_manager.submit_task(
+            task.id,
+            generate_style_recommendations_and_previews_task,
+            project_id,
+            template_json_text_compact,
+            style_requirements,
+            app,
+            language,
+            generate_previews
+        )
+
+        return success_response({'task_id': task.id, 'status': 'PROCESSING'}, status_code=202)
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"generate_style_recommendations failed: {str(e)}", exc_info=True)
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
+@project_bp.route('/<project_id>/style/recommendations/<rec_id>/previews', methods=['POST'])
+def regenerate_style_previews(project_id, rec_id):
+    """
+    POST /api/projects/{project_id}/style/recommendations/{rec_id}/previews - Regenerate 4 preview images for one style_json
+
+    Body:
+    {
+      "style_json": {...} | "...",   # required
+      "sample_pages": {              # optional
+        "cover": "...",
+        "toc": "...",
+        "detail": "...",
+        "ending": "..."
+      },
+      "language": "zh"               # optional
+    }
+    """
+    try:
+        project = Project.query.get(project_id)
+        if not project:
+            return not_found('Project')
+
+        data = request.get_json() or {}
+        style_json = data.get('style_json')
+        if style_json is None:
+            return bad_request("style_json is required")
+
+        style_json_text = ""
+        if isinstance(style_json, (dict, list)):
+            style_json_text = json.dumps(style_json, ensure_ascii=False)
+        elif isinstance(style_json, str):
+            style_json_text = style_json.strip()
+            if not style_json_text:
+                return bad_request("style_json is required")
+            try:
+                json.loads(style_json_text)
+            except Exception as e:
+                return bad_request(f"style_json must be valid JSON: {str(e)}")
+        else:
+            return bad_request("style_json must be an object/array or JSON string")
+
+        sample_pages = data.get('sample_pages')
+        if sample_pages is not None and not isinstance(sample_pages, dict):
+            return bad_request("sample_pages must be an object")
+
+        language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+
+        task = Task(project_id=project_id, task_type='STYLE_PREVIEW_REGENERATE', status='PENDING')
+        task.set_progress({'total': 4, 'completed': 0, 'failed': 0, 'rec_id': rec_id})
+        db.session.add(task)
+        db.session.commit()
+
+        app = current_app._get_current_object()
+        task_manager.submit_task(
+            task.id,
+            regenerate_single_style_previews_task,
+            project_id,
+            rec_id,
+            style_json_text,
+            sample_pages,
+            app,
+            language
+        )
+
+        return success_response({'task_id': task.id, 'status': 'PROCESSING'}, status_code=202)
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"regenerate_style_previews failed: {str(e)}", exc_info=True)
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
 @project_bp.route('/<project_id>/tasks/<task_id>', methods=['GET'])
 def get_task_status(project_id, task_id):
     """
@@ -946,6 +1100,16 @@ def get_task_status(project_id, task_id):
         
         if not task or task.project_id != project_id:
             return not_found('Task')
+
+        # If the server restarted or the in-memory executor lost the Future,
+        # tasks can be left in PROCESSING forever. Detect and fail-fast so the
+        # frontend stops infinite polling.
+        if task.status in ('PENDING', 'PROCESSING', 'RUNNING') and task.completed_at is None:
+            if not task_manager.is_task_active(task_id):
+                task.status = 'FAILED'
+                task.error_message = task.error_message or "Task is not active. The server may have restarted or the worker crashed."
+                task.completed_at = datetime.utcnow()
+                db.session.commit()
         
         return success_response(task.to_dict())
     

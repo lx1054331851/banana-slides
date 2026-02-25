@@ -210,6 +210,12 @@ class AIService:
         """
         # 调用AI生成文本（根据 enable_text_reasoning 配置调整 thinking_budget）
         actual_budget = self._get_text_thinking_budget()
+        if actual_budget > 0:
+            # allow per-call reduction (e.g., disable thinking for latency-sensitive calls)
+            try:
+                actual_budget = min(actual_budget, int(thinking_budget))
+            except (TypeError, ValueError):
+                pass
         response_text = self.text_provider.generate_text(prompt, thinking_budget=actual_budget)
         
         # 清理响应文本：移除markdown代码块标记和多余空白
@@ -244,6 +250,11 @@ class AIService:
         """
         # 使用 caption_provider（支持图片输入的多模态模型）
         actual_budget = self._get_text_thinking_budget()
+        if actual_budget > 0:
+            try:
+                actual_budget = min(actual_budget, int(thinking_budget))
+            except (TypeError, ValueError):
+                pass
         provider = self.caption_provider
         if hasattr(provider, 'generate_with_image'):
             response_text = provider.generate_with_image(

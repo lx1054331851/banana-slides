@@ -48,6 +48,27 @@ def serve_file(project_id, file_type, filename):
         return error_response('SERVER_ERROR', str(e), 500)
 
 
+@file_bp.route('/<project_id>/style-previews/<rec_id>/<filename>', methods=['GET'])
+def serve_style_preview(project_id, rec_id, filename):
+    """
+    GET /files/{project_id}/style-previews/{rec_id}/{filename} - Serve style preview images
+    """
+    try:
+        safe_filename = secure_filename(filename)
+        base_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], project_id, 'style-previews', rec_id)
+
+        if not os.path.exists(base_dir):
+            return not_found('File')
+
+        file_path = os.path.join(base_dir, safe_filename)
+        if not os.path.exists(file_path):
+            return not_found('File')
+
+        return send_from_directory(base_dir, safe_filename)
+    except Exception as e:
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
 @file_bp.route('/user-templates/<template_id>/<filename>', methods=['GET'])
 def serve_user_template(template_id, filename):
     """

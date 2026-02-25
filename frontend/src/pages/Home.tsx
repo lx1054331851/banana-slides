@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Sparkles, FileText, FileEdit, ImagePlus, Paperclip, Palette, Lightbulb, Search, Settings, FolderOpen, HelpCircle, Sun, Moon, Globe, Monitor, ChevronDown, Upload, RefreshCw } from 'lucide-react';
-import { Button, Card, useToast, MaterialGeneratorModal, MaterialCenterModal, ReferenceFileList, ReferenceFileSelector, FilePreviewModal, HelpModal, GithubRepoCard, TextStyleSelector } from '@/components/shared';
+import { Sparkles, FileText, FileEdit, ImagePlus, Paperclip, Palette, Lightbulb, Settings, FolderOpen, HelpCircle, Sun, Moon, Globe, Monitor, ChevronDown, Upload, RefreshCw } from 'lucide-react';
+import { Button, Card, useToast, MaterialGeneratorModal, MaterialCenterModal, ReferenceFileList, ReferenceFileSelector, FilePreviewModal, HelpModal, GithubRepoCard, TextStyleSelector, StyleWorkflowPanel } from '@/components/shared';
 import { MarkdownTextarea, type MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
 import { TemplateSelector, getTemplateFile } from '@/components/shared/TemplateSelector';
-import { listUserTemplates, type UserTemplate, uploadReferenceFile, type ReferenceFile, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject } from '@/api/endpoints';
+import { listUserTemplates, type UserTemplate, uploadReferenceFile, type ReferenceFile, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject, createProject, startStyleRecommendations, updateProject } from '@/api/endpoints';
 import { useProjectStore } from '@/store/useProjectStore';
 import { devLog } from '@/utils/logger';
 import { useTheme } from '@/hooks/useTheme';
@@ -224,6 +224,10 @@ export const Home: React.FC = () => {
 
   const [useTemplateStyle, setUseTemplateStyle] = useState(false);
   const [templateStyle, setTemplateStyle] = useState('');
+  const [pendingStylePresetJson, setPendingStylePresetJson] = useState<string>('');
+  const [stylePreviewProjectId, setStylePreviewProjectId] = useState<string | null>(null);
+  const [stylePreviewTaskId, setStylePreviewTaskId] = useState<string | null>(null);
+  const [stylePreviewTemplateJson, setStylePreviewTemplateJson] = useState<string>('');
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [isAspectRatioOpen, setIsAspectRatioOpen] = useState(false);
   const [renovationFile, setRenovationFile] = useState<File | null>(null);
@@ -238,12 +242,61 @@ export const Home: React.FC = () => {
   const sourceFileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const themeMenuRef = useRef<HTMLDivElement>(null);
+  const draftSaveHandleRef = useRef<{ type: 'timeout' | 'idle'; id: number } | null>(null);
+  const [, startTransition] = useTransition();
+
+  const setContentOptimized = useCallback((next: string) => {
+    // Large text updates can make the whole Home page re-render and block the UI.
+    // Defer big updates so paste stays responsive.
+    if ((next?.length || 0) >= 8000) {
+      startTransition(() => setContent(next));
+      return;
+    }
+    setContent(next);
+  }, [startTransition]);
+
+  const setSourceTextOptimized = useCallback((next: string) => {
+    if ((next?.length || 0) >= 8000) {
+      startTransition(() => setSourceText(next));
+      return;
+    }
+    setSourceText(next);
+  }, [startTransition]);
 
   // 持久化草稿到 sessionStorage，确保跳转设置页后返回时内容不丢失
   useEffect(() => {
-    if (content) {
-      sessionStorage.setItem('home-draft-content', content);
+    const cancelScheduledSave = () => {
+      const handle = draftSaveHandleRef.current;
+      if (!handle) return;
+      if (handle.type === 'timeout') {
+        window.clearTimeout(handle.id);
+      } else if (typeof (window as any).cancelIdleCallback === 'function') {
+        (window as any).cancelIdleCallback(handle.id);
+      }
+      draftSaveHandleRef.current = null;
+    };
+
+    cancelScheduledSave();
+
+    const doSave = () => {
+      try {
+        if (content) sessionStorage.setItem('home-draft-content', content);
+        else sessionStorage.removeItem('home-draft-content');
+      } catch {
+        // Ignore storage failures (quota/disabled). Draft persistence is best-effort.
+      }
+    };
+
+    // sessionStorage 写入是同步的；用 idle/timeout 推迟到空闲期，避免大段粘贴时卡顿
+    if (typeof (window as any).requestIdleCallback === 'function') {
+      const id = (window as any).requestIdleCallback(doSave, { timeout: 1500 });
+      draftSaveHandleRef.current = { type: 'idle', id };
+    } else {
+      const id = window.setTimeout(doSave, 300);
+      draftSaveHandleRef.current = { type: 'timeout', id };
     }
+
+    return cancelScheduledSave;
   }, [content]);
 
   useEffect(() => {
@@ -712,6 +765,76 @@ export const Home: React.FC = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const handleGenerateStylePreviews = async (args: { templateJson: string; styleRequirements: string; generatePreviews?: boolean }) => {
+    if (!content.trim()) {
+      const label = activeTab === 'idea' ? '想法/主题' : activeTab === 'outline' ? '大纲' : '原文';
+      show({ message: `请先填写${label}内容，再生成风格推荐`, type: 'error' });
+      return;
+    }
+    // 检查是否有正在解析的文件
+    const parsingFiles = referenceFiles.filter(f =>
+      f.parse_status === 'pending' || f.parse_status === 'parsing'
+    );
+    if (parsingFiles.length > 0) {
+      show({
+        message: t('home.messages.filesParsing', { count: parsingFiles.length }),
+        type: 'info'
+      });
+      return;
+    }
+
+    if (activeTab === 'ppt_renovation') {
+      show({ message: 'PPT 翻新模式暂不支持风格预览工作流', type: 'error' });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const request: any = {};
+      if (activeTab === 'idea') request.idea_prompt = content;
+      else if (activeTab === 'outline') request.outline_text = content;
+      else if (activeTab === 'description') request.description_text = content;
+
+      const styleDesc = (args.styleRequirements || '').trim();
+      if (styleDesc) request.template_style = styleDesc;
+      if (aspectRatio) request.image_aspect_ratio = aspectRatio;
+
+      const resp = await createProject(request);
+      const projectId = (resp.data as any)?.project_id;
+      if (!projectId) throw new Error('项目创建失败：未返回项目ID');
+      localStorage.setItem('currentProjectId', projectId);
+
+      // 关联已完成解析的参考文件到项目（确保后端能读取内容用于推荐）
+      const refFileIds = referenceFiles
+        .filter(f => f.parse_status === 'completed')
+        .map(f => f.id);
+      if (refFileIds.length > 0) {
+        try {
+          await Promise.all(refFileIds.map(fileId => associateFileToProject(fileId, projectId)));
+        } catch (e) {
+          console.warn('Failed to associate reference files for style recommendations:', e);
+        }
+      }
+
+      const taskResp = await startStyleRecommendations(projectId, {
+        template_json: args.templateJson,
+        style_requirements: styleDesc,
+        generate_previews: typeof args.generatePreviews === 'boolean' ? args.generatePreviews : false,
+      });
+      const taskId = (taskResp.data as any)?.task_id;
+      if (!taskId) throw new Error('风格预览任务创建失败：未返回 task_id');
+
+      setStylePreviewProjectId(projectId);
+      setStylePreviewTaskId(taskId);
+      setStylePreviewTemplateJson(args.templateJson);
+    } catch (error: any) {
+      const msg = error?.response?.data?.error?.message || error?.message || '生成风格预览失败';
+      show({ message: msg, type: 'error' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async () => {
     // For ppt_renovation, validate file instead of content
     if (activeTab === 'ppt_renovation') {
@@ -792,6 +915,16 @@ export const Home: React.FC = () => {
       if (!projectId) {
         show({ message: t('home.messages.projectCreateFailed'), type: 'error' });
         return;
+      }
+
+      // 如选择了风格预设（style_json），在项目创建后直接写入（不影响既有生成流程）
+      if (pendingStylePresetJson && pendingStylePresetJson.trim()) {
+        try {
+          await updateProject(projectId, { template_style_json: pendingStylePresetJson.trim() } as any);
+          show({ message: '已应用风格预设', type: 'success' });
+        } catch (e: any) {
+          console.warn('Failed to apply style preset json:', e);
+        }
       }
       
       // 关联未完成解析的参考文件（已完成的在 initializeProject 中关联）
@@ -1191,7 +1324,7 @@ export const Home: React.FC = () => {
                   {!isSourceCollapsed && (
                     <MarkdownTextarea
                       value={sourceText}
-                      onChange={setSourceText}
+                      onChange={setSourceTextOptimized}
                       placeholder={t('home.descriptionTools.sourcePlaceholder')}
                       rows={6}
                       maxHeight={240}
@@ -1205,7 +1338,7 @@ export const Home: React.FC = () => {
                 ref={textareaRef}
                 placeholder={tabConfig[activeTab].placeholder}
                 value={content}
-                onChange={setContent}
+                onChange={setContentOptimized}
                 onPaste={handlePaste}
                 onFiles={handleImageFiles}
                 rows={activeTab === 'idea' ? 4 : 8}
@@ -1335,6 +1468,10 @@ export const Home: React.FC = () => {
                         setSelectedTemplate(null);
                         setSelectedTemplateId(null);
                         setSelectedPresetTemplateId(null);
+                      } else {
+                        setStylePreviewProjectId(null);
+                        setStylePreviewTaskId(null);
+                        setStylePreviewTemplateJson('');
                       }
                       // 不再清空风格描述，允许用户保留已输入的内容
                     }}
@@ -1347,11 +1484,32 @@ export const Home: React.FC = () => {
             
             {/* 根据模式显示不同的内容 */}
             {useTemplateStyle ? (
-              <TextStyleSelector
-                value={templateStyle}
-                onChange={setTemplateStyle}
-                onToast={show}
-              />
+              <>
+                <TextStyleSelector
+                  value={templateStyle}
+                  onChange={setTemplateStyle}
+                  onToast={show}
+                  onGenerateStylePreviews={handleGenerateStylePreviews}
+                  onPresetSelected={async (preset) => {
+                    setPendingStylePresetJson(preset.style_json || '');
+                    show({ message: '已选择风格预设（将在创建项目后应用）', type: 'success' });
+                  }}
+                />
+                {stylePreviewProjectId && stylePreviewTaskId ? (
+                  <StyleWorkflowPanel
+                    projectId={stylePreviewProjectId}
+                    taskId={stylePreviewTaskId}
+                    templateJson={stylePreviewTemplateJson}
+                    onTaskIdChange={(newTaskId) => setStylePreviewTaskId(newTaskId)}
+                    onBackToProject={() => {
+                      setStylePreviewProjectId(null);
+                      setStylePreviewTaskId(null);
+                      setStylePreviewTemplateJson('');
+                    }}
+                    backButtonText="关闭预览"
+                  />
+                ) : null}
+              </>
             ) : (
               <TemplateSelector
                 onSelect={handleTemplateSelect}

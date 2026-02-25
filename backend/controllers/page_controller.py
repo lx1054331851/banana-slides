@@ -409,10 +409,12 @@ def generate_page_image(project_id, page_id):
         ref_image_path = None
         if use_template:
             ref_image_path = file_service.get_template_path(project_id)
+        has_template = bool(ref_image_path)
+        use_template = has_template  # normalize by actual presence
         
-        # 检查是否有模板图片或风格描述
+        # 检查是否有模板图片或风格描述/风格JSON
         # 如果都没有，则返回错误
-        if not ref_image_path and not project.template_style:
+        if not has_template and not project.template_style and not project.template_style_json:
             return bad_request("No template image or style description found for project")
         
         # Generate prompt
@@ -442,11 +444,12 @@ def generate_page_image(project_id, page_id):
                 additional_ref_images = image_urls
                 has_material_images = True
         
-        # 合并额外要求和风格描述
+        # 合并额额外要求 + 风格JSON + 风格描述
         combined_requirements = project.extra_requirements or ""
+        if project.template_style_json:
+            combined_requirements = combined_requirements + f"\n\nppt页面风格指导(JSON)：\n<style_json>\n{project.template_style_json}\n</style_json>\n"
         if project.template_style:
-            style_requirement = f"\n\nppt页面风格描述：\n\n{project.template_style}"
-            combined_requirements = combined_requirements + style_requirement
+            combined_requirements = combined_requirements + f"\n\n附加风格要求：\n{project.template_style}"
         
         # Create async task for image generation
         task = Task(

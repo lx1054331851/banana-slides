@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/utils';
 
@@ -70,7 +71,7 @@ export const Modal: React.FC<ModalProps> = ({
     full: 'max-w-[calc(100vw-2rem)] sm:max-w-[calc(100vw-4rem)]',
   };
 
-  return (
+  const node = (
     <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain">
       {/* 遮罩 */}
       <div
@@ -178,4 +179,7 @@ export const Modal: React.FC<ModalProps> = ({
       </div>
     </div>
   );
+
+  // Render to body to avoid being clipped/hidden by parent stacking contexts (e.g. nested modals).
+  return typeof document !== 'undefined' ? createPortal(node, document.body) : node;
 };

@@ -100,6 +100,12 @@ class FileService:
         materials_dir = self._get_project_dir(project_id) / "materials"
         materials_dir.mkdir(exist_ok=True, parents=True)
         return materials_dir
+
+    def _get_style_previews_dir(self, project_id: str, rec_id: str) -> Path:
+        """Get style previews directory for a recommendation within a project"""
+        previews_dir = self._get_project_dir(project_id) / "style-previews" / rec_id
+        previews_dir.mkdir(exist_ok=True, parents=True)
+        return previews_dir
     
     def save_template_image(self, file, project_id: str) -> str:
         """
@@ -368,6 +374,23 @@ class FileService:
             shutil.rmtree(project_dir)
         
         return True
+
+    def save_style_preview_image(self, image: Image.Image, project_id: str, rec_id: str,
+                                 slide_type: str, run_id: str, image_format: str = 'PNG') -> str:
+        """
+        Save a style preview image under uploads/{project_id}/style-previews/{rec_id}/
+
+        Returns:
+            Relative file path from upload folder (posix).
+        """
+        previews_dir = self._get_style_previews_dir(project_id, rec_id)
+        ext = (image_format or 'PNG').lower()
+        if ext == 'jpeg':
+            ext = 'jpg'
+        filename = f"{slide_type}_{run_id}.{ext}"
+        filepath = previews_dir / filename
+        image.save(str(filepath), format=image_format)
+        return filepath.relative_to(self.upload_folder).as_posix()
     
     def file_exists(self, relative_path: str) -> bool:
         """Check if file exists"""

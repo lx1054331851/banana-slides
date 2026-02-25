@@ -150,7 +150,7 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react';
-import { Button, Loading, Modal, Textarea, useToast, useConfirm, MaterialSelector, ProjectSettingsModal, ExportTasksPanel, TextStyleSelector } from '@/components/shared';
+import { Button, Loading, Modal, Textarea, useToast, useConfirm, MaterialSelector, ProjectSettingsModal, ExportTasksPanel, TextStyleSelector, StyleWorkflowPanel } from '@/components/shared';
 import { MaterialGeneratorModal } from '@/components/shared/MaterialGeneratorModal';
 import { TemplateSelector, getTemplateFile } from '@/components/shared/TemplateSelector';
 import { listUserTemplates, type UserTemplate } from '@/api/endpoints';
@@ -160,7 +160,7 @@ import { SlideCard } from '@/components/preview/SlideCard';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useExportTasksStore, type ExportTaskType } from '@/store/useExportTasksStore';
 import { getImageUrl } from '@/api/client';
-import { getPageImageVersions, setCurrentImageVersion, updateProject, uploadTemplate, exportPPTXTask as apiExportPPTXTask, exportPDFTask as apiExportPDFTask, exportImagesTask as apiExportImagesTask, exportEditablePPTX as apiExportEditablePPTX, getSettings } from '@/api/endpoints';
+import { getPageImageVersions, setCurrentImageVersion, updateProject, uploadTemplate, exportPPTXTask as apiExportPPTXTask, exportPDFTask as apiExportPDFTask, exportImagesTask as apiExportImagesTask, exportEditablePPTX as apiExportEditablePPTX, getSettings, startStyleRecommendations } from '@/api/endpoints';
 import type { ImageVersion, DescriptionContent, ExportExtractorMethod, ExportInpaintMethod, Page } from '@/types';
 import { normalizeErrorMessage } from '@/utils';
 
@@ -381,6 +381,8 @@ export const SlidePreview: React.FC = () => {
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [useTextStyleMode, setUseTextStyleMode] = useState(false);
   const [draftTemplateStyle, setDraftTemplateStyle] = useState('');
+  const [stylePreviewTaskId, setStylePreviewTaskId] = useState<string | null>(null);
+  const [stylePreviewTemplateJson, setStylePreviewTemplateJson] = useState<string>('');
   const [editPrompt, setEditPrompt] = useState('');
   // 大纲和描述编辑状态
   const [editOutlineTitle, setEditOutlineTitle] = useState('');
@@ -2565,7 +2567,11 @@ export const SlidePreview: React.FC = () => {
       {/* 模板选择 Modal */}
       <Modal
         isOpen={isTemplateModalOpen}
-        onClose={() => setIsTemplateModalOpen(false)}
+        onClose={() => {
+          setIsTemplateModalOpen(false);
+          setStylePreviewTaskId(null);
+          setStylePreviewTemplateJson('');
+        }}
         title={t('preview.changeTemplate')}
         size="lg"
       >
@@ -2582,18 +2588,77 @@ export const SlidePreview: React.FC = () => {
               <input
                 type="checkbox"
                 checked={useTextStyleMode}
-                onChange={(e) => setUseTextStyleMode(e.target.checked)}
+                onChange={(e) => {
+                  setUseTextStyleMode(e.target.checked);
+                  if (!e.target.checked) {
+                    setStylePreviewTaskId(null);
+                    setStylePreviewTemplateJson('');
+                  }
+                }}
                 className="sr-only peer"
               />
               <div className="w-11 h-6 bg-gray-200 dark:bg-background-hover peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-banana-300 dark:peer-focus:ring-banana/30 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white dark:after:bg-foreground-secondary after:border-gray-300 dark:after:border-border-hover after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-banana"></div>
             </div>
           </label>
           {useTextStyleMode ? (
-            <TextStyleSelector
-              value={draftTemplateStyle}
+            <>
+              <TextStyleSelector
+                value={draftTemplateStyle}
               onChange={setDraftTemplateStyle}
               onToast={show}
-            />
+              onGenerateStylePreviews={async ({ templateJson, styleRequirements, generatePreviews }) => {
+                try {
+                  // 先把当前输入的风格要求保存到项目（便于后端任务读取/复用）
+                  await updateProject(projectId!, { template_style: styleRequirements || '' } as any);
+                  await syncProject(projectId!);
+
+                  const resp = await startStyleRecommendations(projectId!, {
+                    template_json: templateJson,
+                    style_requirements: styleRequirements || '',
+                    generate_previews: typeof generatePreviews === 'boolean' ? generatePreviews : false,
+                  });
+                  const taskId = (resp.data as any)?.task_id;
+                  if (!taskId) throw new Error('未返回任务ID');
+                  setStylePreviewTemplateJson(templateJson);
+                  setStylePreviewTaskId(taskId);
+                } catch (error: any) {
+                  show({ message: `生成风格预览失败: ${error?.message || '未知错误'}`, type: 'error' });
+                }
+              }}
+                onPresetSelected={async (preset) => {
+                  try {
+                    await updateProject(projectId!, { template_style_json: preset.style_json || '' } as any);
+                    await syncProject(projectId!);
+                    show({ message: '已应用风格预设', type: 'success' });
+                    setStylePreviewTaskId(null);
+                    setStylePreviewTemplateJson('');
+                    setIsTemplateModalOpen(false);
+                  } catch (error: any) {
+                    show({ message: `应用预设失败: ${error?.message || '未知错误'}`, type: 'error' });
+                  }
+                }}
+              />
+              {stylePreviewTaskId ? (
+                <StyleWorkflowPanel
+                  projectId={projectId!}
+                  taskId={stylePreviewTaskId}
+                  templateJson={stylePreviewTemplateJson}
+                  applyMode="apply_only"
+                  onTaskIdChange={(newTaskId) => setStylePreviewTaskId(newTaskId)}
+                  onBackToProject={() => {
+                    setStylePreviewTaskId(null);
+                    setStylePreviewTemplateJson('');
+                  }}
+                  backButtonText="关闭预览"
+                  onApplied={() => {
+                    void syncProject(projectId!);
+                    setStylePreviewTaskId(null);
+                    setStylePreviewTemplateJson('');
+                    setIsTemplateModalOpen(false);
+                  }}
+                />
+              ) : null}
+            </>
           ) : (
             <>
               <TemplateSelector
@@ -2624,6 +2689,8 @@ export const SlidePreview: React.FC = () => {
                     isEditingTemplateStyle.current = false;
                     await syncProject(projectId!);
                     show({ message: t('slidePreview.styleDescSaved'), type: 'success' });
+                    setStylePreviewTaskId(null);
+                    setStylePreviewTemplateJson('');
                     setIsTemplateModalOpen(false);
                   } catch (error: any) {
                     show({ message: `保存失败: ${error.message || '未知错误'}`, type: 'error' });
@@ -2637,7 +2704,11 @@ export const SlidePreview: React.FC = () => {
             )}
             <Button
               variant="ghost"
-              onClick={() => setIsTemplateModalOpen(false)}
+              onClick={() => {
+                setStylePreviewTaskId(null);
+                setStylePreviewTemplateJson('');
+                setIsTemplateModalOpen(false);
+              }}
               disabled={isUploadingTemplate || isSavingTemplateStyle}
             >
               {t('common.close')}

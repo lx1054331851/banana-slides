@@ -24,6 +24,8 @@ from .page_image_version import PageImageVersion
 from .material import Material
 from .reference_file import ReferenceFile
 from .settings import Settings
+from .style_template import StyleTemplate
+from .style_preset import StylePreset
 
-__all__ = ['db', 'Project', 'Page', 'Task', 'UserTemplate', 'PageImageVersion', 'Material', 'ReferenceFile', 'Settings']
+__all__ = ['db', 'Project', 'Page', 'Task', 'UserTemplate', 'PageImageVersion', 'Material', 'ReferenceFile', 'Settings', 'StyleTemplate', 'StylePreset']
 

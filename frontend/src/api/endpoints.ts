@@ -1199,3 +1199,96 @@ export const extractStyleFromImage = async (
   );
   return response.data;
 };
+
+// ===== 风格模板 / 预设（全局库）=====
+
+export interface StyleTemplate {
+  id: string;
+  name?: string | null;
+  template_json: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface StylePreset {
+  id: string;
+  name?: string | null;
+  style_json: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export const listStyleTemplates = async (): Promise<ApiResponse<{ templates: StyleTemplate[] }>> => {
+  const response = await apiClient.get<ApiResponse<{ templates: StyleTemplate[] }>>('/api/style-templates');
+  return response.data;
+};
+
+export const createStyleTemplate = async (data: { name?: string; template_json: string }): Promise<ApiResponse<StyleTemplate>> => {
+  const response = await apiClient.post<ApiResponse<StyleTemplate>>('/api/style-templates', data);
+  return response.data;
+};
+
+export const deleteStyleTemplate = async (templateId: string): Promise<ApiResponse> => {
+  const response = await apiClient.delete<ApiResponse>(`/api/style-templates/${templateId}`);
+  return response.data;
+};
+
+export const listStylePresets = async (): Promise<ApiResponse<{ presets: StylePreset[] }>> => {
+  const response = await apiClient.get<ApiResponse<{ presets: StylePreset[] }>>('/api/style-presets');
+  return response.data;
+};
+
+export const createStylePreset = async (data: { name?: string; style_json: string }): Promise<ApiResponse<StylePreset>> => {
+  const response = await apiClient.post<ApiResponse<StylePreset>>('/api/style-presets', data);
+  return response.data;
+};
+
+export const deleteStylePreset = async (presetId: string): Promise<ApiResponse> => {
+  const response = await apiClient.delete<ApiResponse>(`/api/style-presets/${presetId}`);
+  return response.data;
+};
+
+// ===== 风格推荐 + 预览（项目级异步任务）=====
+
+export const startStyleRecommendations = async (
+  projectId: string,
+  data: {
+    template_json: string;
+    style_requirements?: string;
+    language?: OutputLanguage;
+    generate_previews?: boolean;
+  }
+): Promise<ApiResponse<{ task_id: string; status?: string }>> => {
+  const lang = data.language || await getStoredOutputLanguage();
+  const response = await apiClient.post<ApiResponse<{ task_id: string; status?: string }>>(
+    `/api/projects/${projectId}/style/recommendations`,
+    {
+      template_json: data.template_json,
+      style_requirements: data.style_requirements,
+      language: lang,
+      ...(typeof data.generate_previews === 'boolean' ? { generate_previews: data.generate_previews } : {}),
+    }
+  );
+  return response.data;
+};
+
+export const regenerateStyleRecommendationPreviews = async (
+  projectId: string,
+  recId: string,
+  data: {
+    style_json: any;
+    sample_pages?: Record<string, string>;
+    language?: OutputLanguage;
+  }
+): Promise<ApiResponse<{ task_id: string; status?: string }>> => {
+  const lang = data.language || await getStoredOutputLanguage();
+  const response = await apiClient.post<ApiResponse<{ task_id: string; status?: string }>>(
+    `/api/projects/${projectId}/style/recommendations/${recId}/previews`,
+    {
+      style_json: data.style_json,
+      sample_pages: data.sample_pages,
+      language: lang,
+    }
+  );
+  return response.data;
+};

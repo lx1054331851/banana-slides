@@ -71,6 +71,7 @@ export interface Project {
   template_image_url?: string; // 后端返回 template_image_url
   template_image_path?: string; // 前端使用的别名
   template_style?: string; // 风格描述文本（无模板图模式）
+  template_style_json?: string; // 风格指导 JSON（字符串，优先级高于 template_style）
   // 导出设置
   export_extractor_method?: ExportExtractorMethod; // 组件提取方法
   export_inpaint_method?: ExportInpaintMethod; // 背景图获取方法

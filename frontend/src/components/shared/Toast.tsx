@@ -66,8 +66,34 @@ export const Toast: React.FC<ToastProps> = ({
 export const useToast = () => {
   const [toasts, setToasts] = React.useState<Array<{ id: string; props: Omit<ToastProps, 'onClose'> }>>([]);
   const timersRef = useRef<Map<string, number>>(new Map());
+  const recentRef = useRef<Map<string, number>>(new Map());
+  const toastsRef = useRef(toasts);
 
-  const show = (props: Omit<ToastProps, 'onClose'>) => {
+  useEffect(() => {
+    toastsRef.current = toasts;
+  }, [toasts]);
+
+  const remove = React.useCallback((id: string) => {
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      window.clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const show = React.useCallback((props: Omit<ToastProps, 'onClose'>) => {
+    const type = props.type ?? 'info';
+    const key = `${type}:${props.message}`;
+    const now = Date.now();
+
+    // Deduplicate noisy toasts (e.g. repeated polling/network errors) to avoid UI "shaking".
+    // If the same message is already visible or was shown very recently, skip it.
+    const lastShown = recentRef.current.get(key) ?? 0;
+    if (now - lastShown < 1500) return;
+    if (toastsRef.current.some((t) => (t.props.type ?? 'info') === type && t.props.message === props.message)) return;
+    recentRef.current.set(key, now);
+
     const id = Math.random().toString(36);
     setToasts((prev) => {
       const newToasts = [...prev, { id, props }];
@@ -81,16 +107,7 @@ export const useToast = () => {
       }, duration);
       timersRef.current.set(id, timer);
     }
-  };
-
-  const remove = (id: string) => {
-    const timer = timersRef.current.get(id);
-    if (timer) {
-      window.clearTimeout(timer);
-      timersRef.current.delete(id);
-    }
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, [remove]);
 
   useEffect(() => () => {
     timersRef.current.forEach((timer) => window.clearTimeout(timer));
