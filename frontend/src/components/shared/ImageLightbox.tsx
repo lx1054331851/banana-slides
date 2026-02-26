@@ -1,18 +1,38 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Download } from 'lucide-react';
+import { X, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/utils';
+
+type ImageLightboxItem = {
+  src: string;
+  title?: string;
+};
 
 interface ImageLightboxProps {
   isOpen: boolean;
-  src: string;
+  src?: string;
   title?: string;
+  items?: ImageLightboxItem[];
+  initialIndex?: number;
   onClose: () => void;
 }
 
-export const ImageLightbox: React.FC<ImageLightboxProps> = ({ isOpen, src, title, onClose }) => {
+export const ImageLightbox: React.FC<ImageLightboxProps> = ({ isOpen, src, title, items, initialIndex = 0, onClose }) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [index, setIndex] = useState(0);
+
+  const effectiveItems = useMemo<ImageLightboxItem[]>(() => {
+    const list = (items || []).filter((it) => Boolean(it?.src));
+    if (list.length) return list;
+    if (src) return [{ src, title }];
+    return [];
+  }, [items, src, title]);
+
+  const hasGallery = effectiveItems.length > 1;
+  const current = effectiveItems[index] || effectiveItems[0];
+  const currentSrc = current?.src || '';
+  const currentTitle = current?.title || title;
 
   useEffect(() => {
     if (!isOpen) {
@@ -21,11 +41,17 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ isOpen, src, title
       return;
     }
 
+    const safeIndex = Math.max(0, Math.min(initialIndex, Math.max(effectiveItems.length - 1, 0)));
+    setIndex(safeIndex);
+
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
+      if (!hasGallery) return;
+      if (e.key === 'ArrowLeft') setIndex((prev) => (prev - 1 + effectiveItems.length) % effectiveItems.length);
+      if (e.key === 'ArrowRight') setIndex((prev) => (prev + 1) % effectiveItems.length);
     };
     document.addEventListener('keydown', onKeyDown);
 
@@ -35,14 +61,23 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ isOpen, src, title
       document.body.style.overflow = prevOverflow;
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [effectiveItems.length, hasGallery, initialIndex, isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setIsLoaded(false);
+  }, [index, isOpen]);
 
   const downloadName = useMemo(() => {
-    const safe = (title || 'preview').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 80);
+    const safe = (currentTitle || 'preview').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 80);
     return `${safe}.png`;
-  }, [title]);
+  }, [currentTitle]);
 
   if (!isOpen) return null;
+  if (!currentSrc) return null;
+
+  const goPrev = () => setIndex((prev) => (prev - 1 + effectiveItems.length) % effectiveItems.length);
+  const goNext = () => setIndex((prev) => (prev + 1) % effectiveItems.length);
 
   const node = (
     <div
@@ -67,7 +102,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ isOpen, src, title
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={title || 'image preview'}
+          aria-label={currentTitle || 'image preview'}
           className={cn(
             'relative w-full max-w-[min(1600px,98vw)] max-h-[92vh]',
             'rounded-2xl overflow-hidden',
@@ -82,12 +117,19 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ isOpen, src, title
           {/* Top bar */}
           <div className="flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-b from-black/40 to-black/10">
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-white truncate">{title || '预览图'}</div>
-              <div className="text-xs text-white/70">点击空白处或按 Esc 关闭</div>
+              <div className="text-sm font-semibold text-white truncate">{currentTitle || '预览图'}</div>
+              <div className="text-xs text-white/70">
+                点击空白处或按 Esc 关闭{hasGallery ? '，←/→ 切换' : ''}
+              </div>
             </div>
             <div className="flex items-center gap-2">
+              {hasGallery ? (
+                <div className="text-xs font-semibold px-2 py-1 rounded-md bg-white/10 text-white border border-white/15">
+                  {index + 1}/{effectiveItems.length}
+                </div>
+              ) : null}
               <a
-                href={src}
+                href={currentSrc}
                 download={downloadName}
                 target="_blank"
                 rel="noreferrer"
@@ -119,8 +161,8 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ isOpen, src, title
               </div>
             ) : null}
             <img
-              src={src}
-              alt={title || 'preview'}
+              src={currentSrc}
+              alt={currentTitle || 'preview'}
               onLoad={() => setIsLoaded(true)}
               onError={() => setIsLoaded(true)}
               className={cn(
@@ -130,6 +172,27 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ isOpen, src, title
               )}
               draggable={false}
             />
+
+            {hasGallery ? (
+              <>
+                <button
+                  type="button"
+                  onClick={goPrev}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-black/35 hover:bg-black/50 text-white border border-white/20 flex items-center justify-center transition-colors"
+                  aria-label="上一张"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <button
+                  type="button"
+                  onClick={goNext}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-black/35 hover:bg-black/50 text-white border border-white/20 flex items-center justify-center transition-colors"
+                  aria-label="下一张"
+                >
+                  <ChevronRight size={20} />
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
       </div>

@@ -73,7 +73,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
   const [regenLoadingByRecId, setRegenLoadingByRecId] = useState<Record<string, boolean>>({});
   const [regenProgressByRecId, setRegenProgressByRecId] = useState<Record<string, { completed: number; total: number; failed: number }>>({});
   const [applyLoadingRecId, setApplyLoadingRecId] = useState<string | null>(null);
-  const [previewModal, setPreviewModal] = useState<{ title: string; url: string } | null>(null);
+  const [previewModal, setPreviewModal] = useState<{ title: string; items: { src: string; title?: string }[]; initialIndex: number } | null>(null);
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -642,7 +642,27 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
                           <button
                             type="button"
                             className="w-full h-full block"
-                            onClick={() => setPreviewModal({ title: `${rec.name}-${label}`, url: preview[key] })}
+                            onClick={() => {
+                              const order = [
+                                ['封面', 'cover_url'],
+                                ['目录', 'toc_url'],
+                                ['详情', 'detail_url'],
+                                ['结尾', 'ending_url'],
+                              ] as const;
+                              const items = order
+                                .map(([lbl, k]) => {
+                                  const url = (preview as any)?.[k];
+                                  return url ? { src: url as string, title: `${rec.name}-${lbl}` } : null;
+                                })
+                                .filter(Boolean) as { src: string; title?: string }[];
+
+                              const clicked = items.findIndex((it) => it.src === preview[key]);
+                              setPreviewModal({
+                                title: rec.name || '预览',
+                                items,
+                                initialIndex: Math.max(0, clicked),
+                              });
+                            }}
                           >
                             <img src={preview[key]} alt={`${rec.name}-${label}`} className="w-full h-full object-cover" />
                           </button>
@@ -688,8 +708,9 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
 
       <ImageLightbox
         isOpen={Boolean(previewModal)}
-        src={previewModal?.url || ''}
         title={previewModal?.title || '预览'}
+        items={previewModal?.items || []}
+        initialIndex={previewModal?.initialIndex || 0}
         onClose={() => setPreviewModal(null)}
       />
     </div>
