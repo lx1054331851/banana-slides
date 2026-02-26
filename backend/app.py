@@ -5,6 +5,7 @@ import os
 import sys
 import hmac
 import logging
+import tempfile
 from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import event
@@ -61,8 +62,25 @@ def create_app():
     instance_dir = os.path.join(backend_dir, 'instance')
     os.makedirs(instance_dir, exist_ok=True)
     
-    db_path = os.path.join(instance_dir, 'database.db')
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    # Database URL resolution priority:
+    # 1) DATABASE_URL (explicit, e.g. tests or external DB)
+    # 2) Testing env (avoid touching local dev/prod DB during pytest runs)
+    # 3) Default local sqlite under backend/instance/database.db
+    database_url = os.getenv('DATABASE_URL', '').strip()
+    is_testing = (
+        os.getenv('FLASK_ENV', '').strip().lower() == 'testing'
+        or os.getenv('TESTING', '').strip().lower() in ('1', 'true', 'yes', 'y', 'on')
+    )
+
+    if database_url:
+        app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+    elif is_testing:
+        # Use a per-process sqlite file under system temp to prevent tests from wiping real data.
+        test_db_path = os.path.join(tempfile.gettempdir(), f'banana-slides-test-{os.getpid()}.db')
+        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{test_db_path}'
+    else:
+        db_path = os.path.join(instance_dir, 'database.db')
+        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
     
     # Ensure upload folder exists
     project_root = os.path.dirname(backend_dir)
