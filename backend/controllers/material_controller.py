@@ -33,7 +33,8 @@ def _generate_image_caption(filepath: str) -> str:
     try:
         from PIL import Image
 
-        image = Image.open(filepath)
+        with Image.open(filepath) as img:
+            image = img.copy()
         image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
 
         output_lang = current_app.config.get('OUTPUT_LANGUAGE', 'zh')
@@ -46,13 +47,20 @@ def _generate_image_caption(filepath: str) -> str:
         caption_model = current_app.config.get('IMAGE_CAPTION_MODEL', 'gemini-3-flash-preview')
 
         if provider_format == 'openai':
-            from openai import OpenAI
-            api_key = current_app.config.get('OPENAI_API_KEY', '')
+            from services.ai_providers.openai_client import make_openai_client
+
+            api_key = (current_app.config.get('AZURE_OPENAI_API_KEY')
+                       or current_app.config.get('OPENAI_API_KEY', ''))
             if not api_key:
                 return ""
-            client = OpenAI(
+
+            azure_endpoint = (current_app.config.get('AZURE_OPENAI_ENDPOINT') or '').strip() or None
+            azure_api_version = (current_app.config.get('AZURE_OPENAI_API_VERSION') or '').strip() or None
+            client = make_openai_client(
                 api_key=api_key,
-                base_url=current_app.config.get('OPENAI_API_BASE') or None
+                api_base=current_app.config.get('OPENAI_API_BASE') or None,
+                azure_endpoint=azure_endpoint,
+                azure_api_version=azure_api_version,
             )
 
             buffered = io.BytesIO()

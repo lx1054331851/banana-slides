@@ -15,10 +15,10 @@ import re
 import requests
 from io import BytesIO
 from typing import Optional, List
-from openai import OpenAI
 from PIL import Image
 from .base import ImageProvider
 from config import get_config
+from ..openai_client import make_openai_client
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +44,18 @@ class OpenAIImageProvider(ImageProvider):
             api_base: API base URL (e.g., https://aihubmix.com/v1)
             model: Model name to use
         """
-        self.client = OpenAI(
-            api_key=api_key,
-            base_url=api_base,
-            timeout=get_config().OPENAI_TIMEOUT,  # set timeout from config
-            max_retries=get_config().OPENAI_MAX_RETRIES  # set max retries from config
+        cfg = get_config()
+        azure_endpoint = (cfg.AZURE_OPENAI_ENDPOINT or "").strip() or None
+        azure_key = (cfg.AZURE_OPENAI_API_KEY or "").strip() or None
+        azure_api_version = (cfg.AZURE_OPENAI_API_VERSION or "").strip() or None
+
+        self.client = make_openai_client(
+            api_key=(azure_key or api_key),
+            api_base=api_base,
+            azure_endpoint=azure_endpoint,
+            azure_api_version=azure_api_version,
+            timeout=cfg.OPENAI_TIMEOUT,
+            max_retries=cfg.OPENAI_MAX_RETRIES,
         )
         self.api_base = api_base or ""
         self.model = model

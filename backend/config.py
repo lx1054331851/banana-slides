@@ -62,6 +62,12 @@ class Config:
     OPENAI_TIMEOUT = float(os.getenv('OPENAI_TIMEOUT', '300.0'))  # 增加到 5 分钟（生成清洁背景图需要很长时间）
     OPENAI_MAX_RETRIES = int(os.getenv('OPENAI_MAX_RETRIES', '2'))  # 减少重试次数，避免过多重试导致累积超时
 
+    # Azure OpenAI（可选）：当设置了 AZURE_OPENAI_ENDPOINT 时，OpenAI provider 会自动切换到 AzureOpenAI 客户端。
+    # 说明：Azure 的“model”参数一般填写你在 Azure Portal 里创建的 deployment 名称。
+    AZURE_OPENAI_API_KEY = os.getenv('AZURE_OPENAI_API_KEY', '')  # 可替代 OPENAI_API_KEY
+    AZURE_OPENAI_ENDPOINT = os.getenv('AZURE_OPENAI_ENDPOINT', '')  # 例如 https://{resource}.openai.azure.com
+    AZURE_OPENAI_API_VERSION = os.getenv('AZURE_OPENAI_API_VERSION', '2024-10-21')
+
     # Lazyllm 格式专用配置（当 AI_PROVIDER_FORMAT=lazyllm 时使用）
     TEXT_MODEL_SOURCE = os.getenv('TEXT_MODEL_SOURCE', '')                   # 文本生成模型厂商（留空则跟随全局 AI_PROVIDER_FORMAT）
     IMAGE_MODEL_SOURCE = os.getenv('IMAGE_MODEL_SOURCE', '')                   # 图片生成模型厂商（留空则跟随全局 AI_PROVIDER_FORMAT）

@@ -107,14 +107,27 @@ def _build_provider_config() -> Dict[str, Any]:
     cfg: Dict[str, Any] = {'format': fmt}
 
     if fmt == 'openai':
-        cfg['api_key'] = _resolve_setting('OPENAI_API_KEY') or _resolve_setting('GOOGLE_API_KEY')
+        cfg['api_key'] = (
+            _resolve_setting('AZURE_OPENAI_API_KEY')
+            or _resolve_setting('OPENAI_API_KEY')
+            or _resolve_setting('GOOGLE_API_KEY')
+        )
         cfg['api_base'] = _resolve_setting('OPENAI_API_BASE', 'https://aihubmix.com/v1')
+        cfg['azure_endpoint'] = _resolve_setting('AZURE_OPENAI_ENDPOINT')
+        cfg['azure_api_version'] = _resolve_setting('AZURE_OPENAI_API_VERSION')
         if not cfg['api_key']:
             raise ValueError(
-                "OPENAI_API_KEY or GOOGLE_API_KEY (from database settings or environment) "
+                "AZURE_OPENAI_API_KEY or OPENAI_API_KEY or GOOGLE_API_KEY (from database settings or environment) "
                 "is required when AI_PROVIDER_FORMAT=openai."
             )
-        logger.info("Provider config — format: openai, api_base: %s", cfg['api_base'])
+        if cfg.get('azure_endpoint'):
+            logger.info(
+                "Provider config — format: openai(azure), azure_endpoint: %s, api_version: %s",
+                cfg['azure_endpoint'],
+                cfg.get('azure_api_version') or '(default)',
+            )
+        else:
+            logger.info("Provider config — format: openai, api_base: %s", cfg['api_base'])
 
     elif fmt == 'vertex':
         cfg['project_id'] = _resolve_setting('VERTEX_PROJECT_ID')
@@ -188,17 +201,34 @@ def _get_model_type_provider_config(model_type: str) -> Dict[str, Any]:
 
     elif source_lower == 'openai':
         api_key = (_resolve_setting(f'{prefix}_API_KEY')
+                   or _resolve_setting('AZURE_OPENAI_API_KEY')
                    or _resolve_setting('OPENAI_API_KEY')
                    or _resolve_setting('GOOGLE_API_KEY'))
         api_base = (_resolve_setting(f'{prefix}_API_BASE')
                     or _resolve_setting('OPENAI_API_BASE', 'https://aihubmix.com/v1'))
+        azure_endpoint = _resolve_setting('AZURE_OPENAI_ENDPOINT')
+        azure_api_version = _resolve_setting('AZURE_OPENAI_API_VERSION')
         if not api_key:
             raise ValueError(
                 f"API key is required for {model_type} model with OpenAI provider. "
-                f"Set {prefix}_API_KEY or OPENAI_API_KEY."
+                f"Set {prefix}_API_KEY or AZURE_OPENAI_API_KEY or OPENAI_API_KEY."
             )
-        logger.info("Per-model config — %s: openai, api_base: %s", model_type, api_base)
-        return {'format': 'openai', 'api_key': api_key, 'api_base': api_base}
+        if azure_endpoint:
+            logger.info(
+                "Per-model config — %s: openai(azure), azure_endpoint: %s, api_version: %s",
+                model_type,
+                azure_endpoint,
+                azure_api_version or '(default)',
+            )
+        else:
+            logger.info("Per-model config — %s: openai, api_base: %s", model_type, api_base)
+        return {
+            'format': 'openai',
+            'api_key': api_key,
+            'api_base': api_base,
+            'azure_endpoint': azure_endpoint,
+            'azure_api_version': azure_api_version,
+        }
 
     else:
         # Assume it's a LazyLLM vendor name

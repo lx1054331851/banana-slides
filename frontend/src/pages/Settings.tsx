@@ -88,11 +88,11 @@ const settingsI18n = {
           captionDesc: "识别描述：{{caption}}", imageSize: "输出尺寸：{{width}}x{{height}}",
           mozjpegPath: "cjpeg 路径：{{path}}",
           butteraugliPath: "butteraugli：{{path}}",
-          mozjpegInstallHint: "安装教程：macOS 运行 `brew install mozjpeg`；Linux 可用 `apt-get install mozjpeg`（按发行版选择对应包管理器）",
+          mozjpegInstallHint: "安装教程：macOS 运行 `brew install mozjpeg`；Linux 可用 `apt-get install mozjpeg`（按发行版选择对应包管理器）；Windows 请安装/编译获得 `cjpeg.exe` 并加入 PATH，或在 `.env` 设置 `MOZJPEG_BIN=C:\\\\path\\\\to\\\\cjpeg.exe`（如果用 Docker/WSL 跑后端，则在容器/WSL 内安装）",
           oxipngPath: "oxipng 路径：{{path}}",
-          oxipngInstallHint: "安装教程：macOS 运行 `brew install oxipng`；Linux 可用 `apt-get install oxipng`（按发行版选择对应包管理器）",
+          oxipngInstallHint: "安装教程：macOS 运行 `brew install oxipng`；Linux 可用 `apt-get install oxipng`（按发行版选择对应包管理器）；Windows 请安装获得 `oxipng.exe` 并加入 PATH，或在 `.env` 设置 `OXIPNG_BIN=C:\\\\path\\\\to\\\\oxipng.exe`（如果用 Docker/WSL 跑后端，则在容器/WSL 内安装）",
           pngquantPath: "pngquant 路径：{{path}}",
-          pngquantInstallHint: "安装教程：macOS 运行 `brew install pngquant`；Linux 可用 `apt-get install pngquant`（按发行版选择对应包管理器）",
+          pngquantInstallHint: "安装教程：macOS 运行 `brew install pngquant`；Linux 可用 `apt-get install pngquant`（按发行版选择对应包管理器）；Windows 请安装获得 `pngquant.exe` 并加入 PATH，或在 `.env` 设置 `PNGQUANT_BIN=C:\\\\path\\\\to\\\\pngquant.exe`（如果用 Docker/WSL 跑后端，则在容器/WSL 内安装）",
           parsePreview: "解析预览：{{preview}}"
         }
       },
@@ -188,11 +188,11 @@ const settingsI18n = {
           captionDesc: "Caption: {{caption}}", imageSize: "Output size: {{width}}x{{height}}",
           mozjpegPath: "cjpeg path: {{path}}",
           butteraugliPath: "butteraugli: {{path}}",
-          mozjpegInstallHint: "Install guide: macOS `brew install mozjpeg`; Linux `apt-get install mozjpeg` (use your distro package manager)",
+          mozjpegInstallHint: "Install guide: macOS `brew install mozjpeg`; Linux `apt-get install mozjpeg` (use your distro package manager); Windows: install/build to get `cjpeg.exe` and add it to PATH, or set `.env` `MOZJPEG_BIN=C:\\\\path\\\\to\\\\cjpeg.exe` (if backend runs in Docker/WSL, install inside the container/WSL)",
           oxipngPath: "oxipng path: {{path}}",
-          oxipngInstallHint: "Install guide: macOS `brew install oxipng`; Linux `apt-get install oxipng` (use your distro package manager)",
+          oxipngInstallHint: "Install guide: macOS `brew install oxipng`; Linux `apt-get install oxipng` (use your distro package manager); Windows: install `oxipng.exe` and add it to PATH, or set `.env` `OXIPNG_BIN=C:\\\\path\\\\to\\\\oxipng.exe` (if backend runs in Docker/WSL, install inside the container/WSL)",
           pngquantPath: "pngquant path: {{path}}",
-          pngquantInstallHint: "Install guide: macOS `brew install pngquant`; Linux `apt-get install pngquant` (use your distro package manager)",
+          pngquantInstallHint: "Install guide: macOS `brew install pngquant`; Linux `apt-get install pngquant` (use your distro package manager); Windows: install `pngquant.exe` and add it to PATH, or set `.env` `PNGQUANT_BIN=C:\\\\path\\\\to\\\\pngquant.exe` (if backend runs in Docker/WSL, install inside the container/WSL)",
           parsePreview: "Parse preview: {{preview}}"
         }
       },

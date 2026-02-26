@@ -222,6 +222,19 @@ OPENAI_API_BASE=https://api.openai.com/v1
 
 # Proxy Example: https://aihubmix.com/v1
 
+# Azure OpenAI (Optional): when configured, backend will automatically use AzureOpenAI client
+# Note: in Azure, the "model" parameter is typically your Deployment name
+# Note: AZURE_OPENAI_ENDPOINT should be host-only (do not include paths like `/openai/v1`)
+AZURE_OPENAI_API_KEY=
+AZURE_OPENAI_ENDPOINT=
+AZURE_OPENAI_API_VERSION=2024-10-21
+
+# Typical setup: only image generation uses Gemini, other text/vision tasks use OpenAI(Azure)
+# AI_PROVIDER_FORMAT=openai
+# IMAGE_MODEL_SOURCE=gemini
+# TEXT_MODEL_SOURCE=openai
+# IMAGE_CAPTION_MODEL_SOURCE=openai
+
 # Vertex AI Configuration (AI_PROVIDER_FORMAT=vertex)
 
 # GCP Project and Service Account Key Required

@@ -221,6 +221,19 @@ OPENAI_API_KEY=your-api-key-here
 OPENAI_API_BASE=https://api.openai.com/v1
 # 代理示例: https://aihubmix.com/v1
 
+# Azure OpenAI（可选）：配置后会自动使用 AzureOpenAI 客户端
+# 注意：Azure 的“model”参数一般填写 Deployment 名称
+# 注意：AZURE_OPENAI_ENDPOINT 只填到域名即可，不要带 `/openai/v1` 之类的路径
+AZURE_OPENAI_API_KEY=
+AZURE_OPENAI_ENDPOINT=
+AZURE_OPENAI_API_VERSION=2024-10-21
+
+# 仅“生图”走 Gemini，其余文本/识图走 OpenAI(Azure) 示例：
+# AI_PROVIDER_FORMAT=openai
+# IMAGE_MODEL_SOURCE=gemini
+# TEXT_MODEL_SOURCE=openai
+# IMAGE_CAPTION_MODEL_SOURCE=openai
+
 # Vertex AI 配置（AI_PROVIDER_FORMAT=vertex）
 # 需要 GCP 项目和服务账户密钥
 # VERTEX_PROJECT_ID=your-gcp-project-id

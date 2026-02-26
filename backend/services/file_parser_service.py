@@ -109,11 +109,24 @@ class FileParserService:
     
     def _get_openai_client(self):
         """Lazily initialize OpenAI client"""
-        if self._openai_client is None and self._openai_api_key:
-            from openai import OpenAI
-            self._openai_client = OpenAI(
-                api_key=self._openai_api_key,
-                base_url=self._openai_api_base
+        if self._openai_client is None:
+            from config import get_config
+            from services.ai_providers.openai_client import make_openai_client
+
+            cfg = get_config()
+            azure_endpoint = (cfg.AZURE_OPENAI_ENDPOINT or "").strip() or None
+            azure_api_version = (cfg.AZURE_OPENAI_API_VERSION or "").strip() or None
+            azure_key = (cfg.AZURE_OPENAI_API_KEY or "").strip() or None
+            api_key = azure_key or (self._openai_api_key or "").strip() or None
+
+            if not api_key:
+                return None
+
+            self._openai_client = make_openai_client(
+                api_key=api_key,
+                api_base=self._openai_api_base,
+                azure_endpoint=azure_endpoint,
+                azure_api_version=azure_api_version,
             )
         return self._openai_client
     
