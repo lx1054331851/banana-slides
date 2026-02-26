@@ -251,35 +251,35 @@ def get_page_description_prompt(project_context: 'ProjectContext', outline: list
         original_input = project_context.idea_prompt or ""
     
     prompt = (f"""\
-我们正在为PPT的每一页生成内容描述。
-用户的原始需求是：\n{original_input}\n
-我们已经有了完整的大纲：\n{outline}\n{part_info}
-现在请为第 {page_index} 页生成描述：
-{page_outline}
-{"**除非特殊要求，第一页的内容需要保持极简，只放标题副标题以及演讲人等（输出到标题后）, 不添加任何素材。**" if page_index == 1 else ""}
+                我们正在为PPT的每一页生成内容描述。
+                用户的原始需求是：\n{original_input}\n
+                我们已经有了完整的大纲：\n{outline}\n{part_info}
+                现在请为第 {page_index} 页生成描述：
+                {page_outline}
+                {"**除非特殊要求，第一页的内容需要保持极简，只放标题副标题以及演讲人等（输出到标题后）, 不添加任何素材。**" if page_index == 1 else ""}
 
-【重要提示】生成的"页面文字"部分会直接渲染到PPT页面上，因此请务必注意：
-1. 文字内容要简洁精炼，每条要点控制在15-25字以内
-2. 条理清晰，使用列表形式组织内容
-3. 避免冗长的句子和复杂的表述
-4. 确保内容可读性强，适合在演示时展示
-5. 不要包含任何额外的说明性文字或注释
+                【重要提示】生成的"页面文字"部分会直接渲染到PPT页面上，因此请务必注意：
+                1. 文字内容要简洁精炼，每条要点控制在15-25字以内
+                2. 条理清晰，使用列表形式组织内容
+                3. 避免冗长的句子和复杂的表述
+                4. 确保内容可读性强，适合在演示时展示
+                5. 不要包含任何额外的说明性文字或注释
 
-输出格式示例：
-页面标题：原始社会：与自然共生
-{"副标题：人类祖先和自然的相处之道" if page_index == 1 else ""}
+                输出格式示例：
+                页面标题：原始社会：与自然共生
+                {"副标题：人类祖先和自然的相处之道" if page_index == 1 else ""}
 
-页面文字：
-- 狩猎采集文明：人类活动规模小，对环境影响有限
-- 依赖性强：生活完全依赖自然资源的直接供给
-- 适应而非改造：通过观察学习自然，发展生存技能
-- 影响特点：局部、短期、低强度，生态可自我恢复
+                页面文字：
+                - 狩猎采集文明：人类活动规模小，对环境影响有限
+                - 依赖性强：生活完全依赖自然资源的直接供给
+                - 适应而非改造：通过观察学习自然，发展生存技能
+                - 影响特点：局部、短期、低强度，生态可自我恢复
 
-其他页面素材（如果文件中存在请积极添加，包括markdown图片链接、公式、表格等）
+                其他页面素材（如果文件中存在请积极添加，包括markdown图片链接、公式、表格等）
 
-【关于图片】如果参考文件中包含以 /files/ 开头的本地文件URL图片（例如 /files/mineru/xxx/image.png），请将这些图片以markdown格式输出，例如：![图片描述](/files/mineru/xxx/image.png)。这些图片会被包含在PPT页面中。
+                【关于图片】如果参考文件中包含以 /files/ 开头的本地文件URL图片（例如 /files/mineru/xxx/image.png），请将这些图片以markdown格式输出，例如：![图片描述](/files/mineru/xxx/image.png)。这些图片会被包含在PPT页面中。
 
-{get_language_instruction(language)}
+                {get_language_instruction(language)}
 """)
     
     final_prompt = files_xml + prompt

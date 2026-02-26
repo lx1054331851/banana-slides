@@ -54,6 +54,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
   const [task, setTask] = useState<Task | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const unmountedRef = useRef(false);
   const pollTimerRef = useRef<number | null>(null);
   const pollDelayRef = useRef<number>(2000);
   const pollFailuresRef = useRef<number>(0);
@@ -73,6 +74,15 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
   const [regenProgressByRecId, setRegenProgressByRecId] = useState<Record<string, { completed: number; total: number; failed: number }>>({});
   const [applyLoadingRecId, setApplyLoadingRecId] = useState<string | null>(null);
   const [previewModal, setPreviewModal] = useState<{ title: string; url: string } | null>(null);
+
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+    };
+  }, []);
+
+  const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
   const clearPollTimer = () => {
     if (pollTimerRef.current !== null) {
@@ -231,26 +241,56 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
   };
 
   const pollRegenTask = async (regenTaskId: string, recId: string) => {
-    await pollTask(regenTaskId, (t) => {
-      const p: any = (t as any)?.progress || {};
-      const preview_images: any = p?.preview_images;
-      if (preview_images) {
-        setOverridePreviewByRecId((prev) => ({
-          ...prev,
-          [recId]: { preview_images },
-        }));
+    let failures = 0;
+    let delay = 2000;
+
+    // Dedicated polling loop for preview regeneration tasks.
+    // Do NOT reuse the main pollTask() timer, otherwise it will stop polling the primary workflow task.
+    // Also: keep regenLoading=true until this task reaches a terminal state, so the UI animation stays visible.
+    while (!unmountedRef.current) {
+      try {
+        const resp = await api.getTaskStatus(projectId, regenTaskId);
+        const t = resp.data as any as Task;
+
+        const p: any = (t as any)?.progress || {};
+        const preview_images: any = p?.preview_images;
+        if (preview_images) {
+          setOverridePreviewByRecId((prev) => ({
+            ...prev,
+            [recId]: { preview_images },
+          }));
+        }
+        if (typeof p?.completed === 'number' && typeof p?.total === 'number') {
+          setRegenProgressByRecId((prev) => ({
+            ...prev,
+            [recId]: {
+              completed: p.completed,
+              total: p.total,
+              failed: typeof p.failed === 'number' ? p.failed : 0,
+            },
+          }));
+        }
+
+        failures = 0;
+        delay = 2000;
+
+        const status = String((t as any)?.status || '');
+        if (status === 'COMPLETED') return;
+        if (status === 'FAILED') {
+          const errMsg = (t as any)?.error_message || (t as any)?.error || '预览生成任务失败';
+          throw new Error(String(errMsg));
+        }
+
+        await sleep(2000);
+      } catch (e: any) {
+        failures += 1;
+        if (failures >= 3) {
+          throw e;
+        }
+        await sleep(delay);
+        delay = Math.min(Math.floor(delay * 1.6), 15000);
       }
-      if (typeof p?.completed === 'number' && typeof p?.total === 'number') {
-        setRegenProgressByRecId((prev) => ({
-          ...prev,
-          [recId]: {
-            completed: p.completed,
-            total: p.total,
-            failed: typeof p.failed === 'number' ? p.failed : 0,
-          },
-        }));
-      }
-    });
+    }
   };
 
   const handleRegenerate = async (rec: StyleRecommendation) => {

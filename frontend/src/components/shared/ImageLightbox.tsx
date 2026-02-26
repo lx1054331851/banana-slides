@@ -63,13 +63,13 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ isOpen, src, title
       />
 
       {/* Center */}
-      <div className="absolute inset-0 flex items-center justify-center p-3 sm:p-6">
+      <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-4">
         <div
           role="dialog"
           aria-modal="true"
           aria-label={title || 'image preview'}
           className={cn(
-            'relative w-full max-w-[min(1200px,96vw)]',
+            'relative w-full max-w-[min(1600px,98vw)] max-h-[92vh]',
             'rounded-2xl overflow-hidden',
             'bg-white/5 dark:bg-white/5',
             'border border-white/15',
@@ -124,7 +124,7 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({ isOpen, src, title
               onLoad={() => setIsLoaded(true)}
               onError={() => setIsLoaded(true)}
               className={cn(
-                'w-full max-h-[78vh] object-contain block',
+                'w-full max-h-[calc(92vh-64px)] object-contain block',
                 'transition-opacity duration-200',
                 isLoaded ? 'opacity-100' : 'opacity-0'
               )}

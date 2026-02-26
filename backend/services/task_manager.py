@@ -232,7 +232,12 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
             # 关键：提前提取 page.id，不要传递 ORM 对象到子线程
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = [
-                    executor.submit(generate_single_desc, page.id, page_data, i)
+                    executor.submit(
+                        generate_single_desc,
+                        page.id,
+                        page_data,
+                        (page.order_index + 1) if getattr(page, 'order_index', None) is not None else i,
+                    )
                     for i, (page, page_data) in enumerate(zip(pages, pages_data), 1)
                 ]
                 
@@ -342,6 +347,8 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
             failed = 0
             resolution_mismatched = 0  # Count of resolution mismatches
             
+            total_pages = len(all_pages_data)
+
             def generate_single_image(page_id, page_data, page_index):
                 """
                 Generate image for a single page
@@ -408,7 +415,7 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                         logger.debug(f"Generated image prompt for page {page_id}")
                         
                         # Generate image
-                        logger.info(f"🎨 Calling AI service to generate image for page {page_index}/{len(pages)}...")
+                        logger.info(f"🎨 Calling AI service to generate image for page {page_index}/{total_pages}...")
                         image = ai_service.generate_image(
                             prompt, page_ref_image_path, aspect_ratio, resolution,
                             additional_ref_images=page_additional_ref_images if page_additional_ref_images else None
@@ -443,7 +450,8 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                 futures = [
                     executor.submit(
                         generate_single_image, page.id,
-                        pages_data_by_index.get(page.order_index, {}), i
+                        pages_data_by_index.get(page.order_index, {}),
+                        (page.order_index + 1) if getattr(page, 'order_index', None) is not None else i,
                     )
                     for i, page in enumerate(pages, 1)
                 ]
