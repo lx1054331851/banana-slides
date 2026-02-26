@@ -28,8 +28,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.sha }}
           fetch-depth: 0
+
+      - name: Checkout target SHA
+        run: git checkout ${{ inputs.sha }}
 
       - name: Resolve SHA
         id: resolve
