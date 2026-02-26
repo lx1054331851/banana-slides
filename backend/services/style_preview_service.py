@@ -4,6 +4,7 @@ Style preview service - recommend style_json and generate preview images.
 import json
 import logging
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -352,53 +353,57 @@ def regenerate_single_style_previews_task(task_id: str, project_id: str, rec_id:
 
             preview_urls: Dict[str, str] = {}
 
-            for slide_key, page_index in slide_keys:
-                try:
-                    page_desc = sample_pages.get(slide_key, '')
-                    page = outline[page_index - 1]
-                    prompt_img = ai_service.generate_image_prompt(
-                        outline=outline,
-                        page=page,
-                        page_desc=page_desc,
-                        page_index=page_index,
-                        extra_requirements=extra_req,
-                        language=language or app.config.get('OUTPUT_LANGUAGE', 'zh'),
-                        has_template=False
-                    )
-                    image = ai_service.generate_image(
-                        prompt_img,
-                        ref_image_path=None,
-                        aspect_ratio=aspect_ratio,
-                        resolution=resolution
-                    )
-                    if not image:
-                        raise ValueError("Failed to generate preview image")
+            def render_slide(slide_key: str, page_index: int) -> tuple[str, str]:
+                page_desc = sample_pages.get(slide_key, '')
+                page = outline[page_index - 1]
+                prompt_img = ai_service.generate_image_prompt(
+                    outline=outline,
+                    page=page,
+                    page_desc=page_desc,
+                    page_index=page_index,
+                    extra_requirements=extra_req,
+                    language=language or app.config.get('OUTPUT_LANGUAGE', 'zh'),
+                    has_template=False
+                )
+                image = ai_service.generate_image(
+                    prompt_img,
+                    ref_image_path=None,
+                    aspect_ratio=aspect_ratio,
+                    resolution=resolution
+                )
+                if not image:
+                    raise ValueError("Failed to generate preview image")
 
-                    run_id = uuid.uuid4().hex[:10]
-                    rel_path = file_service.save_style_preview_image(
-                        image=image,
-                        project_id=project_id,
-                        rec_id=rec_id,
-                        slide_type=slide_key,
-                        run_id=run_id,
-                        image_format='PNG'
-                    )
-                    filename = rel_path.split('/')[-1]
-                    url = f"/files/{project_id}/style-previews/{rec_id}/{filename}"
-                    preview_urls[f"{slide_key}_url"] = url
+                run_id = uuid.uuid4().hex[:10]
+                rel_path = file_service.save_style_preview_image(
+                    image=image,
+                    project_id=project_id,
+                    rec_id=rec_id,
+                    slide_type=slide_key,
+                    run_id=run_id,
+                    image_format='PNG'
+                )
+                filename = rel_path.split('/')[-1]
+                url = f"/files/{project_id}/style-previews/{rec_id}/{filename}"
+                return slide_key, url
 
-                    completed += 1
-                    task = Task.query.get(task_id)
-                    if task:
-                        p = task.get_progress() or {}
-                        p['completed'] = completed
-                        p['failed'] = failed
-                        p['preview_images'] = preview_urls
-                        task.set_progress(p)
-                        db.session.commit()
-                except Exception as e:
-                    logger.error(f"Regenerate preview failed: rec={rec_id} slide={slide_key}: {str(e)}", exc_info=True)
-                    failed += 1
+            max_workers = int(app.config.get('STYLE_PREVIEW_WORKERS', 4))
+            max_workers = max(1, min(max_workers, len(slide_keys)))
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_map = {
+                    executor.submit(render_slide, slide_key, page_index): slide_key
+                    for slide_key, page_index in slide_keys
+                }
+                for future in as_completed(future_map):
+                    slide_key = future_map[future]
+                    try:
+                        slide_key, url = future.result()
+                        preview_urls[f"{slide_key}_url"] = url
+                        completed += 1
+                    except Exception as e:
+                        logger.error(f"Regenerate preview failed: rec={rec_id} slide={slide_key}: {str(e)}", exc_info=True)
+                        failed += 1
                     task = Task.query.get(task_id)
                     if task:
                         p = task.get_progress() or {}

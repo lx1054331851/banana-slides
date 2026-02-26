@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ImagePlus, Loader2 } from 'lucide-react';
+import { ImagePlus, Loader2, Trash2 } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 import { Textarea } from './Textarea';
 import { PRESET_STYLES } from '@/config/presetStyles';
 import { presetStylesI18n } from '@/config/presetStylesI18n';
-import { createStyleTemplate, extractStyleFromImage, listStylePresets, listStyleTemplates } from '@/api/endpoints';
+import { createStyleTemplate, deleteStyleTemplate, extractStyleFromImage, listStylePresets, listStyleTemplates } from '@/api/endpoints';
 import type { StylePreset, StyleTemplate } from '@/api/endpoints';
+import { useConfirm } from './ConfirmDialog';
 
 const i18n = {
   zh: {
@@ -28,6 +29,9 @@ const i18n = {
     templateJsonRequired: '请先粘贴风格模板 JSON 骨架',
     invalidJson: 'JSON 解析失败',
     needCallback: '当前页面未配置预览工作流',
+    deleteTemplate: '删除模板',
+    deleteTemplateConfirm: '将删除该风格模板骨架（全局生效），此操作不可撤销。确定继续？',
+    deleteTemplateSuccess: '模板已删除',
   },
   en: {
     presetStyles: presetStylesI18n.en,
@@ -49,6 +53,9 @@ const i18n = {
     templateJsonRequired: 'Please paste a style template JSON skeleton first',
     invalidJson: 'Invalid JSON',
     needCallback: 'Preview workflow is not available here',
+    deleteTemplate: 'Delete template',
+    deleteTemplateConfirm: 'This will delete the style template globally and cannot be undone. Continue?',
+    deleteTemplateSuccess: 'Template deleted',
   },
 };
 
@@ -62,6 +69,7 @@ interface TextStyleSelectorProps {
 
 export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onChange, onToast, onGenerateStylePreviews, onPresetSelected }) => {
   const t = useT(i18n);
+  const { confirm, ConfirmDialog } = useConfirm();
   const [hoveredPresetId, setHoveredPresetId] = useState<string | null>(null);
   const [isExtractingStyle, setIsExtractingStyle] = useState(false);
   const styleImageInputRef = useRef<HTMLInputElement>(null);
@@ -75,6 +83,7 @@ export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onC
   const [selectedPresetId, setSelectedPresetId] = useState('');
   const [isLoadingAdvanced, setIsLoadingAdvanced] = useState(false);
   const [isStartingRecommendations, setIsStartingRecommendations] = useState(false);
+  const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
 
   const selectedTemplate = useMemo(
     () => templates.find((x) => x.id === selectedTemplateId),
@@ -234,18 +243,50 @@ export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onC
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div className="space-y-1">
                 <div className="text-xs text-gray-600 dark:text-foreground-tertiary">{t('templates')}</div>
-                <select
-                  value={selectedTemplateId}
-                  onChange={(e) => setSelectedTemplateId(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-tertiary dark:text-white"
-                >
-                  <option value="">{isLoadingAdvanced ? 'Loading…' : '—'}</option>
-                  {templates.map((tpl) => (
-                    <option key={tpl.id} value={tpl.id}>
-                      {tpl.name || tpl.id}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(e) => setSelectedTemplateId(e.target.value)}
+                    className="flex-1 min-w-0 px-3 py-2 text-xs rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-tertiary dark:text-white"
+                  >
+                    <option value="">{isLoadingAdvanced ? 'Loading…' : '—'}</option>
+                    {templates.map((tpl) => (
+                      <option key={tpl.id} value={tpl.id}>
+                        {tpl.name || tpl.id}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!selectedTemplateId || isDeletingTemplate}
+                    onClick={() => {
+                      if (!selectedTemplateId) return;
+                      confirm(
+                        t('deleteTemplateConfirm'),
+                        async () => {
+                          setIsDeletingTemplate(true);
+                          try {
+                            await deleteStyleTemplate(selectedTemplateId);
+                            onToast?.({ message: t('deleteTemplateSuccess'), type: 'success' });
+                            setSelectedTemplateId('');
+                            setTemplateJson('');
+                            await loadAdvanced();
+                          } catch (e: any) {
+                            onToast?.({ message: e?.message || 'Delete failed', type: 'error' });
+                          } finally {
+                            setIsDeletingTemplate(false);
+                          }
+                        },
+                        { title: t('deleteTemplate'), confirmText: t('deleteTemplate'), variant: 'danger' }
+                      );
+                    }}
+                    className="shrink-0 min-w-[96px] px-2.5 py-2 text-xs font-medium rounded-lg border-2 border-gray-200 dark:border-border-primary hover:border-red-400 dark:hover:border-red-500 hover:bg-red-50 dark:hover:bg-background-hover transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-1 whitespace-nowrap justify-center"
+                    title={t('deleteTemplate')}
+                  >
+                    <Trash2 size={14} />
+                    <span className="hidden sm:inline">{t('deleteTemplate')}</span>
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-1">
@@ -352,6 +393,7 @@ export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onC
           </div>
         ) : null}
       </div>
+      {ConfirmDialog}
     </div>
   );
 };

@@ -40,6 +40,8 @@ interface MarkdownTextareaProps {
   error?: string;
   className?: string;
   rows?: number;
+  /** Text direction. Default: ltr */
+  direction?: 'ltr' | 'rtl' | 'auto';
   /** Maximum editor height (px or CSS value) */
   maxHeight?: number | string;
   /** Collapse editor area, keeping toolbar visible */
@@ -271,6 +273,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   error,
   className,
   rows = 4,
+  direction = 'ltr',
   maxHeight,
   collapsed = false,
   showUploadButton,
@@ -284,6 +287,9 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastValueRef = useRef(value);
   const isInternalRef = useRef(false);
+  const isComposingRef = useRef(false);
+  const pendingEmitRef = useRef(false);
+  const prevCollapsedRef = useRef(collapsed);
   const [isDragging, setIsDragging] = useState(false);
   const [editingChip, setEditingChip] = useState<{ chip: HTMLElement; rect: DOMRect } | null>(null);
   const [editAlt, setEditAlt] = useState('');
@@ -333,9 +339,11 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     }
   }, [value]);
 
-  // Rebuild editor when expanding from collapsed state
+  // Rebuild editor only when expanding from collapsed -> expanded
   useEffect(() => {
-    if (!collapsed && editorRef.current) {
+    const wasCollapsed = prevCollapsedRef.current;
+    prevCollapsedRef.current = collapsed;
+    if (wasCollapsed && !collapsed && editorRef.current) {
       buildDOM(editorRef.current, parseSegments(value), chipTooltipsRef.current);
       lastValueRef.current = value;
     }
@@ -351,6 +359,10 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
 
   const emitChange = useCallback(() => {
     if (!editorRef.current) return;
+    if (isComposingRef.current) {
+      pendingEmitRef.current = true;
+      return;
+    }
     const markdown = serializeEditor(editorRef.current);
     isInternalRef.current = true;
     lastValueRef.current = markdown;
@@ -459,6 +471,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
 
   // --- Key handling ---
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (isComposingRef.current || e.isComposing || (e.key as any) === 'Process' || (e as any).keyCode === 229) return;
     if (!editorRef.current) return;
 
     if (e.key === 'Backspace') {
@@ -494,9 +507,33 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     }
   }, [emitChange]);
 
-  const handleInput = useCallback(() => {
+  const handleInput = useCallback((e?: React.FormEvent<HTMLDivElement>) => {
+    const native = e?.nativeEvent as InputEvent | undefined;
+    if (
+      isComposingRef.current ||
+      native?.isComposing ||
+      (native?.inputType && native.inputType.includes('Composition'))
+    ) {
+      return;
+    }
     if (editorRef.current) clearChipSelection(editorRef.current);
     emitChange();
+  }, [emitChange]);
+
+  const handleCompositionStart = useCallback(() => {
+    isComposingRef.current = true;
+  }, []);
+
+  const handleCompositionUpdate = useCallback(() => {
+    isComposingRef.current = true;
+  }, []);
+
+  const handleCompositionEnd = useCallback(() => {
+    isComposingRef.current = false;
+    if (pendingEmitRef.current) {
+      pendingEmitRef.current = false;
+    }
+    requestAnimationFrame(() => emitChange());
   }, [emitChange]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
@@ -628,6 +665,9 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   const isEmpty = !value.trim();
   const editorStyle: React.CSSProperties = {
     minHeight: `${minHeight}px`,
+    direction,
+    unicodeBidi: 'plaintext',
+    textAlign: direction === 'rtl' ? 'right' : 'left',
   };
 
   if (maxHeight !== undefined) {
@@ -657,7 +697,11 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
               contentEditable
               role="textbox"
               aria-multiline="true"
+              dir={direction}
               onKeyDown={handleKeyDown}
+              onCompositionStart={handleCompositionStart}
+              onCompositionUpdate={handleCompositionUpdate}
+              onCompositionEnd={handleCompositionEnd}
               onInput={handleInput}
               onPaste={handlePaste}
               onCopy={handleCopy}
@@ -678,7 +722,10 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
 
             {/* Placeholder */}
             {isEmpty && placeholder && !isDragging && (
-              <div className="absolute top-0 left-0 right-0 px-4 py-3 text-gray-400 dark:text-gray-500 pointer-events-none select-none">
+              <div
+                dir={direction}
+                className="absolute top-0 left-0 right-0 px-4 py-3 text-gray-400 dark:text-gray-500 pointer-events-none select-none"
+              >
                 {placeholder}
               </div>
             )}

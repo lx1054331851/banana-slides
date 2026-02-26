@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from './Button';
 import { Card } from './Card';
 import { Loading } from './Loading';
@@ -6,6 +7,8 @@ import { ImageLightbox } from './ImageLightbox';
 import { Textarea } from './Textarea';
 import { useToast } from './Toast';
 import * as api from '@/api/endpoints';
+import { normalizeProject } from '@/utils';
+import { getProjectRoute } from '@/utils/projectUtils';
 import type { Project, Task } from '@/types';
 
 type StyleRecommendation = {
@@ -46,6 +49,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
   onBackToProject,
   onApplied,
 }) => {
+  const navigate = useNavigate();
   const { show, ToastContainer } = useToast();
   const [task, setTask] = useState<Task | null>(null);
   const [project, setProject] = useState<Project | null>(null);
@@ -328,17 +332,25 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
       }
 
       const creationType = (project as any)?.creation_type;
-      if (creationType === 'descriptions') {
+      const isDescription = creationType === 'descriptions' || creationType === 'description';
+
+      if (isDescription) {
         await api.generateFromDescription(projectId);
-        window.location.href = `/project/${projectId}/detail`;
-        return;
-      }
-      if (creationType === 'outline') {
+      } else {
+        // idea / outline / unknown -> generate outline pages
         await api.generateOutline(projectId);
-        window.location.href = `/project/${projectId}/outline`;
-        return;
       }
-      window.location.href = `/project/${projectId}/outline`;
+
+      try {
+        const refreshed = await api.getProject(projectId);
+        const nextRoute = getProjectRoute(normalizeProject(refreshed.data));
+        navigate(nextRoute);
+      } catch {
+        const fallbackRoute = isDescription
+          ? `/project/${projectId}/detail`
+          : `/project/${projectId}/outline`;
+        navigate(fallbackRoute);
+      }
     } catch (e: any) {
       show({ message: `应用失败：${e?.message || ''}`, type: 'error' });
     } finally {
@@ -549,19 +561,19 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
           return (
             <Card key={rec.id} className="p-4 space-y-3">
               <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
-                <div>
+                <div className="min-w-0 lg:pr-4">
                   <h3 className="text-base font-semibold text-gray-900 dark:text-white">{rec.name}</h3>
                   {rec.rationale ? (
                     <p className="text-xs text-gray-600 dark:text-foreground-tertiary mt-1">{rec.rationale}</p>
                   ) : null}
                 </div>
-                <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
-                  <Button size="sm" className="whitespace-nowrap" loading={!!regenLoadingByRecId[rec.id]} onClick={() => handleRegenerate(rec)}>
+                <div className="flex flex-wrap lg:flex-nowrap gap-2 justify-start lg:justify-end lg:shrink-0">
+                  <Button size="sm" variant="secondary" className="whitespace-nowrap" loading={!!regenLoadingByRecId[rec.id]} onClick={() => handleRegenerate(rec)}>
                     {regenLoadingByRecId[rec.id]
                       ? (hasPreview ? '重跑中…' : '生成中…')
                       : (hasPreview ? '重跑本组预览' : '生成本组预览')}
                   </Button>
-                  <Button size="sm" className="whitespace-nowrap" variant="ghost" onClick={() => handleSavePreset(rec)}>保存为预设</Button>
+                  <Button size="sm" className="whitespace-nowrap" variant="secondary" onClick={() => handleSavePreset(rec)}>保存为预设</Button>
                   <Button size="sm" className="whitespace-nowrap" variant="primary" loading={applyLoadingRecId === rec.id} onClick={() => handleApplyAndContinue(rec)}>
                     {applyMode === 'apply_only' ? '选用并应用' : '选用并继续'}
                   </Button>
