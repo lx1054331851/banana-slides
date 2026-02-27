@@ -387,6 +387,10 @@ def update_project(project_id):
         # Update template_style_json if provided
         if 'template_style_json' in data:
             project.template_style_json = data['template_style_json']
+
+        # Update presentation_meta if provided
+        if 'presentation_meta' in data:
+            project.presentation_meta = data['presentation_meta']
         
         # Update aspect ratio if provided
         if 'image_aspect_ratio' in data:
@@ -737,6 +741,89 @@ def parse_description_text(project_id):
 
     except Exception as e:
         logger.error(f"parse_description_text failed: {str(e)}", exc_info=True)
+        return error_response('AI_SERVICE_ERROR', str(e), 503)
+
+
+@project_bp.route('/<project_id>/detect/cover-ending-fields', methods=['POST'])
+def detect_cover_ending_fields(project_id):
+    """
+    POST /api/projects/{project_id}/detect/cover-ending-fields - Detect missing fields in cover/ending descriptions
+
+    Request body:
+    {
+        "cover": {"page_id": "...", "description": "..."},
+        "ending": {"page_id": "...", "description": "..."},
+        "language": "zh"
+    }
+    """
+    try:
+        project = Project.query.get(project_id)
+        if not project:
+            return not_found('Project')
+
+        data = request.get_json() or {}
+        cover = data.get('cover') or {}
+        ending = data.get('ending') or {}
+        cover_text = cover.get('description') or ''
+        ending_text = ending.get('description') or ''
+        language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+
+        ai_service = get_ai_service()
+        reference_files_content = _get_project_reference_files_content(project_id)
+        project_context = ProjectContext(project, reference_files_content)
+
+        def _normalize_fields(raw_fields):
+            allowed_keys = {
+                'logo', 'company_name', 'project_name', 'presenter', 'presenter_title',
+                'date', 'location', 'phone', 'website_or_email', 'thanks_or_slogan'
+            }
+            allowed_roles = {'cover', 'ending'}
+            normalized = []
+            if not isinstance(raw_fields, list):
+                return normalized
+            for item in raw_fields:
+                if not isinstance(item, dict):
+                    continue
+                key = item.get('key')
+                page_role = item.get('page_role')
+                if key not in allowed_keys or page_role not in allowed_roles:
+                    continue
+                placeholders = item.get('placeholders')
+                if not isinstance(placeholders, list):
+                    placeholders = []
+                placeholders = [str(p) for p in placeholders if str(p)]
+                confidence = item.get('confidence')
+                try:
+                    confidence = float(confidence)
+                except (TypeError, ValueError):
+                    confidence = None
+                normalized.append({
+                    'key': key,
+                    'page_role': page_role,
+                    'present': bool(item.get('present')),
+                    'value': str(item.get('value') or ''),
+                    'is_placeholder': bool(item.get('is_placeholder')),
+                    'placeholders': placeholders,
+                    'confidence': confidence
+                })
+            return normalized
+
+        try:
+            result = ai_service.detect_cover_ending_fields(
+                project_context,
+                cover_text,
+                ending_text,
+                language=language
+            )
+            fields = _normalize_fields(result.get('fields') if isinstance(result, dict) else None)
+        except Exception as e:
+            logger.warning(f"detect_cover_ending_fields failed: {str(e)}", exc_info=True)
+            fields = []
+
+        return success_response({'fields': fields})
+
+    except Exception as e:
+        logger.error(f"detect_cover_ending_fields failed: {str(e)}", exc_info=True)
         return error_response('AI_SERVICE_ERROR', str(e), 503)
 
 

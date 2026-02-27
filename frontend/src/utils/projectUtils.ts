@@ -1,5 +1,5 @@
 import { getImageUrl } from '@/api/client';
-import type { Project, Page, DescriptionContent } from '@/types';
+import type { Project, Page, DescriptionContent, PresentationMeta, CoverEndingFieldDetect } from '@/types';
 import { downloadFile } from './index';
 
 /**
@@ -219,6 +219,145 @@ export const parseMarkdownPages = (markdown: string): ParsedPage[] => {
 
     return { title, points, text, part };
   });
+};
+
+// ========== 封面/结尾补全 ==========
+
+const safeReplaceAll = (text: string, target: string, replacement: string) => {
+  if (!target) return text;
+  return text.split(target).join(replacement);
+};
+
+export const parsePresentationMeta = (raw?: string | null): PresentationMeta => {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') return parsed as PresentationMeta;
+  } catch {
+    return {};
+  }
+  return {};
+};
+
+const buildFieldLine = (key: string, value: string, pageRole: 'cover' | 'ending'): string => {
+  switch (key) {
+    case 'logo':
+      return `Logo：![公司Logo](${value})，置于左上角，小尺寸`;
+    case 'company_name':
+      return `公司名称：${value}`;
+    case 'project_name':
+      return `项目名：${value}`;
+    case 'presenter':
+      return `汇报人：${value}`;
+    case 'presenter_title':
+      return `部门/职位：${value}`;
+    case 'date':
+      return `日期：${value}`;
+    case 'location':
+      return `地点：${value}`;
+    case 'phone':
+      return `联系电话：${value}`;
+    case 'website_or_email':
+      return `网址/邮箱：${value}`;
+    case 'thanks_or_slogan':
+      return pageRole === 'ending' ? `致谢/口号：${value}` : `口号：${value}`;
+    default:
+      return value;
+  }
+};
+
+const insertLinesIntoDescription = (text: string, lines: string[]): string => {
+  if (lines.length === 0) return text;
+  const normalized = text || '';
+  const lineArr = normalized.split('\n');
+  const labelIdx = lineArr.findIndex(l => l.trim().replace('：', ':') === '页面文字:');
+  const bulletLines = lines.map(line => (line.trim().startsWith('- ') ? line : `- ${line}`));
+  if (labelIdx >= 0) {
+    let insertIdx = labelIdx + 1;
+    while (
+      insertIdx < lineArr.length &&
+      lineArr[insertIdx].trim() !== '' &&
+      !/^(其他页面素材|页面标题|排版|布局|风格|配色|备注|note)/i.test(lineArr[insertIdx].trim())
+    ) {
+      insertIdx += 1;
+    }
+    lineArr.splice(insertIdx, 0, ...bulletLines);
+    return lineArr.join('\n');
+  }
+  const suffix = normalized.trim().length > 0 ? '\n\n' : '';
+  return `${normalized.trim()}${suffix}页面文字：\n${bulletLines.join('\n')}\n`;
+};
+
+export const applyPresentationMetaToDescription = (
+  descriptionText: string,
+  meta: PresentationMeta,
+  options: {
+    pageRole: 'cover' | 'ending';
+    detectFields?: CoverEndingFieldDetect[];
+  }
+): string => {
+  const pageRole = options.pageRole;
+  const detectFields = options.detectFields || [];
+  const relevantFields = detectFields.filter(f => f.page_role === pageRole);
+  const defaultKeysByRole: Record<'cover' | 'ending', string[]> = {
+    cover: [
+      'logo',
+      'company_name',
+      'project_name',
+      'presenter',
+      'presenter_title',
+      'date',
+      'location',
+      'phone',
+      'website_or_email',
+    ],
+    ending: [
+      'logo',
+      'company_name',
+      'presenter',
+      'presenter_title',
+      'phone',
+      'website_or_email',
+      'thanks_or_slogan',
+    ],
+  };
+  const missingKeys = new Set(
+    relevantFields.length > 0
+      ? relevantFields.filter(f => !f.present || f.is_placeholder).map(f => f.key)
+      : defaultKeysByRole[pageRole]
+  );
+  let updated = descriptionText || '';
+  const handledKeys = new Set<string>();
+
+  // 尝试替换占位符
+  for (const field of relevantFields) {
+    const value = (meta as any)[field.key === 'logo' ? 'logo_url' : field.key] as string | undefined;
+    if (!value) continue;
+    if (Array.isArray(field.placeholders) && field.placeholders.length > 0) {
+      let replaced = false;
+      for (const placeholder of field.placeholders) {
+        if (placeholder && updated.includes(placeholder)) {
+          updated = safeReplaceAll(updated, placeholder, value);
+          replaced = true;
+        }
+      }
+      if (replaced) {
+        handledKeys.add(field.key);
+      }
+    }
+  }
+
+  // 追加缺失字段到“页面文字”中
+  const lines: string[] = [];
+  for (const key of Array.from(missingKeys)) {
+    if (handledKeys.has(key)) continue;
+    const value = (meta as any)[key === 'logo' ? 'logo_url' : key] as string | undefined;
+    if (!value) continue;
+    if (updated.includes(value)) continue;
+    lines.push(buildFieldLine(key, value, pageRole));
+  }
+
+  return insertLinesIntoDescription(updated, lines);
 };
 
 /**

@@ -22,6 +22,7 @@ from .prompts import (
     get_description_split_prompt,
     get_outline_refinement_prompt,
     get_descriptions_refinement_prompt,
+    get_cover_ending_fields_detect_prompt,
     get_ppt_page_content_extraction_prompt,
     get_layout_caption_prompt,
     get_style_extraction_prompt
@@ -626,6 +627,26 @@ class AIService:
             return [str(desc) for desc in descriptions]
         else:
             raise ValueError("Expected a list of page descriptions, but got: " + str(type(descriptions)))
+
+    def detect_cover_ending_fields(self, project_context: ProjectContext,
+                                   cover_text: str,
+                                   ending_text: str,
+                                   language: str = 'zh') -> Dict:
+        """
+        检测封面/结尾页描述中的关键信息字段
+
+        Returns:
+            Dict with key "fields" (list)
+        """
+        prompt = get_cover_ending_fields_detect_prompt(
+            cover_text=cover_text or "",
+            ending_text=ending_text or "",
+            language=language
+        )
+        result = self.generate_json(prompt, thinking_budget=400)
+        if isinstance(result, dict):
+            return result
+        raise ValueError("Expected a dict result for cover/ending field detection")
     
     def refine_outline(self, current_outline: List[Dict], user_requirement: str,
                       project_context: ProjectContext,

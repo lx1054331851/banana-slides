@@ -23,6 +23,33 @@ export type DescriptionContent =
       layout_suggestion?: string;
     };
 
+// 封面/结尾补全信息（前端使用的结构）
+export interface PresentationMeta {
+  logo_url?: string;
+  company_name?: string;
+  project_name?: string;
+  presenter?: string;
+  presenter_title?: string;
+  date?: string;
+  location?: string;
+  phone?: string;
+  website_or_email?: string;
+  thanks_or_slogan?: string;
+  _cover_ending_checked?: boolean;
+  _cover_ending_skipped?: boolean;
+  _cover_ending_completed?: boolean;
+}
+
+export interface CoverEndingFieldDetect {
+  key: string;
+  page_role: 'cover' | 'ending';
+  present: boolean;
+  value?: string;
+  is_placeholder?: boolean;
+  placeholders?: string[];
+  confidence?: number | null;
+}
+
 // 图片版本
 export interface ImageVersion {
   version_id: string;
@@ -67,6 +94,7 @@ export interface Project {
   outline_text?: string;  // 用户输入的大纲文本（用于outline类型）
   description_text?: string;  // 用户输入的描述文本（用于description类型）
   extra_requirements?: string; // 额外要求，应用到每个页面的AI提示词
+  presentation_meta?: string; // 封面/结尾补全信息（JSON字符串）
   creation_type?: string;
   template_image_url?: string; // 后端返回 template_image_url
   template_image_path?: string; // 前端使用的别名

@@ -11,6 +11,7 @@ const detailI18n = {
       title: "编辑页面描述", pageCount: "共 {{count}} 页", generateImages: "生成图片",
       generating: "生成中...", page: "第 {{num}} 页", titleLabel: "标题",
       description: "描述", batchGenerate: "批量生成描述", export: "导出描述", exportFull: "导出大纲+描述", import: "导入",
+      coverEndingInfo: "封面/结尾信息",
       pagesCompleted: "页已完成", noPages: "还没有页面",
       noPagesHint: "请先返回大纲编辑页添加页面", backToOutline: "返回大纲编辑",
       aiPlaceholder: "例如：让描述更详细、删除第2页的某个要点、强调XXX的重要性... · Ctrl+Enter提交",
@@ -38,6 +39,7 @@ const detailI18n = {
       title: "Edit Descriptions", pageCount: "{{count}} pages", generateImages: "Generate Images",
       generating: "Generating...", page: "Page {{num}}", titleLabel: "Title",
       description: "Description", batchGenerate: "Batch Generate Descriptions", export: "Export Descriptions", exportFull: "Export Outline+Descriptions", import: "Import",
+      coverEndingInfo: "Cover/Ending Info",
       pagesCompleted: "pages completed", noPages: "No pages yet",
       noPagesHint: "Please go back to outline editor to add pages first", backToOutline: "Back to Outline Editor",
       aiPlaceholder: "e.g., Make descriptions more detailed, remove a point from page 2, emphasize XXX... · Ctrl+Enter to submit",
@@ -60,11 +62,12 @@ const detailI18n = {
     }
   }
 };
-import { Button, Loading, useToast, useConfirm, AiRefineInput, FilePreviewModal, ReferenceFileList } from '@/components/shared';
+import { Button, Loading, useToast, useConfirm, AiRefineInput, FilePreviewModal, ReferenceFileList, CoverEndingInfoModal } from '@/components/shared';
 import { DescriptionCard } from '@/components/preview/DescriptionCard';
 import { useProjectStore } from '@/store/useProjectStore';
-import { refineDescriptions, getTaskStatus, addPage } from '@/api/endpoints';
-import { exportProjectToMarkdown, parseMarkdownPages } from '@/utils/projectUtils';
+import { refineDescriptions, getTaskStatus, addPage, detectCoverEndingFields, updateProject } from '@/api/endpoints';
+import { exportProjectToMarkdown, parseMarkdownPages, getDescriptionText, applyPresentationMetaToDescription, parsePresentationMeta } from '@/utils/projectUtils';
+import type { CoverEndingFieldDetect, PresentationMeta } from '@/types';
 
 export const DetailEditor: React.FC = () => {
   const navigate = useNavigate();
@@ -77,6 +80,7 @@ export const DetailEditor: React.FC = () => {
     currentProject,
     syncProject,
     updatePageLocal,
+    saveAllPages,
     generateDescriptions,
     generatePageDescription,
     regenerateRenovationPage,
@@ -88,6 +92,10 @@ export const DetailEditor: React.FC = () => {
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
   const [isRenovationProcessing, setIsRenovationProcessing] = useState(false);
   const [renovationProgress, setRenovationProgress] = useState<{ total: number; completed: number } | null>(null);
+  const [detectFields, setDetectFields] = useState<CoverEndingFieldDetect[]>([]);
+  const [isCoverEndingModalOpen, setIsCoverEndingModalOpen] = useState(false);
+  const [coverEndingModalMode, setCoverEndingModalMode] = useState<'missing' | 'all'>('missing');
+  const [isCheckingCoverEnding, setIsCheckingCoverEnding] = useState(false);
 
   // PPT 翻新：异步任务轮询
   useEffect(() => {
@@ -302,6 +310,141 @@ export const DetailEditor: React.FC = () => {
     }
   }, [currentProject, projectId, syncProject, show, t]);
 
+  const getSortedPages = () => {
+    if (!currentProject) return [];
+    return [...currentProject.pages].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+  };
+
+  const handleCoverEndingSave = async (meta: PresentationMeta) => {
+    if (!currentProject || !projectId) return;
+    const sortedPages = getSortedPages();
+    if (sortedPages.length === 0) return;
+    const coverPage = sortedPages[0];
+    const endingPage = sortedPages[sortedPages.length - 1];
+    const coverId = coverPage.id || coverPage.page_id;
+    const endingId = endingPage.id || endingPage.page_id;
+
+    try {
+      const baseMeta = parsePresentationMeta(currentProject.presentation_meta);
+      const mergedMeta: PresentationMeta = {
+        ...baseMeta,
+        ...meta,
+        _cover_ending_checked: true,
+        _cover_ending_skipped: false,
+        _cover_ending_completed: true,
+      };
+      const metaStr = JSON.stringify(mergedMeta || {});
+      await updateProject(projectId, { presentation_meta: metaStr } as any);
+
+      const coverText = getDescriptionText(coverPage.description_content);
+      const endingText = getDescriptionText(endingPage.description_content);
+
+      const updatedCover = applyPresentationMetaToDescription(coverText, mergedMeta, {
+        pageRole: 'cover',
+        detectFields,
+      });
+      const updatedEnding = applyPresentationMetaToDescription(endingText, mergedMeta, {
+        pageRole: 'ending',
+        detectFields,
+      });
+
+      if (coverId) {
+        updatePageLocal(coverId, {
+          description_content: { text: updatedCover },
+        });
+      }
+      if (endingId && endingId !== coverId) {
+        updatePageLocal(endingId, {
+          description_content: { text: updatedEnding },
+        });
+      }
+
+      await saveAllPages();
+      await syncProject(projectId);
+      setIsCoverEndingModalOpen(false);
+      setCoverEndingModalMode('missing');
+      if (coverEndingModalMode === 'missing') {
+        navigate(`/project/${projectId}/preview`);
+      }
+    } catch (error: any) {
+      console.error('保存封面/结尾信息失败:', error);
+      show({ message: error.message || '保存失败，请重试', type: 'error' });
+    }
+  };
+
+  const handleCoverEndingSkip = async () => {
+    if (!currentProject || !projectId) {
+      setIsCoverEndingModalOpen(false);
+      return;
+    }
+    try {
+      const baseMeta = parsePresentationMeta(currentProject.presentation_meta);
+      const mergedMeta: PresentationMeta = {
+        ...baseMeta,
+        _cover_ending_checked: true,
+        _cover_ending_skipped: true,
+        _cover_ending_completed: false,
+      };
+      await updateProject(projectId, { presentation_meta: JSON.stringify(mergedMeta) } as any);
+      await syncProject(projectId);
+    } catch (error) {
+      console.warn('保存跳过状态失败:', error);
+    } finally {
+      setIsCoverEndingModalOpen(false);
+      setCoverEndingModalMode('missing');
+      navigate(`/project/${projectId}/preview`);
+    }
+  };
+
+  const handleCoverEndingView = () => {
+    setDetectFields([]);
+    setCoverEndingModalMode('all');
+    setIsCoverEndingModalOpen(true);
+  };
+
+  const handleCoverEndingClose = () => {
+    setIsCoverEndingModalOpen(false);
+    setCoverEndingModalMode('missing');
+  };
+
+  const handleGenerateImages = async () => {
+    if (!currentProject || !projectId) return;
+    const sortedPages = getSortedPages();
+    if (sortedPages.length === 0) return;
+    const coverPage = sortedPages[0];
+    const endingPage = sortedPages[sortedPages.length - 1];
+    const coverText = getDescriptionText(coverPage.description_content);
+    const endingText = getDescriptionText(endingPage.description_content);
+
+    try {
+      const meta = parsePresentationMeta(currentProject.presentation_meta);
+      if (meta._cover_ending_checked) {
+        navigate(`/project/${projectId}/preview`);
+        return;
+      }
+      setIsCheckingCoverEnding(true);
+      show({ message: '正在检查封面/结尾信息...', type: 'info' });
+      const response = await detectCoverEndingFields(projectId, {
+        cover: { page_id: coverPage.id || coverPage.page_id, description: coverText },
+        ending: { page_id: endingPage.id || endingPage.page_id, description: endingText },
+      });
+      const fields = response.data?.fields || [];
+      const missing = fields.filter(f => !f.present || f.is_placeholder);
+      if (missing.length > 0) {
+        setDetectFields(fields);
+        setCoverEndingModalMode('missing');
+        setIsCoverEndingModalOpen(true);
+        return;
+      }
+    } catch (error) {
+      console.warn('封面/结尾检测失败，跳过检测流程', error);
+    } finally {
+      setIsCheckingCoverEnding(false);
+    }
+
+    navigate(`/project/${projectId}/preview`);
+  };
+
   if (!currentProject) {
     return <Loading fullscreen message={t('detail.messages.loadingProject')} />;
   }
@@ -369,8 +512,9 @@ export const DetailEditor: React.FC = () => {
               variant="primary"
               size="sm"
               icon={<ArrowRight size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={() => navigate(`/project/${projectId}/preview`)}
-              disabled={!hasAllDescriptions || isRenovationProcessing}
+              onClick={handleGenerateImages}
+              disabled={!hasAllDescriptions || isRenovationProcessing || isCheckingCoverEnding}
+              loading={isCheckingCoverEnding}
               className="text-xs md:text-sm"
             >
               <span className="hidden sm:inline">{t('detail.generateImages')}</span>
@@ -457,6 +601,14 @@ export const DetailEditor: React.FC = () => {
             >
               {t('detail.import')}
             </Button>
+            <Button
+              variant="secondary"
+              icon={<FileText size={16} className="md:w-[18px] md:h-[18px]" />}
+              onClick={handleCoverEndingView}
+              className="flex-1 sm:flex-initial text-sm md:text-base"
+            >
+              {t('detail.coverEndingInfo')}
+            </Button>
             <input ref={importFileRef} type="file" accept=".md,.txt" className="hidden" onChange={handleImportDescriptions} />
             <span className="text-xs md:text-sm text-gray-500 dark:text-foreground-tertiary whitespace-nowrap">
               {currentProject.pages.filter((p) => p.description_content).length} /{' '}
@@ -540,8 +692,17 @@ export const DetailEditor: React.FC = () => {
       </main>
       <ToastContainer />
       {ConfirmDialog}
+      <CoverEndingInfoModal
+        isOpen={isCoverEndingModalOpen}
+        detectFields={detectFields}
+        initialMeta={parsePresentationMeta(currentProject.presentation_meta)}
+        onSave={handleCoverEndingSave}
+        onSkip={handleCoverEndingSkip}
+        onClose={handleCoverEndingClose}
+        mode={coverEndingModalMode}
+        showSkip={coverEndingModalMode === 'missing'}
+      />
       <FilePreviewModal fileId={previewFileId} onClose={() => setPreviewFileId(null)} />
     </div>
   );
 };
-

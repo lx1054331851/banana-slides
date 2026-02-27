@@ -718,6 +718,79 @@ You are a helpful assistant that modifies PPT page descriptions based on user re
     return final_prompt
 
 
+def get_cover_ending_fields_detect_prompt(cover_text: str,
+                                          ending_text: str,
+                                          language: str = None) -> str:
+    """
+    检测封面/结尾页是否包含关键信息字段（以及是否为占位符）的 prompt
+
+    Returns:
+        JSON 对象，格式：
+        {
+          "fields": [
+            {
+              "key": "company_name",
+              "page_role": "cover|ending",
+              "present": true|false,
+              "value": "xxx",
+              "is_placeholder": true|false,
+              "placeholders": ["某某公司", "Company Name"],
+              "confidence": 0.0-1.0
+            }
+          ]
+        }
+    """
+    prompt = dedent(f"""\
+你是一位专业的 PPT 内容审校助手。请检查封面页与结尾页的页面描述，判断以下字段是否已经包含真实信息，或只是占位符/示例文本。
+
+需要检测的字段（共 10 项）：
+1. logo
+2. company_name
+3. project_name
+4. presenter
+5. presenter_title
+6. date
+7. location
+8. phone
+9. website_or_email（网址或邮箱其一即可）
+10. thanks_or_slogan（仅用于结尾页）
+
+请注意：
+- 只要描述中出现明确真实信息即可认为 present=true。
+- 如果仅出现“占位符/示例/泛指”文字（如“Company Name”、“某某公司”、“Your Name”、“2024-01-01”、“example.com”、“your@email.com”、“XXX”等），请标记 is_placeholder=true，present 可以为 true，但必须明确它是占位符。
+- website_or_email：只要出现网址或邮箱之一即可算 present=true。
+- logo：如果明确出现图片链接（例如 ![logo](/files/xxx.png) 或 http/https 图片），或明确指定品牌 Logo（且非占位符）即可算 present=true。
+
+请严格输出 JSON，不要包含任何解释性文字。
+
+封面页描述：
+<<<COVER_TEXT>>>
+
+结尾页描述：
+<<<ENDING_TEXT>>>
+
+输出 JSON 示例：
+{{
+  "fields": [
+    {{
+      "key": "company_name",
+      "page_role": "cover",
+      "present": false,
+      "value": "",
+      "is_placeholder": false,
+      "placeholders": [],
+      "confidence": 0.6
+    }}
+  ]
+}}
+{get_language_instruction(language)}
+""")
+    prompt = prompt.replace("<<<COVER_TEXT>>>", cover_text or "")
+    prompt = prompt.replace("<<<ENDING_TEXT>>>", ending_text or "")
+    logger.debug(f"[get_cover_ending_fields_detect_prompt] Final prompt:\n{prompt}")
+    return prompt
+
+
 def get_long_report_split_prompt(report_text: str,
                                  reference_files_content: Optional[List[Dict[str, str]]] = None) -> str:
     """
