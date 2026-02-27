@@ -41,6 +41,7 @@ const outlineI18n = {
         parseSourceEmpty: "请先选择文件或粘贴原文",
         unsupportedFile: "仅支持 .docx / .txt / .md 文件",
         saveFailed: "保存失败",
+        deleteFailed: "删除页面失败",
       }
     }
   },
@@ -79,6 +80,7 @@ const outlineI18n = {
         parseSourceEmpty: "Please choose a file or paste source text first",
         unsupportedFile: "Only .docx, .txt, or .md files are supported",
         saveFailed: "Save failed",
+        deleteFailed: "Failed to delete page",
       }
     }
   }
@@ -188,6 +190,18 @@ export const OutlineEditor: React.FC = () => {
   });
   const { confirm, ConfirmDialog } = useConfirm();
   const { show, ToastContainer } = useToast();
+
+  const handleDeletePage = useCallback(async (page: Page) => {
+    const pageId = page.id || page.page_id;
+    if (!pageId) {
+      show({ message: t('outline.messages.deleteFailed'), type: 'error' });
+      return;
+    }
+    const ok = await deletePageById(pageId);
+    if (!ok) {
+      show({ message: t('outline.messages.deleteFailed'), type: 'error' });
+    }
+  }, [deletePageById, show, t]);
 
   // 左侧可编辑文本区域 — desktop and mobile use separate refs to avoid
   // the shared-ref bug where insertAtCursor targets the wrong (hidden) instance.
@@ -910,7 +924,7 @@ export const OutlineEditor: React.FC = () => {
                       projectId={projectId}
                       showToast={show}
                       onUpdate={(data) => page.id && updatePageLocal(page.id, data)}
-                      onDelete={() => page.id && deletePageById(page.id)}
+                      onDelete={() => handleDeletePage(page)}
                       onClick={() => setSelectedPageId(page.id || null)}
                       isSelected={selectedPageId === page.id}
                       isAiRefining={isAiRefining}

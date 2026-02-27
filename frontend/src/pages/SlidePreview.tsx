@@ -65,6 +65,9 @@ const previewI18n = {
       confirmGenerateAll: "尚未生成任何图片，将生成全部 {{count}} 页。确定继续吗？",
       confirmPartialGenerateTitle: "选择生成范围",
       confirmPartialGenerateMessage: "已生成 {{generated}}/{{total}} 页图片。请选择仅生成未生成的 {{missing}} 页，或重新生成全部 {{total}} 页（历史记录将会保存）。",
+      confirmPartialGenerateWithGeneratingMessage: "已生成 {{generated}}/{{total}} 页图片，另有 {{generating}} 页正在生成中。请选择仅生成未生成的 {{missing}} 页，或重新生成全部 {{total}} 页（历史记录将会保存）。",
+      generatingInProgress: "已有 {{count}} 页正在生成中，请稍候...",
+      deleteFailed: "删除页面失败",
       generateMissingOnly: "仅生成未生成的 {{count}} 页",
       regenerateAllPages: "重新生成全部 {{count}} 页",
       generationFailed: "生成失败",
@@ -142,6 +145,9 @@ const previewI18n = {
       confirmGenerateAll: "No images have been generated yet. Generate all {{count}} page(s)?",
       confirmPartialGenerateTitle: "Choose Scope",
       confirmPartialGenerateMessage: "{{generated}}/{{total}} page(s) already have images. Generate only the {{missing}} missing page(s), or regenerate all {{total}} page(s) (history will be saved).",
+      confirmPartialGenerateWithGeneratingMessage: "{{generated}}/{{total}} page(s) already have images, and {{generating}} page(s) are still generating. Generate only the {{missing}} missing page(s), or regenerate all {{total}} page(s) (history will be saved).",
+      generatingInProgress: "{{count}} page(s) are generating. Please wait...",
+      deleteFailed: "Failed to delete page",
       generateMissingOnly: "Generate Missing ({{count}})",
       regenerateAllPages: "Regenerate All ({{count}})",
       generationFailed: "Generation failed",
@@ -217,6 +223,11 @@ export const SlidePreview: React.FC = () => {
     pageGeneratingTasks,
     warningMessage,
   } = useProjectStore();
+
+  const isPageGenerating = useCallback((page?: Page | null) => {
+    if (!page?.id) return false;
+    return Boolean(pageGeneratingTasks[page.id]) || page.status === 'GENERATING';
+  }, [pageGeneratingTasks]);
   
   const { addTask, pollTask: pollExportTask, tasks: exportTasks, restoreActiveTasks } = useExportTasksStore();
   const activeExportTasks = useMemo(
@@ -507,6 +518,7 @@ export const SlidePreview: React.FC = () => {
   const [batchGenerateContext, setBatchGenerateContext] = useState<{
     total: number;
     generated: number;
+    generating: number;
     missing: number;
     targetPageIds: string[];
     missingPageIds: string[];
@@ -547,6 +559,18 @@ export const SlidePreview: React.FC = () => {
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const { show, ToastContainer } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
+
+  const handleDeletePage = useCallback(async (page: Page) => {
+    const pageId = page.id || page.page_id;
+    if (!pageId) {
+      show({ message: t('preview.deleteFailed'), type: 'error' });
+      return;
+    }
+    const ok = await deletePageById(pageId);
+    if (!ok) {
+      show({ message: t('preview.deleteFailed'), type: 'error' });
+    }
+  }, [deletePageById, show, t]);
 
   // Memoize pages with generated images to avoid re-computing in multiple places
   const pagesWithImages = useMemo(() => {
@@ -867,15 +891,17 @@ export const SlidePreview: React.FC = () => {
       const pagesToGenerate = isPartialGenerate
         ? currentProject?.pages.filter(p => p.id && selectedPageIds.has(p.id))
         : currentProject?.pages;
-      const generatedPages = pagesToGenerate?.filter((p) => p.generated_image_path || p.preview_image_path) || [];
+      const generatedPages = pagesToGenerate?.filter((p) => !isPageGenerating(p) && (p.generated_image_path || p.preview_image_path)) || [];
+      const generatingPages = pagesToGenerate?.filter((p) => isPageGenerating(p)) || [];
       const targetPageIds = (pagesToGenerate || [])
         .map(p => p.id)
         .filter((id): id is string => !!id);
       const missingPageIds = (pagesToGenerate || [])
-        .filter(p => !p.generated_image_path && !p.preview_image_path && p.id)
+        .filter(p => !isPageGenerating(p) && !p.generated_image_path && !p.preview_image_path && p.id)
         .map(p => p.id!) || [];
       const totalCount = targetPageIds.length;
       const generatedCount = generatedPages.length;
+      const generatingCount = generatingPages.length;
       const missingCount = missingPageIds.length;
 
       const executeGenerate = async (pageIdsOverride?: string[]) => {
@@ -884,7 +910,7 @@ export const SlidePreview: React.FC = () => {
 
       if (totalCount === 0) return;
 
-      if (generatedCount === 0) {
+      if (generatedCount === 0 && generatingCount === 0) {
         confirm(
           t('preview.confirmGenerateAll', { count: totalCount }),
           () => executeGenerate(targetPageIds),
@@ -893,10 +919,16 @@ export const SlidePreview: React.FC = () => {
         return;
       }
 
+      if (generatingCount > 0 && missingCount === 0) {
+        show({ message: t('preview.generatingInProgress', { count: generatingCount }), type: 'info' });
+        return;
+      }
+
       if (generatedCount < totalCount) {
         setBatchGenerateContext({
           total: totalCount,
           generated: generatedCount,
+          generating: generatingCount,
           missing: missingCount,
           targetPageIds,
           missingPageIds,
@@ -922,7 +954,7 @@ export const SlidePreview: React.FC = () => {
     if (!page.id) return;
 
     // 如果该页面正在生成，不重复提交
-    if (pageGeneratingTasks[page.id]) {
+    if (isPageGenerating(page)) {
       show({ message: t('slidePreview.pageGenerating'), type: 'info' });
       return;
     }
@@ -962,7 +994,7 @@ export const SlidePreview: React.FC = () => {
         });
       }
     });
-  }, [currentProject, selectedIndex, pageGeneratingTasks, generateImages, show, checkResolutionAndExecute]);
+  }, [currentProject, selectedIndex, generateImages, show, checkResolutionAndExecute, isPageGenerating]);
 
   const handleSwitchVersion = async (versionId: string) => {
     if (!currentProject || !selectedPage?.id || !projectId) return;
@@ -2332,8 +2364,8 @@ export const SlidePreview: React.FC = () => {
                           setSelectedIndex(index);
                           handleEditPage();
                         }}
-                        onDelete={() => page.id && deletePageById(page.id)}
-                        isGenerating={page.id ? !!pageGeneratingTasks[page.id] : false}
+                        onDelete={() => handleDeletePage(page)}
+                        isGenerating={page.id ? isPageGenerating(page) : false}
                         aspectRatio={aspectRatio}
                       />
                     </div>
@@ -2425,14 +2457,11 @@ export const SlidePreview: React.FC = () => {
                         <div className="text-center">
                           <div className="text-6xl mb-4">🍌</div>
                           <p className="text-gray-500 dark:text-foreground-tertiary mb-4">
-                            {selectedPage?.id && pageGeneratingTasks[selectedPage.id]
-                              ? t('preview.generating')
-                              : selectedPage?.status === 'GENERATING'
+                            {isPageGenerating(selectedPage)
                               ? t('preview.generating')
                               : t('preview.notGenerated')}
                           </p>
-                          {(!selectedPage?.id || !pageGeneratingTasks[selectedPage.id]) && 
-                           selectedPage?.status !== 'GENERATING' && (
+                          {!isPageGenerating(selectedPage) && (
                             <Button
                               variant="primary"
                               onClick={handleRegeneratePage}
@@ -2582,10 +2611,10 @@ export const SlidePreview: React.FC = () => {
                       variant="ghost"
                       size="sm"
                       onClick={handleRegeneratePage}
-                      disabled={selectedPage?.id && pageGeneratingTasks[selectedPage.id] ? true : false}
+                      disabled={selectedPage?.id ? isPageGenerating(selectedPage) : false}
                       className="text-xs md:text-sm flex-1 sm:flex-initial"
                     >
-                      {selectedPage?.id && pageGeneratingTasks[selectedPage.id]
+                      {selectedPage?.id && isPageGenerating(selectedPage)
                         ? t('preview.regenerating')
                         : t('preview.regenerate')}
                     </Button>
@@ -2907,11 +2936,17 @@ export const SlidePreview: React.FC = () => {
         <div className="space-y-4">
           <p className="text-sm text-gray-700 dark:text-foreground-secondary">
             {batchGenerateContext
-              ? t('preview.confirmPartialGenerateMessage', {
-                  generated: batchGenerateContext.generated,
-                  total: batchGenerateContext.total,
-                  missing: batchGenerateContext.missing,
-                })
+              ? t(
+                  batchGenerateContext.generating > 0
+                    ? 'preview.confirmPartialGenerateWithGeneratingMessage'
+                    : 'preview.confirmPartialGenerateMessage',
+                  {
+                    generated: batchGenerateContext.generated,
+                    total: batchGenerateContext.total,
+                    missing: batchGenerateContext.missing,
+                    generating: batchGenerateContext.generating,
+                  }
+                )
               : ''}
           </p>
           <div className="flex flex-col gap-2">

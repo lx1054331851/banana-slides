@@ -250,6 +250,7 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
         {!isEditing && (
           <div className="flex-shrink-0 flex gap-2">
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsEditing(true);
@@ -259,6 +260,7 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
               <Edit2 size={16} />
             </button>
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 confirm(

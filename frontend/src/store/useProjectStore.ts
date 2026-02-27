@@ -101,7 +101,7 @@ interface ProjectState {
   saveAllPages: () => Promise<void>;
   reorderPages: (newOrder: string[]) => Promise<void>;
   addNewPage: () => Promise<void>;
-  deletePageById: (pageId: string) => Promise<void>;
+  deletePageById: (pageId: string) => Promise<boolean>;
   
   // 异步任务
   startAsyncTask: (apiCall: () => Promise<any>) => Promise<void>;
@@ -437,13 +437,15 @@ const debouncedUpdatePage = debounce(
   // 删除页面
   deletePageById: async (pageId) => {
     const { currentProject } = get();
-    if (!currentProject) return;
+    if (!currentProject) return false;
 
     try {
       await api.deletePage(currentProject.id, pageId);
       await get().syncProject();
+      return true;
     } catch (error: any) {
-      set({ error: error.message || t('store.deletePageFailed') });
+      set({ error: normalizeErrorMessage(error.message || t('store.deletePageFailed')) });
+      return false;
     }
   },
 
@@ -861,11 +863,16 @@ const debouncedUpdatePage = debounce(
     const targetPageIds = pageIds || currentProject.pages.map(p => p.id).filter((id): id is string => !!id);
     
     // 检查是否有页面正在生成
-    const alreadyGenerating = targetPageIds.filter(id => pageGeneratingTasks[id]);
+    const pageStatusMap = new Map(currentProject.pages.map(page => [page.id, page.status]));
+    const alreadyGenerating = targetPageIds.filter(
+      id => pageGeneratingTasks[id] || pageStatusMap.get(id) === 'GENERATING'
+    );
     if (alreadyGenerating.length > 0) {
       devLog(`[批量生成] ${alreadyGenerating.length} 个页面正在生成中，跳过`);
       // 过滤掉已经在生成的页面
-      const newPageIds = targetPageIds.filter(id => !pageGeneratingTasks[id]);
+      const newPageIds = targetPageIds.filter(
+        id => !pageGeneratingTasks[id] && pageStatusMap.get(id) !== 'GENERATING'
+      );
       if (newPageIds.length === 0) {
         devLog('[批量生成] 所有页面都在生成中，跳过请求');
         return;
@@ -876,15 +883,18 @@ const debouncedUpdatePage = debounce(
     
     try {
       // 调用批量生成 API
-      const response = await api.generateImages(currentProject.id, undefined, pageIds);
+      const newPageIds = targetPageIds.filter(
+        id => !pageGeneratingTasks[id] && pageStatusMap.get(id) !== 'GENERATING'
+      );
+      const response = await api.generateImages(currentProject.id, undefined, newPageIds);
       const taskId = response.data?.task_id;
       
       if (taskId) {
-        devLog(`[批量生成] 收到 task_id: ${taskId}，标记 ${targetPageIds.length} 个页面为生成中`);
+        devLog(`[批量生成] 收到 task_id: ${taskId}，标记 ${newPageIds.length} 个页面为生成中`);
         
         // 为所有目标页面设置任务ID
         const newPageGeneratingTasks = { ...pageGeneratingTasks };
-        targetPageIds.forEach(id => {
+        newPageIds.forEach(id => {
           newPageGeneratingTasks[id] = taskId;
         });
         set({ pageGeneratingTasks: newPageGeneratingTasks });
@@ -893,7 +903,7 @@ const debouncedUpdatePage = debounce(
         await get().syncProject();
         
         // 开始轮询批量任务状态（非阻塞）
-        get().pollImageTask(taskId, targetPageIds);
+        get().pollImageTask(taskId, newPageIds);
       } else {
         // 如果没有返回 task_id，可能是同步接口，直接刷新
         await get().syncProject();

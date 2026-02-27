@@ -126,6 +126,7 @@ export const SlideCard: React.FC<SlideCardProps> = ({
             {/* 悬停操作 */}
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   confirm(
@@ -139,13 +140,14 @@ export const SlideCard: React.FC<SlideCardProps> = ({
               >
                 <Trash2 size={18} className="text-red-600" />
               </button>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit();
-                  }}
-                  className="p-2 bg-white dark:bg-background-secondary rounded-lg hover:bg-banana-50 dark:hover:bg-background-hover transition-colors"
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+                  className="pointer-events-auto p-2 bg-white dark:bg-background-secondary rounded-lg hover:bg-banana-50 dark:hover:bg-background-hover transition-colors"
                   aria-label="Edit"
                 >
                   <Edit2 size={18} />
