@@ -78,7 +78,7 @@ const homeI18n = {
       },
       renovation: {
         uploadHint: '点击或拖拽上传 PDF / PPTX 文件',
-        formatHint: '支持 .pdf, .pptx, .ppt 格式',
+        formatHint: '支持 .pdf, .pptx, .ppt 格式（推荐上传 PDF）',
         keepLayout: '保留原始排版布局',
         onlyPdfPptx: '仅支持 PDF 和 PPTX 文件',
         uploadFile: '请先上传 PDF 或 PPTX 文件',
@@ -94,7 +94,7 @@ const homeI18n = {
         fileUploadFailed: '文件上传失败',
         fileTooLarge: '文件过大：{{size}}MB，最大支持 200MB',
         unsupportedFileType: '不支持的文件类型: {{type}}',
-        pptTip: '提示：建议将PPT转换为PDF格式上传，可获得更好的解析效果',
+        pptTip: '建议先在本地将 PPTX 转为 PDF 后再上传，可获得更好的兼容性和更快的处理速度',
         filesAdded: '已添加 {{count}} 个参考文件',
         imageRemoved: '已移除图片',
         serviceTestTip: '建议先到设置页底部进行服务测试，避免后续功能异常',
@@ -167,7 +167,7 @@ const homeI18n = {
       },
       renovation: {
         uploadHint: 'Click or drag to upload PDF / PPTX file',
-        formatHint: 'Supports .pdf, .pptx, .ppt formats',
+        formatHint: 'Supports .pdf, .pptx, .ppt formats (PDF recommended)',
         keepLayout: 'Keep original layout',
         onlyPdfPptx: 'Only PDF and PPTX files are supported',
         uploadFile: 'Please upload a PDF or PPTX file first',
@@ -183,7 +183,7 @@ const homeI18n = {
         fileUploadFailed: 'Failed to upload file',
         fileTooLarge: 'File too large: {{size}}MB, maximum 200MB',
         unsupportedFileType: 'Unsupported file type: {{type}}',
-        pptTip: 'Tip: Convert PPT to PDF for better parsing results',
+        pptTip: 'We recommend converting your PPTX to PDF locally before uploading for better compatibility and faster processing',
         filesAdded: 'Added {{count}} reference file(s)',
         imageRemoved: 'Image removed',
         serviceTestTip: 'Test services in Settings first to avoid issues',
@@ -478,14 +478,14 @@ export const Home: React.FC = () => {
       
       // 特殊处理413错误
       if (error?.response?.status === 413) {
-        show({ 
-          message: `文件过大：${(file.size / 1024 / 1024).toFixed(1)}MB，最大支持 200MB`, 
-          type: 'error' 
+        show({
+          message: t('home.messages.fileTooLarge', { size: (file.size / 1024 / 1024).toFixed(1) }),
+          type: 'error'
         });
       } else {
-        show({ 
-          message: `文件上传失败: ${error?.response?.data?.error?.message || error.message || '未知错误'}`, 
-          type: 'error' 
+        show({
+          message: `${t('home.messages.fileUploadFailed')}: ${error?.response?.data?.error?.message || error.message || ''}`.replace(/: $/, ''),
+          type: 'error'
         });
       }
     } finally {

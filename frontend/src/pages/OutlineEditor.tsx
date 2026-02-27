@@ -40,6 +40,7 @@ const outlineI18n = {
         parseSourceFailed: "解析失败",
         parseSourceEmpty: "请先选择文件或粘贴原文",
         unsupportedFile: "仅支持 .docx / .txt / .md 文件",
+        saveFailed: "保存失败",
       }
     }
   },
@@ -77,6 +78,7 @@ const outlineI18n = {
         parseSourceFailed: "Parsing failed",
         parseSourceEmpty: "Please choose a file or paste source text first",
         unsupportedFile: "Only .docx, .txt, or .md files are supported",
+        saveFailed: "Save failed",
       }
     }
   }
@@ -229,7 +231,7 @@ export const OutlineEditor: React.FC = () => {
       setIsInputDirty(false);
     } catch (e) {
       console.error('保存输入文本失败:', e);
-      show({ message: '保存失败', type: 'error' });
+      show({ message: t('outline.messages.saveFailed'), type: 'error' });
     }
   }, [projectId, show, syncProject]);
 

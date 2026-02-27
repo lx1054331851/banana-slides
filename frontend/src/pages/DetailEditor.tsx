@@ -20,6 +20,7 @@ const detailI18n = {
       renovationProgress: "{{completed}}/{{total}} 页",
       renovationFailed: "PDF 解析失败，请返回重试",
       renovationPollFailed: "与服务器通信失败，请检查网络后刷新页面重试",
+      disabledNextTip: "还有 {{count}} 页缺少描述，请先完成所有页面的描述",
       messages: {
         generateSuccess: "生成成功", generateFailed: "生成失败",
         confirmRegenerate: "部分页面已有描述，重新生成将覆盖，确定继续吗？",
@@ -48,6 +49,7 @@ const detailI18n = {
       renovationProgress: "{{completed}}/{{total}} pages",
       renovationFailed: "PDF parsing failed, please go back and retry",
       renovationPollFailed: "Lost connection to server. Please check your network and refresh the page.",
+      disabledNextTip: "{{count}} page(s) are missing descriptions. Please complete all page descriptions first",
       messages: {
         generateSuccess: "Generated successfully", generateFailed: "Generation failed",
         confirmRegenerate: "Some pages already have descriptions. Regenerating will overwrite them. Continue?",
@@ -452,6 +454,7 @@ export const DetailEditor: React.FC = () => {
   const hasAllDescriptions = currentProject.pages.every(
     (p) => p.description_content
   );
+  const missingDescCount = currentProject.pages.filter(p => !p.description_content).length;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-background-primary flex flex-col">
@@ -515,6 +518,7 @@ export const DetailEditor: React.FC = () => {
               onClick={handleGenerateImages}
               disabled={!hasAllDescriptions || isRenovationProcessing || isCheckingCoverEnding}
               loading={isCheckingCoverEnding}
+              title={!hasAllDescriptions && !isRenovationProcessing && !isCheckingCoverEnding ? t('detail.disabledNextTip', { count: missingDescCount }) : undefined}
               className="text-xs md:text-sm"
             >
               <span className="hidden sm:inline">{t('detail.generateImages')}</span>
