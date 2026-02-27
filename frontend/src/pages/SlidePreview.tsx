@@ -61,6 +61,12 @@ const previewI18n = {
       confirmRegenerateSelected: "将重新生成选中的 {{count}} 页（历史记录将会保存），确定继续吗？",
       confirmRegenerateAll: "将重新生成所有页面（历史记录将会保存），确定继续吗？",
       confirmRegenerateTitle: "确认重新生成",
+      confirmGenerateAllTitle: "确认生成",
+      confirmGenerateAll: "尚未生成任何图片，将生成全部 {{count}} 页。确定继续吗？",
+      confirmPartialGenerateTitle: "选择生成范围",
+      confirmPartialGenerateMessage: "已生成 {{generated}}/{{total}} 页图片。请选择仅生成未生成的 {{missing}} 页，或重新生成全部 {{total}} 页（历史记录将会保存）。",
+      generateMissingOnly: "仅生成未生成的 {{count}} 页",
+      regenerateAllPages: "重新生成全部 {{count}} 页",
       generationFailed: "生成失败",
       disabledExportTip: "还有 {{count}} 页未生成图片，请先生成所有页面图片",
       disabledEditTip: "请先生成该页图片",
@@ -132,6 +138,12 @@ const previewI18n = {
       confirmRegenerateSelected: "Will regenerate {{count}} selected page(s) (history will be saved). Continue?",
       confirmRegenerateAll: "Will regenerate all pages (history will be saved). Continue?",
       confirmRegenerateTitle: "Confirm Regenerate",
+      confirmGenerateAllTitle: "Confirm Generate",
+      confirmGenerateAll: "No images have been generated yet. Generate all {{count}} page(s)?",
+      confirmPartialGenerateTitle: "Choose Scope",
+      confirmPartialGenerateMessage: "{{generated}}/{{total}} page(s) already have images. Generate only the {{missing}} missing page(s), or regenerate all {{total}} page(s) (history will be saved).",
+      generateMissingOnly: "Generate Missing ({{count}})",
+      regenerateAllPages: "Regenerate All ({{count}})",
       generationFailed: "Generation failed",
       disabledExportTip: "{{count}} page(s) have no images yet. Please generate all page images first",
       disabledEditTip: "Please generate this page's image first",
@@ -491,6 +503,14 @@ export const SlidePreview: React.FC = () => {
   const [show1KWarningDialog, setShow1KWarningDialog] = useState(false);
   const [skip1KWarningChecked, setSkip1KWarningChecked] = useState(false);
   const [pending1KAction, setPending1KAction] = useState<(() => Promise<void>) | null>(null);
+  const [showBatchGenerateDialog, setShowBatchGenerateDialog] = useState(false);
+  const [batchGenerateContext, setBatchGenerateContext] = useState<{
+    total: number;
+    generated: number;
+    missing: number;
+    targetPageIds: string[];
+    missingPageIds: string[];
+  } | null>(null);
   // 每页编辑参数缓存（前端会话内缓存，便于重复执行）
   const [editContextByPage, setEditContextByPage] = useState<Record<string, {
     prompt: string;
@@ -798,70 +818,101 @@ export const SlidePreview: React.FC = () => {
     setPending1KAction(null);
   }, []);
 
+  const handleBatchGenerate = useCallback(async (pageIds?: string[]) => {
+    try {
+      await generateImages(pageIds);
+    } catch (error: any) {
+      console.error('批量生成错误:', error);
+      console.error('错误响应:', error?.response?.data);
+
+      // 提取后端返回的更具体错误信息
+      let errorMessage = t('preview.generationFailed');
+      const respData = error?.response?.data;
+
+      if (respData) {
+        if (respData.error?.message) {
+          errorMessage = respData.error.message;
+        } else if (respData.message) {
+          errorMessage = respData.message;
+        } else if (respData.error) {
+          errorMessage =
+            typeof respData.error === 'string'
+              ? respData.error
+              : respData.error.message || errorMessage;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      devLog('提取的错误消息:', errorMessage);
+
+      // 使用统一的错误消息规范化函数
+      errorMessage = normalizeErrorMessage(errorMessage);
+
+      devLog('规范化后的错误消息:', errorMessage);
+
+      show({
+        message: errorMessage,
+        type: 'error',
+      });
+    }
+  }, [generateImages, show, t]);
+
   const handleGenerateAll = async () => {
     // 先检查分辨率，如果是1K则显示警告
     await checkResolutionAndExecute(async () => {
-      const pageIds = getSelectedPageIdsForExport();
       const isPartialGenerate = isMultiSelectMode && selectedPageIds.size > 0;
 
       // 检查要生成的页面中是否有已有图片的
       const pagesToGenerate = isPartialGenerate
         ? currentProject?.pages.filter(p => p.id && selectedPageIds.has(p.id))
         : currentProject?.pages;
-      const hasImages = pagesToGenerate?.some((p) => p.generated_image_path || p.preview_image_path);
+      const generatedPages = pagesToGenerate?.filter((p) => p.generated_image_path || p.preview_image_path) || [];
+      const targetPageIds = (pagesToGenerate || [])
+        .map(p => p.id)
+        .filter((id): id is string => !!id);
+      const missingPageIds = (pagesToGenerate || [])
+        .filter(p => !p.generated_image_path && !p.preview_image_path && p.id)
+        .map(p => p.id!) || [];
+      const totalCount = targetPageIds.length;
+      const generatedCount = generatedPages.length;
+      const missingCount = missingPageIds.length;
 
-      const executeGenerate = async () => {
-        try {
-          await generateImages(pageIds);
-        } catch (error: any) {
-          console.error('批量生成错误:', error);
-          console.error('错误响应:', error?.response?.data);
-
-          // 提取后端返回的更具体错误信息
-          let errorMessage = t('preview.generationFailed');
-          const respData = error?.response?.data;
-
-          if (respData) {
-            if (respData.error?.message) {
-              errorMessage = respData.error.message;
-            } else if (respData.message) {
-              errorMessage = respData.message;
-            } else if (respData.error) {
-              errorMessage =
-                typeof respData.error === 'string'
-                  ? respData.error
-                  : respData.error.message || errorMessage;
-            }
-          } else if (error.message) {
-            errorMessage = error.message;
-          }
-
-          devLog('提取的错误消息:', errorMessage);
-
-          // 使用统一的错误消息规范化函数
-          errorMessage = normalizeErrorMessage(errorMessage);
-
-          devLog('规范化后的错误消息:', errorMessage);
-
-          show({
-            message: errorMessage,
-            type: 'error',
-          });
-        }
+      const executeGenerate = async (pageIdsOverride?: string[]) => {
+        await handleBatchGenerate(pageIdsOverride);
       };
 
-      if (hasImages) {
-        const message = isPartialGenerate
-          ? t('preview.confirmRegenerateSelected', { count: selectedPageIds.size })
-          : t('preview.confirmRegenerateAll');
+      if (totalCount === 0) return;
+
+      if (generatedCount === 0) {
         confirm(
-          message,
-          executeGenerate,
-          { title: t('preview.confirmRegenerateTitle'), variant: 'warning' }
+          t('preview.confirmGenerateAll', { count: totalCount }),
+          () => executeGenerate(targetPageIds),
+          { title: t('preview.confirmGenerateAllTitle'), variant: 'info' }
         );
-      } else {
-        await executeGenerate();
+        return;
       }
+
+      if (generatedCount < totalCount) {
+        setBatchGenerateContext({
+          total: totalCount,
+          generated: generatedCount,
+          missing: missingCount,
+          targetPageIds,
+          missingPageIds,
+        });
+        setShowBatchGenerateDialog(true);
+        return;
+      }
+
+      const message = isPartialGenerate
+        ? t('preview.confirmRegenerateSelected', { count: selectedPageIds.size })
+        : t('preview.confirmRegenerateAll');
+      confirm(
+        message,
+        () => executeGenerate(targetPageIds),
+        { title: t('preview.confirmRegenerateTitle'), variant: 'warning' }
+      );
     });
   };
 
@@ -2838,6 +2889,66 @@ export const SlidePreview: React.FC = () => {
             </Button>
             <Button variant="primary" onClick={handleConfirm1KWarning}>
               {t('preview.generateAnyway')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 批量生成范围选择对话框 */}
+      <Modal
+        isOpen={showBatchGenerateDialog}
+        onClose={() => {
+          setShowBatchGenerateDialog(false);
+          setBatchGenerateContext(null);
+        }}
+        title={t('preview.confirmPartialGenerateTitle')}
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-700 dark:text-foreground-secondary">
+            {batchGenerateContext
+              ? t('preview.confirmPartialGenerateMessage', {
+                  generated: batchGenerateContext.generated,
+                  total: batchGenerateContext.total,
+                  missing: batchGenerateContext.missing,
+                })
+              : ''}
+          </p>
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                if (!batchGenerateContext) return;
+                setShowBatchGenerateDialog(false);
+                setBatchGenerateContext(null);
+                await handleBatchGenerate(batchGenerateContext.missingPageIds);
+              }}
+            >
+              {batchGenerateContext
+                ? t('preview.generateMissingOnly', { count: batchGenerateContext.missing })
+                : t('preview.generateMissingOnly', { count: 0 })}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={async () => {
+                if (!batchGenerateContext) return;
+                setShowBatchGenerateDialog(false);
+                setBatchGenerateContext(null);
+                await handleBatchGenerate(batchGenerateContext.targetPageIds);
+              }}
+            >
+              {batchGenerateContext
+                ? t('preview.regenerateAllPages', { count: batchGenerateContext.total })
+                : t('preview.regenerateAllPages', { count: 0 })}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setShowBatchGenerateDialog(false);
+                setBatchGenerateContext(null);
+              }}
+            >
+              {t('common.cancel')}
             </Button>
           </div>
         </div>

@@ -358,17 +358,30 @@ class AIService:
         Flatten outline structure to page list
         Based on demo.py flatten_outline()
         """
+        def normalize_page(raw_page):
+            if isinstance(raw_page, dict):
+                return raw_page
+            if isinstance(raw_page, str):
+                return {"title": raw_page}
+            return {"title": str(raw_page)}
+
         pages = []
+        if not outline:
+            return pages
+
         for item in outline:
-            if "part" in item and "pages" in item:
-                # This is a part, expand its pages
-                for page in item["pages"]:
-                    page_with_part = page.copy()
-                    page_with_part["part"] = item["part"]
+            if isinstance(item, dict) and "part" in item and "pages" in item:
+                part = item.get("part")
+                raw_pages = item.get("pages") or []
+                if not isinstance(raw_pages, list):
+                    raw_pages = [raw_pages]
+                for page in raw_pages:
+                    page_with_part = normalize_page(page)
+                    if part:
+                        page_with_part["part"] = part
                     pages.append(page_with_part)
             else:
-                # This is a direct page
-                pages.append(item)
+                pages.append(normalize_page(item))
         return pages
     
     def generate_page_description(self, project_context: ProjectContext, outline: List[Dict], 
