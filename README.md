@@ -337,7 +337,14 @@ docker compose down
 
 6. **更新项目**
 
-拉取最新代码并重新构建和启动服务：
+**使用预构建镜像（docker-compose.prod.yml）**
+
+```bash
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+```
+
+**使用本地构建（docker-compose.yml）**
 
 ```bash
 git pull
