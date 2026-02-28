@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, Key, Image, Zap, Save, RotateCcw, Globe, FileText, Brain, ArrowUp } from 'lucide-react';
+import { Home, Key, Image, Zap, Save, RotateCcw, Globe, FileText, Brain, ArrowUp, HelpCircle, Lock } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 
 // 组件内翻译
@@ -65,6 +65,14 @@ const settingsI18n = {
         perModelApiKey: "API Key", perModelApiKeyPlaceholder: "输入 API Key",
         perModelApiKeyDesc: "留空则保持当前设置不变",
         perModelApiKeySet: "已设置（长度: {{length}}）",
+      },
+      apiKeyHelp: {
+        title: "如何获取 API 密钥",
+        step1: "前往 {{link}} 注册账号",
+        step2: "点击顶栏「充值」，根据需要充值一定的额度",
+        step3: "点击顶栏「密钥」",
+        step4: "点击「创建 key」生成新的 API Key",
+        privacy: "您的 API 密钥仅用于您自己的请求，不会与其他用户共享",
       },
       apiKeyTip: { before: "推荐使用 ", after: " 中转，支持 Gemini 和 OpenAI 双格式，高并发文生图稳定可靠。" },
       apiKeyApplyLink: "，请点击此处申请密钥",
@@ -157,6 +165,14 @@ const settingsI18n = {
         perModelApiKey: "API Key", perModelApiKeyPlaceholder: "Enter API Key",
         perModelApiKeyDesc: "Leave empty to keep current setting",
         perModelApiKeySet: "Set (length: {{length}})",
+      },
+      apiKeyHelp: {
+        title: "How to get an API key",
+        step1: "Register at {{link}}",
+        step2: "Click \"Recharge\" in the top navigation bar and add credits as needed",
+        step3: "Click \"Keys\" in the top navigation bar",
+        step4: "Click \"Create Key\" to generate a new API Key",
+        privacy: "Your API key is only used for your own requests and is never shared with other users",
       },
       apiKeyTip: { before: "Recommended: ", after: " proxy — supports both Gemini and OpenAI formats with stable high-concurrency image generation." },
       apiKeyApplyLink: ", click here to apply",
@@ -1105,6 +1121,33 @@ export const Settings: React.FC = () => {
               </h2>
               <div className="space-y-4">
                 {section.fields.map((field) => renderField(field))}
+                {section.title === t('settings.sections.apiConfig') && (
+                  <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
+                    <p className="text-sm font-medium text-gray-800 dark:text-foreground-primary flex items-center gap-1.5 mb-2">
+                      <HelpCircle size={15} className="text-blue-500" />
+                      {t('settings.apiKeyHelp.title')}
+                    </p>
+                    <ol className="text-sm text-gray-700 dark:text-foreground-secondary space-y-1 list-decimal list-inside ml-1">
+                      <li>
+                        {t('settings.apiKeyHelp.step1', { link: '{{link}}' }).split('{{link}}')[0]}
+                        <span
+                          onClick={() => { const u = ['https://', 'aihubmix', '.com/?', 'aff=17EC'].join(''); window.open(u, '_blank', 'noopener,noreferrer'); }}
+                          className="text-blue-600 hover:text-blue-800 underline font-medium cursor-pointer"
+                        >
+                          点击此处访问 AIHubmix →
+                        </span>
+                        {t('settings.apiKeyHelp.step1', { link: '{{link}}' }).split('{{link}}')[1]}
+                      </li>
+                      <li>{t('settings.apiKeyHelp.step2')}</li>
+                      <li>{t('settings.apiKeyHelp.step3')}</li>
+                      <li>{t('settings.apiKeyHelp.step4')}</li>
+                    </ol>
+                    <p className="mt-2 text-xs text-green-700 dark:text-green-400 flex items-center gap-1">
+                      <Lock size={11} />
+                      {t('settings.apiKeyHelp.privacy')}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           ))}
