@@ -693,6 +693,8 @@ Welcome to contribute to this project through
 and 
 [Pull Request](https://github.com/Anionex/banana-slides/pulls)!
 
+> **Important:** Please read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing.
+
 ## 📄 License
 
 This project is open-source under the **GNU Affero General Public License v3.0 (AGPL-3.0)** and can be freely used for non-commercial purposes such as personal learning, research, experimentation, education, or non-profit scientific research;

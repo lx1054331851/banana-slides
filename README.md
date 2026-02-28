@@ -615,6 +615,8 @@ banana-slides/
 [Pull Request](https://github.com/Anionex/banana-slides/pulls)
 为本项目贡献力量！
 
+> **重要：** 贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)
+
 ## 📄 许可证
 
 本项目采用 **GNU Affero General Public License v3.0（AGPL-3.0）** 开源，
