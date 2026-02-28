@@ -864,7 +864,7 @@ export const Settings: React.FC = () => {
           <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
             {field.description}
             {field.link && (
-              <span onClick={() => window.open(field.link, '_blank', 'noopener,noreferrer')} className="text-banana-500 hover:underline cursor-pointer">{t('settings.fields.applyLink')}</span>
+              <a href={field.link} target="_blank" rel="noopener noreferrer" className="text-banana-500 hover:underline">{t('settings.fields.applyLink')}</a>
             )}
           </p>
         )}
@@ -1089,7 +1089,7 @@ export const Settings: React.FC = () => {
           <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
             <p className="text-sm text-gray-700 dark:text-foreground-secondary">
               {t('settings.apiKeyTip.before')}
-              <span onClick={() => { const u = ['https://', 'aihubmix', '.com/?', 'aff=17EC'].join(''); window.open(u, '_blank', 'noopener,noreferrer'); }} className="text-blue-600 hover:text-blue-800 underline font-medium cursor-pointer">AIHubmix 申请 API key</span>
+              <a href={['https://', 'aihubmix', '.com/?', 'aff=17EC'].join('')} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline font-medium">AIHubmix 申请 API key</a>
             </p>
           </div>
 
@@ -1102,12 +1102,13 @@ export const Settings: React.FC = () => {
             <ol className="text-sm text-gray-700 dark:text-foreground-secondary space-y-1 list-decimal list-inside ml-1">
               <li>
                 {t('settings.apiKeyHelp.step1', { link: '{{link}}' }).split('{{link}}')[0]}
-                <span
-                  onClick={() => { const u = ['https://', 'aihubmix', '.com/?', 'aff=17EC'].join(''); window.open(u, '_blank', 'noopener,noreferrer'); }}
-                  className="text-blue-600 hover:text-blue-800 underline font-medium cursor-pointer"
+                <a
+                  href={['https://', 'aihubmix', '.com/?', 'aff=17EC'].join('')}
+                  target="_blank" rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 underline font-medium"
                 >
                   点击此处访问 AIHubmix →
-                </span>
+                </a>
                 {t('settings.apiKeyHelp.step1', { link: '{{link}}' }).split('{{link}}')[1]}
               </li>
               <li>{t('settings.apiKeyHelp.step2')}</li>
