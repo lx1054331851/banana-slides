@@ -190,7 +190,7 @@
 2. 敬请期待
 
 
-### 使用 Docker Compose🐳（推荐）
+### 使用 Docker Compose🐳
 通过docker compose快速启动前后端服务。
 
 <details>
