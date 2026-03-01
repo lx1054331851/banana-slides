@@ -6,6 +6,7 @@ Operates in two authentication modes selected at construction time:
   * Vertex AI mode (GCP service-account credentials via GOOGLE_APPLICATION_CREDENTIALS)
 """
 import logging
+from typing import Generator
 from google import genai
 from google.genai import types
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -171,3 +172,6 @@ class GenAITextProvider(TextProvider):
             config=types.GenerateContentConfig(**config_params) if config_params else None,
         )
         return _validate_response(response)
+    def generate_text_stream(self, prompt: str, thinking_budget: int = 0) -> Generator[str, None, None]:
+        """Compatibility wrapper for new streaming interface."""
+        yield from self.stream_text(prompt, thinking_budget=thinking_budget)

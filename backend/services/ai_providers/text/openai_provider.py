@@ -2,6 +2,7 @@
 OpenAI SDK implementation for text generation
 """
 import logging
+from typing import Generator
 from .base import TextProvider, strip_think_tags
 from config import get_config
 from ..openai_client import make_openai_client
@@ -55,22 +56,21 @@ class OpenAITextProvider(TextProvider):
         )
         return strip_think_tags(response.choices[0].message.content)
 
-    def stream_text(self, prompt: str, thinking_budget: int = 0):
-        """
-        Stream text using OpenAI SDK
-        """
+    def generate_text_stream(self, prompt: str, thinking_budget: int = 0) -> Generator[str, None, None]:
+        """Stream text using OpenAI SDK with stream=True."""
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
-            stream=True
+            stream=True,
         )
         for chunk in response:
-            if not chunk or not getattr(chunk, "choices", None):
-                continue
-            delta = chunk.choices[0].delta
-            content = getattr(delta, "content", None)
-            if content:
-                yield content
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta and delta.content:
+                yield delta.content
+
+    def stream_text(self, prompt: str, thinking_budget: int = 0) -> Generator[str, None, None]:
+        """Backward-compatible alias for legacy call sites."""
+        yield from self.generate_text_stream(prompt, thinking_budget=thinking_budget)
 
     def generate_with_image(self, prompt: str, image_path: str, thinking_budget: int = 0) -> str:
         """
