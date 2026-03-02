@@ -3,6 +3,7 @@ Style preview service - recommend style_json and generate preview images.
 """
 import json
 import logging
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -45,6 +46,93 @@ def _normalize_style_recommendations(result: Any) -> list[dict]:
     if isinstance(result, list):
         return result
     return []
+
+
+def _is_transient_image_network_error(exc: Exception) -> bool:
+    """
+    Heuristic matcher for transient network/TLS errors from provider SDK stacks.
+    """
+    text = f"{type(exc).__name__}: {exc}".lower()
+    markers = (
+        'connecterror',
+        'connectionerror',
+        'readtimeout',
+        'writetimeout',
+        'timeout',
+        'remoteprotocolerror',
+        'unexpected_eof_while_reading',
+        'ssl:',
+        'eof occurred in violation of protocol',
+        'temporarily unavailable',
+        'connection reset',
+        'broken pipe',
+    )
+    return any(marker in text for marker in markers)
+
+
+def _render_preview_slide_with_retry(*,
+                                     ai_service,
+                                     file_service: FileService,
+                                     project_id: str,
+                                     rec_id: str,
+                                     slide_key: str,
+                                     page_index: int,
+                                     outline: list[dict],
+                                     sample_pages: Dict[str, str],
+                                     extra_req: str,
+                                     aspect_ratio: str,
+                                     resolution: str,
+                                     language: str,
+                                     extra_retries: int) -> tuple[str, str]:
+    max_attempts = max(1, int(extra_retries) + 1)
+    attempt = 0
+
+    while attempt < max_attempts:
+        attempt += 1
+        try:
+            page_desc = sample_pages.get(slide_key, '')
+            page = outline[page_index - 1]
+            prompt_img = ai_service.generate_image_prompt(
+                outline=outline,
+                page=page,
+                page_desc=page_desc,
+                page_index=page_index,
+                extra_requirements=extra_req,
+                language=language,
+                has_template=False
+            )
+            image = ai_service.generate_image(
+                prompt_img,
+                ref_image_path=None,
+                aspect_ratio=aspect_ratio,
+                resolution=resolution
+            )
+            if not image:
+                raise ValueError("Failed to generate preview image")
+
+            run_id = uuid.uuid4().hex[:10]
+            rel_path = file_service.save_style_preview_image(
+                image=image,
+                project_id=project_id,
+                rec_id=rec_id,
+                slide_type=slide_key,
+                run_id=run_id,
+                image_format='PNG'
+            )
+            filename = rel_path.split('/')[-1]
+            url = f"/files/{project_id}/style-previews/{rec_id}/{filename}"
+            return slide_key, url
+        except Exception as e:
+            transient = _is_transient_image_network_error(e)
+            if attempt < max_attempts and transient:
+                sleep_s = min(2 ** (attempt - 1), 8)
+                logger.warning(
+                    "Regenerate preview transient error, retrying: rec=%s slide=%s attempt=%s/%s sleep=%ss err=%s",
+                    rec_id, slide_key, attempt, max_attempts, sleep_s, str(e)
+                )
+                time.sleep(sleep_s)
+                continue
+            raise
 
 
 def generate_style_recommendations_and_previews_task(task_id: str, project_id: str,
@@ -245,7 +333,16 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                             task.set_progress(p)
                             db.session.commit()
                     except Exception as e:
-                        logger.error(f"Preview generation failed: rec={rec.get('id')} slide={slide_key}: {str(e)}", exc_info=True)
+                        if _is_transient_image_network_error(e):
+                            logger.error(
+                                "Preview generation failed after retries (transient network): rec=%s slide=%s err=%s",
+                                rec.get('id'), slide_key, str(e)
+                            )
+                        else:
+                            logger.error(
+                                "Preview generation failed: rec=%s slide=%s err=%s",
+                                rec.get('id'), slide_key, str(e), exc_info=True
+                            )
                         failed += 1
                         db.session.expire_all()
                         task = Task.query.get(task_id)
@@ -353,42 +450,26 @@ def regenerate_single_style_previews_task(task_id: str, project_id: str, rec_id:
 
             preview_urls: Dict[str, str] = {}
 
-            def render_slide(slide_key: str, page_index: int) -> tuple[str, str]:
-                page_desc = sample_pages.get(slide_key, '')
-                page = outline[page_index - 1]
-                prompt_img = ai_service.generate_image_prompt(
-                    outline=outline,
-                    page=page,
-                    page_desc=page_desc,
-                    page_index=page_index,
-                    extra_requirements=extra_req,
-                    language=language or app.config.get('OUTPUT_LANGUAGE', 'zh'),
-                    has_template=False
-                )
-                image = ai_service.generate_image(
-                    prompt_img,
-                    ref_image_path=None,
-                    aspect_ratio=aspect_ratio,
-                    resolution=resolution
-                )
-                if not image:
-                    raise ValueError("Failed to generate preview image")
+            slide_extra_retries = int(app.config.get('STYLE_PREVIEW_SLIDE_RETRIES', 1))
+            max_workers = int(app.config.get('STYLE_PREVIEW_WORKERS', 2))
+            max_workers = max(1, min(max_workers, len(slide_keys)))
 
-                run_id = uuid.uuid4().hex[:10]
-                rel_path = file_service.save_style_preview_image(
-                    image=image,
+            def render_slide(slide_key: str, page_index: int) -> tuple[str, str]:
+                return _render_preview_slide_with_retry(
+                    ai_service=ai_service,
+                    file_service=file_service,
                     project_id=project_id,
                     rec_id=rec_id,
-                    slide_type=slide_key,
-                    run_id=run_id,
-                    image_format='PNG'
+                    slide_key=slide_key,
+                    page_index=page_index,
+                    outline=outline,
+                    sample_pages=sample_pages or {},
+                    extra_req=extra_req,
+                    aspect_ratio=aspect_ratio,
+                    resolution=resolution,
+                    language=language or app.config.get('OUTPUT_LANGUAGE', 'zh'),
+                    extra_retries=slide_extra_retries,
                 )
-                filename = rel_path.split('/')[-1]
-                url = f"/files/{project_id}/style-previews/{rec_id}/{filename}"
-                return slide_key, url
-
-            max_workers = int(app.config.get('STYLE_PREVIEW_WORKERS', 4))
-            max_workers = max(1, min(max_workers, len(slide_keys)))
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 future_map = {
@@ -402,7 +483,16 @@ def regenerate_single_style_previews_task(task_id: str, project_id: str, rec_id:
                         preview_urls[f"{slide_key}_url"] = url
                         completed += 1
                     except Exception as e:
-                        logger.error(f"Regenerate preview failed: rec={rec_id} slide={slide_key}: {str(e)}", exc_info=True)
+                        if _is_transient_image_network_error(e):
+                            logger.error(
+                                "Regenerate preview failed after retries (transient network): rec=%s slide=%s err=%s",
+                                rec_id, slide_key, str(e)
+                            )
+                        else:
+                            logger.error(
+                                "Regenerate preview failed: rec=%s slide=%s err=%s",
+                                rec_id, slide_key, str(e), exc_info=True
+                            )
                         failed += 1
                     task = Task.query.get(task_id)
                     if task:

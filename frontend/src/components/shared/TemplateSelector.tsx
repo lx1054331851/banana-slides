@@ -1,66 +1,116 @@
-import React, { useState, useEffect } from 'react';
-import { Button, useToast, MaterialSelector } from '@/components/shared';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Button, Modal, useToast, MaterialSelector } from '@/components/shared';
 import { useT } from '@/hooks/useT';
 import { getImageUrl } from '@/api/client';
+import {
+  listUserTemplates,
+  uploadUserTemplate,
+  deleteUserTemplate,
+  listStylePresets,
+  type UserTemplate,
+  type Material,
+  type StylePreset,
+  type StylePresetPreviewImages,
+} from '@/api/endpoints';
+import { materialUrlToFile } from '@/components/shared/MaterialSelector';
+import { ImagePlus, X } from 'lucide-react';
 
 // Template 组件自包含翻译
 const templateI18n = {
   zh: {
     template: {
-      myTemplates: "我的模板", presetTemplates: "预设模板", uploadTemplate: "上传模板",
-      deleteTemplate: "删除模板", templateSelected: "已选择",
-      saveToLibraryOnUpload: "上传模板时同时保存到我的模板库",
-      selectFromMaterials: "从素材库选择", selectAsTemplate: "从素材库选择作为模板",
-      cannotDeleteInUse: "当前使用中的模板不能删除，请先取消选择或切换",
+      myTemplates: '我的模板',
+      presetTemplates: '预设模板',
+      styleTemplates: '风格模板',
+      moreStyleTemplates: '更多风格模板',
+      more: '更多',
+      noStyleTemplates: '暂无风格模板',
+      uploadTemplate: '上传模板',
+      deleteTemplate: '删除模板',
+      templateSelected: '已选择',
+      saveToLibraryOnUpload: '上传模板时同时保存到我的模板库',
+      selectFromMaterials: '从素材库选择',
+      selectAsTemplate: '从素材库选择作为模板',
+      cannotDeleteInUse: '当前使用中的模板不能删除，请先取消选择或切换',
       presets: {
-        retroScroll: "复古卷轴", vectorIllustration: "矢量插画", glassEffect: "拟物玻璃",
-        techBlue: "科技蓝", simpleBusiness: "简约商务", academicReport: "学术报告"
+        retroScroll: '复古卷轴', vectorIllustration: '矢量插画', glassEffect: '拟物玻璃',
+        techBlue: '科技蓝', simpleBusiness: '简约商务', academicReport: '学术报告'
       },
-      messages: { uploadSuccess: "模板上传成功", uploadFailed: "模板上传失败", deleteSuccess: "模板已删除", deleteFailed: "删除模板失败" }
+      messages: {
+        uploadSuccess: '模板上传成功',
+        uploadFailed: '模板上传失败',
+        deleteSuccess: '模板已删除',
+        deleteFailed: '删除模板失败',
+        styleTemplateApplied: '已选择风格模板',
+        styleTemplateApplyFailed: '选择风格模板失败',
+      }
     },
-    material: { messages: { savedToLibrary: "素材已保存到模板库", selectedAsTemplate: "已从素材库选择作为模板", loadMaterialFailed: "加载素材失败" } }
+    material: { messages: { savedToLibrary: '素材已保存到模板库', selectedAsTemplate: '已从素材库选择作为模板', loadMaterialFailed: '加载素材失败' } }
   },
   en: {
     template: {
-      myTemplates: "My Templates", presetTemplates: "Preset Templates", uploadTemplate: "Upload Template",
-      deleteTemplate: "Delete Template", templateSelected: "Selected",
-      saveToLibraryOnUpload: "Save to my template library when uploading",
-      selectFromMaterials: "Select from Materials", selectAsTemplate: "Select from materials as template",
-      cannotDeleteInUse: "Cannot delete template in use, please deselect or switch first",
+      myTemplates: 'My Templates',
+      presetTemplates: 'Preset Templates',
+      styleTemplates: 'Style Templates',
+      moreStyleTemplates: 'More Style Templates',
+      more: 'More',
+      noStyleTemplates: 'No style templates',
+      uploadTemplate: 'Upload Template',
+      deleteTemplate: 'Delete Template',
+      templateSelected: 'Selected',
+      saveToLibraryOnUpload: 'Save to my template library when uploading',
+      selectFromMaterials: 'Select from Materials',
+      selectAsTemplate: 'Select from materials as template',
+      cannotDeleteInUse: 'Cannot delete template in use, please deselect or switch first',
       presets: {
-        retroScroll: "Retro Scroll", vectorIllustration: "Vector Illustration", glassEffect: "Glass Effect",
-        techBlue: "Tech Blue", simpleBusiness: "Simple Business", academicReport: "Academic Report"
+        retroScroll: 'Retro Scroll',
+        vectorIllustration: 'Vector Illustration',
+        glassEffect: 'Glass Effect',
+        techBlue: 'Tech Blue',
+        simpleBusiness: 'Simple Business',
+        academicReport: 'Academic Report'
       },
-      messages: { uploadSuccess: "Template uploaded successfully", uploadFailed: "Failed to upload template", deleteSuccess: "Template deleted", deleteFailed: "Failed to delete template" }
+      messages: {
+        uploadSuccess: 'Template uploaded successfully',
+        uploadFailed: 'Failed to upload template',
+        deleteSuccess: 'Template deleted',
+        deleteFailed: 'Failed to delete template',
+        styleTemplateApplied: 'Style template selected',
+        styleTemplateApplyFailed: 'Failed to select style template',
+      }
     },
-    material: { messages: { savedToLibrary: "Material saved to template library", selectedAsTemplate: "Selected from library as template", loadMaterialFailed: "Failed to load materials" } }
+    material: { messages: { savedToLibrary: 'Material saved to template library', selectedAsTemplate: 'Selected from library as template', loadMaterialFailed: 'Failed to load materials' } }
   }
 };
-import { listUserTemplates, uploadUserTemplate, deleteUserTemplate, type UserTemplate } from '@/api/endpoints';
-import { materialUrlToFile } from '@/components/shared/MaterialSelector';
-import type { Material } from '@/api/endpoints';
-import { ImagePlus, X } from 'lucide-react';
 
 interface TemplateSelectorProps {
   onSelect: (templateFile: File | null, templateId?: string) => void;
+  onSelectStylePreset?: (preset: StylePreset | null) => Promise<void> | void;
   selectedTemplateId?: string | null;
   selectedPresetTemplateId?: string | null;
+  selectedStylePresetId?: string | null;
   showUpload?: boolean;
   projectId?: string | null;
 }
 
 export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
   onSelect,
+  onSelectStylePreset,
   selectedTemplateId,
   selectedPresetTemplateId,
+  selectedStylePresetId,
   showUpload = true,
   projectId,
 }) => {
   const t = useT(templateI18n);
   const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([]);
+  const [stylePresets, setStylePresets] = useState<StylePreset[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [isLoadingStylePresets, setIsLoadingStylePresets] = useState(false);
   const [isMaterialSelectorOpen, setIsMaterialSelectorOpen] = useState(false);
+  const [isStylePresetModalOpen, setIsStylePresetModalOpen] = useState(false);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
+  const [selectingStylePresetId, setSelectingStylePresetId] = useState<string | null>(null);
   const [saveToLibrary, setSaveToLibrary] = useState(true);
   const { show, ToastContainer } = useToast();
 
@@ -71,7 +121,8 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
   ];
 
   useEffect(() => {
-    loadUserTemplates();
+    void loadUserTemplates();
+    void loadStylePresets();
   }, []);
 
   const loadUserTemplates = async () => {
@@ -88,6 +139,27 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
     }
   };
 
+  const loadStylePresets = async () => {
+    setIsLoadingStylePresets(true);
+    try {
+      const response = await listStylePresets();
+      setStylePresets(response.data?.presets || []);
+    } catch (error: any) {
+      console.error('Failed to load style presets:', error);
+    } finally {
+      setIsLoadingStylePresets(false);
+    }
+  };
+
+  const clearStylePresetSelection = async () => {
+    if (!onSelectStylePreset) return;
+    try {
+      await onSelectStylePreset(null);
+    } catch {
+      // Parent handles toast if needed
+    }
+  };
+
   const handleTemplateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -97,6 +169,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
           if (response.data) {
             const template = response.data;
             setUserTemplates(prev => [template, ...prev]);
+            await clearStylePresetSelection();
             onSelect(null, template.template_id);
             show({ message: t('template.messages.uploadSuccess'), type: 'success' });
           }
@@ -106,10 +179,12 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
             if (response.data) {
               const template = response.data;
               setUserTemplates(prev => [template, ...prev]);
+              await clearStylePresetSelection();
               onSelect(file, template.template_id);
               show({ message: t('material.messages.savedToLibrary'), type: 'success' });
             }
           } else {
+            await clearStylePresetSelection();
             onSelect(file);
           }
         }
@@ -121,30 +196,54 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
     e.target.value = '';
   };
 
-  const handleSelectUserTemplate = (template: UserTemplate) => {
+  const handleSelectUserTemplate = async (template: UserTemplate) => {
+    await clearStylePresetSelection();
     onSelect(null, template.template_id);
   };
 
-  const handleSelectPresetTemplate = (templateId: string, preview: string) => {
+  const handleSelectPresetTemplate = async (templateId: string, preview: string) => {
     if (!preview) return;
+    await clearStylePresetSelection();
     onSelect(null, templateId);
+  };
+
+  const handleSelectStylePreset = async (preset: StylePreset, closeModal: boolean = false) => {
+    if (!onSelectStylePreset) return;
+    setSelectingStylePresetId(preset.id);
+    try {
+      await onSelectStylePreset(preset);
+      show({ message: t('template.messages.styleTemplateApplied'), type: 'success' });
+      if (closeModal) {
+        setIsStylePresetModalOpen(false);
+      }
+    } catch (error: any) {
+      console.error('Failed to apply style preset:', error);
+      show({
+        message: t('template.messages.styleTemplateApplyFailed') + ': ' + (error?.message || t('common.unknownError')),
+        type: 'error'
+      });
+    } finally {
+      setSelectingStylePresetId(null);
+    }
   };
 
   const handleSelectMaterials = async (materials: Material[], saveAsTemplate?: boolean) => {
     if (materials.length === 0) return;
-    
+
     try {
       const file = await materialUrlToFile(materials[0]);
-      
+
       if (saveAsTemplate) {
         const response = await uploadUserTemplate(file);
         if (response.data) {
           const template = response.data;
           setUserTemplates(prev => [template, ...prev]);
+          await clearStylePresetSelection();
           onSelect(file, template.template_id);
           show({ message: t('material.messages.savedToLibrary'), type: 'success' });
         }
       } else {
+        await clearStylePresetSelection();
         onSelect(file);
         show({ message: t('material.messages.selectedAsTemplate'), type: 'success' });
       }
@@ -173,6 +272,14 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
     }
   };
 
+  const getStylePresetCover = (preset: StylePreset) => {
+    const preview: Partial<StylePresetPreviewImages> = preset.preview_images || {};
+    return preview.cover_url || preview.toc_url || preview.detail_url || preview.ending_url || '';
+  };
+
+  const visibleStylePresets = useMemo(() => stylePresets.slice(0, 4), [stylePresets]);
+  const hasMoreStylePresets = stylePresets.length > 4;
+
   return (
     <>
       <div className="space-y-4">
@@ -183,7 +290,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
               {userTemplates.map((template) => (
                 <div
                   key={template.template_id}
-                  onClick={() => handleSelectUserTemplate(template)}
+                  onClick={() => void handleSelectUserTemplate(template)}
                   className={`aspect-[4/3] rounded-lg border-2 cursor-pointer transition-all relative group ${
                     selectedTemplateId === template.template_id
                       ? 'border-banana-500 ring-2 ring-banana-200'
@@ -198,7 +305,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                   {selectedTemplateId !== template.template_id && (
                     <button
                       type="button"
-                      onClick={(e) => handleDeleteUserTemplate(template, e)}
+                      onClick={(e) => void handleDeleteUserTemplate(template, e)}
                       disabled={deletingTemplateId === template.template_id}
                       className={`absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow z-20 opacity-0 group-hover:opacity-100 transition-opacity ${
                         deletingTemplateId === template.template_id ? 'opacity-60 cursor-not-allowed' : ''
@@ -225,7 +332,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
             {presetTemplates.map((template) => (
               <div
                 key={template.id}
-                onClick={() => template.preview && handleSelectPresetTemplate(template.id, template.preview)}
+                onClick={() => template.preview && void handleSelectPresetTemplate(template.id, template.preview)}
                 className={`aspect-[4/3] rounded-lg border-2 cursor-pointer transition-all bg-gray-100 dark:bg-background-secondary flex items-center justify-center relative ${
                   selectedPresetTemplateId === template.id
                     ? 'border-banana-500 ring-2 ring-banana-200'
@@ -263,7 +370,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
               />
             </label>
           </div>
-          
+
           {!showUpload && (
             <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -277,6 +384,63 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                   {t('template.saveToLibraryOnUpload')}
                 </span>
               </label>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">{t('template.styleTemplates')}</h4>
+          {isLoadingStylePresets ? (
+            <div className="text-xs text-gray-500 dark:text-foreground-tertiary">Loading…</div>
+          ) : stylePresets.length === 0 ? (
+            <div className="text-xs text-gray-500 dark:text-foreground-tertiary">{t('template.noStyleTemplates')}</div>
+          ) : (
+            <div className="grid grid-cols-4 gap-4">
+              {visibleStylePresets.map((preset) => {
+                const coverUrl = getStylePresetCover(preset);
+                const isSelected = selectedStylePresetId === preset.id;
+                return (
+                  <div
+                    key={preset.id}
+                    onClick={() => void handleSelectStylePreset(preset)}
+                    className={`aspect-[4/3] rounded-lg border-2 cursor-pointer transition-all bg-gray-100 dark:bg-background-secondary relative ${
+                      isSelected
+                        ? 'border-banana-500 ring-2 ring-banana-200'
+                        : 'border-gray-200 dark:border-border-primary hover:border-banana-500'
+                    }`}
+                  >
+                    {coverUrl ? (
+                      <img
+                        src={getImageUrl(coverUrl)}
+                        alt={preset.name || 'Style Preset'}
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center p-2 text-xs text-gray-500 dark:text-foreground-tertiary text-center">
+                        {preset.name || preset.id}
+                      </div>
+                    )}
+                    <div className="absolute left-1 right-1 bottom-1 px-1 py-0.5 rounded bg-black/45 text-white text-[10px] truncate">
+                      {preset.name || preset.id}
+                    </div>
+                    {isSelected && (
+                      <div className="absolute inset-0 bg-banana-500 bg-opacity-20 flex items-center justify-center pointer-events-none">
+                        <span className="text-white font-semibold text-sm">{t('template.templateSelected')}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {hasMoreStylePresets && (
+                <button
+                  type="button"
+                  onClick={() => setIsStylePresetModalOpen(true)}
+                  className="aspect-[4/3] rounded-lg border-2 border-dashed border-gray-300 dark:border-border-primary hover:border-banana-500 transition-all flex items-center justify-center text-sm text-gray-600 dark:text-foreground-secondary"
+                >
+                  {t('template.more')}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -296,7 +460,51 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
           </div>
         )}
       </div>
+
       <ToastContainer />
+
+      <Modal
+        isOpen={isStylePresetModalOpen}
+        onClose={() => setIsStylePresetModalOpen(false)}
+        title={t('template.moreStyleTemplates')}
+        size="xl"
+      >
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {stylePresets.map((preset) => {
+            const coverUrl = getStylePresetCover(preset);
+            const isSelected = selectedStylePresetId === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                disabled={selectingStylePresetId === preset.id}
+                onClick={() => void handleSelectStylePreset(preset, true)}
+                className={`relative aspect-[4/3] rounded-lg border-2 overflow-hidden text-left transition-all ${
+                  isSelected
+                    ? 'border-banana-500 ring-2 ring-banana-200'
+                    : 'border-gray-200 dark:border-border-primary hover:border-banana-400'
+                } ${selectingStylePresetId === preset.id ? 'opacity-60 cursor-not-allowed' : ''}`}
+              >
+                {coverUrl ? (
+                  <img
+                    src={getImageUrl(coverUrl)}
+                    alt={preset.name || 'Style Preset'}
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-gray-100 dark:bg-background-secondary flex items-center justify-center p-2 text-xs text-gray-500 dark:text-foreground-tertiary text-center">
+                    {preset.name || preset.id}
+                  </div>
+                )}
+                <div className="absolute inset-x-0 bottom-0 px-2 py-1 bg-black/45 text-white text-xs truncate">
+                  {preset.name || preset.id}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </Modal>
+
       {projectId && (
         <MaterialSelector
           projectId={projectId}

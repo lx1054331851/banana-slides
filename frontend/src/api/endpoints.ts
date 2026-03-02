@@ -57,6 +57,16 @@ export const uploadTemplate = async (
 };
 
 /**
+ * 删除项目模板图片
+ */
+export const deleteTemplate = async (
+  projectId: string
+): Promise<ApiResponse> => {
+  const response = await apiClient.delete<ApiResponse>(`/api/projects/${projectId}/template`);
+  return response.data;
+};
+
+/**
  * 获取项目列表（历史项目）
  */
 export const listProjects = async (limit?: number, offset?: number): Promise<ApiResponse<{ projects: Project[]; total: number }>> => {
@@ -1307,10 +1317,18 @@ export interface StyleTemplate {
   updated_at?: string;
 }
 
+export interface StylePresetPreviewImages {
+  cover_url: string;
+  toc_url: string;
+  detail_url: string;
+  ending_url: string;
+}
+
 export interface StylePreset {
   id: string;
   name?: string | null;
   style_json: string;
+  preview_images?: StylePresetPreviewImages;
   created_at?: string;
   updated_at?: string;
 }
@@ -1335,7 +1353,11 @@ export const listStylePresets = async (): Promise<ApiResponse<{ presets: StylePr
   return response.data;
 };
 
-export const createStylePreset = async (data: { name?: string; style_json: string }): Promise<ApiResponse<StylePreset>> => {
+export const createStylePreset = async (data: {
+  name?: string;
+  style_json: string;
+  preview_images?: Partial<StylePresetPreviewImages>;
+}): Promise<ApiResponse<StylePreset>> => {
   const response = await apiClient.post<ApiResponse<StylePreset>>('/api/style-presets', data);
   return response.data;
 };

@@ -2,6 +2,7 @@
 File Service - handles all file operations
 """
 import os
+import shutil
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -106,6 +107,18 @@ class FileService:
         previews_dir = self._get_project_dir(project_id) / "style-previews" / rec_id
         previews_dir.mkdir(exist_ok=True, parents=True)
         return previews_dir
+
+    def _get_style_presets_root_dir(self) -> Path:
+        """Get root directory for saved style presets"""
+        root_dir = self.upload_folder / "style-presets"
+        root_dir.mkdir(exist_ok=True, parents=True)
+        return root_dir
+
+    def _get_style_preset_dir(self, preset_id: str) -> Path:
+        """Get directory for a specific style preset"""
+        preset_dir = self._get_style_presets_root_dir() / preset_id
+        preset_dir.mkdir(exist_ok=True, parents=True)
+        return preset_dir
     
     def save_template_image(self, file, project_id: str) -> str:
         """
@@ -391,6 +404,44 @@ class FileService:
         filepath = previews_dir / filename
         image.save(str(filepath), format=image_format)
         return filepath.relative_to(self.upload_folder).as_posix()
+
+    def save_style_preset_preview_image_from_relative(self, source_relative_path: str,
+                                                      preset_id: str, slide_type: str) -> str:
+        """
+        Copy a generated style preview image into preset library directory.
+
+        Args:
+            source_relative_path: Relative path from upload folder
+            preset_id: Style preset ID
+            slide_type: cover/toc/detail/ending
+
+        Returns:
+            Relative destination path from upload folder
+        """
+        safe_slide_type = secure_filename(slide_type or "").strip()
+        if not safe_slide_type:
+            raise ValueError("Invalid slide_type")
+
+        source_full_path = Path(self.get_absolute_path(source_relative_path))
+        if not source_full_path.exists() or not source_full_path.is_file():
+            raise ValueError("Source preview image not found")
+
+        ext = source_full_path.suffix.lower() or ".png"
+        run_id = uuid.uuid4().hex[:10]
+        filename = f"{safe_slide_type}_{run_id}{ext}"
+        preset_dir = self._get_style_preset_dir(preset_id)
+        dest_full_path = preset_dir / filename
+        shutil.copy2(source_full_path, dest_full_path)
+        return dest_full_path.relative_to(self.upload_folder).as_posix()
+
+    def delete_style_preset_files(self, preset_id: str) -> bool:
+        """
+        Delete all files for one style preset.
+        """
+        preset_dir = self._get_style_presets_root_dir() / preset_id
+        if preset_dir.exists():
+            shutil.rmtree(preset_dir)
+        return True
     
     def file_exists(self, relative_path: str) -> bool:
         """Check if file exists"""

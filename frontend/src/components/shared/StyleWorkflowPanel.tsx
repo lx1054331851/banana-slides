@@ -20,6 +20,8 @@ type StyleRecommendation = {
   preview_images: Record<'cover_url' | 'toc_url' | 'detail_url' | 'ending_url', string>;
 };
 
+type PreviewImages = Record<'cover_url' | 'toc_url' | 'detail_url' | 'ending_url', string>;
+
 function getTaskRecommendations(task: Task | null): StyleRecommendation[] {
   const progress: any = task?.progress;
   const recs = progress?.recommendations;
@@ -213,6 +215,13 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
     return override?.preview_images || rec.preview_images || {};
   };
 
+  const normalizePreviewImages = (preview: any): PreviewImages => ({
+    cover_url: String(preview?.cover_url || ''),
+    toc_url: String(preview?.toc_url || ''),
+    detail_url: String(preview?.detail_url || ''),
+    ending_url: String(preview?.ending_url || ''),
+  });
+
   const hasAnyPreviewImages = (rec: StyleRecommendation) => {
     const preview = getPreviewImages(rec) || {};
     return Boolean(preview.cover_url || preview.toc_url || preview.detail_url || preview.ending_url);
@@ -240,9 +249,10 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
     }
   };
 
-  const pollRegenTask = async (regenTaskId: string, recId: string) => {
+  const pollRegenTask = async (regenTaskId: string, recId: string): Promise<PreviewImages> => {
     let failures = 0;
     let delay = 2000;
+    let latestPreviewImages: PreviewImages = normalizePreviewImages({});
 
     // Dedicated polling loop for preview regeneration tasks.
     // Do NOT reuse the main pollTask() timer, otherwise it will stop polling the primary workflow task.
@@ -255,9 +265,10 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
         const p: any = (t as any)?.progress || {};
         const preview_images: any = p?.preview_images;
         if (preview_images) {
+          latestPreviewImages = normalizePreviewImages(preview_images);
           setOverridePreviewByRecId((prev) => ({
             ...prev,
-            [recId]: { preview_images },
+            [recId]: { preview_images: latestPreviewImages },
           }));
         }
         if (typeof p?.completed === 'number' && typeof p?.total === 'number') {
@@ -275,7 +286,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
         delay = 2000;
 
         const status = String((t as any)?.status || '');
-        if (status === 'COMPLETED') return;
+        if (status === 'COMPLETED') return latestPreviewImages;
         if (status === 'FAILED') {
           const errMsg = (t as any)?.error_message || (t as any)?.error || '预览生成任务失败';
           throw new Error(String(errMsg));
@@ -291,6 +302,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
         delay = Math.min(Math.floor(delay * 1.6), 15000);
       }
     }
+    return latestPreviewImages;
   };
 
   const handleRegenerate = async (rec: StyleRecommendation) => {
@@ -333,14 +345,49 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
       show({ message: 'style_json 不能为空', type: 'error' });
       return;
     }
+    let jsonObj: any;
     try {
-      JSON.parse(jsonText);
+      jsonObj = JSON.parse(jsonText);
     } catch (e: any) {
       show({ message: `JSON 解析失败：${e?.message || ''}`, type: 'error' });
       return;
     }
+
+    let previewImages = normalizePreviewImages(getPreviewImages(rec));
+    const generatedCount = Object.values(previewImages).filter(Boolean).length;
+    if (generatedCount < 4) {
+      show({ message: '保存前将自动补齐 4 张预览图…', type: 'info', duration: 2000 });
+      setRegenLoadingByRecId((prev) => ({ ...prev, [rec.id]: true }));
+      setRegenProgressByRecId((prev) => ({ ...prev, [rec.id]: { completed: generatedCount, total: 4, failed: 0 } }));
+      try {
+        const regenResp = await api.regenerateStyleRecommendationPreviews(projectId, rec.id, {
+          style_json: jsonObj,
+          sample_pages: rec.sample_pages,
+        });
+        const regenTaskId = (regenResp.data as any)?.task_id;
+        if (!regenTaskId) throw new Error('未返回任务ID');
+        previewImages = await pollRegenTask(regenTaskId, rec.id);
+      } catch (e: any) {
+        show({ message: `自动补齐预览失败：${e?.message || ''}`, type: 'error' });
+        setRegenLoadingByRecId((prev) => ({ ...prev, [rec.id]: false }));
+        return;
+      } finally {
+        setRegenLoadingByRecId((prev) => ({ ...prev, [rec.id]: false }));
+      }
+    }
+
+    const finalCount = Object.values(previewImages).filter(Boolean).length;
+    if (finalCount < 4) {
+      show({ message: `预览图不足 4 张（当前 ${finalCount}/4），无法保存`, type: 'error' });
+      return;
+    }
+
     try {
-      await api.createStylePreset({ name: rec.name || '未命名风格', style_json: jsonText });
+      await api.createStylePreset({
+        name: rec.name || '未命名风格',
+        style_json: jsonText,
+        preview_images: previewImages,
+      });
       show({ message: '已保存为风格预设', type: 'success' });
     } catch (e: any) {
       show({ message: `保存预设失败：${e?.message || ''}`, type: 'error' });

@@ -69,6 +69,27 @@ def serve_style_preview(project_id, rec_id, filename):
         return error_response('SERVER_ERROR', str(e), 500)
 
 
+@file_bp.route('/style-presets/<preset_id>/<filename>', methods=['GET'])
+def serve_style_preset_preview(preset_id, filename):
+    """
+    GET /files/style-presets/{preset_id}/{filename} - Serve saved style preset preview images
+    """
+    try:
+        safe_filename = secure_filename(filename)
+        base_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'style-presets', preset_id)
+
+        if not os.path.exists(base_dir):
+            return not_found('File')
+
+        file_path = os.path.join(base_dir, safe_filename)
+        if not os.path.exists(file_path):
+            return not_found('File')
+
+        return send_from_directory(base_dir, safe_filename)
+    except Exception as e:
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
 @file_bp.route('/user-templates/<template_id>/<filename>', methods=['GET'])
 def serve_user_template(template_id, filename):
     """
@@ -180,4 +201,3 @@ def serve_mineru_file(extract_id, filepath):
         return not_found('File')
     except Exception as e:
         return error_response('SERVER_ERROR', str(e), 500)
-

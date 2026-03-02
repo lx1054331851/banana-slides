@@ -4,8 +4,8 @@ import { useT } from '@/hooks/useT';
 import { Textarea } from './Textarea';
 import { PRESET_STYLES } from '@/config/presetStyles';
 import { presetStylesI18n } from '@/config/presetStylesI18n';
-import { createStyleTemplate, deleteStyleTemplate, extractStyleFromImage, listStylePresets, listStyleTemplates } from '@/api/endpoints';
-import type { StylePreset, StyleTemplate } from '@/api/endpoints';
+import { createStyleTemplate, deleteStyleTemplate, extractStyleFromImage, listStyleTemplates } from '@/api/endpoints';
+import type { StyleTemplate } from '@/api/endpoints';
 import { useConfirm } from './ConfirmDialog';
 
 const i18n = {
@@ -24,7 +24,6 @@ const i18n = {
     templateName: '模板名称（可选）',
     saveTemplate: '保存模板骨架',
     templates: '已保存模板',
-    presets: '风格预设（直接应用）',
     generatePreviews: '生成 3 组风格推荐',
     templateJsonRequired: '请先粘贴风格模板 JSON 骨架',
     invalidJson: 'JSON 解析失败',
@@ -48,7 +47,6 @@ const i18n = {
     templateName: 'Template name (optional)',
     saveTemplate: 'Save template',
     templates: 'Saved templates',
-    presets: 'Style presets (apply)',
     generatePreviews: 'Generate 3 style recommendations',
     templateJsonRequired: 'Please paste a style template JSON skeleton first',
     invalidJson: 'Invalid JSON',
@@ -64,10 +62,9 @@ interface TextStyleSelectorProps {
   onChange: (value: string) => void;
   onToast?: (msg: { message: string; type: 'success' | 'error' }) => void;
   onGenerateStylePreviews?: (args: { templateJson: string; styleRequirements: string; generatePreviews?: boolean }) => Promise<void> | void;
-  onPresetSelected?: (preset: StylePreset) => Promise<void> | void;
 }
 
-export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onChange, onToast, onGenerateStylePreviews, onPresetSelected }) => {
+export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onChange, onToast, onGenerateStylePreviews }) => {
   const t = useT(i18n);
   const { confirm, ConfirmDialog } = useConfirm();
   const [hoveredPresetId, setHoveredPresetId] = useState<string | null>(null);
@@ -78,9 +75,7 @@ export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onC
   const [templateJson, setTemplateJson] = useState('');
   const [templateName, setTemplateName] = useState('');
   const [templates, setTemplates] = useState<StyleTemplate[]>([]);
-  const [presets, setPresets] = useState<StylePreset[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [selectedPresetId, setSelectedPresetId] = useState('');
   const [isLoadingAdvanced, setIsLoadingAdvanced] = useState(false);
   const [isStartingRecommendations, setIsStartingRecommendations] = useState(false);
   const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
@@ -89,20 +84,12 @@ export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onC
     () => templates.find((x) => x.id === selectedTemplateId),
     [selectedTemplateId, templates]
   );
-  const selectedPreset = useMemo(
-    () => presets.find((x) => x.id === selectedPresetId),
-    [selectedPresetId, presets]
-  );
 
   const loadAdvanced = async () => {
     setIsLoadingAdvanced(true);
     try {
-      const [tplRes, preRes] = await Promise.all([
-        listStyleTemplates(),
-        listStylePresets(),
-      ]);
+      const tplRes = await listStyleTemplates();
       setTemplates(tplRes.data?.templates || []);
-      setPresets(preRes.data?.presets || []);
     } catch (e: any) {
       onToast?.({ message: e?.message || 'Failed to load style library', type: 'error' });
     } finally {
@@ -121,19 +108,6 @@ export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onC
       setTemplateJson(selectedTemplate.template_json);
     }
   }, [selectedTemplate]);
-
-  useEffect(() => {
-    if (!selectedPreset) return;
-    if (!onPresetSelected) return;
-    (async () => {
-      try {
-        await onPresetSelected(selectedPreset);
-      } catch (e: any) {
-        onToast?.({ message: e?.message || 'Apply preset failed', type: 'error' });
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPresetId]);
 
   return (
     <div className="space-y-3">
@@ -240,8 +214,7 @@ export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onC
 
         {advancedOpen ? (
           <div className="mt-3 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <div className="space-y-1">
+            <div className="space-y-1">
                 <div className="text-xs text-gray-600 dark:text-foreground-tertiary">{t('templates')}</div>
                 <div className="flex items-center gap-2">
                   <select
@@ -287,23 +260,6 @@ export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onC
                     <span className="hidden sm:inline">{t('deleteTemplate')}</span>
                   </button>
                 </div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="text-xs text-gray-600 dark:text-foreground-tertiary">{t('presets')}</div>
-                <select
-                  value={selectedPresetId}
-                  onChange={(e) => setSelectedPresetId(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-tertiary dark:text-white"
-                >
-                  <option value="">{isLoadingAdvanced ? 'Loading…' : '—'}</option>
-                  {presets.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name || p.id}
-                    </option>
-                  ))}
-                </select>
-              </div>
             </div>
 
             <div className="space-y-1">

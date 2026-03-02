@@ -193,7 +193,7 @@ import {
 import { Button, Loading, Modal, Textarea, useToast, useConfirm, MaterialSelector, ProjectSettingsModal, ExportTasksPanel, TextStyleSelector, StyleWorkflowPanel } from '@/components/shared';
 import { MaterialGeneratorModal } from '@/components/shared/MaterialGeneratorModal';
 import { TemplateSelector, getTemplateFile } from '@/components/shared/TemplateSelector';
-import { listUserTemplates, type UserTemplate } from '@/api/endpoints';
+import { listUserTemplates, type UserTemplate, type StylePreset } from '@/api/endpoints';
 import { materialUrlToFile } from '@/components/shared/MaterialSelector';
 import type { Material } from '@/api/endpoints';
 import { SlideCard } from '@/components/preview/SlideCard';
@@ -449,6 +449,7 @@ export const SlidePreview: React.FC = () => {
   const [showVersionMenu, setShowVersionMenu] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedPresetTemplateId, setSelectedPresetTemplateId] = useState<string | null>(null);
+  const [selectedStylePresetId, setSelectedStylePresetId] = useState<string | null>(null);
   const [isUploadingTemplate, setIsUploadingTemplate] = useState(false);
   const [selectedContextImages, setSelectedContextImages] = useState<{
     useTemplate: boolean;
@@ -1593,9 +1594,12 @@ export const SlidePreview: React.FC = () => {
     setIsUploadingTemplate(true);
     try {
       await uploadTemplate(projectId, file);
+      // 互斥策略：切换到图片模板时清空 style_json
+      await updateProject(projectId, { template_style_json: '' } as any);
       await syncProject(projectId);
       setIsTemplateModalOpen(false);
       show({ message: t('slidePreview.templateChanged'), type: 'success' });
+      setSelectedStylePresetId(null);
       
       // 更新选择状态
       if (templateId) {
@@ -1616,6 +1620,22 @@ export const SlidePreview: React.FC = () => {
     } finally {
       setIsUploadingTemplate(false);
     }
+  };
+
+  const handleStylePresetSelect = async (preset: StylePreset | null) => {
+    if (!projectId) return;
+    if (!preset) {
+      setSelectedStylePresetId(null);
+      return;
+    }
+    await updateProject(projectId, { template_style_json: preset.style_json || '' } as any);
+    await syncProject(projectId);
+    setSelectedStylePresetId(preset.id);
+    setSelectedTemplateId(null);
+    setSelectedPresetTemplateId(null);
+    setStylePreviewTaskId(null);
+    setStylePreviewTemplateJson('');
+    setIsTemplateModalOpen(false);
   };
 
   if (!currentProject) {
@@ -2730,18 +2750,6 @@ export const SlidePreview: React.FC = () => {
                   show({ message: `生成风格预览失败: ${error?.message || '未知错误'}`, type: 'error' });
                 }
               }}
-                onPresetSelected={async (preset) => {
-                  try {
-                    await updateProject(projectId!, { template_style_json: preset.style_json || '' } as any);
-                    await syncProject(projectId!);
-                    show({ message: '已应用风格预设', type: 'success' });
-                    setStylePreviewTaskId(null);
-                    setStylePreviewTemplateJson('');
-                    setIsTemplateModalOpen(false);
-                  } catch (error: any) {
-                    show({ message: `应用预设失败: ${error?.message || '未知错误'}`, type: 'error' });
-                  }
-                }}
               />
               {stylePreviewTaskId ? (
                 <StyleWorkflowPanel
@@ -2768,8 +2776,10 @@ export const SlidePreview: React.FC = () => {
             <>
               <TemplateSelector
                 onSelect={handleTemplateSelect}
+                onSelectStylePreset={handleStylePresetSelect}
                 selectedTemplateId={selectedTemplateId}
                 selectedPresetTemplateId={selectedPresetTemplateId}
+                selectedStylePresetId={selectedStylePresetId}
                 showUpload={false}
                 projectId={projectId || null}
               />

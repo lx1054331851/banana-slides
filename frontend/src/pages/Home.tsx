@@ -5,7 +5,7 @@ import { Sparkles, FileText, FileEdit, ImagePlus, Paperclip, Palette, Lightbulb,
 import { Button, Card, useToast, MaterialGeneratorModal, MaterialCenterModal, ReferenceFileList, ReferenceFileSelector, FilePreviewModal, HelpModal, GithubRepoCard, TextStyleSelector, StyleWorkflowPanel } from '@/components/shared';
 import { MarkdownTextarea, type MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
 import { TemplateSelector, getTemplateFile } from '@/components/shared/TemplateSelector';
-import { listUserTemplates, type UserTemplate, uploadReferenceFile, type ReferenceFile, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject, createProject, startStyleRecommendations, updateProject } from '@/api/endpoints';
+import { listUserTemplates, type UserTemplate, type StylePreset, uploadReferenceFile, type ReferenceFile, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject, createProject, startStyleRecommendations, updateProject } from '@/api/endpoints';
 import { useProjectStore } from '@/store/useProjectStore';
 import { devLog } from '@/utils/logger';
 import { useTheme } from '@/hooks/useTheme';
@@ -211,6 +211,7 @@ export const Home: React.FC = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<File | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedPresetTemplateId, setSelectedPresetTemplateId] = useState<string | null>(null);
+  const [selectedStylePresetId, setSelectedStylePresetId] = useState<string | null>(null);
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
   const [isMaterialCenterOpen, setIsMaterialCenterOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
@@ -736,10 +737,10 @@ export const Home: React.FC = () => {
   };
 
   const handleTemplateSelect = async (templateFile: File | null, templateId?: string) => {
-    // 总是设置文件（如果提供）
-    if (templateFile) {
-      setSelectedTemplate(templateFile);
-    }
+    // 同步文件选择状态，避免保留过期的本地 File
+    setSelectedTemplate(templateFile || null);
+    setPendingStylePresetJson('');
+    setSelectedStylePresetId(null);
     
     // 处理模板 ID
     if (templateId) {
@@ -761,6 +762,19 @@ export const Home: React.FC = () => {
       setSelectedTemplateId(null);
       setSelectedPresetTemplateId(null);
     }
+  };
+
+  const handleSelectStylePreset = async (preset: StylePreset | null) => {
+    if (!preset) {
+      setPendingStylePresetJson('');
+      setSelectedStylePresetId(null);
+      return;
+    }
+    setPendingStylePresetJson((preset.style_json || '').trim());
+    setSelectedStylePresetId(preset.id);
+    setSelectedTemplate(null);
+    setSelectedTemplateId(null);
+    setSelectedPresetTemplateId(null);
   };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1468,6 +1482,8 @@ export const Home: React.FC = () => {
                         setSelectedTemplate(null);
                         setSelectedTemplateId(null);
                         setSelectedPresetTemplateId(null);
+                        setPendingStylePresetJson('');
+                        setSelectedStylePresetId(null);
                       } else {
                         setStylePreviewProjectId(null);
                         setStylePreviewTaskId(null);
@@ -1490,10 +1506,6 @@ export const Home: React.FC = () => {
                   onChange={setTemplateStyle}
                   onToast={show}
                   onGenerateStylePreviews={handleGenerateStylePreviews}
-                  onPresetSelected={async (preset) => {
-                    setPendingStylePresetJson(preset.style_json || '');
-                    show({ message: '已选择风格预设（将在创建项目后应用）', type: 'success' });
-                  }}
                 />
                 {stylePreviewProjectId && stylePreviewTaskId ? (
                   <StyleWorkflowPanel
@@ -1513,8 +1525,10 @@ export const Home: React.FC = () => {
             ) : (
               <TemplateSelector
                 onSelect={handleTemplateSelect}
+                onSelectStylePreset={handleSelectStylePreset}
                 selectedTemplateId={selectedTemplateId}
                 selectedPresetTemplateId={selectedPresetTemplateId}
+                selectedStylePresetId={selectedStylePresetId}
                 showUpload={true} // 在主页上传的模板保存到用户模板库
                 projectId={currentProjectId}
               />
