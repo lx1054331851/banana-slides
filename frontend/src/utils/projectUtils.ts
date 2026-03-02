@@ -283,6 +283,8 @@ const safeReplaceAll = (text: string, target: string, replacement: string) => {
   return text.split(target).join(replacement);
 };
 
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export const parsePresentationMeta = (raw?: string | null): PresentationMeta => {
   if (!raw) return {};
   try {
@@ -319,6 +321,50 @@ const buildFieldLine = (key: string, value: string, pageRole: 'cover' | 'ending'
     default:
       return value;
   }
+};
+
+const FIELD_LABELS: Record<string, string[]> = {
+  logo: ['Logo'],
+  company_name: ['公司名称', '公司名'],
+  project_name: ['项目名', '项目名称'],
+  presenter: ['汇报人'],
+  presenter_title: ['部门/职位', '部门职位', '职位/部门'],
+  date: ['日期', '时间'],
+  location: ['地点', '地址'],
+  phone: ['联系电话', '电话', '手机号'],
+  website_or_email: ['网址/邮箱', '网址', '邮箱', '网站'],
+  thanks_or_slogan: ['致谢/口号', '致谢', '口号'],
+};
+
+const replaceFieldLineByLabel = (
+  text: string,
+  key: string,
+  value: string,
+  pageRole: 'cover' | 'ending'
+): { text: string; replaced: boolean } => {
+  const labels = FIELD_LABELS[key] || [];
+  if (labels.length === 0) return { text, replaced: false };
+
+  let nextText = text;
+  for (const label of labels) {
+    const pattern = new RegExp(`^(\\s*-?\\s*${escapeRegExp(label)}\\s*[：:]\\s*)(.*)$`, 'm');
+    if (pattern.test(nextText)) {
+      nextText = nextText.replace(pattern, (_line, prefix: string, currentValue: string) => {
+        if (key === 'logo') {
+          return `- ${buildFieldLine(key, value, pageRole)}`;
+        }
+        if (key === 'presenter') {
+          const presenterWithSuffix = String(currentValue || '').match(/^([^|｜]+)(\s*[|｜]\s*.+)$/);
+          if (presenterWithSuffix) {
+            return `${prefix}${value}${presenterWithSuffix[2]}`;
+          }
+        }
+        return `${prefix}${value}`;
+      });
+      return { text: nextText, replaced: true };
+    }
+  }
+  return { text, replaced: false };
 };
 
 const insertLinesIntoDescription = (text: string, lines: string[]): string => {
@@ -376,35 +422,49 @@ export const applyPresentationMetaToDescription = (
       'thanks_or_slogan',
     ],
   };
-  const missingKeys = new Set(
-    relevantFields.length > 0
-      ? relevantFields.filter(f => !f.present || f.is_placeholder).map(f => f.key)
-      : defaultKeysByRole[pageRole]
-  );
   let updated = descriptionText || '';
   const handledKeys = new Set<string>();
+  const relevantFieldMap = new Map(relevantFields.map(field => [field.key, field]));
 
-  // 尝试替换占位符
-  for (const field of relevantFields) {
-    const value = (meta as any)[field.key === 'logo' ? 'logo_url' : field.key] as string | undefined;
+  // 用户输入优先：先尝试按字段标签覆盖，再回退到占位符/检测值替换
+  for (const key of defaultKeysByRole[pageRole]) {
+    const field = relevantFieldMap.get(key);
+    const value = (meta as any)[key === 'logo' ? 'logo_url' : key] as string | undefined;
     if (!value) continue;
-    if (Array.isArray(field.placeholders) && field.placeholders.length > 0) {
-      let replaced = false;
+
+    let replaced = false;
+    const lineReplaceResult = replaceFieldLineByLabel(updated, key, value, pageRole);
+    if (lineReplaceResult.replaced) {
+      updated = lineReplaceResult.text;
+      replaced = true;
+    }
+
+    if (field && Array.isArray(field.placeholders) && field.placeholders.length > 0) {
       for (const placeholder of field.placeholders) {
         if (placeholder && updated.includes(placeholder)) {
           updated = safeReplaceAll(updated, placeholder, value);
           replaced = true;
         }
       }
-      if (replaced) {
-        handledKeys.add(field.key);
-      }
+    }
+
+    if (field && field.value && field.value !== value && updated.includes(field.value)) {
+      updated = safeReplaceAll(updated, field.value, value);
+      replaced = true;
+    }
+
+    if (updated.includes(value)) {
+      replaced = true;
+    }
+
+    if (replaced) {
+      handledKeys.add(key);
     }
   }
 
-  // 追加缺失字段到“页面文字”中
+  // 追加未命中的字段到“页面文字”中
   const lines: string[] = [];
-  for (const key of Array.from(missingKeys)) {
+  for (const key of defaultKeysByRole[pageRole]) {
     if (handledKeys.has(key)) continue;
     const value = (meta as any)[key === 'logo' ? 'logo_url' : key] as string | undefined;
     if (!value) continue;
