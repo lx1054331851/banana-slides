@@ -558,6 +558,149 @@ class AIService:
                 text_parts.append(f"{i}. {item.get('title', 'Untitled')}")
         result = "\n".join(text_parts)
         return dedent(result)
+
+    def _try_extract_ppt_json_slides(self, description_text: str) -> Optional[List[Dict]]:
+        """
+        尝试从 description_text 中提取结构化 PPT JSON 的 slides。
+
+        支持以下输入：
+        - 完整 JSON 对象：{"meta": ..., "slides": [...]} 
+        - 仅 slides 数组：[...]
+        - 被 ```json ... ``` 包裹的文本
+        """
+        if not description_text or not description_text.strip():
+            return None
+
+        raw = description_text.strip()
+        candidates = [raw]
+
+        fenced_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw, re.IGNORECASE)
+        if fenced_match:
+            candidates.append(fenced_match.group(1).strip())
+
+        first_obj = raw.find('{')
+        last_obj = raw.rfind('}')
+        if first_obj != -1 and last_obj != -1 and last_obj > first_obj:
+            candidates.append(raw[first_obj:last_obj + 1])
+
+        first_arr = raw.find('[')
+        last_arr = raw.rfind(']')
+        if first_arr != -1 and last_arr != -1 and last_arr > first_arr:
+            candidates.append(raw[first_arr:last_arr + 1])
+
+        for candidate in candidates:
+            try:
+                parsed = json.loads(candidate)
+            except Exception:
+                continue
+
+            if isinstance(parsed, dict):
+                slides = parsed.get('slides')
+                if isinstance(slides, list) and all(isinstance(s, dict) for s in slides):
+                    return slides
+
+            if isinstance(parsed, list) and all(isinstance(s, dict) for s in parsed):
+                if any('title' in s or 'type' in s or 'content' in s for s in parsed):
+                    return parsed
+
+        return None
+
+    @staticmethod
+    def _normalize_text(value) -> str:
+        if isinstance(value, str):
+            return value.strip()
+        return ""
+
+    def _extract_slide_points(self, slide: Dict) -> List[str]:
+        points: List[str] = []
+        content = slide.get('content')
+        if not isinstance(content, dict):
+            return points
+
+        preferred_scalar_keys = [
+            'headline_summary', 'key_takeaway', 'headline', 'sub_headline',
+            'final_conclusion', 'vision', 'slogan', 'qa_text', 'presenter_info'
+        ]
+        for key in preferred_scalar_keys:
+            text = self._normalize_text(content.get(key))
+            if text:
+                points.append(text)
+
+        for key in ('sections', 'labels', 'highlight_phrases'):
+            arr = content.get(key)
+            if isinstance(arr, list):
+                for item in arr:
+                    text = self._normalize_text(item)
+                    if text:
+                        points.append(text)
+
+        detail_items = content.get('detailed_items')
+        if isinstance(detail_items, list):
+            for item in detail_items:
+                if not isinstance(item, dict):
+                    continue
+                for key in ('point', 'sub_title', 'body', 'detail'):
+                    text = self._normalize_text(item.get(key))
+                    if text:
+                        points.append(text)
+                        break
+
+        deduped: List[str] = []
+        seen = set()
+        for p in points:
+            if p not in seen:
+                seen.add(p)
+                deduped.append(p)
+
+        return deduped[:8]
+
+    def _slides_to_outline(self, slides: List[Dict]) -> List[Dict]:
+        outline: List[Dict] = []
+        for idx, slide in enumerate(slides, 1):
+            title = self._normalize_text(slide.get('title'))
+            if not title:
+                content = slide.get('content') if isinstance(slide.get('content'), dict) else {}
+                title = self._normalize_text(content.get('headline')) or self._normalize_text(content.get('headline_summary')) or f"第{idx}页"
+
+            points = self._extract_slide_points(slide)
+            if not points:
+                slide_type = self._normalize_text(slide.get('type'))
+                if slide_type:
+                    points = [f"页面类型：{slide_type}"]
+
+            outline.append({
+                'title': title,
+                'points': points,
+            })
+        return outline
+
+    def _slides_to_page_descriptions(self, slides: List[Dict]) -> List[str]:
+        descriptions: List[str] = []
+        for idx, slide in enumerate(slides, 1):
+            title = self._normalize_text(slide.get('title'))
+            if not title:
+                content = slide.get('content') if isinstance(slide.get('content'), dict) else {}
+                title = self._normalize_text(content.get('headline')) or self._normalize_text(content.get('headline_summary')) or f"第{idx}页"
+
+            points = self._extract_slide_points(slide)
+            points_lines = "\n".join([f"- {p}" for p in points]) if points else "- （无显式要点）"
+
+            slide_type = self._normalize_text(slide.get('type'))
+            note_text = self._normalize_text(slide.get('note'))
+            other_materials: List[str] = []
+            if slide_type:
+                other_materials.append(f"页面类型：{slide_type}")
+            if note_text:
+                other_materials.append(f"备注：{note_text}")
+            other_materials_text = "\n".join(other_materials) if other_materials else "（无）"
+
+            descriptions.append(
+                f"页面标题：{title}\n\n"
+                f"页面文字：\n{points_lines}\n\n"
+                f"其他页面素材：\n{other_materials_text}"
+            )
+
+        return descriptions
     
     def generate_image_prompt(self, outline: List[Dict], page: Dict, 
                             page_desc: str, page_index: int, 
@@ -744,6 +887,12 @@ class AIService:
         Returns:
             List of outline items (may contain parts with pages or direct pages)
         """
+        extracted_slides = self._try_extract_ppt_json_slides(project_context.description_text or "")
+        if extracted_slides:
+            outline = self._slides_to_outline(extracted_slides)
+            logger.info(f"Detected structured PPT JSON in description_text, parsed outline directly: {len(outline)} pages")
+            return outline
+
         parse_prompt = get_description_to_outline_prompt(project_context, language)
         outline = self.generate_json(parse_prompt, thinking_budget=1000)
         return outline
@@ -761,6 +910,12 @@ class AIService:
         Returns:
             List of page descriptions (strings), one for each page in the outline
         """
+        extracted_slides = self._try_extract_ppt_json_slides(project_context.description_text or "")
+        if extracted_slides:
+            descriptions = self._slides_to_page_descriptions(extracted_slides)
+            logger.info(f"Detected structured PPT JSON in description_text, parsed page descriptions directly: {len(descriptions)} pages")
+            return descriptions
+
         split_prompt = get_description_split_prompt(project_context, outline, language)
         descriptions = self.generate_json(split_prompt, thinking_budget=1000)
         
