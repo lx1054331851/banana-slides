@@ -924,71 +924,59 @@ def get_long_report_split_prompt(report_text: str,
     files_xml = _format_reference_files_xml(reference_files_content)
     prompt = dedent("""\
 # Role
-你是一位麦肯锡/波士顿咨询风格的高级商业分析师兼PPT架构师。你的任务是将一份【长篇分析报告】拆解为【结构化的PPT JSON数据】。
+你是一位麦肯锡/BCG风格的高级商业分析师兼PPT架构师。你擅长将深度、晦涩的【长篇分析报告】转化为逻辑严密、结论先行、视觉化友好的【结构化PPT JSON数据】。
 
 # Core Objective
-目标是将文稿转化为视觉化的演示文稿。
-**关键要求：宁可拆分多页，绝不压缩细节。** 这种报告通常需要 **20-30页** 的篇幅才能完整承载，不要试图用10-15页讲完。
+将文稿转化为“主张驱动（Assertion-Driven）”的演示文稿。
+**核心原则：**
+1. **深度覆盖**：篇幅预设 20-40 页。宁可页数多，绝不漏掉核心论据（遇到子章节如1.1, 1.2必须独立成页）。
+2. **结论先行**：每页标题必须是一个**有观点的句子**（Action Title），而非简单的名词标签。
 
-# ⚡️ STRICT Deconstruction Rules (核心拆解法则 - 必须遵守)
+# ⚡️ MCK-Style Deconstruction Rules (咨询级拆解法则 - 必须严格遵守)
 
-## 1. 强制子章节拆分 (Subsection = Slide)
-- **绝对禁止合并子章节**：如果原文有 `1.1`, `1.2`, `1.3` 这样的结构，**每一个子标题必须至少对应一张独立的Slide**。
-- **示例**：原文第三章有3.1, 3.2, 3.3，你必须生成至少3张Slide来分别详细阐述，严禁将其合并为一张“第三章总述”。
+## 1. 标题逻辑：从“标签”转向“主张”
+- **禁止使用**：`3.2 市场规模分析`、`4.1 核心竞争对手` 等标签式标题。
+- **强制使用**：`3.2 全球固态电池市场预计在2026年进入爆发期`、`4.1 头部玩家通过全产业链布局构建高壁垒` 等动作标题。
+- **逻辑测试**：只读标题，观众应能理解整份报告的核心叙事。
 
-## 2. 严控过渡页泛滥 (Strict Control on Transition Slides)
-- **切勿按原文章节机械生成过渡页**：如果原报告有8个章节，**绝对不要**生成8张 Section_Header。
-- **模块化聚合**：请将整份报告在逻辑上整合为 3 到 4 个核心大模块（例如：市场现状、核心归因分析、应对策略、未来展望），**只在这些大模块切换时使用过渡页**。
-- **强制指标**：整份PPT的 `Section_Header` 数量应严格控制在 **3-5 张以内**。遇到小章节请直接跳过过渡，生成详情页进入正题。
+## 2. 严控过渡页泛滥与强制模块化 (Strict Structure)
+- **切勿机械生成过渡页**：如果原报告有8个章节，绝对不要生成8张过渡页。
+- **模块化聚合**：将报告在逻辑上整合为 3-4 个核心大模块（Part），**只在这些大模块切换时使用 `section_header` 过渡页**（全篇控制在 3-5 张内）。遇到原文小章节请直接生成详情页进入正题。
+- **强制首尾结构**：必须在封面后紧接一页 `catalog`（目录），且全篇最后一页必须是 `closing`（结尾愿景页）。
 
-## 3. 实体与数据保留 (Entity & Data Preservation)
-- **专有名词不丢失**：原文中出现的法律名称（如“ICCA法案”）、特定品牌/组织名（如“8000Kicks”, "Hemp Foundation"）、特定技术名（如“Phytoremediation”），必须完整保留在 `detail` 或 `note` 字段中。
-- **长尾数据保留**：不要只保留最大值。如果表格中有“爱沙尼亚/立陶宛”这样的长尾数据，也要体现在图表配置中，展示分析的全面性。
+## 3. “So What?” 深度挖掘与图表数据化 (Insight & Chart Logic)
+- **洞察提取**：在提取信息时必须自问“这个数据说明了什么？”将“事实描述”转化为“洞察结论”，填入 `headline_summary` 或 `key_takeaway` 字段。
+- **图表识别与结构化**：若原文包含趋势、对比、占比数据，优先使用 `detail_chart` 类型。在 `chart_data` 字段中，严格输出 `labels` 和 `datasets` 结构，保留长尾数据以支撑对比逻辑（MECE原则）。
 
-## 4. 文本纯净度要求 (Text Cleanliness & Citation Removal)
-- **彻底去除引用标记**：原文中如果包含类似 ``, `` 或 `(作者, 年份)` 等学术引用标记，在提取文案填入 JSON 的视觉展示字段时，**必须将其彻底删除**。
-- **数据来源归档**：如果你认为某个数据来源非常重要，请将其单独放置在 `note`（演讲者备注）字段中。
+## 4. 文本纯净度与专业词汇保护 (Cleanliness & Entities)
+- **彻底去除引用标记**：在填入 JSON 的视觉展示字段（如 title, body, detail）时，**必须彻底删除**类似 ``, `[1]`, `(作者, 年份)` 等学术标记，确保画面纯净高级。重要的数据来源请单独放入 `note` 字段。
+- **实体不丢失**：所有技术术语、法律条款、特定品牌名（如“ICCA法案”、“8000Kicks”）必须 1:1 还原，不得模糊处理。
 
-## 5. 关键信息视觉高亮 (Visual Highlighting of Key Metrics)
-- **提取高亮词汇**：在一段详细的描述中，观众没有耐心读完所有字。你必须从 `detail` 或 `evidence` 中提取出最核心的**数据（如 286.2亿美元、36.5%）、痛点词汇或极端形容词（如“断崖式下跌”、“致命漏洞”）**。
-- **填入指定数组**：将这些需要用特殊颜色、加粗或放大字号渲染的词汇，放入 `highlight_phrases` 数组中。前端渲染引擎将根据该数组对正文进行精准匹配和高亮。
-
-## 6. 页面类型与布局映射
-- `cover`: 封面
-- `catalog`: 目录（必须在封面后紧接一页，列出整合后的大模块）
-- `section_header`: **大模块过渡页**
-- `detail_text_split`: 纯文字详情页
-- `detail_case`: 案例深挖页
-- `detail_chart`: 数据图表页
-- `strategy_roadmap`: 路径规划页
-- `closing`: **结束/致谢页**
-
-## 7. 结尾页强制规则 (Closing Slide Rule)
-- 报告的最后一页**必须**是 `closing` 类型，包含全篇一句话总结、行业/品牌愿景（Vision）、有感染力的 Slogan，以及感谢信息。
-
-以下是需要拆解的报告原文：
-<<<REPORT_TEXT>>>
+## 5. 视觉层级与高亮映射 (Visual Hierarchy)
+- **Highlight Phrases**：在纯文字或图表分析页中，提取最核心的**数据（如 36.5%）、剧烈动词或核心名词**填入 `highlight_phrases` 数组，前端将据此进行特殊颜色/加粗/放大渲染。
+- **逻辑分块**：列表内容应保持逻辑平行，避免长段落。
 
 # Output Format (JSON Structure)
 
-请严格按照以下 JSON 结构输出。
+请严格按照以下 JSON 结构输出，不可随意更改 Key 名：
 
 ```json
 {
   "meta": {
-    "report_title": "报告标题",
-    "total_slides": "自动计算(预计>20页)",
-    "theme": "professional_business"
+    "report_title": "报告主标题",
+    "consulting_logic": "叙事主线描述（用一两句话概括全篇的逻辑推演路径，相当于电梯演讲）",
+    "total_pages_estimate": "25-35",
+    "primary_color_theme": "Consulting Blue / Professional Gray"
   },
   "slides": [
     {
       "id": 1,
       "type": "cover",
-      "title": "封面标题",
+      "title": "封面",
       "content": {
-        "headline": "主标题",
-        "sub_headline": "副标题",
-        "presenter_info": "汇报人或机构信息"
+        "headline": "主标题：一个有力、宏观的主张",
+        "sub_headline": "副标题：研究范围与核心视角",
+        "presenter_info": "汇报人 | 机构 | 日期"
       }
     },
     {
@@ -997,9 +985,9 @@ def get_long_report_split_prompt(report_text: str,
       "title": "目录 / AGENDA",
       "content": {
         "sections": [
-          "Part 1: [提炼的大模块名称1]",
-          "Part 2: [提炼的大模块名称2]",
-          "Part 3: [提炼的大模块名称3]"
+          "Part 1: [结论导向的大模块1]",
+          "Part 2: [结论导向的大模块2]",
+          "Part 3: [结论导向的大模块3]"
         ]
       },
       "note": "开场向观众展示今天的核心议题"
@@ -1007,41 +995,62 @@ def get_long_report_split_prompt(report_text: str,
     {
       "id": 3,
       "type": "section_header",
-      "title": "Part 1: [提炼的大模块名称1]",
+      "title": "Part 1: [结论导向的大模块1]",
       "content": {
-        "headline_summary": "该模块的核心导读"
+        "part_number": "ONE",
+        "headline_summary": "该章节要解决的核心问题或核心结论"
       }
     },
     {
       "id": "N",
-      "source_ref": "对应原文章节号(如 3.1)",
-      "type": "detail_text_split",
-      "title": "直接使用原文子标题，或提炼为观点句",
+      "source_ref": "对应原文章节号",
+      "type": "detail_chart",
+      "title": "【动作标题】2026年全球市场规模将达XXX亿美元，增速领跑全行业",
       "content": {
-        "headline_summary": "核心结论，注意删除标记",
+        "chart_type": "bar / line / pie / waterfall",
+        "chart_data": {
+          "labels": ["2023", "2024E", "2025E", "2026E"],
+          "datasets": [
+            {
+              "label": "市场规模(亿美元)",
+              "data": [100, 150, 220, 350]
+            }
+          ]
+        },
+        "key_takeaway": "【洞察】图表说明了什么：年复合增长率(CAGR)高达35%",
+        "highlight_phrases": ["350亿美元", "35%"]
+      },
+      "note": "溯源信息：数据来自XX行业报告，预测基于XX假设。"
+    },
+    {
+      "id": "N+1",
+      "source_ref": "对应原文章节号",
+      "type": "detail_text_split",
+      "title": "【动作标题】通过‘三位一体’战略，XXX品牌成功实现全渠道覆盖",
+      "content": {
+        "headline_summary": "本页的核心论点概述（控制在20字内，供前端做放大展示）",
         "detailed_items": [
           {
-            "point": "关键点标题",
-            "detail": "此处包含原文详细描述，不少于30字。如：市场规模预计将增长至286.2亿美元，复合年增长率高达36.5%。",
-            "evidence": "引用原文的数据或案例",
-            "highlight_phrases": ["286.2亿美元", "36.5%"]
+            "sub_title": "策略1：线上数字化转型",
+            "body": "详细描述，包含原文特定品牌名和关键动作。注意彻底删除等引用标记。",
+            "highlight_phrases": ["数字化转型", "增长20%"]
           }
         ]
       },
-      "note": "演讲者备注"
+      "note": "转场语或演讲者备注..."
     },
     {
       "id": "LAST",
       "type": "closing",
       "title": "总结与展望",
       "content": {
-        "headline_summary": "【一句话高度概括全篇核心结论】",
-        "vision": "【基于报告内容的未来愿景】",
-        "slogan": "【精炼、有煽动力的口号】",
-        "thank_you_text": "感谢聆听 | Q&A",
+        "final_conclusion": "【一句话高度概括全篇核心价值或主要结论】",
+        "vision": "【基于报告内容的未来愿景或战略建议】",
+        "slogan": "【精炼、有煽动力的口号，如：重塑认知，引领未来】",
+        "qa_text": "Q&A | 感谢聆听",
         "contact_info": "your.email@example.com"
       },
-      "note": "升华主题，号召行动(CTA)"
+      "note": "演讲者结语，升华主题，号召行动(CTA)"
     }
   ]
 }
