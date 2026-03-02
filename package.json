@@ -19,6 +19,7 @@
     "dev": "docker compose up",
     "dev:backend": "cd backend && uv run python app.py",
     "dev:frontend": "cd frontend && npm run dev",
+    "dev:ps": "powershell -ExecutionPolicy Bypass -File scripts/dev.ps1",
     "build": "docker compose build",
     "start": "docker compose up -d",
     "stop": "docker compose down",
