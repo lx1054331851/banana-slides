@@ -956,6 +956,13 @@ def get_long_report_split_prompt(report_text: str,
 - **Highlight Phrases**：在纯文字或图表分析页中，提取最核心的**数据（如 36.5%）、剧烈动词或核心名词**填入 `highlight_phrases` 数组，前端将据此进行特殊颜色/加粗/放大渲染。
 - **逻辑分块**：列表内容应保持逻辑平行，避免长段落。
 
+## 6. 交互限制 (No Follow-up Questions)
+- 你已经拿到了完整报告正文，**禁止**向用户追问“请粘贴正文/请补充信息/请上传文件”等请求。
+- 必须基于输入内容一次性完成输出；若个别信息缺失，请使用审慎默认值并继续生成。
+
+以下是需要拆解的报告原文：
+<<<REPORT_TEXT>>>
+
 # Output Format (JSON Structure)
 
 请严格按照以下 JSON 结构输出，不可随意更改 Key 名：
