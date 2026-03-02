@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, ArrowRight, Plus, FileText, Sparkle, Download, Upload, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ArrowLeft, Save, ArrowRight, Plus, FileText, Sparkle, Download, Upload, PanelLeftClose, PanelLeftOpen, ChevronDown, Settings2 } from 'lucide-react';
 import { useT } from '@/hooks/useT';
+import PresetCapsules from '@/components/shared/PresetCapsules';
 
 // 组件内翻译
 const outlineI18n = {
@@ -16,12 +17,14 @@ const outlineI18n = {
       preview: "预览", clickToPreview: "点击左侧卡片查看详情",
       noPages: "还没有页面", noPagesHint: "点击「添加页面」手动创建，或「自动生成大纲」让 AI 帮你完成",
       parseOutline: "解析大纲", autoGenerate: "自动生成大纲",
-      reParseOutline: "重新解析大纲", reGenerate: "重新生成大纲", export: "导出大纲", import: "导入",
+      reParseOutline: "重新解析大纲", reGenerate: "重新生成大纲", export: "导出大纲", import: "导入", importExport: "导入/导出",
       aiPlaceholder: "例如：增加一页关于XXX的内容、删除第3页、合并前两页... · Ctrl+Enter提交",
       aiPlaceholderShort: "例如：增加/删除页面... · Ctrl+Enter",
       contextLabels: { idea: "PPT构想", outline: "大纲", description: "描述" },
       inputLabel: { idea: "PPT 构想", outline: "原始大纲", description: "页面描述", ppt_renovation: "原始 PPT 内容" },
       inputPlaceholder: { idea: "输入你的 PPT 构想...", outline: "输入大纲内容...", description: "输入页面描述...", ppt_renovation: "已从 PDF 中提取内容" },
+      outlineRequirements: "大纲生成要求",
+      outlineRequirementsPlaceholder: "例如：限制在10页以内、每页要点不超过3条、多使用图表...",
       messages: {
         outlineEmpty: "大纲不能为空", generateSuccess: "描述生成完成", generateFailed: "生成描述失败",
         generateIncomplete: "大纲生成可能不完整，请检查后重试",
@@ -45,12 +48,14 @@ const outlineI18n = {
       preview: "Preview", clickToPreview: "Click a card on the left to view details",
       noPages: "No pages yet", noPagesHint: "Click \"Add Page\" to create manually, or \"Auto Generate\" to let AI help you",
       parseOutline: "Parse Outline", autoGenerate: "Auto Generate Outline",
-      reParseOutline: "Re-parse Outline", reGenerate: "Regenerate Outline", export: "Export Outline", import: "Import",
+      reParseOutline: "Re-parse Outline", reGenerate: "Regenerate Outline", export: "Export Outline", import: "Import", importExport: "Import/Export",
       aiPlaceholder: "e.g., Add a page about XXX, delete page 3, merge first two pages... · Ctrl+Enter to submit",
       aiPlaceholderShort: "e.g., Add/delete pages... · Ctrl+Enter",
       contextLabels: { idea: "PPT Idea", outline: "Outline", description: "Description" },
       inputLabel: { idea: "PPT Idea", outline: "Original Outline", description: "Page Descriptions", ppt_renovation: "Original PPT Content" },
       inputPlaceholder: { idea: "Enter your PPT idea...", outline: "Enter outline content...", description: "Enter page descriptions...", ppt_renovation: "Content extracted from PDF" },
+      outlineRequirements: "Generation Requirements",
+      outlineRequirementsPlaceholder: "e.g., Limit to 10 pages, max 3 points per page, use more charts...",
       messages: {
         outlineEmpty: "Outline cannot be empty", generateSuccess: "Descriptions generated successfully", generateFailed: "Failed to generate descriptions",
         generateIncomplete: "Outline generation may be incomplete, please review and retry",
@@ -167,6 +172,8 @@ export const OutlineEditor: React.FC = () => {
   const desktopTextareaRef = useRef<MarkdownTextareaRef>(null);
   const mobileTextareaRef = useRef<MarkdownTextareaRef>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
   const getInputText = useCallback((project: typeof currentProject) => {
     if (!project) return '';
     if (project.creation_type === 'outline' || project.creation_type === 'ppt_renovation') return project.outline_text || project.idea_prompt || '';
@@ -176,12 +183,32 @@ export const OutlineEditor: React.FC = () => {
 
   const [inputText, setInputText] = useState('');
   const [isInputDirty, setIsInputDirty] = useState(false);
+  const [outlineRequirements, setOutlineRequirements] = useState('');
+  const [isRequirementsDirty, setIsRequirementsDirty] = useState(false);
+  const reqTextareaRef = useRef<MarkdownTextareaRef>(null);
+  const [isRequirementsOpen, setIsRequirementsOpen] = useState(
+    () => localStorage.getItem('outlineReqOpen') !== 'false'
+  );
+
+  // 点击外部关闭下拉
+  useEffect(() => {
+    if (!fileMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (fileMenuRef.current && !fileMenuRef.current.contains(e.target as Node)) {
+        setFileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [fileMenuOpen]);
 
   // 项目切换时：强制加载文本
   useEffect(() => {
     if (currentProject) {
       setInputText(getInputText(currentProject));
       setIsInputDirty(false);
+      setOutlineRequirements(currentProject.outline_requirements || '');
+      setIsRequirementsDirty(false);
     }
   }, [currentProject?.id]);
 
@@ -211,6 +238,20 @@ export const OutlineEditor: React.FC = () => {
     return () => clearTimeout(timer);
   }, [inputText, isInputDirty, saveInputText, currentProject?.creation_type]);
 
+  // Debounced auto-save for outline requirements
+  useEffect(() => {
+    if (!isRequirementsDirty || !projectId) return;
+    const timer = setTimeout(async () => {
+      try {
+        await updateProject(projectId, { outline_requirements: outlineRequirements });
+        setIsRequirementsDirty(false);
+      } catch (e) {
+        console.error('保存大纲要求失败:', e);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [outlineRequirements, isRequirementsDirty, projectId]);
+
   const handleSaveInputText = useCallback(() => {
     if (!isInputDirty) return;
     saveInputText(inputText, currentProject?.creation_type);
@@ -232,6 +273,20 @@ export const OutlineEditor: React.FC = () => {
     setContent: setInputText,
     showToast: show,
     insertAtCursor,
+  });
+
+  const insertAtReqCursor = useCallback((markdown: string) => {
+    reqTextareaRef.current?.insertAtCursor(markdown);
+  }, []);
+
+  const { handlePaste: handleReqImagePaste, handleFiles: handleReqImageFiles } = useImagePaste({
+    projectId: projectId || null,
+    setContent: (updater) => {
+      setOutlineRequirements(updater);
+      setIsRequirementsDirty(true);
+    },
+    showToast: show,
+    insertAtCursor: insertAtReqCursor,
   });
 
   const inputLabel = useMemo(() => {
@@ -279,7 +334,9 @@ export const OutlineEditor: React.FC = () => {
     const doGenerate = async () => {
       try {
         const result = await generateOutlineStream();
-        if (result && !result.complete) {
+        const { currentProject: updatedProject } = useProjectStore.getState();
+        const pageCount = updatedProject?.pages.length ?? 0;
+        if (result && (!result.complete || pageCount === 0)) {
           show({ message: t('outline.messages.generateIncomplete'), type: 'warning' });
         }
       } catch (error: any) {
@@ -355,6 +412,7 @@ export const OutlineEditor: React.FC = () => {
       show({ message: t('outline.messages.importFailed'), type: 'error' });
     }
   }, [currentProject, projectId, syncProject, show, t]);
+
 
   if (!currentProject) {
     return <Loading fullscreen message={t('outline.messages.loadingProject')} />;
@@ -480,23 +538,40 @@ export const OutlineEditor: React.FC = () => {
                   : currentProject.creation_type === 'outline' ? t('outline.reParseOutline') : t('outline.reGenerate')}
               </Button>
             )}
-            <Button
-              variant="secondary"
-              icon={<Download size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={handleExportOutline}
-              disabled={currentProject.pages.length === 0}
-              className="flex-1 sm:flex-initial text-sm md:text-base"
-            >
-              {t('outline.export')}
-            </Button>
-            <Button
-              variant="secondary"
-              icon={<Upload size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={() => importFileRef.current?.click()}
-              className="flex-1 sm:flex-initial text-sm md:text-base"
-            >
-              {t('outline.import')}
-            </Button>
+            {/* 导入导出下拉菜单 */}
+            <div className="relative" ref={fileMenuRef}>
+              <Button
+                variant="secondary"
+                onClick={() => setFileMenuOpen(!fileMenuOpen)}
+                icon={<FileText size={16} className="md:w-[18px] md:h-[18px]" />}
+                className="flex-1 sm:flex-initial text-sm md:text-base"
+              >
+                {t('outline.importExport')}
+                <ChevronDown size={14} className={`ml-1 transition-transform duration-200 ${fileMenuOpen ? 'rotate-180' : ''}`} />
+              </Button>
+              {fileMenuOpen && (
+                <div className="absolute top-full left-0 mt-1 z-50 w-full rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary shadow-lg dark:shadow-none overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => { handleExportOutline(); setFileMenuOpen(false); }}
+                    disabled={currentProject.pages.length === 0}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150"
+                  >
+                    <Download size={14} />
+                    {t('outline.export')}
+                  </button>
+                  <div className="border-t border-gray-100 dark:border-border-primary" />
+                  <button
+                    type="button"
+                    onClick={() => { importFileRef.current?.click(); setFileMenuOpen(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover transition-colors duration-150"
+                  >
+                    <Upload size={14} />
+                    {t('outline.import')}
+                  </button>
+                </div>
+              )}
+            </div>
             <input ref={importFileRef} type="file" accept=".md,.txt" className="hidden" onChange={handleImportOutline} />
             {/* 手机端：保存按钮 */}
             <Button
@@ -510,6 +585,53 @@ export const OutlineEditor: React.FC = () => {
             <span className="text-xs md:text-sm text-gray-500 dark:text-foreground-tertiary whitespace-nowrap">
               {t('outline.pageCount', { count: String(currentProject.pages.length) })}
             </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 大纲生成要求 - 可折叠 */}
+      <div className="bg-white dark:bg-background-secondary border-b border-gray-200 dark:border-border-primary flex-shrink-0">
+        <button
+          type="button"
+          data-testid="outline-requirements-toggle"
+          onClick={() => { const next = !isRequirementsOpen; setIsRequirementsOpen(next); localStorage.setItem('outlineReqOpen', String(next)); }}
+          className="w-full px-3 md:px-6 py-2 flex items-center gap-2 text-xs text-gray-500 dark:text-foreground-tertiary hover:text-gray-700 dark:hover:text-foreground-secondary hover:bg-gray-50 dark:hover:bg-background-hover transition-colors"
+        >
+          <Settings2 size={12} className="flex-shrink-0" />
+          <span className="font-medium">{t('outline.outlineRequirements')}</span>
+          {outlineRequirements && !isRequirementsOpen && (
+            <span className="w-1.5 h-1.5 rounded-full bg-banana-400 flex-shrink-0" />
+          )}
+          <ChevronDown
+            size={12}
+            className={`ml-auto transition-transform duration-200 ${isRequirementsOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
+        <div
+          className="overflow-hidden transition-all duration-200 ease-in-out"
+          style={{ maxHeight: isRequirementsOpen ? '600px' : '0px' }}
+        >
+          <div className="px-3 md:px-6 pb-3">
+            <div data-testid="outline-requirements-textarea">
+              <MarkdownTextarea
+                ref={reqTextareaRef}
+                value={outlineRequirements}
+                onChange={(val) => { setOutlineRequirements(val); setIsRequirementsDirty(true); }}
+                onPaste={handleReqImagePaste}
+                onFiles={handleReqImageFiles}
+                placeholder={t('outline.outlineRequirementsPlaceholder')}
+                className="ring-inset"
+                rows={2}
+                showImagePreview={false}
+              />
+            </div>
+            <PresetCapsules
+              type="outline"
+              onAppend={(text) => {
+                setOutlineRequirements((prev) => prev ? `${prev}\n${text}` : text);
+                setIsRequirementsDirty(true);
+              }}
+            />
           </div>
         </div>
       </div>
