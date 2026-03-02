@@ -1,5 +1,5 @@
 // 页面状态
-export type PageStatus = 'DRAFT' | 'DESCRIPTION_GENERATED' | 'GENERATING' | 'COMPLETED' | 'FAILED';
+export type PageStatus = 'DRAFT' | 'GENERATING_DESCRIPTION' | 'DESCRIPTION_GENERATED' | 'QUEUED' | 'GENERATING' | 'COMPLETED' | 'FAILED';
 
 // 项目状态
 export type ProjectStatus = 'DRAFT' | 'OUTLINE_GENERATED' | 'DESCRIPTIONS_GENERATED' | 'COMPLETED';
@@ -95,6 +95,8 @@ export interface Project {
   description_text?: string;  // 用户输入的描述文本（用于description类型）
   extra_requirements?: string; // 额外要求，应用到每个页面的AI提示词
   presentation_meta?: string; // 封面/结尾补全信息（JSON字符串）
+  outline_requirements?: string; // 大纲生成要求
+  description_requirements?: string; // 页面描述生成要求
   creation_type?: string;
   template_image_url?: string; // 后端返回 template_image_url
   template_image_path?: string; // 前端使用的别名
@@ -161,7 +163,7 @@ export interface ApiResponse<T = any> {
 // 设置
 export interface Settings {
   id: number;
-  ai_provider_format: 'openai' | 'gemini' | 'lazyllm';
+  ai_provider_format: string;
   api_base_url?: string;
   api_key_length: number;
   image_resolution: string;

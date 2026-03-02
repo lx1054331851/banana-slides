@@ -320,11 +320,11 @@ export const splitReportToPptJson = async (
  * @param projectId 项目ID
  * @param language 输出语言（可选，默认从 sessionStorage 获取）
  */
-export const generateDescriptions = async (projectId: string, language?: OutputLanguage): Promise<ApiResponse> => {
+export const generateDescriptions = async (projectId: string, language?: OutputLanguage, detailLevel?: string): Promise<ApiResponse> => {
   const lang = language || await getStoredOutputLanguage();
   const response = await apiClient.post<ApiResponse>(
     `/api/projects/${projectId}/generate/descriptions`,
-    { language: lang }
+    { language: lang, detail_level: detailLevel || 'default' }
   );
   return response.data;
 };
@@ -336,12 +336,13 @@ export const generatePageDescription = async (
   projectId: string,
   pageId: string,
   forceRegenerate: boolean = false,
-  language?: OutputLanguage
+  language?: OutputLanguage,
+  detailLevel?: string
 ): Promise<ApiResponse> => {
   const lang = language || await getStoredOutputLanguage();
   const response = await apiClient.post<ApiResponse>(
     `/api/projects/${projectId}/pages/${pageId}/generate/description`,
-    { force_regenerate: forceRegenerate , language: lang}
+    { force_regenerate: forceRegenerate, language: lang, detail_level: detailLevel || 'default' }
   );
   return response.data;
 };
@@ -748,10 +749,14 @@ export const generateMaterialImage = async (
   projectId: string,
   prompt: string,
   refImage?: File | null,
-  extraImages?: File[]
+  extraImages?: File[],
+  aspectRatio?: string
 ): Promise<ApiResponse<{ task_id: string; status: string }>> => {
   const formData = new FormData();
   formData.append('prompt', prompt);
+  if (aspectRatio) {
+    formData.append('aspect_ratio', aspectRatio);
+  }
   if (refImage) {
     formData.append('ref_image', refImage);
   }
@@ -1156,7 +1161,7 @@ export interface TestSettingsOverride {
   mineru_api_base?: string;
   mineru_token?: string;
   baidu_api_key?: string;
-  ai_provider_format?: 'openai' | 'gemini' | 'lazyllm';
+  ai_provider_format?: string;
   image_resolution?: string;
   enable_text_reasoning?: boolean;
   text_thinking_budget?: number;

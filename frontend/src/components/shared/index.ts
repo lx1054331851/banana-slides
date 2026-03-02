@@ -31,4 +31,4 @@ export { AccessCodeGuard } from './AccessCodeGuard';
 export { TextStyleSelector } from './TextStyleSelector';
 export { StyleWorkflowPanel } from './StyleWorkflowPanel';
 export { ImageLightbox } from './ImageLightbox';
-
+export { Pagination } from './Pagination';
