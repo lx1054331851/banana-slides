@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Project } from '@/types';
 import * as api from '@/api/endpoints';
-import { debounce, normalizeProject, normalizeErrorMessage } from '@/utils';
+import { normalizeProject, normalizeErrorMessage } from '@/utils';
 import { devLog } from '@/utils/logger';
 import { getT } from '@/utils/i18nHelper';
 
@@ -133,34 +133,56 @@ interface ProjectState {
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => {
-  // 防抖的API更新函数（在store内部定义，以便访问syncProject）
-const debouncedUpdatePage = debounce(
-  async (projectId: string, pageId: string, data: any) => {
+  const pendingPageUpdates = new Map<string, any>();
+  const pageUpdateTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const inflightPageUpdates = new Map<string, Promise<void>>();
+
+  const getPageUpdateKey = (projectId: string, pageId: string) => `${projectId}:${pageId}`;
+
+  const flushPageUpdate = async (projectId: string, pageId: string) => {
+    const key = getPageUpdateKey(projectId, pageId);
+    const inflight = inflightPageUpdates.get(key);
+    if (inflight) {
+      await inflight;
+      return;
+    }
+
+    const data = pendingPageUpdates.get(key);
+    if (!data) return;
+
+    pendingPageUpdates.delete(key);
+    const timer = pageUpdateTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      pageUpdateTimers.delete(key);
+    }
+
+    const request = (async () => {
       try {
-    const promises: Promise<any>[] = [];
+        const promises: Promise<any>[] = [];
 
-    // 如果更新的是 description_content，使用专门的端点
-    if (data.description_content) {
-      promises.push(api.updatePageDescription(projectId, pageId, data.description_content));
-    }
+        // 如果更新的是 description_content，使用专门的端点
+        if (data.description_content) {
+          promises.push(api.updatePageDescription(projectId, pageId, data.description_content));
+        }
 
-    // 如果更新的是 outline_content，使用专门的端点
-    if (data.outline_content) {
-      promises.push(api.updatePageOutline(projectId, pageId, data.outline_content));
-    }
+        // 如果更新的是 outline_content，使用专门的端点
+        if (data.outline_content) {
+          promises.push(api.updatePageOutline(projectId, pageId, data.outline_content));
+        }
 
-    // 如果更新的是 part 字段，使用通用端点
-    if ('part' in data) {
-      promises.push(api.updatePage(projectId, pageId, { part: data.part }));
-    }
+        // 如果更新的是 part 字段，使用通用端点
+        if ('part' in data) {
+          promises.push(api.updatePage(projectId, pageId, { part: data.part }));
+        }
 
-    // 如果没有特定的内容更新，使用通用端点
-    if (promises.length === 0) {
-      await api.updatePage(projectId, pageId, data);
-    } else {
-      // 并行执行所有更新请求
-      await Promise.all(promises);
-    }
+        // 如果没有特定的内容更新，使用通用端点
+        if (promises.length === 0) {
+          await api.updatePage(projectId, pageId, data);
+        } else {
+          // 并行执行所有更新请求
+          await Promise.all(promises);
+        }
         
         // API调用成功后，同步项目状态以更新updated_at
         // 图片生成期间 poll 已在 2s 同步，跳过以避免并发竞态
@@ -172,10 +194,49 @@ const debouncedUpdatePage = debounce(
         console.error('保存页面失败:', error);
         // 可以在这里添加错误提示，但为了避免频繁提示，暂时只记录日志
         // 如果需要，可以通过事件系统或toast通知用户
+      }
+    })();
+
+    inflightPageUpdates.set(key, request);
+    try {
+      await request;
+    } finally {
+      inflightPageUpdates.delete(key);
     }
-  },
-  1000
-);
+  };
+
+  const debouncedUpdatePage = (projectId: string, pageId: string, data: any) => {
+    const key = getPageUpdateKey(projectId, pageId);
+    const prev = pendingPageUpdates.get(key) || {};
+    pendingPageUpdates.set(key, { ...prev, ...data });
+
+    const existingTimer = pageUpdateTimers.get(key);
+    if (existingTimer) clearTimeout(existingTimer);
+    const timer = setTimeout(() => {
+      void flushPageUpdate(projectId, pageId);
+    }, 1000);
+    pageUpdateTimers.set(key, timer);
+  };
+
+  const flushAllPendingPageUpdates = async () => {
+    const keys = Array.from(pendingPageUpdates.keys());
+    if (keys.length > 0) {
+      await Promise.all(
+        keys.map((key) => {
+          const separatorIndex = key.indexOf(':');
+          if (separatorIndex <= 0 || separatorIndex >= key.length - 1) {
+            return Promise.resolve();
+          }
+          const projectId = key.slice(0, separatorIndex);
+          const pageId = key.slice(separatorIndex + 1);
+          return flushPageUpdate(projectId, pageId);
+        })
+      );
+    }
+    if (inflightPageUpdates.size > 0) {
+      await Promise.all(Array.from(inflightPageUpdates.values()));
+    }
+  };
 
   return {
   // 初始状态
@@ -382,8 +443,8 @@ const debouncedUpdatePage = debounce(
     const { currentProject } = get();
     if (!currentProject) return;
 
-    // 等待防抖延迟时间（1秒）+ 额外时间确保API调用完成
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // 强制 flush 所有待保存更新，避免页面切换导致数据未落库
+    await flushAllPendingPageUpdates();
     
     // 同步项目状态，这会从后端获取最新的updated_at
     await get().syncProject(currentProject.id);

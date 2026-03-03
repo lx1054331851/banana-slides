@@ -67,7 +67,7 @@ const detailI18n = {
 import { Button, Loading, useToast, useConfirm, AiRefineInput, FilePreviewModal, ReferenceFileList, CoverEndingInfoModal } from '@/components/shared';
 import { DescriptionCard } from '@/components/preview/DescriptionCard';
 import { useProjectStore } from '@/store/useProjectStore';
-import { refineDescriptions, getTaskStatus, addPage, detectCoverEndingFields, updateProject } from '@/api/endpoints';
+import { refineDescriptions, getTaskStatus, addPage, detectCoverEndingFields, updateProject, updatePageDescription } from '@/api/endpoints';
 import { exportProjectToMarkdown, parseMarkdownPages, getDescriptionText, applyPresentationMetaToDescription, parsePresentationMeta } from '@/utils/projectUtils';
 import type { CoverEndingFieldDetect, PresentationMeta } from '@/types';
 
@@ -82,7 +82,6 @@ export const DetailEditor: React.FC = () => {
     currentProject,
     syncProject,
     updatePageLocal,
-    saveAllPages,
     generateDescriptions,
     generatePageDescription,
     regenerateRenovationPage,
@@ -350,18 +349,17 @@ export const DetailEditor: React.FC = () => {
         detectFields,
       });
 
+      const saveRequests: Promise<any>[] = [];
       if (coverId) {
-        updatePageLocal(coverId, {
-          description_content: { text: updatedCover },
-        });
+        saveRequests.push(updatePageDescription(projectId, coverId, { text: updatedCover }));
       }
       if (endingId && endingId !== coverId) {
-        updatePageLocal(endingId, {
-          description_content: { text: updatedEnding },
-        });
+        saveRequests.push(updatePageDescription(projectId, endingId, { text: updatedEnding }));
+      }
+      if (saveRequests.length > 0) {
+        await Promise.all(saveRequests);
       }
 
-      await saveAllPages();
       await syncProject(projectId);
       setIsCoverEndingModalOpen(false);
       setCoverEndingModalMode('missing');
@@ -398,10 +396,42 @@ export const DetailEditor: React.FC = () => {
     }
   };
 
-  const handleCoverEndingView = () => {
-    setDetectFields([]);
-    setCoverEndingModalMode('all');
-    setIsCoverEndingModalOpen(true);
+  const handleCoverEndingView = async () => {
+    if (!currentProject || !projectId) {
+      setDetectFields([]);
+      setCoverEndingModalMode('all');
+      setIsCoverEndingModalOpen(true);
+      return;
+    }
+
+    const sortedPages = getSortedPages();
+    if (sortedPages.length === 0) {
+      setDetectFields([]);
+      setCoverEndingModalMode('all');
+      setIsCoverEndingModalOpen(true);
+      return;
+    }
+
+    const coverPage = sortedPages[0];
+    const endingPage = sortedPages[sortedPages.length - 1];
+    const coverText = getDescriptionText(coverPage.description_content);
+    const endingText = getDescriptionText(endingPage.description_content);
+
+    try {
+      setIsCheckingCoverEnding(true);
+      const response = await detectCoverEndingFields(projectId, {
+        cover: { page_id: coverPage.id || coverPage.page_id, description: coverText },
+        ending: { page_id: endingPage.id || endingPage.page_id, description: endingText },
+      });
+      setDetectFields(response.data?.fields || []);
+    } catch (error) {
+      console.warn('查看封面/结尾信息时检测失败，继续打开编辑框', error);
+      setDetectFields([]);
+    } finally {
+      setIsCheckingCoverEnding(false);
+      setCoverEndingModalMode('all');
+      setIsCoverEndingModalOpen(true);
+    }
   };
 
   const handleCoverEndingClose = () => {
