@@ -542,8 +542,8 @@ const debouncedUpdatePage = debounce(
             taskProgress: null,
             isGlobalLoading: false
           });
-        } else if (task.status === 'PENDING' || task.status === 'PROCESSING') {
-          // 继续轮询（PENDING 或 PROCESSING）
+        } else if (task.status === 'PENDING' || task.status === 'PROCESSING' || task.status === 'RUNNING') {
+          // 继续轮询（PENDING / PROCESSING / RUNNING）
           devLog(`[轮询] Task ${taskId} 处理中，2秒后继续轮询...`);
           setTimeout(poll, 2000);
         } else {
@@ -948,29 +948,50 @@ const debouncedUpdatePage = debounce(
     }
     const projectId = currentProject.id!;
 
+    let consecutiveErrors = 0;
+    let consecutiveEmptyResponses = 0;
+    let consecutiveUnknownStatuses = 0;
+    const maxTransientRetries = 5;
+
+    const clearPageTaskMappings = () => {
+      const { pageGeneratingTasks } = get();
+      const newTasks = { ...pageGeneratingTasks };
+      pageIds.forEach(id => {
+        if (newTasks[id] === taskId) {
+          delete newTasks[id];
+        }
+      });
+      return newTasks;
+    };
+
     const poll = async () => {
       try {
         const response = await api.getTaskStatus(projectId, taskId);
         const task = response.data;
         
         if (!task) {
-          console.warn('[批量轮询] 响应中没有任务数据');
+          consecutiveEmptyResponses += 1;
+          console.warn(`[批量轮询] 响应中没有任务数据（${consecutiveEmptyResponses}/${maxTransientRetries}）`);
+          if (consecutiveEmptyResponses < maxTransientRetries) {
+            setTimeout(poll, 2000);
+            return;
+          }
+          // 长时间拿不到任务数据时，释放前端“生成中”标记，并强制同步一次页面状态
+          set({ pageGeneratingTasks: clearPageTaskMappings() });
+          await get().syncProject();
           return;
         }
+        consecutiveErrors = 0;
+        consecutiveEmptyResponses = 0;
 
         devLog(`[批量轮询] Task ${taskId} 状态: ${task.status}`, task.progress);
 
         // 检查任务状态
         if (task.status === 'COMPLETED') {
+          consecutiveUnknownStatuses = 0;
           devLog(`[批量轮询] Task ${taskId} 已完成，清除任务记录`);
           // 清除所有相关页面的任务记录
-          const { pageGeneratingTasks } = get();
-          const newTasks = { ...pageGeneratingTasks };
-          pageIds.forEach(id => {
-            if (newTasks[id] === taskId) {
-              delete newTasks[id];
-            }
-          });
+          const newTasks = clearPageTaskMappings();
           
           // 提取警告消息（如果有）
           const warningMessage = task.progress?.warning_message || null;
@@ -991,7 +1012,8 @@ const debouncedUpdatePage = debounce(
             if (updatedProject) {
               const allImagesReady = pageIds.every(pageId => {
                 const page = updatedProject.pages.find(p => p.id === pageId);
-                return page?.generated_image_path;
+                // 失败页没有图片路径，但其状态已终止，不应阻塞同步完成判断
+                return !!page?.generated_image_path || page?.status === 'FAILED';
               });
 
               if (allImagesReady) {
@@ -1012,22 +1034,18 @@ const debouncedUpdatePage = debounce(
 
           await syncWithRetry();
         } else if (task.status === 'FAILED') {
+          consecutiveUnknownStatuses = 0;
           console.error(`[批量轮询] Task ${taskId} 失败:`, task.error_message || task.error);
           // 清除所有相关页面的任务记录
-          const { pageGeneratingTasks } = get();
-          const newTasks = { ...pageGeneratingTasks };
-          pageIds.forEach(id => {
-            if (newTasks[id] === taskId) {
-              delete newTasks[id];
-            }
-          });
+          const newTasks = clearPageTaskMappings();
           set({ 
             pageGeneratingTasks: newTasks,
             error: normalizeErrorMessage(task.error_message || task.error || t('store.batchGenerateFailed'))
           });
           // 刷新项目数据以更新页面状态
           await get().syncProject();
-        } else if (task.status === 'PENDING' || task.status === 'PROCESSING') {
+        } else if (task.status === 'PENDING' || task.status === 'PROCESSING' || task.status === 'RUNNING') {
+          consecutiveUnknownStatuses = 0;
           // 检查警告消息
           const newWarning = task.progress?.warning_message;
           if (newWarning && get().warningMessage !== newWarning) {
@@ -1059,28 +1077,29 @@ const debouncedUpdatePage = debounce(
           devLog(`[批量轮询] Task ${taskId} 处理中，2秒后继续轮询...`);
           setTimeout(poll, 2000);
         } else {
-          // 未知状态，停止轮询
-          console.warn(`[批量轮询] Task ${taskId} 未知状态: ${task.status}，停止轮询`);
-          const { pageGeneratingTasks } = get();
-          const newTasks = { ...pageGeneratingTasks };
-          pageIds.forEach(id => {
-            if (newTasks[id] === taskId) {
-              delete newTasks[id];
-            }
-          });
-          set({ pageGeneratingTasks: newTasks });
+          // 兼容后端未来新增状态：先同步页面再重试，避免前端卡在“生成中”
+          consecutiveUnknownStatuses += 1;
+          console.warn(`[批量轮询] Task ${taskId} 未知状态: ${task.status}（${consecutiveUnknownStatuses}/${maxTransientRetries}）`);
+          if (consecutiveUnknownStatuses < maxTransientRetries) {
+            await get().syncProject();
+            setTimeout(poll, 2000);
+            return;
+          }
+          // 长时间未知状态时，释放任务映射并同步页面，避免 UI 卡住
+          set({ pageGeneratingTasks: clearPageTaskMappings() });
+          await get().syncProject();
         }
       } catch (error: any) {
         console.error('[批量轮询] 轮询错误:', error);
-        // 清除所有相关页面的任务记录
-        const { pageGeneratingTasks } = get();
-        const newTasks = { ...pageGeneratingTasks };
-        pageIds.forEach(id => {
-          if (newTasks[id] === taskId) {
-            delete newTasks[id];
-          }
-        });
-        set({ pageGeneratingTasks: newTasks });
+        consecutiveErrors += 1;
+        if (consecutiveErrors < maxTransientRetries) {
+          // 临时网络抖动时继续轮询，避免误判导致 UI 卡状态
+          setTimeout(poll, 2000);
+          return;
+        }
+        // 多次失败后释放前端“生成中”标记，并同步页面真实状态
+        set({ pageGeneratingTasks: clearPageTaskMappings() });
+        await get().syncProject();
       }
     };
 
