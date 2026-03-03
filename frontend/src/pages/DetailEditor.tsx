@@ -86,7 +86,7 @@ export const DetailEditor: React.FC = () => {
     generateDescriptions,
     generatePageDescription,
     regenerateRenovationPage,
-    pageDescriptionGeneratingTasks,
+    pageGeneratingTasks,
   } = useProjectStore();
   const { show, ToastContainer } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
@@ -684,7 +684,7 @@ export const DetailEditor: React.FC = () => {
                     showToast={show}
                     onUpdate={(data) => updatePageLocal(pageId, data)}
                     onRegenerate={() => stableHandleRegeneratePage(pageId)}
-                    isGenerating={pageIsGenerating || (pageId ? !!pageDescriptionGeneratingTasks[pageId] : false)}
+                    isGenerating={pageIsGenerating || (pageId ? !!pageGeneratingTasks?.[pageId] : false)}
                     isAiRefining={isAiRefining}
                   />
                 );
