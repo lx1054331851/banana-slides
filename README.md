@@ -70,20 +70,6 @@
 </p>
 
 
-## 🎨 结果案例
-
-
-<div align="center">
-
-| | |
-|:---:|:---:|
-| <img src="https://github.com/user-attachments/assets/d58ce3f7-bcec-451d-a3b9-ca3c16223644" width="500" alt="案例3"> | <img src="https://github.com/user-attachments/assets/c64cd952-2cdf-4a92-8c34-0322cbf3de4e" width="500" alt="案例2"> |
-| **软件开发最佳实践** | **DeepSeek-V3.2技术展示** |
-| <img src="https://github.com/user-attachments/assets/383eb011-a167-4343-99eb-e1d0568830c7" width="500" alt="案例4"> | <img src="https://github.com/user-attachments/assets/1a63afc9-ad05-4755-8480-fc4aa64987f1" width="500" alt="案例1"> |
-| **预制菜智能产线装备研发和产业化** | **钱的演变：从贝壳到纸币的旅程** |
-
-</div>
-
 更多可见<a href="https://github.com/Anionex/banana-slides/issues/2" > 使用案例 </a>
 
 
@@ -95,7 +81,6 @@
 - **自然语言编辑**：支持以 Vibe 形式口头修改大纲或描述（如"把第三页改成案例分析"），AI 实时响应调整。
 - **大纲/描述模式**：既可一键批量生成，也可手动调整细节。
 
-<img width="2000" height="1125" alt="image" src="https://github.com/user-attachments/assets/7fc1ecc6-433d-4157-b4ca-95fcebac66ba" />
 
 
 ### 2. 强大的素材解析能力
@@ -103,27 +88,22 @@
 - **智能提取**：自动识别文本中的关键点、图片链接和图表信息，为生成提供丰富素材。
 - **风格参考**：支持上传参考图片或模板，定制 PPT 风格。
 
-<img width="1920" height="1080" alt="文件解析与素材处理" src="https://github.com/user-attachments/assets/8cda1fd2-2369-4028-b310-ea6604183936" />
 
 ### 3. "Vibe" 式自然语言修改
 不再受限于复杂的菜单按钮，直接通过**自然语言**下达修改指令。
 - **局部重绘**：对不满意的区域进行口头式修改（如"把这个图换成饼图"）。
 - **整页优化**：基于 nano banana pro🍌 生成高清、风格统一的页面。
 
-<img width="2000" height="1125" alt="image" src="https://github.com/user-attachments/assets/929ba24a-996c-4f6d-9ec6-818be6b08ea3" />
 
 
 ### 4. 开箱即用的格式导出
 - **多格式支持**：一键导出标准 **PPTX** 或 **PDF** 文件。
 - **完美适配**：默认 16:9 比例，排版无需二次调整，直接演示。
 
-<img width="1000" alt="image" src="https://github.com/user-attachments/assets/3e54bbba-88be-4f69-90a1-02e875c25420" />
-<img width="1748" height="538" alt="PPT与PDF导出" src="https://github.com/user-attachments/assets/647eb9b1-d0b6-42cb-a898-378ebe06c984" />
 
 ### 5. 可自由编辑的pptx导出（Beta迭代中）
 - **导出图像为高还原度、背景干净的、可自由编辑图像和文字的PPT页面**
 - 相关更新见 https://github.com/Anionex/banana-slides/issues/121
-<img width="1000"  alt="image" src="https://github.com/user-attachments/assets/a85d2d48-1966-4800-a4bf-73d17f914062" />
 
 <br>
 
