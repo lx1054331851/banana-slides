@@ -19,7 +19,7 @@ DEFAULT_RESOLUTION = "2K"  # "1K", "2K", "4K"
 def gen_image(prompt: str, ref_image_path: str, aspect_ratio: str = DEFAULT_ASPECT_RATIO, 
               resolution: str = DEFAULT_RESOLUTION):
     response = client.models.generate_content(
-        model="gemini-3-pro-image-preview",
+        model="gemini-3.1-flash-image-preview",
         contents=[
             prompt,
             Image.open(ref_image_path),

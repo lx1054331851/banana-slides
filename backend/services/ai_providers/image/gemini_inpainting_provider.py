@@ -17,7 +17,7 @@ class GeminiInpaintingProvider:
     """Gemini Inpainting 消除服务（使用 Gemini 2.5 Flash）"""
     
     # DEFAULT_MODEL = "gemini-2.5-flash-image"
-    DEFAULT_MODEL = "gemini-3-pro-image-preview"
+    DEFAULT_MODEL = "gemini-3.1-flash-image-preview"
     DEFAULT_PROMPT = """\
 你是一个专业的图片前景元素去除专家，以极高的精度进行前景元素的去除工作。
 现在用户向你提供了两张不同的图片：
