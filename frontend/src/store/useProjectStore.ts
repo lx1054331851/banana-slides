@@ -29,6 +29,7 @@ const storeI18n = {
       noTaskId: '未收到任务ID',
       generateDescFailed: '生成描述失败',
       generateDescTimeout: '生成描述失败：轮询超时',
+      imageTaskTimeout: '图片生成超时，请重试',
       startGenerationFailed: '启动生成任务失败',
       regenerateFailed: '重新生成失败',
       batchGenerateFailed: '批量生成失败',
@@ -61,6 +62,7 @@ const storeI18n = {
       noTaskId: 'No task ID received',
       generateDescFailed: 'Failed to generate description',
       generateDescTimeout: 'Failed to generate description: polling timeout',
+      imageTaskTimeout: 'Image generation timed out, please retry',
       startGenerationFailed: 'Failed to start generation task',
       regenerateFailed: 'Failed to regenerate',
       batchGenerateFailed: 'Batch generation failed',
@@ -1013,6 +1015,8 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     let consecutiveEmptyResponses = 0;
     let consecutiveUnknownStatuses = 0;
     const maxTransientRetries = 5;
+    const maxPollingDurationMs = 5 * 60 * 1000; // 5 min hard stop
+    const pollStartedAt = Date.now();
 
     const clearPageTaskMappings = () => {
       const { pageGeneratingTasks } = get();
@@ -1025,8 +1029,32 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       return newTasks;
     };
 
+    const markTargetPagesFailedLocally = () => {
+      const { currentProject: latestProject } = get();
+      if (!latestProject) return;
+      const targetSet = new Set(pageIds);
+      const patchedPages = latestProject.pages.map((page) => {
+        if (!page.id || !targetSet.has(page.id)) return page;
+        if (page.status === 'QUEUED' || page.status === 'GENERATING') {
+          return { ...page, status: 'FAILED' as const };
+        }
+        return page;
+      });
+      set({ currentProject: { ...latestProject, pages: patchedPages } });
+    };
+
     const poll = async () => {
       try {
+        if (Date.now() - pollStartedAt > maxPollingDurationMs) {
+          set({
+            pageGeneratingTasks: clearPageTaskMappings(),
+            error: normalizeErrorMessage(t('store.imageTaskTimeout'))
+          });
+          markTargetPagesFailedLocally();
+          await get().syncProject();
+          return;
+        }
+
         const response = await api.getTaskStatus(projectId, taskId);
         const task = response.data;
         
@@ -1105,6 +1133,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
           });
           // 刷新项目数据以更新页面状态
           await get().syncProject();
+          markTargetPagesFailedLocally();
         } else if (task.status === 'PENDING' || task.status === 'PROCESSING' || task.status === 'RUNNING') {
           consecutiveUnknownStatuses = 0;
           // 检查警告消息
@@ -1160,6 +1189,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
         }
         // 多次失败后释放前端“生成中”标记，并同步页面真实状态
         set({ pageGeneratingTasks: clearPageTaskMappings() });
+        markTargetPagesFailedLocally();
         await get().syncProject();
       }
     };

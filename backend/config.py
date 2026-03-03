@@ -87,6 +87,8 @@ class Config:
     # 并发配置
     MAX_DESCRIPTION_WORKERS = int(os.getenv('MAX_DESCRIPTION_WORKERS', '5'))
     MAX_IMAGE_WORKERS = int(os.getenv('MAX_IMAGE_WORKERS', '8'))
+    # 异步任务卡死保护：任务处于 PENDING/PROCESSING 超过该时间会被判定为失败（秒）
+    TASK_STALE_TIMEOUT_SECONDS = int(os.getenv('TASK_STALE_TIMEOUT_SECONDS', '300'))
     
     # 图片生成配置
     DEFAULT_ASPECT_RATIO = "16:9"

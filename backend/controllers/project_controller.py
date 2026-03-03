@@ -1307,14 +1307,50 @@ def get_task_status(project_id, task_id):
         if not task or task.project_id != project_id:
             return not_found('Task')
 
-        # If the server restarted or the in-memory executor lost the Future,
-        # tasks can be left in PROCESSING forever. Detect and fail-fast so the
-        # frontend stops infinite polling.
+        # If the server restarted or a worker got stuck, tasks can be left in
+        # PROCESSING forever. Detect and fail-fast so the frontend stops
+        # infinite polling.
         if task.status in ('PENDING', 'PROCESSING', 'RUNNING') and task.completed_at is None:
+            fail_reason = None
+
             if not task_manager.is_task_active(task_id):
+                fail_reason = "Task is not active. The server may have restarted or the worker crashed."
+            else:
+                timeout_task_types = {
+                    'GENERATE_IMAGES',
+                    'GENERATE_PAGE_IMAGE',
+                    'EDIT_PAGE_IMAGE',
+                    'GENERATE_MATERIAL',
+                    'STYLE_RECOMMENDATIONS',
+                    'STYLE_PREVIEW_REGENERATE',
+                }
+                if task.task_type in timeout_task_types:
+                    stale_timeout = int(current_app.config.get('TASK_STALE_TIMEOUT_SECONDS', 1800) or 0)
+                    if stale_timeout > 0 and task.created_at:
+                        running_seconds = int((datetime.utcnow() - task.created_at).total_seconds())
+                        if running_seconds > stale_timeout:
+                            fail_reason = (
+                                f"Task exceeded maximum runtime ({stale_timeout}s). "
+                                "This usually indicates an upstream model/network timeout."
+                            )
+
+            if fail_reason:
                 task.status = 'FAILED'
-                task.error_message = task.error_message or "Task is not active. The server may have restarted or the worker crashed."
+                task.error_message = task.error_message or fail_reason
                 task.completed_at = datetime.utcnow()
+
+                # For image-generation tasks, also release pages stuck in
+                # QUEUED/GENERATING so UI won't remain in generating state.
+                if task.task_type in {'GENERATE_IMAGES', 'GENERATE_PAGE_IMAGE', 'EDIT_PAGE_IMAGE'}:
+                    stuck_pages = Page.query.filter(
+                        Page.project_id == project_id,
+                        Page.status.in_(('QUEUED', 'GENERATING'))
+                    ).all()
+                    for p in stuck_pages:
+                        if not p.generated_image_path:
+                            p.status = 'FAILED'
+                            p.updated_at = datetime.utcnow()
+
                 db.session.commit()
         
         return success_response(task.to_dict())
