@@ -136,6 +136,12 @@ interface ProjectSettingsModalProps {
   onSaveAspectRatio?: () => void;
   isSavingAspectRatio?: boolean;
   hasImages?: boolean;
+  generationDefaultImageSource?: string;
+  generationDefaultImageModel?: string;
+  onGenerationDefaultImageSourceChange?: (value: string) => void;
+  onGenerationDefaultImageModelChange?: (value: string) => void;
+  onSaveGenerationDefaults?: () => void;
+  isSavingGenerationDefaults?: boolean;
 }
 
 type SettingsTab = 'project' | 'global' | 'export';
@@ -172,6 +178,12 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   onSaveAspectRatio,
   isSavingAspectRatio = false,
   hasImages = false,
+  generationDefaultImageSource = '',
+  generationDefaultImageModel = '',
+  onGenerationDefaultImageSourceChange,
+  onGenerationDefaultImageModelChange,
+  onSaveGenerationDefaults,
+  isSavingGenerationDefaults = false,
 }) => {
   const t = useT(projectSettingsI18n);
   const [activeTab, setActiveTab] = useState<SettingsTab>('project');
@@ -304,6 +316,42 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                       className="w-full sm:w-auto"
                     >
                       {isSavingAspectRatio ? t('shared.saving') : t('common.save')}
+                    </Button>
+                  )}
+                </div>
+
+                <div className="bg-gray-50 dark:bg-background-primary rounded-lg p-6 space-y-4">
+                  <div>
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-foreground-primary mb-2">AI 生成默认（项目级）</h4>
+                    <p className="text-sm text-gray-600 dark:text-foreground-tertiary">
+                      配置当前项目默认的图片生成来源/模型（可在预览页临时覆盖）。
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Input
+                      label="图片来源 source"
+                      type="text"
+                      placeholder="留空=使用全局设置；支持 gemini/openai/profile:xxx/vendor"
+                      value={generationDefaultImageSource}
+                      onChange={(e) => onGenerationDefaultImageSourceChange?.(e.target.value)}
+                    />
+                    <Input
+                      label="图片模型 model"
+                      type="text"
+                      placeholder="留空=使用全局设置"
+                      value={generationDefaultImageModel}
+                      onChange={(e) => onGenerationDefaultImageModelChange?.(e.target.value)}
+                    />
+                  </div>
+                  {onSaveGenerationDefaults && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={onSaveGenerationDefaults}
+                      disabled={isSavingGenerationDefaults}
+                      className="w-full sm:w-auto"
+                    >
+                      {isSavingGenerationDefaults ? t('shared.saving') : '保存 AI 默认'}
                     </Button>
                   )}
                 </div>

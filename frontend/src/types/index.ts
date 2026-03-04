@@ -38,6 +38,22 @@ export interface PresentationMeta {
   _cover_ending_checked?: boolean;
   _cover_ending_skipped?: boolean;
   _cover_ending_completed?: boolean;
+  _ai_generation_defaults_v1?: GenerationOverride;
+}
+
+export interface OverrideRoute {
+  source?: string;
+  model?: string;
+  api_base_url?: string;
+  api_key?: string;
+  adapter?: string;
+  adapter_options?: Record<string, any>;
+}
+
+export interface GenerationOverride {
+  text?: OverrideRoute;
+  image?: OverrideRoute;
+  image_caption?: OverrideRoute;
 }
 
 export interface CoverEndingFieldDetect {
@@ -95,6 +111,7 @@ export interface Project {
   description_text?: string;  // 用户输入的描述文本（用于description类型）
   extra_requirements?: string; // 额外要求，应用到每个页面的AI提示词
   presentation_meta?: string; // 封面/结尾补全信息（JSON字符串）
+  generation_defaults?: GenerationOverride;
   outline_requirements?: string; // 大纲生成要求
   description_requirements?: string; // 页面描述生成要求
   creation_type?: string;

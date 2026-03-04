@@ -224,7 +224,7 @@ const settingsI18n = {
 };
 import { Button, Input, Card, Loading, useToast, useConfirm } from '@/components/shared';
 import * as api from '@/api/endpoints';
-import type { OutputLanguage } from '@/api/endpoints';
+import type { OutputLanguage, ProviderProfileSummary } from '@/api/endpoints';
 import { OUTPUT_LANGUAGE_OPTIONS } from '@/api/endpoints';
 import type { Settings as SettingsType } from '@/types';
 
@@ -272,8 +272,8 @@ const LAZYLLM_SOURCES = [
   { value: 'kimi', label: 'Kimi' },
 ];
 
-// 所有可用的提供商选项（Gemini/OpenAI + LazyLLM 厂商）
-const ALL_PROVIDER_SOURCES = [
+// 全局 provider 下拉（不含 profile:*）
+const GLOBAL_PROVIDER_SOURCES = [
   { value: 'gemini', label: 'Gemini' },
   { value: 'openai', label: 'OpenAI' },
   ...LAZYLLM_SOURCES.filter(s => s.value !== 'openai'), // avoid duplicate 'openai'
@@ -398,6 +398,7 @@ export const Settings: React.FC = () => {
   const { confirm, ConfirmDialog } = useConfirm();
 
   const [settings, setSettings] = useState<SettingsType | null>(null);
+  const [providerProfiles, setProviderProfiles] = useState<ProviderProfileSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState(initialFormData);
@@ -546,11 +547,15 @@ export const Settings: React.FC = () => {
   const loadSettings = async () => {
     setIsLoading(true);
     try {
-      const response = await api.getSettings();
-      if (response.data) {
-        setSettings(response.data);
-        setFormData(formDataFromSettings(response.data));
+      const [settingsResp, profilesResp] = await Promise.all([
+        api.getSettings(),
+        api.getProviderProfiles().catch(() => ({ data: { profiles: [] } } as any)),
+      ]);
+      if (settingsResp.data) {
+        setSettings(settingsResp.data);
+        setFormData(formDataFromSettings(settingsResp.data));
       }
+      setProviderProfiles(profilesResp?.data?.profiles || []);
     } catch (error: any) {
       console.error('加载设置失败:', error);
       show({
@@ -925,6 +930,11 @@ export const Settings: React.FC = () => {
       sourceLabel: t('settings.fields.imageCaptionModelSource'),
     },
   ];
+  const profileSourceOptions = providerProfiles.map((p) => ({
+    value: `profile:${p.id}`,
+    label: `Profile: ${p.id} (${String(p.provider || '').toUpperCase()})`,
+  }));
+  const MODEL_PROVIDER_SOURCES = [...GLOBAL_PROVIDER_SOURCES, ...profileSourceOptions];
 
   // 渲染单个模型配置组（模型名 + 提供商选择 + 条件凭证）
   const renderModelConfigGroup = (item: typeof modelConfigItems[0]) => {
@@ -959,7 +969,7 @@ export const Settings: React.FC = () => {
             className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
           >
             <option value="">{t('settings.fields.modelProviderPlaceholder')}</option>
-            {ALL_PROVIDER_SOURCES.map((option) => (
+            {MODEL_PROVIDER_SOURCES.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -1061,7 +1071,7 @@ export const Settings: React.FC = () => {
                 onChange={(e) => handleFieldChange('ai_provider_format', e.target.value)}
                 className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
               >
-                {ALL_PROVIDER_SOURCES.map((option) => (
+                {GLOBAL_PROVIDER_SOURCES.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>

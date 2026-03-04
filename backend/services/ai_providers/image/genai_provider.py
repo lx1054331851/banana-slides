@@ -50,6 +50,7 @@ class GenAIImageProvider(ImageProvider):
         vertexai: bool = False,
         project_id: str = None,
         location: str = None,
+        adapter_options: Optional[dict] = None,
     ):
         self.client = make_genai_client(
             vertexai=vertexai,
@@ -59,6 +60,7 @@ class GenAIImageProvider(ImageProvider):
             location=location,
         )
         self.model = model
+        self.adapter_options = adapter_options or {}
 
     @staticmethod
     def _should_retry_without_image_size(error: Exception) -> bool:
@@ -146,6 +148,7 @@ class GenAIImageProvider(ImageProvider):
             logger.debug(f"Config - aspect_ratio: {aspect_ratio}, resolution: {resolution}, enable_thinking: {enable_thinking}")
 
             # First attempt: include image_size (for providers that support explicit size)
+            include_image_size = not bool(self.adapter_options.get("omit_image_size"))
             try:
                 response = self.client.models.generate_content(
                     model=self.model,
@@ -155,7 +158,7 @@ class GenAIImageProvider(ImageProvider):
                         resolution=resolution,
                         enable_thinking=enable_thinking,
                         thinking_budget=thinking_budget,
-                        include_image_size=True,
+                        include_image_size=include_image_size,
                     )
                 )
             except Exception as first_error:

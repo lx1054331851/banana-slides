@@ -2,6 +2,7 @@
 Project model
 """
 import uuid
+import json
 from datetime import datetime
 from . import db
 
@@ -61,6 +62,17 @@ class Project(db.Model):
         if self.updated_at:
             updated_at_str = self.updated_at.isoformat() + 'Z' if not self.updated_at.tzinfo else self.updated_at.isoformat()
         
+        generation_defaults = None
+        if self.presentation_meta:
+            try:
+                meta = json.loads(self.presentation_meta)
+                if isinstance(meta, dict):
+                    gd = meta.get('_ai_generation_defaults_v1')
+                    if isinstance(gd, dict):
+                        generation_defaults = gd
+            except Exception:
+                generation_defaults = None
+
         data = {
             'project_id': self.id,
             'idea_prompt': self.idea_prompt,
@@ -84,6 +96,7 @@ class Project(db.Model):
             'export_compress_progressive': self.export_compress_progressive if self.export_compress_progressive is not None else True,
             'export_compress_png_quantize_enabled': self.export_compress_png_quantize_enabled or False,
             'presentation_meta': self.presentation_meta,
+            'generation_defaults': generation_defaults,
             'image_aspect_ratio': self.image_aspect_ratio,
             'status': self.status,
             'created_at': created_at_str,

@@ -24,6 +24,7 @@ from models import db, Project, Page, Task, ReferenceFile
 from services import ProjectContext, FileService
 from services.prompts import get_long_report_split_prompt
 from services.ai_service_manager import get_ai_service
+from services.provider_routing import resolve_routing_bundle
 from services.task_manager import (
     task_manager,
     generate_descriptions_task,
@@ -410,6 +411,25 @@ def update_project(project_id):
         # Update presentation_meta if provided
         if 'presentation_meta' in data:
             project.presentation_meta = data['presentation_meta']
+
+        # Update generation_defaults (stored inside presentation_meta namespace)
+        if 'generation_defaults' in data:
+            try:
+                current_meta = {}
+                if project.presentation_meta:
+                    parsed = json.loads(project.presentation_meta)
+                    if isinstance(parsed, dict):
+                        current_meta = parsed
+
+                generation_defaults = data.get('generation_defaults')
+                if isinstance(generation_defaults, dict):
+                    current_meta['_ai_generation_defaults_v1'] = generation_defaults
+                else:
+                    current_meta.pop('_ai_generation_defaults_v1', None)
+
+                project.presentation_meta = json.dumps(current_meta, ensure_ascii=False)
+            except Exception as e:
+                return bad_request(f"generation_defaults must be JSON object: {str(e)}")
         
         # Update aspect ratio if provided
         if 'image_aspect_ratio' in data:
@@ -531,12 +551,24 @@ def generate_outline(project_id):
         if not project:
             return not_found('Project')
         
-        # Get singleton AI service instance
-        ai_service = get_ai_service()
-        
         # Get request data and language parameter
         data = request.get_json() or {}
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request("generation_override must be an object")
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+
+        # Resolve provider routing (request override > project defaults > settings/env)
+        try:
+            routing_bundle = resolve_routing_bundle(
+                project=project,
+                generation_override=generation_override,
+            )
+        except Exception as e:
+            return bad_request(str(e))
+
+        # Get AI service instance (cached by route fingerprint when override/defaults are active)
+        ai_service = get_ai_service(routing_bundle=routing_bundle)
         
         # Get reference files content and create project context
         reference_files_content = _get_project_reference_files_content(project_id)
@@ -740,6 +772,9 @@ def generate_from_description(project_id):
         
         # Get description text and language
         data = request.get_json() or {}
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request("generation_override must be an object")
         description_text = data.get('description_text') or project.description_text
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
         
@@ -748,8 +783,17 @@ def generate_from_description(project_id):
         
         project.description_text = description_text
         
-        # Get singleton AI service instance
-        ai_service = get_ai_service()
+        # Resolve provider routing (request override > project defaults > settings/env)
+        try:
+            routing_bundle = resolve_routing_bundle(
+                project=project,
+                generation_override=generation_override,
+            )
+        except Exception as e:
+            return bad_request(str(e))
+
+        # Get AI service instance (cached by route fingerprint when override/defaults are active)
+        ai_service = get_ai_service(routing_bundle=routing_bundle)
         
         # Get reference files content and create project context
         reference_files_content = _get_project_reference_files_content(project_id)
@@ -1203,6 +1247,9 @@ def generate_style_recommendations(project_id):
         style_requirements = (data.get('style_requirements') or '').strip()
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
         generate_previews = data.get('generate_previews', False)
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request("generation_override must be an object")
         if generate_previews is None:
             generate_previews = False
         if not isinstance(generate_previews, bool):
@@ -1223,6 +1270,14 @@ def generate_style_recommendations(project_id):
         db.session.add(task)
         db.session.commit()
 
+        try:
+            routing_bundle = resolve_routing_bundle(
+                project=project,
+                generation_override=generation_override,
+            )
+        except Exception as e:
+            return bad_request(str(e))
+
         app = current_app._get_current_object()
         task_manager.submit_task(
             task.id,
@@ -1232,7 +1287,8 @@ def generate_style_recommendations(project_id):
             style_requirements,
             app,
             language,
-            generate_previews
+            generate_previews,
+            routing_bundle,
         )
 
         return success_response({'task_id': task.id, 'status': 'PROCESSING'}, status_code=202)
@@ -1289,6 +1345,17 @@ def regenerate_style_previews(project_id, rec_id):
             return bad_request("sample_pages must be an object")
 
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request("generation_override must be an object")
+
+        try:
+            routing_bundle = resolve_routing_bundle(
+                project=project,
+                generation_override=generation_override,
+            )
+        except Exception as e:
+            return bad_request(str(e))
 
         task = Task(project_id=project_id, task_type='STYLE_PREVIEW_REGENERATE', status='PENDING')
         task.set_progress({'total': 4, 'completed': 0, 'failed': 0, 'rec_id': rec_id})
@@ -1304,7 +1371,8 @@ def regenerate_style_previews(project_id, rec_id):
             style_json_text,
             sample_pages,
             app,
-            language
+            language,
+            routing_bundle,
         )
 
         return success_response({'task_id': task.id, 'status': 'PROCESSING'}, status_code=202)

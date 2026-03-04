@@ -21,6 +21,7 @@ from typing import Any, Dict, Optional
 
 from .text import TextProvider, GenAITextProvider, OpenAITextProvider, LazyLLMTextProvider
 from .image import ImageProvider, GenAIImageProvider, OpenAIImageProvider, LazyLLMImageProvider
+from services.provider_routing.types import ResolvedProviderRoute
 
 logger = logging.getLogger(__name__)
 
@@ -204,14 +205,40 @@ def _get_model_type_provider_config(model_type: str) -> Dict[str, Any]:
         return {'format': 'gemini', 'api_key': api_key, 'api_base': api_base}
 
     elif source_lower == 'openai':
-        api_key = (_resolve_setting(f'{prefix}_API_KEY')
-                   or _resolve_setting('AZURE_OPENAI_API_KEY')
-                   or _resolve_setting('OPENAI_API_KEY')
-                   or _resolve_setting('GOOGLE_API_KEY'))
-        api_base = (_resolve_setting(f'{prefix}_API_BASE')
-                    or _resolve_setting('OPENAI_API_BASE', 'https://aihubmix.com/v1'))
-        azure_endpoint = _resolve_setting('AZURE_OPENAI_ENDPOINT')
-        azure_api_version = _resolve_setting('AZURE_OPENAI_API_VERSION')
+        model_api_key = _resolve_setting(f'{prefix}_API_KEY')
+        model_api_base = _resolve_setting(f'{prefix}_API_BASE')
+        model_azure_endpoint = _resolve_setting(f'{prefix}_AZURE_OPENAI_ENDPOINT')
+        model_azure_api_version = _resolve_setting(f'{prefix}_AZURE_OPENAI_API_VERSION')
+
+        api_base = model_api_base or _resolve_setting('OPENAI_API_BASE', 'https://aihubmix.com/v1')
+
+        # If model-specific API credentials/base are configured, don't implicitly inherit
+        # global Azure endpoint settings. This avoids routing per-model proxy traffic to Azure.
+        if model_azure_endpoint:
+            azure_endpoint = model_azure_endpoint
+            azure_api_version = model_azure_api_version or _resolve_setting('AZURE_OPENAI_API_VERSION')
+        elif model_api_key or model_api_base:
+            azure_endpoint = None
+            azure_api_version = None
+        else:
+            azure_endpoint = _resolve_setting('AZURE_OPENAI_ENDPOINT')
+            azure_api_version = _resolve_setting('AZURE_OPENAI_API_VERSION')
+
+        if model_api_key:
+            api_key = model_api_key
+        elif azure_endpoint:
+            api_key = (_resolve_setting('AZURE_OPENAI_API_KEY')
+                       or _resolve_setting('OPENAI_API_KEY')
+                       or _resolve_setting('GOOGLE_API_KEY'))
+        elif model_api_base:
+            api_key = (_resolve_setting('OPENAI_API_KEY')
+                       or _resolve_setting('GOOGLE_API_KEY')
+                       or _resolve_setting('AZURE_OPENAI_API_KEY'))
+        else:
+            api_key = (_resolve_setting('AZURE_OPENAI_API_KEY')
+                       or _resolve_setting('OPENAI_API_KEY')
+                       or _resolve_setting('GOOGLE_API_KEY'))
+
         if not api_key:
             raise ValueError(
                 f"API key is required for {model_type} model with OpenAI provider. "
@@ -245,14 +272,45 @@ def get_image_caption_provider_config() -> Dict[str, Any]:
     return _get_model_type_provider_config('image_caption')
 
 
-def get_caption_provider(model: str = "gemini-3-flash-preview") -> TextProvider:
+def get_caption_provider(model: str = "gemini-3-flash-preview", route: Optional[ResolvedProviderRoute] = None) -> TextProvider:
     """Factory: return a TextProvider for image caption (multimodal) tasks."""
+    if route:
+        effective_model = route.model or model
+        if route.provider == 'openai':
+            return OpenAITextProvider(
+                api_key=route.api_key or "",
+                api_base=route.api_base,
+                model=effective_model,
+                azure_endpoint=route.azure_endpoint,
+                azure_api_version=route.azure_api_version,
+            )
+        if route.provider == 'lazyllm':
+            return LazyLLMTextProvider(
+                source=(route.metadata.get('lazyllm_source') if route.metadata else None) or route.source,
+                model=effective_model,
+            )
+        # Gemini (default) with optional vertex mode
+        if route.metadata.get("vertexai"):
+            return GenAITextProvider(
+                model=effective_model,
+                vertexai=True,
+                project_id=route.metadata.get("project_id"),
+                location=route.metadata.get("location"),
+            )
+        return GenAITextProvider(api_key=route.api_key or "", api_base=route.api_base, model=effective_model)
+
     config = _get_model_type_provider_config('image_caption')
     fmt = config['format']
 
     if fmt == 'openai':
         logger.info("Caption provider: OpenAI, model=%s", model)
-        return OpenAITextProvider(api_key=config['api_key'], api_base=config['api_base'], model=model)
+        return OpenAITextProvider(
+            api_key=config['api_key'],
+            api_base=config['api_base'],
+            model=model,
+            azure_endpoint=config.get('azure_endpoint'),
+            azure_api_version=config.get('azure_api_version'),
+        )
     elif fmt == 'vertex':
         logger.info("Caption provider: Vertex AI, model=%s", model)
         return GenAITextProvider(
@@ -268,14 +326,44 @@ def get_caption_provider(model: str = "gemini-3-flash-preview") -> TextProvider:
         return GenAITextProvider(api_key=config['api_key'], api_base=config['api_base'], model=model)
 
 
-def get_text_provider(model: str = "gemini-3-flash-preview") -> TextProvider:
+def get_text_provider(model: str = "gemini-3-flash-preview", route: Optional[ResolvedProviderRoute] = None) -> TextProvider:
     """Factory: return the appropriate text-generation provider."""
+    if route:
+        effective_model = route.model or model
+        if route.provider == 'openai':
+            return OpenAITextProvider(
+                api_key=route.api_key or "",
+                api_base=route.api_base,
+                model=effective_model,
+                azure_endpoint=route.azure_endpoint,
+                azure_api_version=route.azure_api_version,
+            )
+        if route.provider == 'lazyllm':
+            return LazyLLMTextProvider(
+                source=(route.metadata.get('lazyllm_source') if route.metadata else None) or route.source,
+                model=effective_model,
+            )
+        if route.metadata.get("vertexai"):
+            return GenAITextProvider(
+                model=effective_model,
+                vertexai=True,
+                project_id=route.metadata.get("project_id"),
+                location=route.metadata.get("location"),
+            )
+        return GenAITextProvider(api_key=route.api_key or "", api_base=route.api_base, model=effective_model)
+
     config = _get_model_type_provider_config('text')
     fmt = config['format']
 
     if fmt == 'openai':
         logger.info("Text provider: OpenAI, model=%s", model)
-        return OpenAITextProvider(api_key=config['api_key'], api_base=config['api_base'], model=model)
+        return OpenAITextProvider(
+            api_key=config['api_key'],
+            api_base=config['api_base'],
+            model=model,
+            azure_endpoint=config.get('azure_endpoint'),
+            azure_api_version=config.get('azure_api_version'),
+        )
 
     elif fmt == 'vertex':
         logger.info("Text provider: Vertex AI, model=%s, project=%s", model, config['project_id'])
@@ -295,19 +383,61 @@ def get_text_provider(model: str = "gemini-3-flash-preview") -> TextProvider:
         return GenAITextProvider(api_key=config['api_key'], api_base=config['api_base'], model=model)
 
 
-def get_image_provider(model: str = "gemini-3.1-flash-image-preview") -> ImageProvider:
+def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Optional[ResolvedProviderRoute] = None) -> ImageProvider:
     """Factory: return the appropriate image-generation provider.
 
     Note: OpenAI format does NOT support 4K resolution — only 1K is available.
     Use Gemini or Vertex AI for higher resolution output.
     """
+    if route:
+        effective_model = route.model or model
+        if route.provider == 'openai':
+            opts = route.adapter_options or {}
+            return OpenAIImageProvider(
+                api_key=route.api_key or "",
+                api_base=route.api_base,
+                model=effective_model,
+                azure_endpoint=route.azure_endpoint,
+                azure_api_version=route.azure_api_version,
+                endpoint_mode=opts.get("endpoint_mode"),
+                path_style=opts.get("path_style"),
+                response_format=opts.get("response_format"),
+                chat_fallback=opts.get("chat_fallback"),
+                strict_params=opts.get("strict_params"),
+            )
+        if route.provider == 'lazyllm':
+            return LazyLLMImageProvider(
+                source=(route.metadata.get('lazyllm_source') if route.metadata else None) or route.source,
+                model=effective_model,
+            )
+        if route.metadata.get("vertexai"):
+            return GenAIImageProvider(
+                model=effective_model,
+                vertexai=True,
+                project_id=route.metadata.get("project_id"),
+                location=route.metadata.get("location"),
+                adapter_options=route.adapter_options or {},
+            )
+        return GenAIImageProvider(
+            api_key=route.api_key or "",
+            api_base=route.api_base,
+            model=effective_model,
+            adapter_options=route.adapter_options or {},
+        )
+
     config = _get_model_type_provider_config('image')
     fmt = config['format']
 
     if fmt == 'openai':
         logger.info("Image provider: OpenAI, model=%s", model)
         logger.warning("OpenAI format only supports 1K resolution, 4K is not available")
-        return OpenAIImageProvider(api_key=config['api_key'], api_base=config['api_base'], model=model)
+        return OpenAIImageProvider(
+            api_key=config['api_key'],
+            api_base=config['api_base'],
+            model=model,
+            azure_endpoint=config.get('azure_endpoint'),
+            azure_api_version=config.get('azure_api_version'),
+        )
 
     elif fmt == 'vertex':
         logger.info("Image provider: Vertex AI, model=%s, project=%s", model, config['project_id'])

@@ -200,8 +200,21 @@ import { SlideCard } from '@/components/preview/SlideCard';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useExportTasksStore, type ExportTaskType } from '@/store/useExportTasksStore';
 import { getImageUrl } from '@/api/client';
-import { getPageImageVersions, setCurrentImageVersion, updateProject, uploadTemplate, exportPPTXTask as apiExportPPTXTask, exportPDFTask as apiExportPDFTask, exportImagesTask as apiExportImagesTask, exportEditablePPTX as apiExportEditablePPTX, getSettings, startStyleRecommendations } from '@/api/endpoints';
-import type { ImageVersion, DescriptionContent, ExportExtractorMethod, ExportInpaintMethod, Page } from '@/types';
+import {
+  getPageImageVersions,
+  setCurrentImageVersion,
+  updateProject,
+  uploadTemplate,
+  exportPPTXTask as apiExportPPTXTask,
+  exportPDFTask as apiExportPDFTask,
+  exportImagesTask as apiExportImagesTask,
+  exportEditablePPTX as apiExportEditablePPTX,
+  getSettings,
+  startStyleRecommendations,
+  getProviderProfiles,
+} from '@/api/endpoints';
+import type { ImageVersion, DescriptionContent, ExportExtractorMethod, ExportInpaintMethod, Page, GenerationOverride } from '@/types';
+import type { ProviderProfileSummary } from '@/api/endpoints';
 import { normalizeErrorMessage } from '@/utils';
 
 export const SlidePreview: React.FC = () => {
@@ -501,6 +514,12 @@ export const SlidePreview: React.FC = () => {
     currentProject?.image_aspect_ratio || '16:9'
   );
   const [isSavingAspectRatio, setIsSavingAspectRatio] = useState(false);
+  const [isSavingGenerationDefaults, setIsSavingGenerationDefaults] = useState(false);
+  const [providerProfiles, setProviderProfiles] = useState<ProviderProfileSummary[]>([]);
+  const [overrideImageSource, setOverrideImageSource] = useState<string>('');
+  const [overrideImageModel, setOverrideImageModel] = useState<string>('');
+  const [projectDefaultImageSource, setProjectDefaultImageSource] = useState<string>('');
+  const [projectDefaultImageModel, setProjectDefaultImageModel] = useState<string>('');
   // 根据画面比例计算 CSS aspect-ratio
   const aspectRatioStyle = useMemo(() => {
     const parts = aspectRatio.split(':');
@@ -533,6 +552,34 @@ export const SlidePreview: React.FC = () => {
       uploadedFiles: File[];
     };
   }>>({});
+
+  const runGenerationOverride = useMemo<GenerationOverride | undefined>(() => {
+    const imageOverride: Record<string, any> = {};
+    if (overrideImageSource.trim()) imageOverride.source = overrideImageSource.trim();
+    if (overrideImageModel.trim()) imageOverride.model = overrideImageModel.trim();
+    if (!Object.keys(imageOverride).length) return undefined;
+    return { image: imageOverride };
+  }, [overrideImageSource, overrideImageModel]);
+  const overrideSourceOptions = useMemo(() => {
+    const base = [
+      { value: '', label: 'Use Project Default' },
+      { value: 'gemini', label: 'Gemini' },
+      { value: 'openai', label: 'OpenAI' },
+      { value: 'qwen', label: 'Qwen' },
+      { value: 'doubao', label: 'Doubao' },
+      { value: 'deepseek', label: 'DeepSeek' },
+      { value: 'glm', label: 'GLM' },
+      { value: 'siliconflow', label: 'SiliconFlow' },
+      { value: 'sensenova', label: 'SenseNova' },
+      { value: 'minimax', label: 'MiniMax' },
+      { value: 'kimi', label: 'Kimi' },
+    ];
+    const profiles = providerProfiles.map((p) => ({
+      value: `profile:${p.id}`,
+      label: `Profile: ${p.id} (${String(p.provider || '').toUpperCase()})`,
+    }));
+    return [...base, ...profiles];
+  }, [providerProfiles]);
 
   useEffect(() => {
     if (!showExportMenu && !showExportTasksPanel) return;
@@ -700,7 +747,17 @@ export const SlidePreview: React.FC = () => {
         console.error('Failed to load user templates:', error);
       }
     };
+    const loadProfiles = async () => {
+      try {
+        const response = await getProviderProfiles();
+        setProviderProfiles(response.data?.profiles || []);
+      } catch (error) {
+        console.warn('Failed to load provider profiles:', error);
+        setProviderProfiles([]);
+      }
+    };
     loadTemplates();
+    loadProfiles();
   }, [projectId, currentProject, syncProject]);
 
   // 监听警告消息
@@ -737,6 +794,9 @@ export const SlidePreview: React.FC = () => {
         setExportCompressQuality(currentProject.export_compress_quality || 92);
         setExportCompressPngQuantizeEnabled(currentProject.export_compress_png_quantize_enabled || false);
         setAspectRatio(currentProject.image_aspect_ratio || '16:9');
+        const imageDefaults = currentProject.generation_defaults?.image || {};
+        setProjectDefaultImageSource(imageDefaults.source || '');
+        setProjectDefaultImageModel(imageDefaults.model || '');
         lastProjectId.current = currentProject.id || null;
         isEditingRequirements.current = false;
         isEditingTemplateStyle.current = false;
@@ -757,10 +817,13 @@ export const SlidePreview: React.FC = () => {
         setExportCompressFormat((currentProject.export_compress_format as 'jpeg' | 'png' | 'webp') || 'jpeg');
         setExportCompressQuality(currentProject.export_compress_quality || 92);
         setExportCompressPngQuantizeEnabled(currentProject.export_compress_png_quantize_enabled || false);
+        const imageDefaults = currentProject.generation_defaults?.image || {};
+        setProjectDefaultImageSource(imageDefaults.source || '');
+        setProjectDefaultImageModel(imageDefaults.model || '');
       }
       // 如果用户正在编辑，则不更新本地状态
     }
-  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality, currentProject?.export_compress_png_quantize_enabled]);
+  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality, currentProject?.export_compress_png_quantize_enabled, currentProject?.generation_defaults]);
 
   // 加载当前页面的历史版本
   useEffect(() => {
@@ -845,7 +908,7 @@ export const SlidePreview: React.FC = () => {
 
   const handleBatchGenerate = useCallback(async (pageIds?: string[]) => {
     try {
-      await generateImages(pageIds);
+      await generateImages(pageIds, runGenerationOverride);
     } catch (error: any) {
       console.error('批量生成错误:', error);
       console.error('错误响应:', error?.response?.data);
@@ -881,7 +944,7 @@ export const SlidePreview: React.FC = () => {
         type: 'error',
       });
     }
-  }, [generateImages, show, t]);
+  }, [generateImages, runGenerationOverride, show, t]);
 
   const handleGenerateAll = async () => {
     // 先检查分辨率，如果是1K则显示警告
@@ -964,7 +1027,7 @@ export const SlidePreview: React.FC = () => {
     await checkResolutionAndExecute(async () => {
       try {
         // 使用统一的 generateImages，传入单个页面 ID
-        await generateImages([page.id!]);
+        await generateImages([page.id!], runGenerationOverride);
         show({ message: t('slidePreview.generationStarted'), type: 'success' });
       } catch (error: any) {
         // 提取后端返回的更具体错误信息
@@ -995,7 +1058,7 @@ export const SlidePreview: React.FC = () => {
         });
       }
     });
-  }, [currentProject, selectedIndex, generateImages, show, checkResolutionAndExecute, isPageGenerating]);
+  }, [currentProject, selectedIndex, generateImages, runGenerationOverride, show, checkResolutionAndExecute, isPageGenerating]);
 
   const handleSwitchVersion = async (versionId: string) => {
     if (!currentProject || !selectedPage?.id || !projectId) return;
@@ -1154,7 +1217,8 @@ export const SlidePreview: React.FC = () => {
         uploadedFiles: selectedContextImages.uploadedFiles.length > 0 
           ? selectedContextImages.uploadedFiles 
           : undefined,
-      }
+      },
+      runGenerationOverride
     );
 
     // 缓存当前页的编辑上下文，便于后续快速重复执行
@@ -1171,7 +1235,7 @@ export const SlidePreview: React.FC = () => {
     }));
 
     setIsEditModalOpen(false);
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, handleSaveOutlineAndDescription]);
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, runGenerationOverride, handleSaveOutlineAndDescription]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -1527,6 +1591,27 @@ export const SlidePreview: React.FC = () => {
       setIsSavingTemplateStyle(false);
     }
   }, [currentProject, projectId, templateStyle, syncProject, show]);
+
+  const handleSaveGenerationDefaults = useCallback(async () => {
+    if (!currentProject || !projectId) return;
+    setIsSavingGenerationDefaults(true);
+    try {
+      const imageDefaults: Record<string, string> = {};
+      if (projectDefaultImageSource.trim()) imageDefaults.source = projectDefaultImageSource.trim();
+      if (projectDefaultImageModel.trim()) imageDefaults.model = projectDefaultImageModel.trim();
+      const generationDefaults: GenerationOverride = Object.keys(imageDefaults).length ? { image: imageDefaults } : {};
+      await updateProject(projectId, { generation_defaults: generationDefaults });
+      await syncProject(projectId);
+      show({ message: '项目 AI 默认已保存', type: 'success' });
+    } catch (error: any) {
+      show({
+        message: t('slidePreview.saveFailed', { error: error.message || t('slidePreview.unknownError') }),
+        type: 'error',
+      });
+    } finally {
+      setIsSavingGenerationDefaults(false);
+    }
+  }, [currentProject, projectId, projectDefaultImageSource, projectDefaultImageModel, syncProject, show, t]);
 
   const handleSaveExportSettings = useCallback(async () => {
     if (!currentProject || !projectId) return;
@@ -1897,7 +1982,7 @@ export const SlidePreview: React.FC = () => {
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            {selectedContextImages.uploadedFiles.map((file, idx) => (
+            {selectedContextImages.uploadedFiles.map((_file, idx) => (
               <div key={idx} className="relative group">
                 <img
                   src={uploadedFileUrls.current[idx] || ''}
@@ -2151,6 +2236,41 @@ export const SlidePreview: React.FC = () => {
           </div>
         </div>
       </header>
+
+      <div className="px-4 md:px-6 py-2 border-b border-gray-200 dark:border-border-primary bg-gray-50 dark:bg-background-primary">
+        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 text-xs">
+          <span className="font-medium text-gray-700 dark:text-foreground-secondary">This Run Override</span>
+          <select
+            value={overrideImageSource}
+            onChange={(e) => setOverrideImageSource(e.target.value)}
+            className="h-8 px-2 rounded border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary"
+          >
+            {overrideSourceOptions.map((opt) => (
+              <option key={opt.value || '__default'} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <input
+            type="text"
+            value={overrideImageModel}
+            onChange={(e) => setOverrideImageModel(e.target.value)}
+            placeholder="Image model override (optional)"
+            className="h-8 px-2 rounded border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary md:min-w-[240px]"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setOverrideImageSource('');
+              setOverrideImageModel('');
+            }}
+            className="h-8 px-2 rounded border border-gray-200 dark:border-border-primary hover:bg-gray-100 dark:hover:bg-background-hover"
+          >
+            Restore Project Default
+          </button>
+          <span className="text-gray-500 dark:text-foreground-tertiary">
+            Project default: source={projectDefaultImageSource || '(global)'} model={projectDefaultImageModel || '(global)'}
+          </span>
+        </div>
+      </div>
 
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-w-0 min-h-0">
@@ -2741,6 +2861,7 @@ export const SlidePreview: React.FC = () => {
                     template_json: templateJson,
                     style_requirements: styleRequirements || '',
                     generate_previews: typeof generatePreviews === 'boolean' ? generatePreviews : false,
+                    ...(runGenerationOverride ? { generation_override: runGenerationOverride } : {}),
                   });
                   const taskId = (resp.data as any)?.task_id;
                   if (!taskId) throw new Error('未返回任务ID');
@@ -2756,6 +2877,7 @@ export const SlidePreview: React.FC = () => {
                   projectId={projectId!}
                   taskId={stylePreviewTaskId}
                   templateJson={stylePreviewTemplateJson}
+                  generationOverride={runGenerationOverride}
                   applyMode="apply_only"
                   onTaskIdChange={(newTaskId) => setStylePreviewTaskId(newTaskId)}
                   onBackToProject={() => {
@@ -2888,6 +3010,12 @@ export const SlidePreview: React.FC = () => {
             onSaveAspectRatio={handleSaveAspectRatio}
             isSavingAspectRatio={isSavingAspectRatio}
             hasImages={hasImages}
+            generationDefaultImageSource={projectDefaultImageSource}
+            generationDefaultImageModel={projectDefaultImageModel}
+            onGenerationDefaultImageSourceChange={setProjectDefaultImageSource}
+            onGenerationDefaultImageModelChange={setProjectDefaultImageModel}
+            onSaveGenerationDefaults={handleSaveGenerationDefaults}
+            isSavingGenerationDefaults={isSavingGenerationDefaults}
           />
         </>
       )}

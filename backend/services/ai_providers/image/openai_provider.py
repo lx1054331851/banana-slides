@@ -64,36 +64,56 @@ class OpenAIImageProvider(ImageProvider):
         "21:9": "1536x672",
     }
 
-    def __init__(self, api_key: str, api_base: str = None, model: str = "gemini-3.1-flash-image-preview"):
+    def __init__(
+        self,
+        api_key: str,
+        api_base: str = None,
+        model: str = "gemini-3.1-flash-image-preview",
+        azure_endpoint: str = None,
+        azure_api_version: str = None,
+        endpoint_mode: str = None,
+        path_style: str = None,
+        response_format: str = None,
+        chat_fallback: bool = None,
+        strict_params: bool = None,
+    ):
         cfg = get_config()
-        azure_endpoint = (cfg.AZURE_OPENAI_ENDPOINT or "").strip() or None
-        azure_key = (cfg.AZURE_OPENAI_API_KEY or "").strip() or None
-        azure_api_version = (cfg.AZURE_OPENAI_API_VERSION or "").strip() or None
+        azure_endpoint = (azure_endpoint or "").strip() or None
+        azure_api_version = (azure_api_version or "").strip() or None
 
         self.client = make_openai_client(
-            api_key=(azure_key or api_key),
+            api_key=api_key,
             api_base=api_base,
             azure_endpoint=azure_endpoint,
             azure_api_version=azure_api_version,
             timeout=cfg.OPENAI_TIMEOUT,
             max_retries=cfg.OPENAI_MAX_RETRIES,
         )
-        self.api_key = azure_key or api_key
+        self.api_key = api_key
         self.api_base = (api_base or "").rstrip("/")
         self.model = model
         self.timeout = cfg.OPENAI_TIMEOUT
 
         self.endpoint_mode = self._normalize_enum(
-            cfg.IMAGE_OPENAI_ENDPOINT_MODE, self._VALID_ENDPOINT_MODES, "auto", "IMAGE_OPENAI_ENDPOINT_MODE"
+            endpoint_mode if endpoint_mode is not None else cfg.IMAGE_OPENAI_ENDPOINT_MODE,
+            self._VALID_ENDPOINT_MODES,
+            "auto",
+            "IMAGE_OPENAI_ENDPOINT_MODE",
         )
         self.path_style = self._normalize_enum(
-            cfg.IMAGE_OPENAI_PATH_STYLE, self._VALID_PATH_STYLES, "auto", "IMAGE_OPENAI_PATH_STYLE"
+            path_style if path_style is not None else cfg.IMAGE_OPENAI_PATH_STYLE,
+            self._VALID_PATH_STYLES,
+            "auto",
+            "IMAGE_OPENAI_PATH_STYLE",
         )
         self.response_format = self._normalize_enum(
-            cfg.IMAGE_OPENAI_RESPONSE_FORMAT, self._VALID_RESPONSE_FORMATS, "b64_json", "IMAGE_OPENAI_RESPONSE_FORMAT"
+            response_format if response_format is not None else cfg.IMAGE_OPENAI_RESPONSE_FORMAT,
+            self._VALID_RESPONSE_FORMATS,
+            "b64_json",
+            "IMAGE_OPENAI_RESPONSE_FORMAT",
         )
-        self.chat_fallback = bool(cfg.IMAGE_OPENAI_CHAT_FALLBACK)
-        self.strict_params = bool(cfg.IMAGE_OPENAI_STRICT_PARAMS)
+        self.chat_fallback = bool(cfg.IMAGE_OPENAI_CHAT_FALLBACK if chat_fallback is None else chat_fallback)
+        self.strict_params = bool(cfg.IMAGE_OPENAI_STRICT_PARAMS if strict_params is None else strict_params)
 
     @staticmethod
     def _normalize_enum(raw_value: Any, valid_values: set, default: str, key: str) -> str:

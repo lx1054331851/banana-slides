@@ -32,6 +32,7 @@ from .prompts import (
 )
 from .ai_providers import get_text_provider, get_image_provider, get_caption_provider, TextProvider, ImageProvider
 from config import get_config
+from services.provider_routing.types import RoutingBundle
 from utils.aspect_ratio_policy import (
     get_supported_aspect_ratios_for_model,
     is_aspect_ratio_supported_for_model,
@@ -85,7 +86,13 @@ class ProjectContext:
 class AIService:
     """Service for AI model interactions using pluggable providers"""
     
-    def __init__(self, text_provider: TextProvider = None, image_provider: ImageProvider = None, caption_provider: TextProvider = None):
+    def __init__(
+        self,
+        text_provider: TextProvider = None,
+        image_provider: ImageProvider = None,
+        caption_provider: TextProvider = None,
+        routing_bundle: Optional[RoutingBundle] = None,
+    ):
         """
         Initialize AI service with providers
         
@@ -124,10 +131,25 @@ class AIService:
         else:
             self.caption_model = config.IMAGE_CAPTION_MODEL
 
+        self.routing_bundle = routing_bundle
+        if routing_bundle:
+            self.text_model = routing_bundle.text.model or self.text_model
+            self.image_model = routing_bundle.image.model or self.image_model
+            self.caption_model = routing_bundle.image_caption.model or self.caption_model
+
         # Use provided providers or create from factory based on AI_PROVIDER_FORMAT (from Flask config or env var)
-        self.text_provider = text_provider or get_text_provider(model=self.text_model)
-        self.image_provider = image_provider or get_image_provider(model=self.image_model)
-        self.caption_provider = caption_provider or get_caption_provider(model=self.caption_model)
+        self.text_provider = text_provider or get_text_provider(
+            model=self.text_model,
+            route=(routing_bundle.text if routing_bundle else None),
+        )
+        self.image_provider = image_provider or get_image_provider(
+            model=self.image_model,
+            route=(routing_bundle.image if routing_bundle else None),
+        )
+        self.caption_provider = caption_provider or get_caption_provider(
+            model=self.caption_model,
+            route=(routing_bundle.image_caption if routing_bundle else None),
+        )
     
     def _get_text_thinking_budget(self) -> int:
         """

@@ -85,6 +85,11 @@ class Config:
     TEXT_MODEL_SOURCE = os.getenv('TEXT_MODEL_SOURCE', '')                   # 文本生成模型厂商（留空则跟随全局 AI_PROVIDER_FORMAT）
     IMAGE_MODEL_SOURCE = os.getenv('IMAGE_MODEL_SOURCE', '')                   # 图片生成模型厂商（留空则跟随全局 AI_PROVIDER_FORMAT）
     IMAGE_CAPTION_MODEL_SOURCE = os.getenv('IMAGE_CAPTION_MODEL_SOURCE', '')   # 图片识别模型厂商（留空则跟随全局 AI_PROVIDER_FORMAT）
+
+    # Provider routing profiles/adapters（首版基于环境变量，不落库）
+    PROVIDER_PROFILES_JSON = os.getenv('PROVIDER_PROFILES_JSON', '[]')
+    PROVIDER_ROUTING_STRICT = os.getenv('PROVIDER_ROUTING_STRICT', 'true').lower() in ('1', 'true', 'yes', 'y', 'on')
+    PROVIDER_ADAPTER_DEFAULT = os.getenv('PROVIDER_ADAPTER_DEFAULT', 'native')
     
     # AI 模型配置
     TEXT_MODEL = os.getenv('TEXT_MODEL', 'gemini-3-flash-preview')

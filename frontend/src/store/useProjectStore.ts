@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Project } from '@/types';
+import type { Project, GenerationOverride } from '@/types';
 import * as api from '@/api/endpoints';
 import { debounce, normalizeProject, normalizeErrorMessage } from '@/utils';
 import { devLog } from '@/utils/logger';
@@ -115,7 +115,7 @@ interface ProjectState {
   generateDescriptions: (detailLevel?: string) => Promise<void>;
   generatePageDescription: (pageId: string, detailLevel?: string) => Promise<void>;
   regenerateRenovationPage: (pageId: string, keepLayout?: boolean) => Promise<void>;
-  generateImages: (pageIds?: string[]) => Promise<void>;
+  generateImages: (pageIds?: string[], generationOverride?: GenerationOverride) => Promise<void>;
   editPageImage: (
     pageId: string,
     editPrompt: string,
@@ -123,7 +123,8 @@ interface ProjectState {
       useTemplate?: boolean;
       descImageUrls?: string[];
       uploadedFiles?: File[];
-    }
+    },
+    generationOverride?: GenerationOverride
   ) => Promise<void>;
   
   // 导出
@@ -880,7 +881,7 @@ const debouncedUpdatePage = debounce(
   },
 
   // 生成图片（非阻塞，每个页面显示生成状态）
-  generateImages: async (pageIds?: string[]) => {
+  generateImages: async (pageIds?: string[], generationOverride?: GenerationOverride) => {
     const { currentProject, pageGeneratingTasks } = get();
     if (!currentProject) return;
 
@@ -911,7 +912,7 @@ const debouncedUpdatePage = debounce(
       const newPageIds = targetPageIds.filter(
         id => !pageGeneratingTasks[id] && pageStatusMap.get(id) !== 'GENERATING'
       );
-      const response = await api.generateImages(currentProject.id, undefined, newPageIds);
+      const response = await api.generateImages(currentProject.id, undefined, newPageIds, generationOverride);
       const taskId = response.data?.task_id;
       
       if (taskId) {
@@ -1108,7 +1109,7 @@ const debouncedUpdatePage = debounce(
   },
 
   // 编辑页面图片（异步）
-  editPageImage: async (pageId, editPrompt, contextImages) => {
+  editPageImage: async (pageId, editPrompt, contextImages, generationOverride) => {
     const { currentProject, pageGeneratingTasks } = get();
     if (!currentProject) return;
 
@@ -1120,7 +1121,13 @@ const debouncedUpdatePage = debounce(
 
     set({ error: null });
     try {
-      const response = await api.editPageImage(currentProject.id, pageId, editPrompt, contextImages);
+      const response = await api.editPageImage(
+        currentProject.id,
+        pageId,
+        editPrompt,
+        contextImages,
+        generationOverride
+      );
       const taskId = response.data?.task_id;
       
       if (taskId) {

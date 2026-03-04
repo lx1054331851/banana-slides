@@ -140,7 +140,8 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                                                      style_requirements: str = "",
                                                      app=None,
                                                      language: str = None,
-                                                     generate_previews: bool = True):
+                                                     generate_previews: bool = True,
+                                                     routing_bundle=None):
     """
     Background task:
     1) Call text model to recommend 3 style_json + 4 sample pages each
@@ -169,7 +170,7 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                 project.updated_at = datetime.utcnow()
                 db.session.commit()
 
-            ai_service = get_ai_service()
+            ai_service = get_ai_service(routing_bundle=routing_bundle)
             reference_files_content = _get_project_reference_files_content(project_id)
 
             # Update progress to show we're generating recommendations
@@ -398,7 +399,8 @@ def regenerate_single_style_previews_task(task_id: str, project_id: str, rec_id:
                                          style_json_text: str,
                                          sample_pages: Optional[Dict[str, str]] = None,
                                          app=None,
-                                         language: str = None):
+                                         language: str = None,
+                                         routing_bundle=None):
     """
     Background task: regenerate 4 preview images for a given rec_id.
     """
@@ -427,7 +429,7 @@ def regenerate_single_style_previews_task(task_id: str, project_id: str, rec_id:
             style_requirements = project.template_style or ""
             extra_req = _build_style_extra_requirements(style_json_text, style_requirements)
 
-            ai_service = get_ai_service()
+            ai_service = get_ai_service(routing_bundle=routing_bundle)
             file_service = FileService(app.config['UPLOAD_FOLDER'])
             aspect_ratio = project.image_aspect_ratio or app.config.get('DEFAULT_ASPECT_RATIO', '16:9')
             resolution = app.config.get('DEFAULT_RESOLUTION', '2K')
