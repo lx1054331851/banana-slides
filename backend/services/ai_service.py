@@ -32,6 +32,10 @@ from .prompts import (
 )
 from .ai_providers import get_text_provider, get_image_provider, get_caption_provider, TextProvider, ImageProvider
 from config import get_config
+from utils.aspect_ratio_policy import (
+    get_supported_aspect_ratios_for_model,
+    is_aspect_ratio_supported_for_model,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +146,15 @@ class AIService:
             如果启用图像推理则返回配置的 budget，否则返回 0
         """
         return self.image_thinking_budget if self.enable_image_reasoning else 0
+
+    def _ensure_aspect_ratio_supported_for_current_model(self, aspect_ratio: str):
+        if is_aspect_ratio_supported_for_model(self.image_model, aspect_ratio):
+            return
+        allowed = ", ".join(get_supported_aspect_ratios_for_model(self.image_model))
+        raise ValueError(
+            f"Aspect ratio '{aspect_ratio}' is not supported by image model '{self.image_model}'. "
+            f"Allowed values: {allowed}"
+        )
     
     @staticmethod
     def extract_image_urls_from_markdown(text: str) -> List[str]:
@@ -789,6 +802,7 @@ class AIService:
             if additional_ref_images:
                 logger.debug(f"Additional reference images: {len(additional_ref_images)}")
             logger.debug(f"Config - aspect_ratio: {aspect_ratio}, resolution: {resolution}")
+            self._ensure_aspect_ratio_supported_for_current_model(aspect_ratio)
 
             # 构建参考图片列表
             ref_images = []

@@ -12,6 +12,10 @@ from pathlib import Path
 from flask import Blueprint, request, jsonify, current_app, Response, stream_with_context
 from sqlalchemy import desc
 from utils.validators import normalize_aspect_ratio
+from utils.aspect_ratio_policy import (
+    get_supported_aspect_ratios_for_model,
+    is_aspect_ratio_supported_for_model,
+)
 from sqlalchemy.orm import joinedload
 from werkzeug.exceptions import BadRequest
 from werkzeug.utils import secure_filename
@@ -38,6 +42,18 @@ from utils import (
 logger = logging.getLogger(__name__)
 
 project_bp = Blueprint('projects', __name__, url_prefix='/api/projects')
+
+
+def _validate_aspect_ratio_for_current_image_model(aspect_ratio: str):
+    """Validate aspect ratio against current IMAGE_MODEL capability."""
+    image_model = current_app.config.get('IMAGE_MODEL', '')
+    if is_aspect_ratio_supported_for_model(image_model, aspect_ratio):
+        return
+    allowed = ", ".join(get_supported_aspect_ratios_for_model(image_model))
+    raise ValueError(
+        f"Aspect ratio '{aspect_ratio}' is not supported by image model '{image_model}'. "
+        f"Allowed values: {allowed}"
+    )
 
 
 def _get_project_reference_files_content(project_id: str) -> list:
@@ -278,6 +294,7 @@ def create_project():
         if 'image_aspect_ratio' in data:
             try:
                 image_aspect_ratio = normalize_aspect_ratio(data['image_aspect_ratio'])
+                _validate_aspect_ratio_for_current_image_model(image_aspect_ratio)
             except ValueError as e:
                 return bad_request(str(e))
 
@@ -397,7 +414,9 @@ def update_project(project_id):
         # Update aspect ratio if provided
         if 'image_aspect_ratio' in data:
             try:
-                project.image_aspect_ratio = normalize_aspect_ratio(data['image_aspect_ratio'])
+                normalized_ratio = normalize_aspect_ratio(data['image_aspect_ratio'])
+                _validate_aspect_ratio_for_current_image_model(normalized_ratio)
+                project.image_aspect_ratio = normalized_ratio
             except ValueError as e:
                 return bad_request(str(e))
 
@@ -1677,8 +1696,20 @@ def create_ppt_renovation_project():
         if pdf_page_width and pdf_page_height and pdf_page_width > 0 and pdf_page_height > 0:
             try:
                 raw_ratio = f"{int(round(pdf_page_width))}:{int(round(pdf_page_height))}"
-                project.image_aspect_ratio = normalize_aspect_ratio(raw_ratio)
-                logger.info(f"Set project aspect ratio from PDF: {pdf_page_width}x{pdf_page_height} -> {project.image_aspect_ratio}")
+                normalized_ratio = normalize_aspect_ratio(raw_ratio)
+                image_model = current_app.config.get('IMAGE_MODEL', '')
+                if is_aspect_ratio_supported_for_model(image_model, normalized_ratio):
+                    project.image_aspect_ratio = normalized_ratio
+                    logger.info(
+                        f"Set project aspect ratio from PDF: {pdf_page_width}x{pdf_page_height} -> {project.image_aspect_ratio}"
+                    )
+                else:
+                    logger.warning(
+                        "PDF aspect ratio %s is not supported by image model %s, keeping existing value %s",
+                        normalized_ratio,
+                        image_model,
+                        project.image_aspect_ratio,
+                    )
             except (ValueError, OverflowError) as e:
                 logger.warning(f"Could not normalize PDF aspect ratio ({pdf_page_width}x{pdf_page_height}): {e}, keeping default 16:9")
 

@@ -11,12 +11,32 @@ from google import genai
 from google.genai import types
 from PIL import Image
 from io import BytesIO
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 from .base import ImageProvider
 from config import get_config
 from ..genai_client import make_genai_client
 
 logger = logging.getLogger(__name__)
+
+
+def _should_retry_genai_image_exception(exception: Exception) -> bool:
+    """
+    Decide whether generate_image should be retried by tenacity.
+
+    For proxy overload errors (429, shell_api_error), fail fast and do not retry.
+    """
+    message = str(exception or "").lower()
+    non_retry_hints = (
+        "clienterror: 429",
+        "http 429",
+        "shell_api_error",
+        "当前分组上游负载已饱和",
+        "负载已饱和",
+        "too many requests",
+    )
+    if any(hint in message for hint in non_retry_hints):
+        return False
+    return True
 
 
 class GenAIImageProvider(ImageProvider):
@@ -40,9 +60,51 @@ class GenAIImageProvider(ImageProvider):
         )
         self.model = model
 
+    @staticmethod
+    def _should_retry_without_image_size(error: Exception) -> bool:
+        """
+        Some proxies reject/charge extra for image_size and may fail with
+        provider-specific messages (e.g., "没有可用token").
+        In that case retry once without image_size.
+        """
+        msg = str(error).lower()
+        hints = (
+            "没有可用token",
+            "no available token",
+            "image_size",
+            "imagesize",
+            "invalid_request_error",
+            "unsupported",
+        )
+        return any(h in msg for h in hints)
+
+    @staticmethod
+    def _build_generate_config(aspect_ratio: str, resolution: str,
+                               enable_thinking: bool, thinking_budget: int,
+                               include_image_size: bool = True):
+        image_config_kwargs = {"aspect_ratio": aspect_ratio}
+        if include_image_size and resolution:
+            image_config_kwargs["image_size"] = resolution
+
+        config_params = {
+            "response_modalities": ["TEXT", "IMAGE"],
+            "image_config": types.ImageConfig(**image_config_kwargs),
+        }
+
+        if enable_thinking:
+            # In Vertex AI (Gemini) Thinking mode, enabling include_thoughts=True
+            # requires explicitly setting thinking_budget.
+            config_params["thinking_config"] = types.ThinkingConfig(
+                thinking_budget=thinking_budget,
+                include_thoughts=True
+            )
+
+        return types.GenerateContentConfig(**config_params)
+
     @retry(
         stop=stop_after_attempt(get_config().GENAI_MAX_RETRIES + 1),
         wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception(_should_retry_genai_image_exception),
         reraise=True
     )
     def generate_image(
@@ -82,30 +144,42 @@ class GenAIImageProvider(ImageProvider):
             
             logger.debug(f"Calling GenAI API for image generation with {len(ref_images) if ref_images else 0} reference images...")
             logger.debug(f"Config - aspect_ratio: {aspect_ratio}, resolution: {resolution}, enable_thinking: {enable_thinking}")
-            
-            # Build config
-            config_params = {
-                'response_modalities': ['TEXT', 'IMAGE'],
-                'image_config': types.ImageConfig(
-                    aspect_ratio=aspect_ratio,
-                    image_size=resolution
+
+            # First attempt: include image_size (for providers that support explicit size)
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=contents,
+                    config=self._build_generate_config(
+                        aspect_ratio=aspect_ratio,
+                        resolution=resolution,
+                        enable_thinking=enable_thinking,
+                        thinking_budget=thinking_budget,
+                        include_image_size=True,
+                    )
                 )
-            }
-            
-            # Add thinking config if enabled
-            if enable_thinking:
-                # In Vertex AI (Gemini) Thinking mode, enabling include_thoughts=True requires explicitly setting thinking_budget
-                config_params['thinking_config'] = types.ThinkingConfig(  
-                    thinking_budget=thinking_budget, 
-                    include_thoughts=True  
-                )
-            
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=contents,
-                config=types.GenerateContentConfig(**config_params)
-            )
-            
+            except Exception as first_error:
+                # Compatibility fallback: retry once without image_size.
+                if self._should_retry_without_image_size(first_error):
+                    logger.warning(
+                        "GenAI image call failed with image_size=%s, retrying without image_size. "
+                        "model=%s, aspect_ratio=%s, error=%s",
+                        resolution, self.model, aspect_ratio, first_error
+                    )
+                    response = self.client.models.generate_content(
+                        model=self.model,
+                        contents=contents,
+                        config=self._build_generate_config(
+                            aspect_ratio=aspect_ratio,
+                            resolution=resolution,
+                            enable_thinking=enable_thinking,
+                            thinking_budget=thinking_budget,
+                            include_image_size=False,
+                        )
+                    )
+                else:
+                    raise
+
             logger.debug("GenAI API call completed")
             
             # Extract the final image from the response.

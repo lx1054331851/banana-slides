@@ -4,6 +4,8 @@ Material Controller - handles standalone material image generation
 from flask import Blueprint, request, current_app, send_file
 from models import db, Project, Material, Task
 from utils import success_response, error_response, not_found, bad_request
+from utils.validators import normalize_aspect_ratio
+from utils.aspect_ratio_policy import get_supported_aspect_ratios_for_model
 from services import FileService
 from services.ai_service_manager import get_ai_service
 from services.task_manager import task_manager, generate_material_image_task
@@ -24,7 +26,6 @@ material_bp = Blueprint('materials', __name__, url_prefix='/api/projects')
 material_global_bp = Blueprint('materials_global', __name__, url_prefix='/api/materials')
 
 ALLOWED_MATERIAL_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'}
-ALLOWED_ASPECT_RATIOS = frozenset({'16:9', '21:9', '4:3', '3:2', '5:4', '1:1', '4:5', '2:3', '3:4', '9:16'})
 
 
 def _generate_image_caption(filepath: str) -> str:
@@ -271,8 +272,19 @@ def generate_material_image(project_id):
             extra_files = request.files.getlist('extra_images') or []
 
         aspect_ratio = (data.get('aspect_ratio') or '').strip() or None
-        if aspect_ratio and aspect_ratio not in ALLOWED_ASPECT_RATIOS:
-            return bad_request(f"Invalid aspect ratio. Allowed values: {', '.join(sorted(ALLOWED_ASPECT_RATIOS))}")
+        if aspect_ratio:
+            try:
+                aspect_ratio = normalize_aspect_ratio(aspect_ratio)
+            except ValueError as e:
+                return bad_request(str(e))
+
+            image_model = current_app.config.get('IMAGE_MODEL', '')
+            allowed_ratios = get_supported_aspect_ratios_for_model(image_model)
+            if aspect_ratio not in allowed_ratios:
+                return bad_request(
+                    f"Aspect ratio '{aspect_ratio}' is not supported by image model '{image_model}'. "
+                    f"Allowed values: {', '.join(allowed_ratios)}"
+                )
 
         if not prompt:
             return bad_request("prompt is required")

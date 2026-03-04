@@ -61,6 +61,19 @@ class Config:
     OPENAI_API_BASE = os.getenv('OPENAI_API_BASE', 'https://aihubmix.com/v1')
     OPENAI_TIMEOUT = float(os.getenv('OPENAI_TIMEOUT', '300.0'))  # 增加到 5 分钟（生成清洁背景图需要很长时间）
     OPENAI_MAX_RETRIES = int(os.getenv('OPENAI_MAX_RETRIES', '2'))  # 减少重试次数，避免过多重试导致累积超时
+    # OpenAI 图片专用调用策略（仅影响 IMAGE_MODEL_SOURCE=openai 的图片生成）
+    # auto: 优先 images 端点，必要时回退 chat/completions
+    # images: 只走 images 端点（无参考图 generations，有参考图 edits）
+    # chat: 只走 chat/completions
+    IMAGE_OPENAI_ENDPOINT_MODE = os.getenv('IMAGE_OPENAI_ENDPOINT_MODE', 'auto')
+    # images 端点路径风格：singular=/image/*, plural=/images/*, auto=依次尝试
+    IMAGE_OPENAI_PATH_STYLE = os.getenv('IMAGE_OPENAI_PATH_STYLE', 'auto')
+    # images 端点响应格式：b64_json 或 url
+    IMAGE_OPENAI_RESPONSE_FORMAT = os.getenv('IMAGE_OPENAI_RESPONSE_FORMAT', 'b64_json')
+    # auto 模式下 images 端点不可用时，是否回退 chat/completions
+    IMAGE_OPENAI_CHAT_FALLBACK = os.getenv('IMAGE_OPENAI_CHAT_FALLBACK', 'true').lower() in ('1', 'true', 'yes', 'y', 'on')
+    # 图片参数严格校验（模型族与 size/aspect_ratio 兼容性）
+    IMAGE_OPENAI_STRICT_PARAMS = os.getenv('IMAGE_OPENAI_STRICT_PARAMS', 'true').lower() in ('1', 'true', 'yes', 'y', 'on')
 
     # Azure OpenAI（可选）：当设置了 AZURE_OPENAI_ENDPOINT 时，OpenAI provider 会自动切换到 AzureOpenAI 客户端。
     # 说明：Azure 的“model”参数一般填写你在 Azure Portal 里创建的 deployment 名称。

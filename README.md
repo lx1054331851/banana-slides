@@ -254,6 +254,54 @@ MINIMAX_API_KEY=your-minimax-api-key          # MiniMax
 ...
 ```
 
+#### 双中转 Gemini 图片配置（手动切换）
+
+仅图片模型走 OpenAI 兼容格式时，可通过 `.env` 切换不同中转商参数风格：
+
+```env
+# 让图片模型走 OpenAI provider（文本/识图可继续走 Gemini 或其他）
+IMAGE_MODEL_SOURCE=openai
+IMAGE_MODEL=gemini-3.1-flash-image-preview
+IMAGE_API_BASE=https://your-proxy.example.com/v1
+IMAGE_API_KEY=your-image-key
+
+# 图片路由策略：auto=优先 image(s) 端点，必要时回退 chat/completions
+IMAGE_OPENAI_ENDPOINT_MODE=auto
+# 端点路径风格：auto/singular/plural
+IMAGE_OPENAI_PATH_STYLE=auto
+# 返回格式：b64_json 或 url
+IMAGE_OPENAI_RESPONSE_FORMAT=b64_json
+# auto 下 image(s) 端点不可用时是否回退 chat/completions
+IMAGE_OPENAI_CHAT_FALLBACK=true
+# 严格参数校验（推荐）
+IMAGE_OPENAI_STRICT_PARAMS=true
+```
+
+`vveai` 示例（文生图/图生图优先走 image 端点）：
+
+```env
+IMAGE_MODEL_SOURCE=openai
+IMAGE_API_BASE=https://api.vveai.com/v1
+IMAGE_OPENAI_ENDPOINT_MODE=images
+IMAGE_OPENAI_PATH_STYLE=singular
+IMAGE_OPENAI_RESPONSE_FORMAT=b64_json
+IMAGE_OPENAI_CHAT_FALLBACK=false
+IMAGE_OPENAI_STRICT_PARAMS=true
+```
+
+`viviai` 示例（Gemini 原生更稳定，建议图片走 gemini provider）：
+
+```env
+IMAGE_MODEL_SOURCE=gemini
+IMAGE_API_BASE=https://api.viviai.cc
+IMAGE_MODEL=gemini-3.1-flash-image-preview
+```
+
+手动切换步骤：
+1. 修改 `.env` 中 `IMAGE_MODEL_SOURCE` 与 `IMAGE_API_BASE`（以及上面的 `IMAGE_OPENAI_*`）。
+2. 重启后端服务，使新环境变量生效。
+3. 在设置页“服务测试 -> 图像生成模型”执行一次测试，确认当前中转配置可用。
+
 可选：设置 `LOG_IMAGE_PROMPTS=true` 可在后端日志打印发送给 Gemini 的图片提示词。
 
 **使用新版可编辑导出配置方法，获得更好的可编辑导出效果**: 需在[百度智能云平台](https://console.bce.baidu.com/iam/#/iam/apikey/list)（点击此处进入）中获取 API KEY，填写在 `.env` 文件中的 `BAIDU_API_KEY` 字段（有充足的免费使用额度）。详见 https://github.com/Anionex/banana-slides/issues/121 中的说明
