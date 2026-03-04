@@ -8,8 +8,8 @@ from typing import Set
 # --- Aspect ratio validation ---
 
 _ASPECT_RATIO_PATTERN = re.compile(r"^\d+:\d+$")
-_ASPECT_RATIO_MIN = 0.2
-_ASPECT_RATIO_MAX = 5.0
+_ASPECT_RATIO_MIN = 0.125
+_ASPECT_RATIO_MAX = 8.0
 
 
 def normalize_aspect_ratio(raw_value) -> str:

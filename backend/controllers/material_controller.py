@@ -4,8 +4,12 @@ Material Controller - handles standalone material image generation
 from flask import Blueprint, request, current_app, send_file
 from models import db, Project, Material, Task
 from utils import success_response, error_response, not_found, bad_request
+from utils.validators import normalize_aspect_ratio
+from utils.aspect_ratio_policy import get_supported_aspect_ratios_for_model
 from services import FileService
 from services.ai_service_manager import get_ai_service
+from services.ai_providers import get_caption_provider
+from services.provider_routing import resolve_routing_bundle
 from services.task_manager import task_manager, generate_material_image_task
 from pathlib import Path
 from werkzeug.utils import secure_filename
@@ -17,6 +21,7 @@ import zipfile
 import io
 import base64
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +29,6 @@ material_bp = Blueprint('materials', __name__, url_prefix='/api/projects')
 material_global_bp = Blueprint('materials_global', __name__, url_prefix='/api/materials')
 
 ALLOWED_MATERIAL_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'}
-ALLOWED_ASPECT_RATIOS = frozenset({'16:9', '21:9', '4:3', '3:2', '5:4', '1:1', '4:5', '2:3', '3:4', '9:16'})
 
 
 def _generate_image_caption(filepath: str) -> str:
@@ -32,76 +36,22 @@ def _generate_image_caption(filepath: str) -> str:
     if filepath.lower().endswith('.svg'):
         return ""
     try:
-        from PIL import Image
-
-        with Image.open(filepath) as img:
-            image = img.copy()
-        image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
-
         output_lang = current_app.config.get('OUTPUT_LANGUAGE', 'zh')
         if output_lang == 'en':
             prompt = "Please provide a short description of the main content of this image. Return only the description text without any other explanation."
         else:
             prompt = "请用一句简短的中文描述这张图片的主要内容。只返回描述文字，不要其他解释。"
 
-        provider_format = (current_app.config.get('AI_PROVIDER_FORMAT') or 'gemini').lower()
         caption_model = current_app.config.get('IMAGE_CAPTION_MODEL', 'gemini-3-flash-preview')
-
-        if provider_format == 'openai':
-            from services.ai_providers.openai_client import make_openai_client
-
-            api_key = (current_app.config.get('AZURE_OPENAI_API_KEY')
-                       or current_app.config.get('OPENAI_API_KEY', ''))
-            if not api_key:
-                return ""
-
-            azure_endpoint = (current_app.config.get('AZURE_OPENAI_ENDPOINT') or '').strip() or None
-            azure_api_version = (current_app.config.get('AZURE_OPENAI_API_VERSION') or '').strip() or None
-            client = make_openai_client(
-                api_key=api_key,
-                api_base=current_app.config.get('OPENAI_API_BASE') or None,
-                azure_endpoint=azure_endpoint,
-                azure_api_version=azure_api_version,
-            )
-
-            buffered = io.BytesIO()
-            if image.mode in ('RGBA', 'LA', 'P'):
-                background = Image.new('RGB', image.size, (255, 255, 255))
-                background.paste(image, mask=image.split()[-1] if image.mode in ('RGBA', 'LA') else None)
-                image = background
-            image.save(buffered, format="JPEG", quality=95)
-            base64_image = base64.b64encode(buffered.getvalue()).decode('utf-8')
-
-            response = client.chat.completions.create(
-                model=caption_model,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
-                        {"type": "text", "text": prompt}
-                    ]
-                }],
-                temperature=0.3
-            )
-            return response.choices[0].message.content.strip()
-        else:
-            # Gemini (default)
-            from google import genai
-            from google.genai import types
-            api_key = current_app.config.get('GOOGLE_API_KEY', '')
-            if not api_key:
-                return ""
-            api_base = current_app.config.get('GOOGLE_API_BASE', '')
-            client = genai.Client(
-                http_options=types.HttpOptions(base_url=api_base) if api_base else None,
-                api_key=api_key
-            )
-            result = client.models.generate_content(
-                model=caption_model,
-                contents=[image, prompt],
-                config=types.GenerateContentConfig(temperature=0.3)
-            )
-            return result.text.strip()
+        routing_bundle = resolve_routing_bundle(project=None, generation_override=None)
+        provider = get_caption_provider(model=caption_model, route=routing_bundle.image_caption)
+        if hasattr(provider, 'generate_with_image'):
+            return (provider.generate_with_image(prompt=prompt, image_path=filepath, thinking_budget=0) or "").strip()
+        if hasattr(provider, 'generate_text_with_images'):
+            return (
+                provider.generate_text_with_images(prompt=prompt, images=[filepath], thinking_budget=0) or ""
+            ).strip()
+        return ""
     except Exception as e:
         logger.warning(f"Failed to generate caption for {filepath}: {e}")
         return ""
@@ -269,13 +219,33 @@ def generate_material_image(project_id):
             prompt = (data.get('prompt') or '').strip()
             ref_file = request.files.get('ref_image')
             extra_files = request.files.getlist('extra_images') or []
+            if data.get('generation_override'):
+                try:
+                    data['generation_override'] = json.loads(data['generation_override'])
+                except Exception:
+                    data['generation_override'] = {}
 
         aspect_ratio = (data.get('aspect_ratio') or '').strip() or None
-        if aspect_ratio and aspect_ratio not in ALLOWED_ASPECT_RATIOS:
-            return bad_request(f"Invalid aspect ratio. Allowed values: {', '.join(sorted(ALLOWED_ASPECT_RATIOS))}")
+        if aspect_ratio:
+            try:
+                aspect_ratio = normalize_aspect_ratio(aspect_ratio)
+            except ValueError as e:
+                return bad_request(str(e))
+
+            image_model = current_app.config.get('IMAGE_MODEL', '')
+            allowed_ratios = get_supported_aspect_ratios_for_model(image_model)
+            if aspect_ratio not in allowed_ratios:
+                return bad_request(
+                    f"Aspect ratio '{aspect_ratio}' is not supported by image model '{image_model}'. "
+                    f"Allowed values: {', '.join(allowed_ratios)}"
+                )
 
         if not prompt:
             return bad_request("prompt is required")
+
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request("generation_override must be an object")
 
         # 处理project_id：对于全局素材，使用'global'作为Task的project_id
         # Task模型要求project_id不能为null，但Material可以
@@ -288,7 +258,15 @@ def generate_material_image(project_id):
                 return not_found('Project')
 
         # Initialize services
-        ai_service = get_ai_service()
+        try:
+            routing_bundle = resolve_routing_bundle(
+                project=project,
+                generation_override=generation_override,
+            )
+        except Exception as e:
+            return bad_request(str(e))
+
+        ai_service = get_ai_service(routing_bundle=routing_bundle)
         file_service = FileService(current_app.config['UPLOAD_FOLDER'])
 
         # 创建临时目录保存参考图片（后台任务会清理）

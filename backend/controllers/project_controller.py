@@ -12,6 +12,10 @@ from pathlib import Path
 from flask import Blueprint, request, jsonify, current_app, Response, stream_with_context
 from sqlalchemy import desc
 from utils.validators import normalize_aspect_ratio
+from utils.aspect_ratio_policy import (
+    get_supported_aspect_ratios_for_model,
+    is_aspect_ratio_supported_for_model,
+)
 from sqlalchemy.orm import joinedload
 from werkzeug.exceptions import BadRequest
 from werkzeug.utils import secure_filename
@@ -20,6 +24,7 @@ from models import db, Project, Page, Task, ReferenceFile
 from services import ProjectContext, FileService
 from services.prompts import get_long_report_split_prompt
 from services.ai_service_manager import get_ai_service
+from services.provider_routing import resolve_routing_bundle
 from services.task_manager import (
     task_manager,
     generate_descriptions_task,
@@ -38,6 +43,18 @@ from utils import (
 logger = logging.getLogger(__name__)
 
 project_bp = Blueprint('projects', __name__, url_prefix='/api/projects')
+
+
+def _validate_aspect_ratio_for_current_image_model(aspect_ratio: str):
+    """Validate aspect ratio against current IMAGE_MODEL capability."""
+    image_model = current_app.config.get('IMAGE_MODEL', '')
+    if is_aspect_ratio_supported_for_model(image_model, aspect_ratio):
+        return
+    allowed = ", ".join(get_supported_aspect_ratios_for_model(image_model))
+    raise ValueError(
+        f"Aspect ratio '{aspect_ratio}' is not supported by image model '{image_model}'. "
+        f"Allowed values: {allowed}"
+    )
 
 
 def _get_project_reference_files_content(project_id: str) -> list:
@@ -278,6 +295,7 @@ def create_project():
         if 'image_aspect_ratio' in data:
             try:
                 image_aspect_ratio = normalize_aspect_ratio(data['image_aspect_ratio'])
+                _validate_aspect_ratio_for_current_image_model(image_aspect_ratio)
             except ValueError as e:
                 return bad_request(str(e))
 
@@ -393,11 +411,32 @@ def update_project(project_id):
         # Update presentation_meta if provided
         if 'presentation_meta' in data:
             project.presentation_meta = data['presentation_meta']
+
+        # Update generation_defaults (stored inside presentation_meta namespace)
+        if 'generation_defaults' in data:
+            try:
+                current_meta = {}
+                if project.presentation_meta:
+                    parsed = json.loads(project.presentation_meta)
+                    if isinstance(parsed, dict):
+                        current_meta = parsed
+
+                generation_defaults = data.get('generation_defaults')
+                if isinstance(generation_defaults, dict):
+                    current_meta['_ai_generation_defaults_v1'] = generation_defaults
+                else:
+                    current_meta.pop('_ai_generation_defaults_v1', None)
+
+                project.presentation_meta = json.dumps(current_meta, ensure_ascii=False)
+            except Exception as e:
+                return bad_request(f"generation_defaults must be JSON object: {str(e)}")
         
         # Update aspect ratio if provided
         if 'image_aspect_ratio' in data:
             try:
-                project.image_aspect_ratio = normalize_aspect_ratio(data['image_aspect_ratio'])
+                normalized_ratio = normalize_aspect_ratio(data['image_aspect_ratio'])
+                _validate_aspect_ratio_for_current_image_model(normalized_ratio)
+                project.image_aspect_ratio = normalized_ratio
             except ValueError as e:
                 return bad_request(str(e))
 
@@ -512,12 +551,24 @@ def generate_outline(project_id):
         if not project:
             return not_found('Project')
         
-        # Get singleton AI service instance
-        ai_service = get_ai_service()
-        
         # Get request data and language parameter
         data = request.get_json() or {}
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request("generation_override must be an object")
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+
+        # Resolve provider routing (request override > project defaults > settings/env)
+        try:
+            routing_bundle = resolve_routing_bundle(
+                project=project,
+                generation_override=generation_override,
+            )
+        except Exception as e:
+            return bad_request(str(e))
+
+        # Get AI service instance (cached by route fingerprint when override/defaults are active)
+        ai_service = get_ai_service(routing_bundle=routing_bundle)
         
         # Get reference files content and create project context
         reference_files_content = _get_project_reference_files_content(project_id)
@@ -721,6 +772,9 @@ def generate_from_description(project_id):
         
         # Get description text and language
         data = request.get_json() or {}
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request("generation_override must be an object")
         description_text = data.get('description_text') or project.description_text
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
         
@@ -729,8 +783,17 @@ def generate_from_description(project_id):
         
         project.description_text = description_text
         
-        # Get singleton AI service instance
-        ai_service = get_ai_service()
+        # Resolve provider routing (request override > project defaults > settings/env)
+        try:
+            routing_bundle = resolve_routing_bundle(
+                project=project,
+                generation_override=generation_override,
+            )
+        except Exception as e:
+            return bad_request(str(e))
+
+        # Get AI service instance (cached by route fingerprint when override/defaults are active)
+        ai_service = get_ai_service(routing_bundle=routing_bundle)
         
         # Get reference files content and create project context
         reference_files_content = _get_project_reference_files_content(project_id)
@@ -1184,6 +1247,9 @@ def generate_style_recommendations(project_id):
         style_requirements = (data.get('style_requirements') or '').strip()
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
         generate_previews = data.get('generate_previews', False)
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request("generation_override must be an object")
         if generate_previews is None:
             generate_previews = False
         if not isinstance(generate_previews, bool):
@@ -1204,6 +1270,14 @@ def generate_style_recommendations(project_id):
         db.session.add(task)
         db.session.commit()
 
+        try:
+            routing_bundle = resolve_routing_bundle(
+                project=project,
+                generation_override=generation_override,
+            )
+        except Exception as e:
+            return bad_request(str(e))
+
         app = current_app._get_current_object()
         task_manager.submit_task(
             task.id,
@@ -1213,7 +1287,8 @@ def generate_style_recommendations(project_id):
             style_requirements,
             app,
             language,
-            generate_previews
+            generate_previews,
+            routing_bundle,
         )
 
         return success_response({'task_id': task.id, 'status': 'PROCESSING'}, status_code=202)
@@ -1270,6 +1345,17 @@ def regenerate_style_previews(project_id, rec_id):
             return bad_request("sample_pages must be an object")
 
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request("generation_override must be an object")
+
+        try:
+            routing_bundle = resolve_routing_bundle(
+                project=project,
+                generation_override=generation_override,
+            )
+        except Exception as e:
+            return bad_request(str(e))
 
         task = Task(project_id=project_id, task_type='STYLE_PREVIEW_REGENERATE', status='PENDING')
         task.set_progress({'total': 4, 'completed': 0, 'failed': 0, 'rec_id': rec_id})
@@ -1285,7 +1371,8 @@ def regenerate_style_previews(project_id, rec_id):
             style_json_text,
             sample_pages,
             app,
-            language
+            language,
+            routing_bundle,
         )
 
         return success_response({'task_id': task.id, 'status': 'PROCESSING'}, status_code=202)
@@ -1713,8 +1800,20 @@ def create_ppt_renovation_project():
         if pdf_page_width and pdf_page_height and pdf_page_width > 0 and pdf_page_height > 0:
             try:
                 raw_ratio = f"{int(round(pdf_page_width))}:{int(round(pdf_page_height))}"
-                project.image_aspect_ratio = normalize_aspect_ratio(raw_ratio)
-                logger.info(f"Set project aspect ratio from PDF: {pdf_page_width}x{pdf_page_height} -> {project.image_aspect_ratio}")
+                normalized_ratio = normalize_aspect_ratio(raw_ratio)
+                image_model = current_app.config.get('IMAGE_MODEL', '')
+                if is_aspect_ratio_supported_for_model(image_model, normalized_ratio):
+                    project.image_aspect_ratio = normalized_ratio
+                    logger.info(
+                        f"Set project aspect ratio from PDF: {pdf_page_width}x{pdf_page_height} -> {project.image_aspect_ratio}"
+                    )
+                else:
+                    logger.warning(
+                        "PDF aspect ratio %s is not supported by image model %s, keeping existing value %s",
+                        normalized_ratio,
+                        image_model,
+                        project.image_aspect_ratio,
+                    )
             except (ValueError, OverflowError) as e:
                 logger.warning(f"Could not normalize PDF aspect ratio ({pdf_page_width}x{pdf_page_height}): {e}, keeping default 16:9")
 

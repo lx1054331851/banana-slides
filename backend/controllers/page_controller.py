@@ -7,6 +7,7 @@ from models import db, Project, Page, PageImageVersion, Task
 from utils import success_response, error_response, not_found, bad_request
 from services import FileService, ProjectContext
 from services.ai_service_manager import get_ai_service
+from services.provider_routing import resolve_routing_bundle
 from services.task_manager import task_manager, generate_single_page_image_task, edit_page_image_task
 from datetime import datetime
 from pathlib import Path
@@ -344,6 +345,9 @@ def generate_page_image(project_id, page_id):
         use_template = data.get('use_template', True)
         force_regenerate = data.get('force_regenerate', False)
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request("generation_override must be an object")
         
         # Check if already generated
         if page.generated_image_path and not force_regenerate:
@@ -403,7 +407,15 @@ def generate_page_image(project_id, page_id):
             })
         
         # Initialize services
-        ai_service = get_ai_service()
+        try:
+            routing_bundle = resolve_routing_bundle(
+                project=project,
+                generation_override=generation_override,
+            )
+        except Exception as e:
+            return bad_request(str(e))
+
+        ai_service = get_ai_service(routing_bundle=routing_bundle)
         
         file_service = FileService(current_app.config['UPLOAD_FOLDER'])
         
@@ -533,9 +545,6 @@ def edit_page_image(project_id, page_id):
         if not project:
             return not_found('Project')
         
-        # Initialize services
-        ai_service = get_ai_service()
-        
         file_service = FileService(current_app.config['UPLOAD_FOLDER'])
         
         # Parse request data (support both JSON and multipart/form-data)
@@ -555,9 +564,29 @@ def edit_page_image(project_id, page_id):
                     data['desc_image_urls'] = []
             else:
                 data['desc_image_urls'] = []
-        
+            if 'generation_override' in data and data['generation_override']:
+                try:
+                    data['generation_override'] = json.loads(data['generation_override'])
+                except Exception:
+                    data['generation_override'] = {}
+
         if not data or 'edit_instruction' not in data:
             return bad_request("edit_instruction is required")
+
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request("generation_override must be an object")
+
+        # Initialize services
+        try:
+            routing_bundle = resolve_routing_bundle(
+                project=project,
+                generation_override=generation_override,
+            )
+        except Exception as e:
+            return bad_request(str(e))
+
+        ai_service = get_ai_service(routing_bundle=routing_bundle)
         
         # Get current image path
         current_image_path = file_service.get_absolute_path(page.generated_image_path)

@@ -15,7 +15,7 @@ const projectSettingsI18n = {
       globalConfigTitle: "全局设置", globalConfigDesc: "这些设置应用于所有项目",
       aspectRatio: "画面比例", aspectRatioDesc: "设置生成幻灯片图片的画面比例",
       aspectRatioLocked: "已生成图片的项目无法调整画面比例",
-      aspectRatioHelp: "部分模型仅支持特定的画面比例（如 16:9、4:3、1:1）。如果图片生成报错，可尝试切换画面比例后重试。",
+      aspectRatioHelp: "部分模型仅支持特定的画面比例（如 16:9、4:3、1:1）。其中 gemini-3.1-flash-image-preview 额外支持 1:4、4:1、1:8、8:1。若生成报错，请切换到该模型支持的比例后重试。",
       extraRequirements: "额外要求", extraRequirementsDesc: "在生成每个页面时，AI 会参考这些额外要求",
       extraRequirementsPlaceholder: "例如：使用紧凑的布局，顶部展示一级大纲标题，加入更丰富的PPT插图...",
       saveExtraRequirements: "保存额外要求",
@@ -62,7 +62,7 @@ const projectSettingsI18n = {
       globalConfigTitle: "Global Settings", globalConfigDesc: "These settings apply to all projects",
       aspectRatio: "Aspect Ratio", aspectRatioDesc: "Set the aspect ratio for generated slide images",
       aspectRatioLocked: "Cannot change aspect ratio after images have been generated",
-      aspectRatioHelp: "Some models only support specific aspect ratios (e.g. 16:9, 4:3, 1:1). If image generation fails, try switching to a different aspect ratio.",
+      aspectRatioHelp: "Some models only support specific aspect ratios (e.g. 16:9, 4:3, 1:1). gemini-3.1-flash-image-preview additionally supports 1:4, 4:1, 1:8, and 8:1. If generation fails, switch to a ratio supported by the current model.",
       extraRequirements: "Extra Requirements", extraRequirementsDesc: "AI will reference these extra requirements when generating each page",
       extraRequirementsPlaceholder: "e.g., Use compact layout, show first-level outline title at top, add richer PPT illustrations...",
       saveExtraRequirements: "Save Extra Requirements",
@@ -136,6 +136,12 @@ interface ProjectSettingsModalProps {
   onSaveAspectRatio?: () => void;
   isSavingAspectRatio?: boolean;
   hasImages?: boolean;
+  generationDefaultImageSource?: string;
+  generationDefaultImageModel?: string;
+  onGenerationDefaultImageSourceChange?: (value: string) => void;
+  onGenerationDefaultImageModelChange?: (value: string) => void;
+  onSaveGenerationDefaults?: () => void;
+  isSavingGenerationDefaults?: boolean;
 }
 
 type SettingsTab = 'project' | 'global' | 'export';
@@ -172,6 +178,12 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   onSaveAspectRatio,
   isSavingAspectRatio = false,
   hasImages = false,
+  generationDefaultImageSource = '',
+  generationDefaultImageModel = '',
+  onGenerationDefaultImageSourceChange,
+  onGenerationDefaultImageModelChange,
+  onSaveGenerationDefaults,
+  isSavingGenerationDefaults = false,
 }) => {
   const t = useT(projectSettingsI18n);
   const [activeTab, setActiveTab] = useState<SettingsTab>('project');
@@ -304,6 +316,42 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                       className="w-full sm:w-auto"
                     >
                       {isSavingAspectRatio ? t('shared.saving') : t('common.save')}
+                    </Button>
+                  )}
+                </div>
+
+                <div className="bg-gray-50 dark:bg-background-primary rounded-lg p-6 space-y-4">
+                  <div>
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-foreground-primary mb-2">AI 生成默认（项目级）</h4>
+                    <p className="text-sm text-gray-600 dark:text-foreground-tertiary">
+                      配置当前项目默认的图片生成来源/模型（可在预览页临时覆盖）。
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Input
+                      label="图片来源 source"
+                      type="text"
+                      placeholder="留空=使用全局设置；支持 gemini/openai/profile:xxx/vendor"
+                      value={generationDefaultImageSource}
+                      onChange={(e) => onGenerationDefaultImageSourceChange?.(e.target.value)}
+                    />
+                    <Input
+                      label="图片模型 model"
+                      type="text"
+                      placeholder="留空=使用全局设置"
+                      value={generationDefaultImageModel}
+                      onChange={(e) => onGenerationDefaultImageModelChange?.(e.target.value)}
+                    />
+                  </div>
+                  {onSaveGenerationDefaults && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={onSaveGenerationDefaults}
+                      disabled={isSavingGenerationDefaults}
+                      className="w-full sm:w-auto"
+                    >
+                      {isSavingGenerationDefaults ? t('shared.saving') : '保存 AI 默认'}
                     </Button>
                   )}
                 </div>

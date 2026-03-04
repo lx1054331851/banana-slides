@@ -1,5 +1,13 @@
 import { apiClient } from './client';
-import type { Project, Task, ApiResponse, CreateProjectRequest, Page, CoverEndingFieldDetect } from '@/types';
+import type {
+  Project,
+  Task,
+  ApiResponse,
+  CreateProjectRequest,
+  Page,
+  CoverEndingFieldDetect,
+  GenerationOverride,
+} from '@/types';
 import type { Settings } from '../types/index';
 
 // ===== 访问口令 API =====
@@ -422,11 +430,20 @@ export const refineDescriptions = async (
  * @param language 输出语言（可选，默认从 sessionStorage 获取）
  * @param pageIds 可选的页面ID列表，如果不提供则生成所有页面
  */
-export const generateImages = async (projectId: string, language?: OutputLanguage, pageIds?: string[]): Promise<ApiResponse> => {
+export const generateImages = async (
+  projectId: string,
+  language?: OutputLanguage,
+  pageIds?: string[],
+  generationOverride?: GenerationOverride
+): Promise<ApiResponse> => {
   const lang = language || await getStoredOutputLanguage();
   const response = await apiClient.post<ApiResponse>(
     `/api/projects/${projectId}/generate/images`,
-    { language: lang, page_ids: pageIds }
+    {
+      language: lang,
+      page_ids: pageIds,
+      ...(generationOverride ? { generation_override: generationOverride } : {}),
+    }
   );
   return response.data;
 };
@@ -438,12 +455,17 @@ export const generatePageImage = async (
   projectId: string,
   pageId: string,
   forceRegenerate: boolean = false,
-  language?: OutputLanguage
+  language?: OutputLanguage,
+  generationOverride?: GenerationOverride
 ): Promise<ApiResponse> => {
   const lang = language || await getStoredOutputLanguage();
   const response = await apiClient.post<ApiResponse>(
     `/api/projects/${projectId}/pages/${pageId}/generate/image`,
-    { force_regenerate: forceRegenerate, language: lang }
+    {
+      force_regenerate: forceRegenerate,
+      language: lang,
+      ...(generationOverride ? { generation_override: generationOverride } : {}),
+    }
   );
   return response.data;
 };
@@ -459,7 +481,8 @@ export const editPageImage = async (
     useTemplate?: boolean;
     descImageUrls?: string[];
     uploadedFiles?: File[];
-  }
+  },
+  generationOverride?: GenerationOverride
 ): Promise<ApiResponse> => {
   // 如果有上传的文件，使用 multipart/form-data
   if (contextImages?.uploadedFiles && contextImages.uploadedFiles.length > 0) {
@@ -473,6 +496,9 @@ export const editPageImage = async (
     contextImages.uploadedFiles.forEach((file) => {
       formData.append('context_images', file);
     });
+    if (generationOverride) {
+      formData.append('generation_override', JSON.stringify(generationOverride));
+    }
 
     const response = await apiClient.post<ApiResponse>(
       `/api/projects/${projectId}/pages/${pageId}/edit/image`,
@@ -489,6 +515,7 @@ export const editPageImage = async (
           use_template: contextImages?.useTemplate || false,
           desc_image_urls: contextImages?.descImageUrls || [],
         },
+        ...(generationOverride ? { generation_override: generationOverride } : {}),
       }
     );
     return response.data;
@@ -1169,6 +1196,25 @@ export interface TestSettingsOverride {
   image_thinking_budget?: number;
 }
 
+export interface ProviderProfileSummary {
+  id: string;
+  provider: 'openai' | 'gemini' | string;
+  api_base?: string | null;
+  api_key_env?: string | null;
+  api_key_present?: boolean;
+  adapter?: string;
+  adapter_options?: Record<string, any>;
+  capabilities?: string[];
+  model_defaults?: Record<string, any>;
+}
+
+export const getProviderProfiles = async (): Promise<ApiResponse<{ profiles: ProviderProfileSummary[] }>> => {
+  const response = await apiClient.get<ApiResponse<{ profiles: ProviderProfileSummary[] }>>(
+    '/api/settings/provider-profiles'
+  );
+  return response.data;
+};
+
 /**
  * 测试百度 OCR 服务（异步）
  * @param settings 可选的设置覆盖（未保存的设置）
@@ -1381,6 +1427,7 @@ export const startStyleRecommendations = async (
     style_requirements?: string;
     language?: OutputLanguage;
     generate_previews?: boolean;
+    generation_override?: GenerationOverride;
   }
 ): Promise<ApiResponse<{ task_id: string; status?: string }>> => {
   const lang = data.language || await getStoredOutputLanguage();
@@ -1391,6 +1438,7 @@ export const startStyleRecommendations = async (
       style_requirements: data.style_requirements,
       language: lang,
       ...(typeof data.generate_previews === 'boolean' ? { generate_previews: data.generate_previews } : {}),
+      ...(data.generation_override ? { generation_override: data.generation_override } : {}),
     }
   );
   return response.data;
@@ -1403,6 +1451,7 @@ export const regenerateStyleRecommendationPreviews = async (
     style_json: any;
     sample_pages?: Record<string, string>;
     language?: OutputLanguage;
+    generation_override?: GenerationOverride;
   }
 ): Promise<ApiResponse<{ task_id: string; status?: string }>> => {
   const lang = data.language || await getStoredOutputLanguage();
@@ -1412,6 +1461,7 @@ export const regenerateStyleRecommendationPreviews = async (
       style_json: data.style_json,
       sample_pages: data.sample_pages,
       language: lang,
+      ...(data.generation_override ? { generation_override: data.generation_override } : {}),
     }
   );
   return response.data;

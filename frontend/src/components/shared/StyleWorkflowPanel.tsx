@@ -9,7 +9,7 @@ import { useToast } from './Toast';
 import * as api from '@/api/endpoints';
 import { normalizeProject } from '@/utils';
 import { getProjectRoute } from '@/utils/projectUtils';
-import type { Project, Task } from '@/types';
+import type { GenerationOverride, Project, Task } from '@/types';
 
 type StyleRecommendation = {
   id: string;
@@ -32,6 +32,7 @@ export interface StyleWorkflowPanelProps {
   projectId: string;
   taskId: string;
   templateJson?: string;
+  generationOverride?: GenerationOverride;
   showTemplateControls?: boolean;
   applyMode?: 'continue' | 'apply_only';
   backButtonText?: string;
@@ -44,6 +45,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
   projectId,
   taskId,
   templateJson,
+  generationOverride,
   showTemplateControls = false,
   applyMode = 'continue',
   backButtonText = '返回项目',
@@ -327,6 +329,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
       const resp = await api.regenerateStyleRecommendationPreviews(projectId, rec.id, {
         style_json: jsonObj,
         sample_pages: rec.sample_pages,
+        ...(generationOverride ? { generation_override: generationOverride } : {}),
       });
       const regenTaskId = (resp.data as any)?.task_id;
       if (!regenTaskId) throw new Error('未返回任务ID');
@@ -363,6 +366,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
         const regenResp = await api.regenerateStyleRecommendationPreviews(projectId, rec.id, {
           style_json: jsonObj,
           sample_pages: rec.sample_pages,
+          ...(generationOverride ? { generation_override: generationOverride } : {}),
         });
         const regenTaskId = (regenResp.data as any)?.task_id;
         if (!regenTaskId) throw new Error('未返回任务ID');
@@ -465,6 +469,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
         template_json: text,
         style_requirements: styleReq,
         generate_previews: willGeneratePreviews,
+        ...(generationOverride ? { generation_override: generationOverride } : {}),
       } as any);
       const newTaskId = (resp.data as any)?.task_id;
       if (!newTaskId) throw new Error('未返回任务ID');

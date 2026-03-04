@@ -20,6 +20,7 @@ from services.ai_providers.image.baidu_inpainting_provider import create_baidu_i
 from services.ai_providers import LAZYLLM_VENDORS
 from services.task_manager import task_manager
 from services.image_compression_service import ImageCompressionService
+from services.provider_routing import list_provider_profiles_redacted
 
 logger = logging.getLogger(__name__)
 ALLOWED_PROVIDER_FORMATS = {"openai", "gemini", "lazyllm"} | LAZYLLM_VENDORS
@@ -403,6 +404,17 @@ def get_active_config():
         "output_language": current_app.config.get("OUTPUT_LANGUAGE"),
         "image_caption_model": current_app.config.get("IMAGE_CAPTION_MODEL"),
     })
+
+
+@settings_bp.route("/provider-profiles", methods=["GET"], strict_slashes=False)
+def list_provider_profiles():
+    """GET /api/settings/provider-profiles - list routing profiles (redacted)."""
+    try:
+        profiles = list_provider_profiles_redacted()
+        return success_response({"profiles": profiles})
+    except Exception as e:
+        logger.error(f"Error listing provider profiles: {e}")
+        return error_response("GET_PROVIDER_PROFILES_ERROR", str(e), 500)
 
 
 @settings_bp.route("/verify", methods=["POST"], strict_slashes=False)

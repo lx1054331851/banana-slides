@@ -13,7 +13,14 @@ logger = logging.getLogger(__name__)
 class OpenAITextProvider(TextProvider):
     """Text generation using OpenAI SDK (supports Azure OpenAI when configured)."""
     
-    def __init__(self, api_key: str, api_base: str = None, model: str = "gemini-3-flash-preview"):
+    def __init__(
+        self,
+        api_key: str,
+        api_base: str = None,
+        model: str = "gemini-3-flash-preview",
+        azure_endpoint: str = None,
+        azure_api_version: str = None,
+    ):
         """
         Initialize OpenAI text provider
         
@@ -23,12 +30,11 @@ class OpenAITextProvider(TextProvider):
             model: Model name to use
         """
         cfg = get_config()
-        azure_endpoint = (cfg.AZURE_OPENAI_ENDPOINT or "").strip() or None
-        azure_key = (cfg.AZURE_OPENAI_API_KEY or "").strip() or None
-        azure_api_version = (cfg.AZURE_OPENAI_API_VERSION or "").strip() or None
+        azure_endpoint = (azure_endpoint or "").strip() or None
+        azure_api_version = (azure_api_version or "").strip() or None
 
         self.client = make_openai_client(
-            api_key=(azure_key or api_key),
+            api_key=api_key,
             api_base=api_base,
             azure_endpoint=azure_endpoint,
             azure_api_version=azure_api_version,
