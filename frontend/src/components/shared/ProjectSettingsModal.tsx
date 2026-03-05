@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { X, FileText, Settings as SettingsIcon, Download, Sparkles, AlertTriangle, HelpCircle } from 'lucide-react';
+import { X, FileText, Download, Sparkles, AlertTriangle, HelpCircle } from 'lucide-react';
 import { Button, Textarea, Input } from '@/components/shared';
 import { useT } from '@/hooks/useT';
-import { Settings } from '@/pages/Settings';
 import type { ExportExtractorMethod, ExportInpaintMethod } from '@/types';
 import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
 
@@ -10,9 +9,8 @@ import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
 const projectSettingsI18n = {
   zh: {
     projectSettings: {
-      title: "设置", projectConfig: "项目设置", exportConfig: "导出设置", globalConfig: "全局设置",
+      title: "设置", projectConfig: "项目设置", exportConfig: "导出设置",
       projectConfigTitle: "项目级配置", projectConfigDesc: "这些设置仅应用于当前项目，不影响其他项目",
-      globalConfigTitle: "全局设置", globalConfigDesc: "这些设置应用于所有项目",
       aspectRatio: "画面比例", aspectRatioDesc: "设置生成幻灯片图片的画面比例",
       aspectRatioLocked: "已生成图片的项目无法调整画面比例",
       aspectRatioHelp: "部分模型仅支持特定的画面比例（如 16:9、4:3、1:1）。其中 gemini-3.1-flash-image-preview 额外支持 1:4、4:1、1:8、8:1。若生成报错，请切换到该模型支持的比例后重试。",
@@ -57,9 +55,8 @@ const projectSettingsI18n = {
   },
   en: {
     projectSettings: {
-      title: "Settings", projectConfig: "Project Settings", exportConfig: "Export Settings", globalConfig: "Global Settings",
+      title: "Settings", projectConfig: "Project Settings", exportConfig: "Export Settings",
       projectConfigTitle: "Project-level Configuration", projectConfigDesc: "These settings only apply to the current project",
-      globalConfigTitle: "Global Settings", globalConfigDesc: "These settings apply to all projects",
       aspectRatio: "Aspect Ratio", aspectRatioDesc: "Set the aspect ratio for generated slide images",
       aspectRatioLocked: "Cannot change aspect ratio after images have been generated",
       aspectRatioHelp: "Some models only support specific aspect ratios (e.g. 16:9, 4:3, 1:1). gemini-3.1-flash-image-preview additionally supports 1:4, 4:1, 1:8, and 8:1. If generation fails, switch to a ratio supported by the current model.",
@@ -144,7 +141,7 @@ interface ProjectSettingsModalProps {
   isSavingGenerationDefaults?: boolean;
 }
 
-type SettingsTab = 'project' | 'global' | 'export';
+type SettingsTab = 'project' | 'export';
 
 export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   isOpen,
@@ -247,17 +244,6 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
               >
                 <Download size={20} />
                 <span className="font-medium">{t('projectSettings.exportConfig')}</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('global')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                  activeTab === 'global'
-                    ? 'bg-banana-500 text-white shadow-md'
-                    : 'bg-white dark:bg-background-secondary text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'
-                }`}
-              >
-                <SettingsIcon size={20} />
-                <span className="font-medium">{t('projectSettings.globalConfig')}</span>
               </button>
             </nav>
           </aside>
@@ -636,17 +622,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="max-w-4xl">
-                <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-foreground-primary mb-2">{t('projectSettings.globalConfigTitle')}</h3>
-                  <p className="text-sm text-gray-600 dark:text-foreground-tertiary">
-                    {t('projectSettings.globalConfigDesc')}
-                  </p>
-                </div>
-                <Settings />
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
