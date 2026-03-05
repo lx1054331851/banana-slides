@@ -112,6 +112,8 @@ class Config:
     DEFAULT_ASPECT_RATIO = "16:9"
     DEFAULT_RESOLUTION = "2K"
     LOG_IMAGE_PROMPTS = os.getenv('LOG_IMAGE_PROMPTS', 'false').lower() in ('1', 'true', 'yes', 'y', 'on')
+    # 首次风格推荐任务（3*4预览图）并发；默认跟随 MAX_IMAGE_WORKERS
+    STYLE_PREVIEW_INITIAL_WORKERS = int(os.getenv('STYLE_PREVIEW_INITIAL_WORKERS', os.getenv('MAX_IMAGE_WORKERS', '8')))
     # 风格预览重跑并发（过高并发在代理/弱网下容易触发 TLS EOF）
     STYLE_PREVIEW_WORKERS = int(os.getenv('STYLE_PREVIEW_WORKERS', '2'))
     # 单页预览在网络瞬断时的额外重试次数（不含 provider 内部重试）

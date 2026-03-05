@@ -54,7 +54,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
   onApplied,
 }) => {
   const navigate = useNavigate();
-  const { show, ToastContainer } = useToast();
+  const { show, ToastContainer } = useToast({ position: 'bottom-right' });
   const [task, setTask] = useState<Task | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState(false);

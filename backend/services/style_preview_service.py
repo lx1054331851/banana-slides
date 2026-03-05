@@ -273,49 +273,55 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
 
             completed = 0
             failed = 0
+            slide_extra_retries = int(app.config.get('STYLE_PREVIEW_SLIDE_RETRIES', 1))
+            # Use image-generation worker config for initial 12-image generation speedup.
+            default_initial_workers = int(app.config.get('MAX_IMAGE_WORKERS', 8))
+            max_workers = int(app.config.get('STYLE_PREVIEW_INITIAL_WORKERS', default_initial_workers))
 
+            jobs: list[dict[str, Any]] = []
             for rec in normalized_recs:
                 style_json_text = ""
                 if rec.get('style_json') is not None:
                     style_json_text = json.dumps(rec['style_json'], ensure_ascii=False)
-
                 extra_req = _build_style_extra_requirements(style_json_text, style_requirements)
-
                 for slide_key, page_index in slide_keys:
+                    jobs.append({
+                        'rec_id': rec['id'],
+                        'slide_key': slide_key,
+                        'page_index': page_index,
+                        'sample_pages': rec.get('sample_pages') or {},
+                        'extra_req': extra_req,
+                    })
+
+            max_workers = max(1, min(max_workers, len(jobs) if jobs else 1))
+
+            def render_preview_job(job: dict[str, Any]) -> tuple[str, str, str]:
+                slide_key, url = _render_preview_slide_with_retry(
+                    ai_service=ai_service,
+                    file_service=file_service,
+                    project_id=project_id,
+                    rec_id=job['rec_id'],
+                    slide_key=job['slide_key'],
+                    page_index=job['page_index'],
+                    outline=outline,
+                    sample_pages=job['sample_pages'],
+                    extra_req=job['extra_req'],
+                    aspect_ratio=aspect_ratio,
+                    resolution=resolution,
+                    language=language or app.config.get('OUTPUT_LANGUAGE', 'zh'),
+                    extra_retries=slide_extra_retries,
+                )
+                return job['rec_id'], slide_key, url
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_map = {executor.submit(render_preview_job, job): job for job in jobs}
+                for future in as_completed(future_map):
+                    job = future_map[future]
+                    rec_id = str(job['rec_id'])
+                    slide_key = str(job['slide_key'])
                     try:
-                        page_desc = (rec.get('sample_pages') or {}).get(slide_key, '')
-                        page = outline[page_index - 1]
-                        prompt_img = ai_service.generate_image_prompt(
-                            outline=outline,
-                            page=page,
-                            page_desc=page_desc,
-                            page_index=page_index,
-                            extra_requirements=extra_req,
-                            language=language or app.config.get('OUTPUT_LANGUAGE', 'zh'),
-                            has_template=False
-                        )
-                        image = ai_service.generate_image(
-                            prompt_img,
-                            ref_image_path=None,
-                            aspect_ratio=aspect_ratio,
-                            resolution=resolution
-                        )
-                        if not image:
-                            raise ValueError("Failed to generate preview image")
-
-                        run_id = uuid.uuid4().hex[:10]
-                        rel_path = file_service.save_style_preview_image(
-                            image=image,
-                            project_id=project_id,
-                            rec_id=rec['id'],
-                            slide_type=slide_key,
-                            run_id=run_id,
-                            image_format='PNG'
-                        )
-                        filename = rel_path.split('/')[-1]
-                        url = f"/files/{project_id}/style-previews/{rec['id']}/{filename}"
-
-                        # Update task progress
+                        rec_id, slide_key, url = future.result()
+                        completed += 1
                         db.session.expire_all()
                         task = Task.query.get(task_id)
                         if task:
@@ -323,11 +329,10 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                             p['current_step'] = 'generating_preview_images'
                             p_recs = p.get('recommendations') or []
                             for r in p_recs:
-                                if r.get('id') == rec['id']:
+                                if r.get('id') == rec_id:
                                     r.setdefault('preview_images', {})
                                     r['preview_images'][f"{slide_key}_url"] = url
                                     break
-                            completed += 1
                             p['completed'] = completed
                             p['failed'] = failed
                             p['recommendations'] = p_recs
@@ -337,12 +342,12 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                         if _is_transient_image_network_error(e):
                             logger.error(
                                 "Preview generation failed after retries (transient network): rec=%s slide=%s err=%s",
-                                rec.get('id'), slide_key, str(e)
+                                rec_id, slide_key, str(e)
                             )
                         else:
                             logger.error(
                                 "Preview generation failed: rec=%s slide=%s err=%s",
-                                rec.get('id'), slide_key, str(e), exc_info=True
+                                rec_id, slide_key, str(e), exc_info=True
                             )
                         failed += 1
                         db.session.expire_all()

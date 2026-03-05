@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-react';
 import { cn } from '@/utils';
 
@@ -63,7 +64,14 @@ export const Toast: React.FC<ToastProps> = ({
 };
 
 // Toast 管理器
-export const useToast = () => {
+type ToastPosition = 'top-right' | 'bottom-right';
+
+interface UseToastOptions {
+  position?: ToastPosition;
+}
+
+export const useToast = (options: UseToastOptions = {}) => {
+  const position = options.position ?? 'top-right';
   const [toasts, setToasts] = React.useState<Array<{ id: string; props: Omit<ToastProps, 'onClose'> }>>([]);
   const timersRef = useRef<Map<string, number>>(new Map());
   const recentRef = useRef<Map<string, number>>(new Map());
@@ -116,17 +124,21 @@ export const useToast = () => {
 
   return {
     show,
-    ToastContainer: () => (
-      <div className="fixed top-20 right-4 z-50 flex flex-col items-end gap-2 pointer-events-none">
-        {toasts.map((toast) => (
-          <div key={toast.id} className="pointer-events-auto">
-            <Toast
-              {...toast.props}
-              onClose={() => remove(toast.id)}
-            />
-          </div>
-        ))}
-      </div>
-    ),
+    ToastContainer: () => {
+      const positionClass = position === 'bottom-right' ? 'bottom-4 right-4' : 'top-20 right-4';
+      const container = (
+        <div className={cn('fixed z-[120] flex flex-col items-end gap-2 pointer-events-none', positionClass)}>
+          {toasts.map((toast) => (
+            <div key={toast.id} className="pointer-events-auto">
+              <Toast
+                {...toast.props}
+                onClose={() => remove(toast.id)}
+              />
+            </div>
+          ))}
+        </div>
+      );
+      return typeof document !== 'undefined' ? createPortal(container, document.body) : container;
+    },
   };
 };
