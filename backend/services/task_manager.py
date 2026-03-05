@@ -4,6 +4,7 @@ No need for Celery or Redis, uses in-memory task tracking
 """
 import logging
 import os
+import json
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, List, Dict, Any, Optional
@@ -562,7 +563,7 @@ def generate_single_page_image_task(task_id: str, project_id: str, page_id: str,
             # Get description content
             desc_content = page.get_description_content()
             if not desc_content:
-                raise ValueError("No description content for page")
+                raise ValueError("No saved description content for page")
             
             # 获取描述文本（可能是 text 字段或 text_content 数组）
             desc_text = desc_content.get('text', '')
@@ -714,17 +715,24 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                         additional_ref_images=merged_edit_refs if merged_edit_refs else None
                     )
                 else:
-                    desc_content = page.get_description_content() or {}
-                    desc_text = desc_content.get('text', '') or ''
-                    if not desc_text and desc_content.get('text_content'):
-                        text_content = desc_content.get('text_content', [])
-                        if isinstance(text_content, list):
-                            desc_text = '\n'.join(text_content)
-                        else:
-                            desc_text = str(text_content)
+                    desc_content = page.get_description_content()
+                    desc_text = ''
+                    if isinstance(desc_content, dict):
+                        desc_text = (desc_content.get('text', '') or '').strip()
+                        if not desc_text and desc_content.get('text_content'):
+                            text_content = desc_content.get('text_content', [])
+                            if isinstance(text_content, list):
+                                desc_text = '\n'.join([str(x) for x in text_content if str(x).strip()]).strip()
+                            else:
+                                desc_text = str(text_content).strip()
+                        if not desc_text and desc_content:
+                            # 兼容历史/自定义结构：保底将整个描述对象转为文本
+                            desc_text = json.dumps(desc_content, ensure_ascii=False)
+                    elif isinstance(desc_content, str):
+                        desc_text = desc_content.strip()
 
                     if not desc_text and not edit_instruction_text:
-                        raise ValueError("No description content for page")
+                        raise ValueError("No saved description text for page")
 
                     desc_image_urls: List[str] = []
                     if desc_text:

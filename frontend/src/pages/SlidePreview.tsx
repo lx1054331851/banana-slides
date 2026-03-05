@@ -256,6 +256,7 @@ export const SlidePreview: React.FC = () => {
     syncProject,
     generateImages,
     editPageImage,
+    saveAllPages,
     deletePageById,
     updatePageLocal,
     insertPageAt,
@@ -1291,6 +1292,8 @@ export const SlidePreview: React.FC = () => {
 
     // 先保存大纲和描述的修改
     handleSaveOutlineAndDescription();
+    // 等待本地防抖更新真正落库，避免后端读到旧的 description_content
+    await saveAllPages();
 
     // 调用后端编辑接口
     await editPageImage(
@@ -1320,7 +1323,7 @@ export const SlidePreview: React.FC = () => {
     }));
 
     setIsEditModalOpen(false);
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, runGenerationOverride, handleSaveOutlineAndDescription]);
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, runGenerationOverride, handleSaveOutlineAndDescription, saveAllPages]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);

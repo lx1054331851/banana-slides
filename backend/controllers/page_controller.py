@@ -263,10 +263,13 @@ def generate_page_description(project_id, page_id):
         if page.get_description_content() and not force_regenerate:
             return bad_request("Description already exists. Set force_regenerate=true to regenerate")
         
-        # Get outline content
+        # Get outline content (optional)
         outline_content = page.get_outline_content()
         if not outline_content:
-            return bad_request("Page must have outline content first")
+            outline_content = {
+                "title": f"第{page.order_index + 1}页",
+                "points": []
+            }
         
         # Reconstruct full outline
         all_pages = Page.query.filter_by(project_id=project_id).order_by(Page.order_index).all()
@@ -278,6 +281,10 @@ def generate_page_description(project_id, page_id):
                 if p.part:
                     page_data['part'] = p.part
                 outline.append(page_data)
+
+        # 如果项目中没有任何大纲，也允许继续：至少提供当前页的最小结构
+        if not outline:
+            outline.append(outline_content.copy())
         
         # Initialize AI service
         ai_service = get_ai_service()

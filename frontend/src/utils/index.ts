@@ -119,6 +119,10 @@ export function normalizeErrorMessage(errorMessage: string | null | undefined): 
     return isZh
       ? '当前项目还没有模板，请先点击页面工具栏的"更换模板"按钮，选择或上传一张模板图片后再生成。'
       : 'No template found. Please select or upload a template image first.';
+  } else if (message.includes('page must have outline content first')) {
+    return isZh
+      ? '该页暂未保存大纲。现在已支持无大纲流程：请直接填写并保存页面描述后再生成。'
+      : 'This page has no saved outline. Outline is optional now; please save page description and retry.';
   } else if (message.includes('page must have generated image first')) {
     return isZh
       ? '当前页面还没有已生成图片，系统将自动切换为文生图模式。若仍失败，请先补充页面描述后重试。'
@@ -127,10 +131,14 @@ export function normalizeErrorMessage(errorMessage: string | null | undefined): 
     return isZh
       ? '编辑指令为空时将自动切换为文生图模式。若仍失败，请补充页面描述后重试。'
       : 'Empty edit instruction should fall back to text-to-image mode.';
-  } else if (message.includes('page must have description content')) {
+  } else if (
+    message.includes('page must have description content') ||
+    message.includes('no saved description content for page') ||
+    message.includes('no saved description text for page')
+  ) {
     return isZh
-      ? '该页面还没有描述内容，请先在"编辑页面描述"步骤为此页生成或填写描述。'
-      : 'This page has no description. Please generate or write a description first.';
+      ? '后端读取到该页尚无“已保存”的描述内容。若你刚在弹窗里修改，请先保存（或等待自动保存完成）后再生成。'
+      : 'No saved description was found for this page. If you just edited it in the modal, save it first and retry.';
   } else if (message.includes('image already exists')) {
     return isZh
       ? '该页面已经有图片，如需重新生成，请在生成时选择"重新生成"或稍后重试。'
