@@ -29,6 +29,8 @@ const detailI18n = {
         confirmRegeneratePage: "该页面已有描述，重新生成将覆盖现有内容，确定继续吗？",
         confirmRenovationRegenerate: "您现在是 PPT 翻新模式，重新生成会依照原 PPT 相同页码页面，重新解析并生成该页的大纲和描述，覆盖已有内容。确定要继续吗？",
         confirmRenovationRegenerateTitle: "重新解析此页",
+        confirmDeletePage: "确定要删除这一页吗？",
+        confirmDeleteTitle: "确认删除",
         refineSuccess: "页面描述修改成功", refineFailed: "修改失败，请稍后重试",
         exportSuccess: "导出成功", importSuccess: "导入成功", importFailed: "导入失败，请检查文件格式", importEmpty: "文件中未找到有效页面", deleteFailed: "删除页面失败",
         loadingProject: "加载项目中..."
@@ -59,6 +61,8 @@ const detailI18n = {
         confirmRegeneratePage: "This page already has a description. Regenerating will overwrite it. Continue?",
         confirmRenovationRegenerate: "You are in PPT renovation mode. Regenerating will re-parse the original PDF page and regenerate the outline and description, overwriting existing content. Continue?",
         confirmRenovationRegenerateTitle: "Re-parse This Page",
+        confirmDeletePage: "Are you sure you want to delete this page?",
+        confirmDeleteTitle: "Confirm Delete",
         refineSuccess: "Descriptions modified successfully", refineFailed: "Modification failed, please try again",
         exportSuccess: "Export successful", importSuccess: "Import successful", importFailed: "Import failed, please check file format", importEmpty: "No valid pages found in file", deleteFailed: "Failed to delete page",
         loadingProject: "Loading project..."
@@ -450,12 +454,22 @@ export const DetailEditor: React.FC = () => {
     await insertPageAt(order);
   }, [insertPageAt]);
 
-  const handleDeletePage = useCallback(async (pageId: string) => {
+  const executeDeletePage = useCallback(async (pageId: string) => {
     const ok = await deletePageById(pageId);
     if (!ok) {
       show({ message: t('detail.messages.deleteFailed'), type: 'error' });
     }
   }, [deletePageById, show, t]);
+
+  const handleDeletePage = useCallback((pageId: string) => {
+    confirm(
+      t('detail.messages.confirmDeletePage'),
+      () => {
+        void executeDeletePage(pageId);
+      },
+      { title: t('detail.messages.confirmDeleteTitle'), confirmText: t('common.delete'), variant: 'danger' }
+    );
+  }, [confirm, executeDeletePage, t]);
 
   const handleGenerateImages = async () => {
     if (!currentProject || !projectId) return;

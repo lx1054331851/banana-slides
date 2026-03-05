@@ -73,6 +73,8 @@ const previewI18n = {
       confirmPartialGenerateWithGeneratingMessage: "已生成 {{generated}}/{{total}} 页图片，另有 {{generating}} 页正在生成中。请选择仅生成未生成的 {{missing}} 页，或重新生成全部 {{total}} 页（历史记录将会保存）。",
       generatingInProgress: "已有 {{count}} 页正在生成中，请稍候...",
       deleteFailed: "删除页面失败",
+      confirmDeletePage: "确定要删除这一页吗？",
+      confirmDeleteTitle: "确认删除",
       generateMissingOnly: "仅生成未生成的 {{count}} 页",
       regenerateAllPages: "重新生成全部 {{count}} 页",
       generationFailed: "生成失败",
@@ -158,6 +160,8 @@ const previewI18n = {
       confirmPartialGenerateWithGeneratingMessage: "{{generated}}/{{total}} page(s) already have images, and {{generating}} page(s) are still generating. Generate only the {{missing}} missing page(s), or regenerate all {{total}} page(s) (history will be saved).",
       generatingInProgress: "{{count}} page(s) are generating. Please wait...",
       deleteFailed: "Failed to delete page",
+      confirmDeletePage: "Are you sure you want to delete this page?",
+      confirmDeleteTitle: "Confirm Delete",
       generateMissingOnly: "Generate Missing ({{count}})",
       regenerateAllPages: "Regenerate All ({{count}})",
       generationFailed: "Generation failed",
@@ -638,7 +642,7 @@ export const SlidePreview: React.FC = () => {
   const { show, ToastContainer } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
 
-  const handleDeletePage = useCallback(async (page: Page) => {
+  const executeDeletePage = useCallback(async (page: Page) => {
     const pageId = page.id || page.page_id;
     if (!pageId) {
       show({ message: t('preview.deleteFailed'), type: 'error' });
@@ -649,6 +653,16 @@ export const SlidePreview: React.FC = () => {
       show({ message: t('preview.deleteFailed'), type: 'error' });
     }
   }, [deletePageById, show, t]);
+
+  const handleDeletePage = useCallback((page: Page) => {
+    confirm(
+      t('preview.confirmDeletePage'),
+      () => {
+        void executeDeletePage(page);
+      },
+      { title: t('preview.confirmDeleteTitle'), confirmText: t('common.delete'), variant: 'danger' }
+    );
+  }, [confirm, executeDeletePage, t]);
 
   const handleInsertPageAfter = useCallback(async (targetPage?: Page | null, fallbackIndex = -1) => {
     const insertOrderIndex = targetPage && Number.isFinite(targetPage.order_index)
@@ -1807,6 +1821,14 @@ export const SlidePreview: React.FC = () => {
   );
   const isSidebarCompact = !isMobileView && !isSidebarCollapsed && sidebarWidthPx <= 200;
   const isSidebarGridMode = !isSidebarCompact && sidebarViewMode === 'grid';
+  const sidebarGridGapPx = 12;
+  const sidebarGridMaxThumbWidthPx = 180;
+  const sidebarGridHorizontalPaddingPx = isMobileView ? 24 : 32;
+  const sidebarGridAvailableWidthPx = Math.max(0, sidebarWidthPx - sidebarGridHorizontalPaddingPx);
+  const sidebarGridColumns = Math.max(
+    2,
+    Math.ceil((sidebarGridAvailableWidthPx + sidebarGridGapPx) / (sidebarGridMaxThumbWidthPx + sidebarGridGapPx))
+  );
   const generateButtonText =
     isMultiSelectMode && selectedPageIds.size > 0
       ? t('preview.generateSelected', { count: selectedPageIds.size })
@@ -2498,7 +2520,10 @@ export const SlidePreview: React.FC = () => {
 	                  )}
 	              </div>
 	              {isSidebarGridMode ? (
-	                <div className="grid grid-cols-2 gap-3">
+	                <div
+                    className="grid gap-3"
+                    style={{ gridTemplateColumns: `repeat(${sidebarGridColumns}, minmax(0, 1fr))` }}
+                  >
 	                  {currentProject.pages.map((page, index) => (
 	                    <div key={page.id || `grid-${index}`} className="relative group">
 	                      <button

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Edit2, Trash2 } from 'lucide-react';
 import { useT } from '@/hooks/useT';
-import { StatusBadge, Skeleton, useConfirm } from '@/components/shared';
+import { StatusBadge, Skeleton } from '@/components/shared';
 import { getImageUrl } from '@/api/client';
 import type { Page } from '@/types';
 
@@ -49,7 +49,6 @@ export const SlideCard: React.FC<SlideCardProps> = ({
   aspectRatio = '16:9',
 }) => {
   const t = useT(slideCardI18n);
-  const { confirm, ConfirmDialog } = useConfirm();
   const imageUrl = (page.preview_image_path || page.generated_image_path)
     ? getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)
     : '';
@@ -75,11 +74,7 @@ export const SlideCard: React.FC<SlideCardProps> = ({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          confirm(
-            t('slideCard.confirmDeletePage'),
-            onDelete,
-            { title: t('slideCard.confirmDeleteTitle'), variant: 'danger' }
-          );
+          onDelete();
         }}
         className={`absolute top-2 right-2 z-20 p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-red-600 transition-opacity hover:bg-red-50 ${
           hasImage ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : 'opacity-100'
@@ -173,7 +168,6 @@ export const SlideCard: React.FC<SlideCardProps> = ({
           <StatusBadge status={page.status} />
         </div>
       </div>
-      {ConfirmDialog}
     </div>
   );
 };
