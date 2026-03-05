@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { Edit2, FileText, RefreshCw } from 'lucide-react';
+import { Edit2, FileText, RefreshCw, Trash2 } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 import { useImagePaste } from '@/hooks/useImagePaste';
 import { Card, ContextualStatusBadge, Button, Modal, Skeleton, Markdown } from '@/components/shared';
@@ -40,6 +40,8 @@ export interface DescriptionCardProps {
   showToast: (props: { message: string; type: 'success' | 'error' | 'info' | 'warning' }) => void;
   onUpdate: (data: Partial<Page>) => void;
   onRegenerate: () => void;
+  onDelete?: () => void;
+  isGenerating?: boolean;
   isAiRefining?: boolean;
 }
 
@@ -61,6 +63,8 @@ export const DescriptionCard: React.FC<DescriptionCardProps> = React.memo(({
   showToast,
   onUpdate,
   onRegenerate,
+  onDelete,
+  isGenerating = false,
   isAiRefining = false,
 }) => {
   const t = useT(descriptionCardI18n);
@@ -84,7 +88,7 @@ export const DescriptionCard: React.FC<DescriptionCardProps> = React.memo(({
   });
 
   // 通过 page.status 驱动骨架屏，与图片生成的 GENERATING 状态互不干扰
-  const generating = useDescriptionGeneratingState(page, isAiRefining);
+  const generating = isGenerating || useDescriptionGeneratingState(page, isAiRefining);
 
   const handleEdit = () => {
     // 在打开编辑对话框时，从当前的 page 获取最新值
@@ -154,6 +158,17 @@ export const DescriptionCard: React.FC<DescriptionCardProps> = React.memo(({
 
         {/* 操作栏 */}
         <div className="border-t border-gray-100 dark:border-border-primary px-4 py-3 flex justify-end gap-2 mt-auto">
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Trash2 size={16} />}
+              onClick={onDelete}
+              disabled={generating}
+            >
+              {t('common.delete')}
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"

@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, FileText, Sparkles, Download, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, FileText, Sparkles, Download, Upload, Plus } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 
 // 组件内翻译
@@ -13,7 +13,8 @@ const detailI18n = {
       description: "描述", batchGenerate: "批量生成描述", export: "导出描述", exportFull: "导出大纲+描述", import: "导入",
       coverEndingInfo: "封面/结尾信息",
       pagesCompleted: "页已完成", noPages: "还没有页面",
-      noPagesHint: "请先返回大纲编辑页添加页面", backToOutline: "返回大纲编辑",
+      noPagesHint: "可直接在本页添加页面，或返回大纲页继续编辑", backToOutline: "返回大纲编辑",
+      addFirstPage: "添加第一页", insertAfterPage: "在此页后新增页面",
       aiPlaceholder: "例如：让描述更详细、删除第2页的某个要点、强调XXX的重要性... · Ctrl+Enter提交",
       aiPlaceholderShort: "例如：让描述更详细... · Ctrl+Enter",
       renovationProcessing: "正在解析页面内容...",
@@ -29,7 +30,7 @@ const detailI18n = {
         confirmRenovationRegenerate: "您现在是 PPT 翻新模式，重新生成会依照原 PPT 相同页码页面，重新解析并生成该页的大纲和描述，覆盖已有内容。确定要继续吗？",
         confirmRenovationRegenerateTitle: "重新解析此页",
         refineSuccess: "页面描述修改成功", refineFailed: "修改失败，请稍后重试",
-        exportSuccess: "导出成功", importSuccess: "导入成功", importFailed: "导入失败，请检查文件格式", importEmpty: "文件中未找到有效页面",
+        exportSuccess: "导出成功", importSuccess: "导入成功", importFailed: "导入失败，请检查文件格式", importEmpty: "文件中未找到有效页面", deleteFailed: "删除页面失败",
         loadingProject: "加载项目中..."
       }
     }
@@ -42,7 +43,8 @@ const detailI18n = {
       description: "Description", batchGenerate: "Batch Generate Descriptions", export: "Export Descriptions", exportFull: "Export Outline+Descriptions", import: "Import",
       coverEndingInfo: "Cover/Ending Info",
       pagesCompleted: "pages completed", noPages: "No pages yet",
-      noPagesHint: "Please go back to outline editor to add pages first", backToOutline: "Back to Outline Editor",
+      noPagesHint: "You can add pages directly here, or go back to outline editor", backToOutline: "Back to Outline Editor",
+      addFirstPage: "Add First Page", insertAfterPage: "Insert page after this one",
       aiPlaceholder: "e.g., Make descriptions more detailed, remove a point from page 2, emphasize XXX... · Ctrl+Enter to submit",
       aiPlaceholderShort: "e.g., Make descriptions more detailed... · Ctrl+Enter",
       renovationProcessing: "Parsing page content...",
@@ -58,7 +60,7 @@ const detailI18n = {
         confirmRenovationRegenerate: "You are in PPT renovation mode. Regenerating will re-parse the original PDF page and regenerate the outline and description, overwriting existing content. Continue?",
         confirmRenovationRegenerateTitle: "Re-parse This Page",
         refineSuccess: "Descriptions modified successfully", refineFailed: "Modification failed, please try again",
-        exportSuccess: "Export successful", importSuccess: "Import successful", importFailed: "Import failed, please check file format", importEmpty: "No valid pages found in file",
+        exportSuccess: "Export successful", importSuccess: "Import successful", importFailed: "Import failed, please check file format", importEmpty: "No valid pages found in file", deleteFailed: "Failed to delete page",
         loadingProject: "Loading project..."
       }
     }
@@ -69,7 +71,7 @@ import { DescriptionCard } from '@/components/preview/DescriptionCard';
 import { useProjectStore } from '@/store/useProjectStore';
 import { refineDescriptions, getTaskStatus, addPage, detectCoverEndingFields, updateProject, updatePageDescription } from '@/api/endpoints';
 import { exportProjectToMarkdown, parseMarkdownPages, getDescriptionText, applyPresentationMetaToDescription, parsePresentationMeta } from '@/utils/projectUtils';
-import type { CoverEndingFieldDetect, PresentationMeta } from '@/types';
+import type { CoverEndingFieldDetect, PresentationMeta, Page } from '@/types';
 
 export const DetailEditor: React.FC = () => {
   const navigate = useNavigate();
@@ -82,6 +84,8 @@ export const DetailEditor: React.FC = () => {
     currentProject,
     syncProject,
     updatePageLocal,
+    insertPageAt,
+    deletePageById,
     generateDescriptions,
     generatePageDescription,
     regenerateRenovationPage,
@@ -439,6 +443,20 @@ export const DetailEditor: React.FC = () => {
     setCoverEndingModalMode('missing');
   };
 
+  const handleInsertPageAfter = useCallback(async (page?: Page, index = -1) => {
+    const order = page && Number.isFinite(page.order_index)
+      ? (page.order_index as number) + 1
+      : Math.max(0, index + 1);
+    await insertPageAt(order);
+  }, [insertPageAt]);
+
+  const handleDeletePage = useCallback(async (pageId: string) => {
+    const ok = await deletePageById(pageId);
+    if (!ok) {
+      show({ message: t('detail.messages.deleteFailed'), type: 'error' });
+    }
+  }, [deletePageById, show, t]);
+
   const handleGenerateImages = async () => {
     if (!currentProject || !projectId) return;
     const sortedPages = getSortedPages();
@@ -673,8 +691,16 @@ export const DetailEditor: React.FC = () => {
               </p>
               <Button
                 variant="primary"
-                onClick={() => navigate(`/project/${projectId}/outline`)}
+                icon={<Plus size={16} />}
+                onClick={() => handleInsertPageAfter(undefined, -1)}
                 className="text-sm md:text-base"
+              >
+                {t('detail.addFirstPage')}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => navigate(`/project/${projectId}/outline`)}
+                className="text-sm md:text-base mt-2"
               >
                 {t('detail.backToOutline')}
               </Button>
@@ -691,10 +717,10 @@ export const DetailEditor: React.FC = () => {
                     projectId={currentProject.id}
                     showToast={show}
                     onUpdate={() => {}}
-                    onRegenerate={() => {}}
-                    isGenerating={true}
-                    isAiRefining={false}
-                  />
+                      onRegenerate={() => {}}
+                      isGenerating={true}
+                      isAiRefining={false}
+                    />
                 ))
               ) : (
                 currentProject.pages.map((page, index) => {
@@ -706,17 +732,28 @@ export const DetailEditor: React.FC = () => {
                 );
                 const pageIsGenerating = isRenovationProcessing && !hasDescription;
                 return (
-                  <DescriptionCard
-                    key={pageId}
-                    page={page}
-                    index={index}
-                    projectId={currentProject.id}
-                    showToast={show}
-                    onUpdate={(data) => updatePageLocal(pageId, data)}
-                    onRegenerate={() => stableHandleRegeneratePage(pageId)}
-                    isGenerating={pageIsGenerating || (pageId ? !!pageGeneratingTasks?.[pageId] : false)}
-                    isAiRefining={isAiRefining}
-                  />
+                  <div key={pageId} className="relative group">
+                    <DescriptionCard
+                      page={page}
+                      index={index}
+                      projectId={currentProject.id}
+                      showToast={show}
+                      onUpdate={(data) => updatePageLocal(pageId, data)}
+                      onRegenerate={() => stableHandleRegeneratePage(pageId)}
+                      onDelete={() => handleDeletePage(pageId)}
+                      isGenerating={pageIsGenerating || (pageId ? !!pageGeneratingTasks?.[pageId] : false)}
+                      isAiRefining={isAiRefining}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleInsertPageAfter(page, index)}
+                      title={t('detail.insertAfterPage')}
+                      aria-label={t('detail.insertAfterPage')}
+                      className="hidden sm:inline-flex absolute right-[-14px] top-1/2 -translate-y-1/2 z-20 h-8 w-8 items-center justify-center rounded-full border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-secondary shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity hover:bg-banana-50 dark:hover:bg-background-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-400"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
                 );
               })
               )}

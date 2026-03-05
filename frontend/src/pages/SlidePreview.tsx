@@ -32,7 +32,7 @@ const previewI18n = {
       projectSettings: "项目设置", changeTemplate: "更换模板", refresh: "刷新",
       batchGenerate: "批量生成图片 ({{count}})", generateSelected: "生成选中页面 ({{count}})",
       multiSelect: "多选", cancelMultiSelect: "取消多选", pagesUnit: "页",
-      noPages: "还没有页面", noPagesHint: "请先返回编辑页面添加内容", backToEdit: "返回编辑",
+      noPages: "还没有页面", noPagesHint: "可直接在本页添加页面，或返回编辑页继续完善内容", backToEdit: "返回编辑",
       generating: "正在生成中...", notGenerated: "尚未生成图片", generateThisPage: "生成此页",
       prevPage: "上一页", nextPage: "下一页", historyVersions: "历史版本",
       fullscreen: "全屏查看", exitFullscreen: "退出全屏",
@@ -49,6 +49,11 @@ const previewI18n = {
       saveOutlineOnly: "仅保存大纲/描述", generateImage: "生成图片",
       collapseSidebar: "收起左侧导航",
       expandSidebar: "展开左侧导航",
+      addPage: "添加页面",
+      addFirstPage: "添加第一页",
+      insertAfterPage: "在此页后新增页面",
+      addPageFailed: "新增页面失败",
+      sidebarView: { list: "列表", grid: "网格" },
       templateModalDesc: "选择一个新的模板将应用到后续PPT页面生成（不影响已经生成的页面）。你可以选择预设模板、已有模板或上传新模板。",
       useTextStyle: "使用文字描述风格",
       applyStyle: "应用风格",
@@ -112,7 +117,7 @@ const previewI18n = {
       projectSettings: "Project Settings", changeTemplate: "Change Template", refresh: "Refresh",
       batchGenerate: "Batch Generate Images ({{count}})", generateSelected: "Generate Selected ({{count}})",
       multiSelect: "Multi-select", cancelMultiSelect: "Cancel Multi-select", pagesUnit: " pages",
-      noPages: "No pages yet", noPagesHint: "Please go back to editor to add content first", backToEdit: "Back to Editor",
+      noPages: "No pages yet", noPagesHint: "You can add pages directly here, or go back to editor", backToEdit: "Back to Editor",
       generating: "Generating...", notGenerated: "Image not generated yet", generateThisPage: "Generate This Page",
       prevPage: "Previous", nextPage: "Next", historyVersions: "History Versions",
       fullscreen: "Fullscreen", exitFullscreen: "Exit Fullscreen",
@@ -129,6 +134,11 @@ const previewI18n = {
       saveOutlineOnly: "Save Outline/Description Only", generateImage: "Generate Image",
       collapseSidebar: "Collapse sidebar",
       expandSidebar: "Expand sidebar",
+      addPage: "Add Page",
+      addFirstPage: "Add First Page",
+      insertAfterPage: "Insert page after this one",
+      addPageFailed: "Failed to add page",
+      sidebarView: { list: "List", grid: "Grid" },
       templateModalDesc: "Selecting a new template will apply to future PPT page generation (won't affect already generated pages). You can choose preset templates, existing templates, or upload a new one.",
       useTextStyle: "Use text description for style",
       applyStyle: "Apply Style",
@@ -189,6 +199,9 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
+  Plus,
+  List,
+  LayoutGrid,
 } from 'lucide-react';
 import { Button, Loading, Modal, Textarea, useToast, useConfirm, MaterialSelector, ProjectSettingsModal, ExportTasksPanel, TextStyleSelector, StyleWorkflowPanel } from '@/components/shared';
 import { MaterialGeneratorModal } from '@/components/shared/MaterialGeneratorModal';
@@ -231,6 +244,7 @@ export const SlidePreview: React.FC = () => {
     editPageImage,
     deletePageById,
     updatePageLocal,
+    insertPageAt,
     isGlobalLoading,
     taskProgress,
     pageGeneratingTasks,
@@ -264,6 +278,14 @@ export const SlidePreview: React.FC = () => {
   const [drawerWidthPct, setDrawerWidthPct] = useState(0.4);
   const [isResizingDrawer, setIsResizingDrawer] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [sidebarViewMode, setSidebarViewMode] = useState<'list' | 'grid'>(() => {
+    try {
+      const stored = localStorage.getItem('previewSidebarViewMode');
+      return stored === 'grid' ? 'grid' : 'list';
+    } catch {
+      return 'list';
+    }
+  });
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [sidebarWidthPxExpanded, setSidebarWidthPxExpanded] = useState(sidebarDefaultWidth);
   const resizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -331,8 +353,16 @@ export const SlidePreview: React.FC = () => {
   );
   const sidebarCollapsedWidth = 72;
   const sidebarMinWidth = sidebarCollapsedWidth;
-  const sidebarMaxWidth = Math.min(520, Math.round(viewportWidth * 0.5));
+  const sidebarMaxWidth = Math.round(viewportWidth * (2 / 3));
   const sidebarWidthPx = isSidebarCollapsed ? sidebarCollapsedWidth : sidebarWidthPxExpanded;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('previewSidebarViewMode', sidebarViewMode);
+    } catch {
+      // ignore storage errors
+    }
+  }, [sidebarViewMode]);
 
   useEffect(() => {
     if (!viewportWidth) return;
@@ -619,6 +649,18 @@ export const SlidePreview: React.FC = () => {
       show({ message: t('preview.deleteFailed'), type: 'error' });
     }
   }, [deletePageById, show, t]);
+
+  const handleInsertPageAfter = useCallback(async (targetPage?: Page | null, fallbackIndex = -1) => {
+    const insertOrderIndex = targetPage && Number.isFinite(targetPage.order_index)
+      ? (targetPage.order_index as number) + 1
+      : Math.max(0, fallbackIndex + 1);
+    const inserted = await insertPageAt(insertOrderIndex);
+    if (!inserted) {
+      show({ message: t('preview.addPageFailed'), type: 'error' });
+      return;
+    }
+    setSelectedIndex(Math.max(0, fallbackIndex + 1));
+  }, [insertPageAt, show, t]);
 
   // Memoize pages with generated images to avoid re-computing in multiple places
   const pagesWithImages = useMemo(() => {
@@ -1764,6 +1806,7 @@ export const SlidePreview: React.FC = () => {
     (p) => p.generated_image_path || p.preview_image_path
   );
   const isSidebarCompact = !isMobileView && !isSidebarCollapsed && sidebarWidthPx <= 200;
+  const isSidebarGridMode = !isSidebarCompact && sidebarViewMode === 'grid';
   const generateButtonText =
     isMultiSelectMode && selectedPageIds.size > 0
       ? t('preview.generateSelected', { count: selectedPageIds.size })
@@ -2283,7 +2326,7 @@ export const SlidePreview: React.FC = () => {
         >
           {!isMobileView && (
             <div
-              className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-banana-100/60"
+              className="absolute -right-2 top-0 h-full w-3 cursor-col-resize bg-transparent hover:bg-banana-100/60 z-20"
               onMouseDown={handleSidebarResizeStart}
             />
           )}
@@ -2335,7 +2378,39 @@ export const SlidePreview: React.FC = () => {
                 disabled={isGenerateDisabled}
               >
                 {generateButtonText}
-              </Button>
+                </Button>
+              )}
+            {!isSidebarCollapsed && !isSidebarCompact && !isMobileView && (
+              <div className="inline-flex w-full rounded-lg border border-gray-200 dark:border-border-primary overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setSidebarViewMode('list')}
+                  className={`flex-1 h-8 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors ${
+                    sidebarViewMode === 'list'
+                      ? 'bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
+                      : 'bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
+                  }`}
+                  title={t('preview.sidebarView.list')}
+                  aria-label={t('preview.sidebarView.list')}
+                >
+                  <List size={14} />
+                  <span>{t('preview.sidebarView.list')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSidebarViewMode('grid')}
+                  className={`flex-1 h-8 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors border-l border-gray-200 dark:border-border-primary ${
+                    sidebarViewMode === 'grid'
+                      ? 'bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
+                      : 'bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
+                  }`}
+                  title={t('preview.sidebarView.grid')}
+                  aria-label={t('preview.sidebarView.grid')}
+                >
+                  <LayoutGrid size={14} />
+                  <span>{t('preview.sidebarView.grid')}</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -2373,147 +2448,235 @@ export const SlidePreview: React.FC = () => {
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="flex-1 overflow-y-auto md:overflow-y-auto overflow-x-auto md:overflow-x-visible p-3 md:p-4 min-h-0">
-              {/* 多选模式切换 - 紧凑布局 */}
-              <div className="flex items-center gap-2 text-xs mb-3">
-                {isSidebarCompact ? (
-                  <button
-                    onClick={toggleMultiSelectMode}
-                    title={isMultiSelectMode ? t('preview.cancelMultiSelect') : t('preview.multiSelect')}
-                    className={`w-8 h-8 rounded transition-colors inline-flex items-center justify-center ${
-                      isMultiSelectMode
-                        ? 'bg-banana-100 text-banana-700 hover:bg-banana-200'
-                        : 'text-gray-500 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover'
-                    }`}
-                  >
-                    {isMultiSelectMode ? <CheckSquare size={16} /> : <Square size={16} />}
-                  </button>
-                ) : (
-                  <button
-                    onClick={toggleMultiSelectMode}
-                    className={`px-2 py-1 rounded transition-colors flex items-center gap-1 ${
-                      isMultiSelectMode
-                        ? 'bg-banana-100 text-banana-700 hover:bg-banana-200'
-                        : 'text-gray-500 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover'
-                    }`}
-                  >
-                    {isMultiSelectMode ? <CheckSquare size={14} /> : <Square size={14} />}
-                    <span>{isMultiSelectMode ? t('preview.cancelMultiSelect') : t('preview.multiSelect')}</span>
-                  </button>
-                )}
-                {isMultiSelectMode && !isSidebarCompact && (
-                  <>
-                    <button
-                      onClick={selectedPageIds.size === pagesWithImages.length ? deselectAllPages : selectAllPages}
-                      className="text-gray-500 dark:text-foreground-tertiary hover:text-banana-600 transition-colors"
-                    >
-                      {selectedPageIds.size === pagesWithImages.length ? t('common.deselectAll') : t('common.selectAll')}
-                    </button>
-                    {selectedPageIds.size > 0 && (
-                      <span className="text-banana-600 font-medium">
-                        ({selectedPageIds.size}{t('preview.pagesUnit')})
-                      </span>
-                    )}
-                  </>
-                )}
-                {isMultiSelectMode && isSidebarCompact && selectedPageIds.size > 0 && (
-                  <span className="text-banana-600 font-medium">
-                    {selectedPageIds.size}
-                  </span>
-                )}
-              </div>
-              <div className="flex md:flex-col gap-2 md:gap-4 min-w-max md:min-w-0">
-                {currentProject.pages.map((page, index) => (
-                  <div key={page.id} className="md:w-full flex-shrink-0 relative">
-                    {/* 移动端：简化缩略图 */}
-                    <div className="md:hidden relative">
-                      <button
-                        onClick={() => {
-                          if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
-                            togglePageSelection(page.id);
-                          } else {
-                            setSelectedIndex(index);
-                          }
-                        }}
-                        className={`w-20 h-14 rounded border-2 transition-all ${
-                          selectedIndex === index
-                            ? 'border-banana-500 shadow-md'
-                            : 'border-gray-200 dark:border-border-primary'
-                        } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
-                      >
-                        {(page.preview_image_path || page.generated_image_path) ? (
-                          <img
-                            src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
-                            alt={`Slide ${index + 1}`}
-                            className="w-full h-full object-cover rounded"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gray-100 dark:bg-background-secondary rounded flex items-center justify-center text-xs text-gray-400">
-                            {index + 1}
-                          </div>
-                        )}
-                      </button>
-                      {/* 多选复选框（移动端） */}
-                      {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            togglePageSelection(page.id!);
-                          }}
-                          className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center transition-all ${
-                            selectedPageIds.has(page.id)
-                              ? 'bg-banana-500 text-white'
-                              : 'bg-white dark:bg-background-secondary border-2 border-gray-300 dark:border-border-primary'
-                          }`}
-                        >
-                          {selectedPageIds.has(page.id) && <Check size={12} />}
-                        </button>
-                      )}
-                    </div>
-                    {/* 桌面端：完整卡片 */}
-                    <div className="hidden md:block relative">
-                      {/* 多选复选框（桌面端） */}
-                      {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            togglePageSelection(page.id!);
-                          }}
-                        className={`absolute top-2 right-2 z-10 w-6 h-6 rounded flex items-center justify-center transition-all ${
-                          selectedPageIds.has(page.id)
-                            ? 'bg-banana-500 text-white shadow-md'
-                            : 'bg-white/90 border-2 border-gray-300 dark:border-border-primary hover:border-banana-400'
-                        }`}
-                        >
-                          {selectedPageIds.has(page.id) && <Check size={14} />}
-                        </button>
-                      )}
-                      <SlideCard
-                        page={page}
-                        index={index}
-                        isSelected={selectedIndex === index}
-                        onClick={() => {
-                          if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
-                            togglePageSelection(page.id);
-                          } else {
-                            setSelectedIndex(index);
-                          }
-                        }}
-                        onEdit={() => {
-                          setSelectedIndex(index);
-                          handleEditPage();
-                        }}
-                        onDelete={() => handleDeletePage(page)}
-                        isGenerating={page.id ? isPageGenerating(page) : false}
-                        aspectRatio={aspectRatio}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+	          ) : (
+	            <div className="flex-1 overflow-y-auto md:overflow-y-auto overflow-x-auto md:overflow-x-visible p-3 md:p-4 min-h-0">
+	              <div className="flex items-center gap-2 text-xs mb-3">
+	                  {isSidebarCompact ? (
+	                    <button
+	                      onClick={toggleMultiSelectMode}
+	                      title={isMultiSelectMode ? t('preview.cancelMultiSelect') : t('preview.multiSelect')}
+	                      className={`w-8 h-8 rounded transition-colors inline-flex items-center justify-center ${
+	                        isMultiSelectMode
+	                          ? 'bg-banana-100 text-banana-700 hover:bg-banana-200'
+	                          : 'text-gray-500 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover'
+	                      }`}
+	                    >
+	                      {isMultiSelectMode ? <CheckSquare size={16} /> : <Square size={16} />}
+	                    </button>
+	                  ) : (
+	                    <button
+	                      onClick={toggleMultiSelectMode}
+	                      className={`px-2 py-1 rounded transition-colors flex items-center gap-1 ${
+	                        isMultiSelectMode
+	                          ? 'bg-banana-100 text-banana-700 hover:bg-banana-200'
+	                          : 'text-gray-500 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover'
+	                      }`}
+	                    >
+	                      {isMultiSelectMode ? <CheckSquare size={14} /> : <Square size={14} />}
+	                      <span>{isMultiSelectMode ? t('preview.cancelMultiSelect') : t('preview.multiSelect')}</span>
+	                    </button>
+	                  )}
+	                  {isMultiSelectMode && !isSidebarCompact && (
+	                    <>
+	                      <button
+	                        onClick={selectedPageIds.size === pagesWithImages.length ? deselectAllPages : selectAllPages}
+	                        className="text-gray-500 dark:text-foreground-tertiary hover:text-banana-600 transition-colors"
+	                      >
+	                        {selectedPageIds.size === pagesWithImages.length ? t('common.deselectAll') : t('common.selectAll')}
+	                      </button>
+	                      {selectedPageIds.size > 0 && (
+	                        <span className="text-banana-600 font-medium">
+	                          ({selectedPageIds.size}{t('preview.pagesUnit')})
+	                        </span>
+	                      )}
+	                    </>
+	                  )}
+	                  {isMultiSelectMode && isSidebarCompact && selectedPageIds.size > 0 && (
+	                    <span className="text-banana-600 font-medium">
+	                      {selectedPageIds.size}
+	                    </span>
+	                  )}
+	              </div>
+	              {isSidebarGridMode ? (
+	                <div className="grid grid-cols-2 gap-3">
+	                  {currentProject.pages.map((page, index) => (
+	                    <div key={page.id || `grid-${index}`} className="relative group">
+	                      <button
+	                        onClick={() => {
+	                          if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
+	                            togglePageSelection(page.id);
+	                          } else {
+	                            setSelectedIndex(index);
+	                          }
+	                        }}
+	                        className={`w-full rounded-lg border-2 overflow-hidden bg-white dark:bg-background-secondary transition-all ${
+	                          selectedIndex === index
+	                            ? 'border-banana-500 shadow-md'
+	                            : 'border-gray-200 dark:border-border-primary hover:border-banana-300'
+	                        } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
+	                      >
+	                        <div className="text-xs font-medium px-2 py-1 border-b border-gray-100 dark:border-border-primary text-left text-gray-600 dark:text-foreground-tertiary">
+	                          {t('preview.page', { num: index + 1 })}
+	                        </div>
+	                        <div className="aspect-video bg-gray-100 dark:bg-background-primary">
+	                          {(page.preview_image_path || page.generated_image_path) ? (
+	                            <img
+	                              src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
+	                              alt={`Slide ${index + 1}`}
+	                              className="w-full h-full object-cover"
+	                            />
+	                          ) : (
+	                            <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">
+	                              {index + 1}
+	                            </div>
+	                          )}
+	                        </div>
+	                      </button>
+		                      {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
+		                        <button
+	                          onClick={(e) => {
+	                            e.stopPropagation();
+	                            togglePageSelection(page.id!);
+	                          }}
+	                          className={`absolute top-2 right-2 z-10 w-5 h-5 rounded flex items-center justify-center transition-all ${
+	                            selectedPageIds.has(page.id)
+	                              ? 'bg-banana-500 text-white shadow-md'
+	                              : 'bg-white/90 border border-gray-300 dark:border-border-primary'
+	                          }`}
+	                        >
+	                          {selectedPageIds.has(page.id) && <Check size={12} />}
+		                        </button>
+		                      )}
+		                      <button
+		                        type="button"
+		                        onClick={(e) => {
+		                          e.stopPropagation();
+		                          void handleDeletePage(page);
+		                        }}
+		                        className="absolute top-2 left-2 z-10 w-5 h-5 rounded flex items-center justify-center bg-white/90 border border-gray-200 dark:border-border-primary text-red-600 hover:bg-red-50"
+		                        title={t('common.delete')}
+		                        aria-label={t('common.delete')}
+		                      >
+		                        <X size={12} />
+		                      </button>
+		                      <button
+		                        type="button"
+		                        onClick={(e) => {
+	                          e.stopPropagation();
+	                          void handleInsertPageAfter(page, index);
+	                        }}
+	                        title={t('preview.insertAfterPage')}
+	                        aria-label={t('preview.insertAfterPage')}
+	                        className="absolute -right-3 top-1/2 -translate-y-1/2 z-20 h-7 w-7 hidden md:inline-flex items-center justify-center rounded-full border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-secondary shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity hover:bg-banana-50 dark:hover:bg-background-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-400"
+	                      >
+	                        <Plus size={13} />
+	                      </button>
+	                    </div>
+	                  ))}
+	                </div>
+	              ) : (
+	                <div className="flex md:flex-col gap-2 md:gap-4 min-w-max md:min-w-0">
+	                  {currentProject.pages.map((page, index) => (
+	                    <div key={page.id || `list-${index}`} className="md:w-full flex-shrink-0 relative md:group">
+	                      {/* 移动端：简化缩略图 */}
+	                      <div className="md:hidden relative">
+	                        <button
+	                          onClick={() => {
+	                            if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
+	                              togglePageSelection(page.id);
+	                            } else {
+	                              setSelectedIndex(index);
+	                            }
+	                          }}
+	                          className={`w-20 h-14 rounded border-2 transition-all ${
+	                            selectedIndex === index
+	                              ? 'border-banana-500 shadow-md'
+	                              : 'border-gray-200 dark:border-border-primary'
+	                          } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
+	                        >
+	                          {(page.preview_image_path || page.generated_image_path) ? (
+	                            <img
+	                              src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
+	                              alt={`Slide ${index + 1}`}
+	                              className="w-full h-full object-cover rounded"
+	                            />
+	                          ) : (
+	                            <div className="w-full h-full bg-gray-100 dark:bg-background-secondary rounded flex items-center justify-center text-xs text-gray-400">
+	                              {index + 1}
+	                            </div>
+	                          )}
+	                        </button>
+	                        {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
+	                          <button
+	                            onClick={(e) => {
+	                              e.stopPropagation();
+	                              togglePageSelection(page.id!);
+	                            }}
+	                            className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+	                              selectedPageIds.has(page.id)
+	                                ? 'bg-banana-500 text-white'
+	                                : 'bg-white dark:bg-background-secondary border-2 border-gray-300 dark:border-border-primary'
+	                            }`}
+	                          >
+	                            {selectedPageIds.has(page.id) && <Check size={12} />}
+	                          </button>
+	                        )}
+	                      </div>
+	                      {/* 桌面端：完整卡片 */}
+	                      <div className="hidden md:block relative">
+	                        {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
+	                          <button
+	                            onClick={(e) => {
+	                              e.stopPropagation();
+	                              togglePageSelection(page.id!);
+	                            }}
+	                            className={`absolute top-2 right-2 z-10 w-6 h-6 rounded flex items-center justify-center transition-all ${
+	                              selectedPageIds.has(page.id)
+	                                ? 'bg-banana-500 text-white shadow-md'
+	                                : 'bg-white/90 border-2 border-gray-300 dark:border-border-primary hover:border-banana-400'
+	                            }`}
+	                          >
+	                            {selectedPageIds.has(page.id) && <Check size={14} />}
+	                          </button>
+	                        )}
+	                        <SlideCard
+	                          page={page}
+	                          index={index}
+	                          isSelected={selectedIndex === index}
+	                          onClick={() => {
+	                            if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
+	                              togglePageSelection(page.id);
+	                            } else {
+	                              setSelectedIndex(index);
+	                            }
+	                          }}
+	                          onEdit={() => {
+	                            setSelectedIndex(index);
+	                            handleEditPage();
+	                          }}
+	                          onDelete={() => handleDeletePage(page)}
+	                          isGenerating={page.id ? isPageGenerating(page) : false}
+	                          aspectRatio={aspectRatio}
+	                        />
+	                        <button
+	                          type="button"
+	                          onClick={(e) => {
+	                            e.stopPropagation();
+	                            void handleInsertPageAfter(page, index);
+	                          }}
+	                          title={t('preview.insertAfterPage')}
+	                          aria-label={t('preview.insertAfterPage')}
+	                          className="absolute left-1/2 -bottom-3 -translate-x-1/2 z-20 h-7 w-7 hidden md:inline-flex items-center justify-center rounded-full border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-secondary shadow-sm hover:bg-banana-50 dark:hover:bg-background-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-400"
+	                        >
+	                          <Plus size={13} />
+	                        </button>
+	                      </div>
+	                    </div>
+	                  ))}
+	                </div>
+	              )}
+	            </div>
+	          )}
         </aside>
 
         {/* 右侧：大图预览 */}
@@ -2528,15 +2691,23 @@ export const SlidePreview: React.FC = () => {
                 <p className="text-sm md:text-base text-gray-500 dark:text-foreground-tertiary mb-6">
                   {t('preview.noPagesHint')}
                 </p>
-                <Button
-                  variant="primary"
-                  onClick={() => navigate(`/project/${projectId}/outline`)}
-                  className="text-sm md:text-base"
-                >
-                  {t('preview.backToEdit')}
-                </Button>
-              </div>
-            </div>
+	                <Button
+	                  variant="primary"
+	                  icon={<Plus size={16} />}
+	                  onClick={() => void handleInsertPageAfter(undefined, -1)}
+	                  className="text-sm md:text-base"
+	                >
+	                  {t('preview.addFirstPage')}
+	                </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => navigate(`/project/${projectId}/outline`)}
+                    className="text-sm md:text-base mt-2"
+                  >
+                    {t('preview.backToEdit')}
+                  </Button>
+	              </div>
+	            </div>
           ) : (
             <>
               {/* 预览区 */}
@@ -2737,14 +2908,12 @@ export const SlidePreview: React.FC = () => {
                         )}
                       </div>
                     )}
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleEditPage}
-                      disabled={!(selectedPage?.generated_image_path || selectedPage?.preview_image_path)}
-                      title={!(selectedPage?.generated_image_path || selectedPage?.preview_image_path) ? t('preview.disabledEditTip') : undefined}
-                      className="text-xs md:text-sm flex-1 sm:flex-initial"
-                    >
+	                    <Button
+	                      variant="secondary"
+	                      size="sm"
+	                      onClick={handleEditPage}
+	                      className="text-xs md:text-sm flex-1 sm:flex-initial"
+	                    >
                       {t('common.edit')}
                     </Button>
                     <Button

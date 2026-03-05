@@ -53,6 +53,7 @@ export const SlideCard: React.FC<SlideCardProps> = ({
   const imageUrl = (page.preview_image_path || page.generated_image_path)
     ? getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)
     : '';
+  const hasImage = Boolean(page.preview_image_path || page.generated_image_path);
   
   const generating = isGenerating || page.status === 'QUEUED' || page.status === 'GENERATING';
 
@@ -70,6 +71,24 @@ export const SlideCard: React.FC<SlideCardProps> = ({
           isSelected ? 'bg-banana-500' : 'bg-transparent'
         }`}
       />
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          confirm(
+            t('slideCard.confirmDeletePage'),
+            onDelete,
+            { title: t('slideCard.confirmDeleteTitle'), variant: 'danger' }
+          );
+        }}
+        className={`absolute top-2 right-2 z-20 p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-red-600 transition-opacity hover:bg-red-50 ${
+          hasImage ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : 'opacity-100'
+        }`}
+        aria-label={t('slideCard.confirmDeleteTitle')}
+        title={t('slideCard.confirmDeleteTitle')}
+      >
+        <Trash2 size={16} />
+      </button>
 
       {/* 标题 */}
       <div className="flex items-start gap-2 pl-3">
@@ -125,21 +144,6 @@ export const SlideCard: React.FC<SlideCardProps> = ({
             />
             {/* 悬停操作 */}
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  confirm(
-                    t('slideCard.confirmDeletePage'),
-                    onDelete,
-                    { title: t('slideCard.confirmDeleteTitle'), variant: 'danger' }
-                  );
-                }}
-                className="absolute top-2 right-2 p-2 bg-white dark:bg-background-secondary rounded-lg hover:bg-red-50 transition-colors"
-                aria-label={t('slideCard.confirmDeleteTitle')}
-              >
-                <Trash2 size={18} className="text-red-600" />
-              </button>
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <button
                 type="button"

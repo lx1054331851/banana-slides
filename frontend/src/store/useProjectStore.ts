@@ -102,6 +102,7 @@ interface ProjectState {
   updatePageLocal: (pageId: string, data: any) => void;
   saveAllPages: () => Promise<void>;
   reorderPages: (newOrder: string[]) => Promise<void>;
+  insertPageAt: (orderIndex: number) => Promise<{ orderIndex: number } | null>;
   addNewPage: () => Promise<void>;
   deletePageById: (pageId: string) => Promise<boolean>;
   
@@ -479,24 +480,41 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     }
   },
 
-  // 添加新页面
-  addNewPage: async () => {
+  // 在指定位置插入新页面
+  insertPageAt: async (orderIndex) => {
     const { currentProject } = get();
-    if (!currentProject) return;
+    if (!currentProject) return null;
 
     try {
+      const normalizedIndex = Number.isFinite(orderIndex)
+        ? Math.max(0, Math.floor(orderIndex))
+        : currentProject.pages.length;
       const newPage = {
         outline_content: { title: t('store.newPage'), points: [] },
-        order_index: currentProject.pages.length,
+        order_index: normalizedIndex,
       };
 
       const response = await api.addPage(currentProject.id, newPage);
       if (response.data) {
         await get().syncProject();
+        return { orderIndex: normalizedIndex };
       }
+      return null;
     } catch (error: any) {
       set({ error: error.message || t('store.addPageFailed') });
+      return null;
     }
+  },
+
+  // 添加新页面
+  addNewPage: async () => {
+    const { currentProject, insertPageAt } = get();
+    if (!currentProject) return;
+    const nextOrderIndex = currentProject.pages.reduce(
+      (max, page) => Math.max(max, (page.order_index ?? 0) + 1),
+      0
+    );
+    await insertPageAt(nextOrderIndex);
   },
 
   // 删除页面
