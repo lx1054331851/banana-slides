@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React, { useState } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { TemplateSelector } from '@/components/shared/TemplateSelector';
 
 const { mockListUserTemplates, mockListStylePresets } = vi.hoisted(() => ({
@@ -52,8 +52,9 @@ describe('TemplateSelector', () => {
       expect(screen.getByText('Style 4')).toBeInTheDocument();
     });
 
-    expect(screen.queryByText('Style 5')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /更多|More/i }));
+    const styleGrid = screen.getByTestId('style-presets-grid');
+    expect(within(styleGrid).queryByText('Style 5')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('style-more-button'));
 
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument();

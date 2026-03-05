@@ -408,7 +408,7 @@ class FileService:
     def save_style_preset_preview_image_from_relative(self, source_relative_path: str,
                                                       preset_id: str, slide_type: str) -> str:
         """
-        Copy a generated style preview image into preset library directory.
+        Compress and save a generated style preview image into preset library directory.
 
         Args:
             source_relative_path: Relative path from upload folder
@@ -426,13 +426,27 @@ class FileService:
         if not source_full_path.exists() or not source_full_path.is_file():
             raise ValueError("Source preview image not found")
 
-        ext = source_full_path.suffix.lower() or ".png"
         run_id = uuid.uuid4().hex[:10]
-        filename = f"{safe_slide_type}_{run_id}{ext}"
         preset_dir = self._get_style_preset_dir(preset_id)
-        dest_full_path = preset_dir / filename
-        shutil.copy2(source_full_path, dest_full_path)
-        return dest_full_path.relative_to(self.upload_folder).as_posix()
+
+        try:
+            with Image.open(str(source_full_path)) as original_image:
+                image = resize_image_for_thumbnail(original_image, max_width=1600)
+                image = convert_image_to_rgb(image)
+
+                webp_filename = f"{safe_slide_type}_{run_id}.webp"
+                webp_path = preset_dir / webp_filename
+
+                try:
+                    image.save(str(webp_path), 'WEBP', quality=80, method=6)
+                    return webp_path.relative_to(self.upload_folder).as_posix()
+                except Exception:
+                    jpg_filename = f"{safe_slide_type}_{run_id}.jpg"
+                    jpg_path = preset_dir / jpg_filename
+                    image.save(str(jpg_path), 'JPEG', quality=82, optimize=True)
+                    return jpg_path.relative_to(self.upload_folder).as_posix()
+        except Exception as e:
+            raise ValueError(f"Source preview image decode/compress failed: {e}")
 
     def delete_style_preset_files(self, preset_id: str) -> bool:
         """

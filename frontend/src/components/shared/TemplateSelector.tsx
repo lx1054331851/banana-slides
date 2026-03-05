@@ -389,13 +389,25 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
         </div>
 
         <div>
-          <h4 className="text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">{t('template.styleTemplates')}</h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-medium text-gray-700 dark:text-foreground-secondary">{t('template.styleTemplates')}</h4>
+            {hasMoreStylePresets && (
+              <button
+                type="button"
+                data-testid="style-more-button"
+                onClick={() => setIsStylePresetModalOpen(true)}
+                className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-border-primary hover:border-banana-500 hover:text-banana-600 dark:hover:text-banana transition-colors"
+              >
+                {t('template.more')}
+              </button>
+            )}
+          </div>
           {isLoadingStylePresets ? (
             <div className="text-xs text-gray-500 dark:text-foreground-tertiary">Loading…</div>
           ) : stylePresets.length === 0 ? (
             <div className="text-xs text-gray-500 dark:text-foreground-tertiary">{t('template.noStyleTemplates')}</div>
           ) : (
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-4 gap-4" data-testid="style-presets-grid">
               {visibleStylePresets.map((preset) => {
                 const coverUrl = getStylePresetCover(preset);
                 const isSelected = selectedStylePresetId === preset.id;
@@ -403,7 +415,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                   <div
                     key={preset.id}
                     onClick={() => void handleSelectStylePreset(preset)}
-                    className={`aspect-[4/3] rounded-lg border-2 cursor-pointer transition-all bg-gray-100 dark:bg-background-secondary relative ${
+                    className={`aspect-[4/3] rounded-lg border-2 cursor-pointer transition-all bg-gray-100 dark:bg-background-secondary relative overflow-hidden flex items-center justify-center ${
                       isSelected
                         ? 'border-banana-500 ring-2 ring-banana-200'
                         : 'border-gray-200 dark:border-border-primary hover:border-banana-500'
@@ -413,7 +425,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                       <img
                         src={getImageUrl(coverUrl)}
                         alt={preset.name || 'Style Preset'}
-                        className="absolute inset-0 w-full h-full object-cover"
+                        className="w-full h-full object-contain object-center"
                       />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center p-2 text-xs text-gray-500 dark:text-foreground-tertiary text-center">
@@ -431,16 +443,6 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                   </div>
                 );
               })}
-
-              {hasMoreStylePresets && (
-                <button
-                  type="button"
-                  onClick={() => setIsStylePresetModalOpen(true)}
-                  className="aspect-[4/3] rounded-lg border-2 border-dashed border-gray-300 dark:border-border-primary hover:border-banana-500 transition-all flex items-center justify-center text-sm text-gray-600 dark:text-foreground-secondary"
-                >
-                  {t('template.more')}
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -479,7 +481,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                 type="button"
                 disabled={selectingStylePresetId === preset.id}
                 onClick={() => void handleSelectStylePreset(preset, true)}
-                className={`relative aspect-[4/3] rounded-lg border-2 overflow-hidden text-left transition-all ${
+                className={`relative aspect-[4/3] rounded-lg border-2 overflow-hidden text-left transition-all flex items-center justify-center bg-gray-100 dark:bg-background-secondary ${
                   isSelected
                     ? 'border-banana-500 ring-2 ring-banana-200'
                     : 'border-gray-200 dark:border-border-primary hover:border-banana-400'
@@ -489,7 +491,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                   <img
                     src={getImageUrl(coverUrl)}
                     alt={preset.name || 'Style Preset'}
-                    className="absolute inset-0 w-full h-full object-cover"
+                    className="w-full h-full object-contain object-center"
                   />
                 ) : (
                   <div className="absolute inset-0 bg-gray-100 dark:bg-background-secondary flex items-center justify-center p-2 text-xs text-gray-500 dark:text-foreground-tertiary text-center">

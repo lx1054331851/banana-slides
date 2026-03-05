@@ -21,6 +21,7 @@ const homeI18n = {
   zh: {
     nav: {
       materialGenerate: '素材生成', materialCenter: '素材中心',
+      styleLibrary: '风格模板管理',
       history: '历史项目', settings: '设置', help: '帮助'
     },
     settings: {
@@ -110,6 +111,7 @@ const homeI18n = {
   en: {
     nav: {
       materialGenerate: 'Generate Material', materialCenter: 'Material Center',
+      styleLibrary: 'Style Library',
       history: 'History', settings: 'Settings', help: 'Help'
     },
     settings: {
@@ -1059,6 +1061,15 @@ export const Home: React.FC = () => {
               className="sm:hidden hover:bg-banana-100/60 hover:shadow-sm hover:scale-105 transition-all duration-200"
               title={t('nav.materialCenter')}
             />
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Palette size={16} className="md:w-[18px] md:h-[18px]" />}
+              onClick={() => navigate('/style-library')}
+              className="text-xs md:text-sm hover:bg-banana-100/60 hover:shadow-sm hover:scale-105 transition-all duration-200 font-medium"
+            >
+              <span className="hidden md:inline">{t('nav.styleLibrary')}</span>
+            </Button>
             <Button
               variant="ghost"
               size="sm"

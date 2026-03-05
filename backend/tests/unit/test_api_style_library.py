@@ -1,4 +1,5 @@
 from pathlib import Path
+from PIL import Image
 
 
 def _create_source_preview(app, project_id: str, rec_id: str, filename: str = "cover.png") -> str:
@@ -6,7 +7,11 @@ def _create_source_preview(app, project_id: str, rec_id: str, filename: str = "c
     source_dir = upload_root / project_id / "style-previews" / rec_id
     source_dir.mkdir(parents=True, exist_ok=True)
     source_file = source_dir / filename
-    source_file.write_bytes(b"fake-image-bytes")
+    image = Image.new("RGB", (2400, 1350), color=(120, 180, 240))
+    try:
+        image.save(source_file, format="PNG")
+    finally:
+        image.close()
     return f"/files/{project_id}/style-previews/{rec_id}/{filename}"
 
 
@@ -33,14 +38,18 @@ def test_create_style_preset_with_preview_images(client, app):
     data = payload['data']
     assert data['id']
     preview_images = data.get('preview_images') or {}
-    assert preview_images.get('cover_url', '').startswith(f"/files/style-presets/{data['id']}/")
-    assert preview_images.get('toc_url', '').startswith(f"/files/style-presets/{data['id']}/")
-    assert preview_images.get('detail_url', '').startswith(f"/files/style-presets/{data['id']}/")
-    assert preview_images.get('ending_url', '').startswith(f"/files/style-presets/{data['id']}/")
+    for key in ('cover_url', 'toc_url', 'detail_url', 'ending_url'):
+        image_url = preview_images.get(key, '')
+        assert image_url.startswith(f"/files/style-presets/{data['id']}/")
+        assert image_url.endswith('.webp') or image_url.endswith('.jpg')
 
     preset_dir = Path(app.config['UPLOAD_FOLDER']) / "style-presets" / data['id']
     assert preset_dir.exists()
     assert len(list(preset_dir.glob("*"))) == 4
+    assert not (preset_dir / "cover.png").exists()
+    assert not (preset_dir / "toc.png").exists()
+    assert not (preset_dir / "detail.png").exists()
+    assert not (preset_dir / "ending.png").exists()
 
 
 def test_create_style_preset_rejects_invalid_preview_source(client):
