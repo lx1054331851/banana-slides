@@ -745,6 +745,12 @@ class AIService:
             )
 
         return descriptions
+
+    def _slides_to_page_descriptions_raw_json(self, slides: List[Dict]) -> List[str]:
+        """
+        将结构化 slides 直接按页转为原始 JSON 字符串（无字段展开、无语义压缩）。
+        """
+        return [json.dumps(slide, ensure_ascii=False, indent=2) for slide in slides]
     
     def generate_image_prompt(self, outline: List[Dict], page: Dict, 
                             page_desc: str, page_index: int, 
@@ -957,8 +963,12 @@ class AIService:
         """
         extracted_slides = self._try_extract_ppt_json_slides(project_context.description_text or "")
         if extracted_slides:
-            descriptions = self._slides_to_page_descriptions(extracted_slides)
-            logger.info(f"Detected structured PPT JSON in description_text, parsed page descriptions directly: {len(descriptions)} pages")
+            descriptions = self._slides_to_page_descriptions_raw_json(extracted_slides)
+            logger.info(
+                "Detected structured PPT JSON in description_text, parsed page descriptions via raw JSON passthrough: "
+                "description_json_passthrough=true, slides_count=%s",
+                len(descriptions),
+            )
             return descriptions
 
         split_prompt = get_description_split_prompt(project_context, outline, language)
