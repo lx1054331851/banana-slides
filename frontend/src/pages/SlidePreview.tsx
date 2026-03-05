@@ -241,6 +241,20 @@ import type { ImageVersion, DescriptionContent, ExportExtractorMethod, ExportInp
 import type { ProviderProfileSummary } from '@/api/endpoints';
 import { normalizeErrorMessage } from '@/utils';
 
+const PROJECT_DEFAULT_IMAGE_SOURCE = 'gemini';
+const PROJECT_SUPPORTED_IMAGE_MODELS = [
+  'gemini-3.1-flash-image-preview',
+  'gemini-3-pro-image-preview',
+] as const;
+const PROJECT_DEFAULT_IMAGE_MODEL = PROJECT_SUPPORTED_IMAGE_MODELS[0];
+
+const normalizeProjectDefaultImageModel = (value?: string): string => {
+  const model = String(value || '').trim();
+  return PROJECT_SUPPORTED_IMAGE_MODELS.includes(model as (typeof PROJECT_SUPPORTED_IMAGE_MODELS)[number])
+    ? model
+    : PROJECT_DEFAULT_IMAGE_MODEL;
+};
+
 export const SlidePreview: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -582,8 +596,8 @@ export const SlidePreview: React.FC = () => {
   const [providerProfiles, setProviderProfiles] = useState<ProviderProfileSummary[]>([]);
   const [overrideImageSource, setOverrideImageSource] = useState<string>('');
   const [overrideImageModel, setOverrideImageModel] = useState<string>('');
-  const [projectDefaultImageSource, setProjectDefaultImageSource] = useState<string>('');
-  const [projectDefaultImageModel, setProjectDefaultImageModel] = useState<string>('');
+  const [projectDefaultImageSource, setProjectDefaultImageSource] = useState<string>(PROJECT_DEFAULT_IMAGE_SOURCE);
+  const [projectDefaultImageModel, setProjectDefaultImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   // 根据画面比例计算 CSS aspect-ratio
   const aspectRatioStyle = useMemo(() => {
     const parts = aspectRatio.split(':');
@@ -881,8 +895,8 @@ export const SlidePreview: React.FC = () => {
         setExportCompressPngQuantizeEnabled(currentProject.export_compress_png_quantize_enabled || false);
         setAspectRatio(currentProject.image_aspect_ratio || '16:9');
         const imageDefaults = currentProject.generation_defaults?.image || {};
-        setProjectDefaultImageSource(imageDefaults.source || '');
-        setProjectDefaultImageModel(imageDefaults.model || '');
+        setProjectDefaultImageSource(PROJECT_DEFAULT_IMAGE_SOURCE);
+        setProjectDefaultImageModel(normalizeProjectDefaultImageModel(imageDefaults.model));
         lastProjectId.current = currentProject.id || null;
         isEditingRequirements.current = false;
         isEditingTemplateStyle.current = false;
@@ -904,8 +918,8 @@ export const SlidePreview: React.FC = () => {
         setExportCompressQuality(currentProject.export_compress_quality || 92);
         setExportCompressPngQuantizeEnabled(currentProject.export_compress_png_quantize_enabled || false);
         const imageDefaults = currentProject.generation_defaults?.image || {};
-        setProjectDefaultImageSource(imageDefaults.source || '');
-        setProjectDefaultImageModel(imageDefaults.model || '');
+        setProjectDefaultImageSource(PROJECT_DEFAULT_IMAGE_SOURCE);
+        setProjectDefaultImageModel(normalizeProjectDefaultImageModel(imageDefaults.model));
       }
       // 如果用户正在编辑，则不更新本地状态
     }
@@ -1684,10 +1698,11 @@ export const SlidePreview: React.FC = () => {
     if (!currentProject || !projectId) return;
     setIsSavingGenerationDefaults(true);
     try {
-      const imageDefaults: Record<string, string> = {};
-      if (projectDefaultImageSource.trim()) imageDefaults.source = projectDefaultImageSource.trim();
-      if (projectDefaultImageModel.trim()) imageDefaults.model = projectDefaultImageModel.trim();
-      const generationDefaults: GenerationOverride = Object.keys(imageDefaults).length ? { image: imageDefaults } : {};
+      const imageDefaults: Record<string, string> = {
+        source: PROJECT_DEFAULT_IMAGE_SOURCE,
+        model: normalizeProjectDefaultImageModel(projectDefaultImageModel),
+      };
+      const generationDefaults: GenerationOverride = { image: imageDefaults };
       await updateProject(projectId, { generation_defaults: generationDefaults });
       await syncProject(projectId);
       show({ message: '项目 AI 默认已保存', type: 'success' });
@@ -1699,7 +1714,7 @@ export const SlidePreview: React.FC = () => {
     } finally {
       setIsSavingGenerationDefaults(false);
     }
-  }, [currentProject, projectId, projectDefaultImageSource, projectDefaultImageModel, syncProject, show, t]);
+  }, [currentProject, projectId, projectDefaultImageModel, syncProject, show, t]);
 
   const handleSaveExportSettings = useCallback(async () => {
     if (!currentProject || !projectId) return;

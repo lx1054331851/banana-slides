@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { X, FileText, Download, Sparkles, AlertTriangle, HelpCircle } from 'lucide-react';
 import { Button, Textarea, Input } from '@/components/shared';
 import { useT } from '@/hooks/useT';
@@ -13,7 +13,7 @@ const projectSettingsI18n = {
       projectConfigTitle: "项目级配置", projectConfigDesc: "这些设置仅应用于当前项目，不影响其他项目",
       aspectRatio: "画面比例", aspectRatioDesc: "设置生成幻灯片图片的画面比例",
       aspectRatioLocked: "已生成图片的项目无法调整画面比例",
-      aspectRatioHelp: "部分模型仅支持特定的画面比例（如 16:9、4:3、1:1）。其中 gemini-3.1-flash-image-preview 额外支持 1:4、4:1、1:8、8:1。若生成报错，请切换到该模型支持的比例后重试。",
+      aspectRatioHelp: "gemini-3.1-flash-image-preview 支持全部画面比例；gemini-3-pro-image-preview 支持 1:1、2:3、3:2、3:4、4:3、4:5、5:4、9:16、16:9、21:9。若生成报错，请切换到该模型支持的比例后重试。",
       extraRequirements: "额外要求", extraRequirementsDesc: "在生成每个页面时，AI 会参考这些额外要求",
       extraRequirementsPlaceholder: "例如：使用紧凑的布局，顶部展示一级大纲标题，加入更丰富的PPT插图...",
       saveExtraRequirements: "保存额外要求",
@@ -59,7 +59,7 @@ const projectSettingsI18n = {
       projectConfigTitle: "Project-level Configuration", projectConfigDesc: "These settings only apply to the current project",
       aspectRatio: "Aspect Ratio", aspectRatioDesc: "Set the aspect ratio for generated slide images",
       aspectRatioLocked: "Cannot change aspect ratio after images have been generated",
-      aspectRatioHelp: "Some models only support specific aspect ratios (e.g. 16:9, 4:3, 1:1). gemini-3.1-flash-image-preview additionally supports 1:4, 4:1, 1:8, and 8:1. If generation fails, switch to a ratio supported by the current model.",
+      aspectRatioHelp: "gemini-3.1-flash-image-preview supports all aspect ratios; gemini-3-pro-image-preview supports 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, and 21:9. If generation fails, switch to a ratio supported by the selected model.",
       extraRequirements: "Extra Requirements", extraRequirementsDesc: "AI will reference these extra requirements when generating each page",
       extraRequirementsPlaceholder: "e.g., Use compact layout, show first-level outline title at top, add richer PPT illustrations...",
       saveExtraRequirements: "Save Extra Requirements",
@@ -143,6 +143,25 @@ interface ProjectSettingsModalProps {
 
 type SettingsTab = 'project' | 'export';
 
+const GEMINI_PROVIDER = 'gemini';
+const GEMINI_IMAGE_MODELS = [
+  'gemini-3.1-flash-image-preview',
+  'gemini-3-pro-image-preview',
+] as const;
+const DEFAULT_GEMINI_IMAGE_MODEL = GEMINI_IMAGE_MODELS[0];
+const GEMINI_PRO_SUPPORTED_ASPECT_RATIOS = new Set([
+  '1:1',
+  '2:3',
+  '3:2',
+  '3:4',
+  '4:3',
+  '4:5',
+  '5:4',
+  '9:16',
+  '16:9',
+  '21:9',
+]);
+
 export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   isOpen,
   onClose,
@@ -184,6 +203,39 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
 }) => {
   const t = useT(projectSettingsI18n);
   const [activeTab, setActiveTab] = useState<SettingsTab>('project');
+  const selectedImageModel = useMemo(
+    () => (GEMINI_IMAGE_MODELS.includes(generationDefaultImageModel as (typeof GEMINI_IMAGE_MODELS)[number])
+      ? generationDefaultImageModel
+      : DEFAULT_GEMINI_IMAGE_MODEL),
+    [generationDefaultImageModel]
+  );
+  const visibleAspectRatioOptions = useMemo(() => {
+    if (selectedImageModel !== 'gemini-3-pro-image-preview') {
+      return ASPECT_RATIO_OPTIONS;
+    }
+    return ASPECT_RATIO_OPTIONS.filter((opt) => GEMINI_PRO_SUPPORTED_ASPECT_RATIOS.has(opt.value));
+  }, [selectedImageModel]);
+
+  useEffect(() => {
+    if (generationDefaultImageSource !== GEMINI_PROVIDER) {
+      onGenerationDefaultImageSourceChange?.(GEMINI_PROVIDER);
+    }
+  }, [generationDefaultImageSource, onGenerationDefaultImageSourceChange]);
+
+  useEffect(() => {
+    if (generationDefaultImageModel !== selectedImageModel) {
+      onGenerationDefaultImageModelChange?.(selectedImageModel);
+    }
+  }, [generationDefaultImageModel, onGenerationDefaultImageModelChange, selectedImageModel]);
+
+  useEffect(() => {
+    if (!onAspectRatioChange || !aspectRatio || hasImages) return;
+    const supported = visibleAspectRatioOptions.some((opt) => opt.value === aspectRatio);
+    if (!supported) {
+      onAspectRatioChange('16:9');
+    }
+  }, [aspectRatio, hasImages, onAspectRatioChange, visibleAspectRatioOptions]);
+
   const handleCompressFormatChange = (fmt: 'jpeg' | 'png' | 'webp') => {
     onExportCompressFormatChange?.(fmt);
     if (fmt === 'png' && exportCompressQuality > 9) {
@@ -277,7 +329,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {ASPECT_RATIO_OPTIONS.map((opt) => (
+                    {visibleAspectRatioOptions.map((opt) => (
                       <button
                         key={opt.value}
                         type="button"
@@ -314,20 +366,34 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                     </p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <Input
-                      label="图片来源 source"
-                      type="text"
-                      placeholder="留空=使用全局设置；支持 gemini/openai/profile:xxx/vendor"
-                      value={generationDefaultImageSource}
-                      onChange={(e) => onGenerationDefaultImageSourceChange?.(e.target.value)}
-                    />
-                    <Input
-                      label="图片模型 model"
-                      type="text"
-                      placeholder="留空=使用全局设置"
-                      value={generationDefaultImageModel}
-                      onChange={(e) => onGenerationDefaultImageModelChange?.(e.target.value)}
-                    />
+                    <div className="w-full">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+                        服务商
+                      </label>
+                      <select
+                        value={GEMINI_PROVIDER}
+                        onChange={(e) => onGenerationDefaultImageSourceChange?.(e.target.value)}
+                        className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
+                      >
+                        <option value={GEMINI_PROVIDER}>gemini</option>
+                      </select>
+                    </div>
+                    <div className="w-full">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+                        图片模型
+                      </label>
+                      <select
+                        value={selectedImageModel}
+                        onChange={(e) => onGenerationDefaultImageModelChange?.(e.target.value)}
+                        className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
+                      >
+                        {GEMINI_IMAGE_MODELS.map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                   {onSaveGenerationDefaults && (
                     <Button
