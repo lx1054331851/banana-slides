@@ -1255,11 +1255,62 @@ export const useProjectStore = create<ProjectState>((set, get) => {
         await get().syncProject();
       }
     } catch (error: any) {
+      const status = error?.response?.status;
+      const backendMessage =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        '';
+      const messageLower = String(backendMessage || '').toLowerCase();
+
+      // 兼容后端旧逻辑：当 edit/image 仍要求“先有生成图”或“必须提供编辑指令”时，自动回退到单页文生图
+      if (
+        status === 400 &&
+        (
+          messageLower.includes('page must have generated image first') ||
+          messageLower.includes('edit_instruction is required')
+        )
+      ) {
+        try {
+          const fallbackResp = await api.generatePageImage(
+            currentProject.id,
+            pageId,
+            false,
+            undefined,
+            generationOverride
+          );
+          const fallbackTaskId = fallbackResp.data?.task_id;
+          if (fallbackTaskId) {
+            set({
+              pageGeneratingTasks: { ...get().pageGeneratingTasks, [pageId]: fallbackTaskId },
+              error: null,
+            });
+            await get().syncProject();
+            get().pollImageTask(fallbackTaskId, [pageId]);
+            return;
+          }
+        } catch (fallbackError: any) {
+          const fallbackBackendMessage =
+            fallbackError?.response?.data?.error?.message ||
+            fallbackError?.response?.data?.message;
+          const finalFallbackMessage = normalizeErrorMessage(
+            fallbackBackendMessage || fallbackError.message || t('store.editImageFailed')
+          );
+          const { pageGeneratingTasks } = get();
+          const newTasks = { ...pageGeneratingTasks };
+          delete newTasks[pageId];
+          set({ pageGeneratingTasks: newTasks, error: finalFallbackMessage });
+          throw fallbackError;
+        }
+      }
+
       // 清除该页面的任务记录
       const { pageGeneratingTasks } = get();
       const newTasks = { ...pageGeneratingTasks };
       delete newTasks[pageId];
-      set({ pageGeneratingTasks: newTasks, error: normalizeErrorMessage(error.message || t('store.editImageFailed')) });
+      set({
+        pageGeneratingTasks: newTasks,
+        error: normalizeErrorMessage(backendMessage || error.message || t('store.editImageFailed')),
+      });
       throw error;
     }
   },

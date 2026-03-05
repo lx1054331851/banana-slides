@@ -538,9 +538,6 @@ def edit_page_image(project_id, page_id):
         if not page or page.project_id != project_id:
             return not_found('Page')
         
-        if not page.generated_image_path:
-            return bad_request("Page must have generated image first")
-        
         project = Project.query.get(project_id)
         if not project:
             return not_found('Project')
@@ -549,7 +546,7 @@ def edit_page_image(project_id, page_id):
         
         # Parse request data (support both JSON and multipart/form-data)
         if request.is_json:
-            data = request.get_json()
+            data = request.get_json() or {}
             uploaded_files = []
         else:
             # multipart/form-data
@@ -570,8 +567,8 @@ def edit_page_image(project_id, page_id):
                 except Exception:
                     data['generation_override'] = {}
 
-        if not data or 'edit_instruction' not in data:
-            return bad_request("edit_instruction is required")
+        edit_instruction = (data.get('edit_instruction') or '').strip()
+        language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
 
         generation_override = data.get('generation_override') or {}
         if generation_override and not isinstance(generation_override, dict):
@@ -587,9 +584,6 @@ def edit_page_image(project_id, page_id):
             return bad_request(str(e))
 
         ai_service = get_ai_service(routing_bundle=routing_bundle)
-        
-        # Get current image path
-        current_image_path = file_service.get_absolute_path(page.generated_image_path)
         
         # Get original description if available
         original_description = None
@@ -609,15 +603,24 @@ def edit_page_image(project_id, page_id):
         
         # 1. Add template image if requested
         context_images = data.get('context_images', {})
+        template_path = None
         if isinstance(context_images, dict):
-            use_template = context_images.get('use_template', False)
+            raw_use_template = context_images.get('use_template', False)
         else:
-            use_template = data.get('use_template', 'false').lower() == 'true'
+            raw_use_template = data.get('use_template', 'false')
+
+        if isinstance(raw_use_template, bool):
+            use_template = raw_use_template
+        elif isinstance(raw_use_template, str):
+            use_template = raw_use_template.strip().lower() == 'true'
+        else:
+            use_template = bool(raw_use_template)
         
         if use_template:
             template_path = file_service.get_template_path(project_id)
-            if template_path:
-                additional_ref_images.append(template_path)
+
+        has_template = bool(template_path) if use_template else False
+        use_template = has_template
         
         # 2. Add desc image URLs if provided
         if isinstance(context_images, dict):
@@ -654,6 +657,52 @@ def edit_page_image(project_id, page_id):
                 if temp_dir and temp_dir.exists():
                     shutil.rmtree(temp_dir)
                 raise e
+
+        # Reconstruct full outline with part structure for text-to-image fallback mode
+        all_pages = Page.query.filter_by(project_id=project_id).order_by(Page.order_index).all()
+        outline = []
+        current_part = None
+        current_part_pages = []
+        for p in all_pages:
+            oc = p.get_outline_content()
+            if not oc:
+                continue
+
+            page_data = oc.copy()
+            if p.part:
+                if current_part and current_part != p.part:
+                    outline.append({
+                        "part": current_part,
+                        "pages": current_part_pages
+                    })
+                    current_part_pages = []
+
+                current_part = p.part
+                if 'part' in page_data:
+                    del page_data['part']
+                current_part_pages.append(page_data)
+            else:
+                if current_part:
+                    outline.append({
+                        "part": current_part,
+                        "pages": current_part_pages
+                    })
+                    current_part = None
+                    current_part_pages = []
+                outline.append(page_data)
+
+        if current_part:
+            outline.append({
+                "part": current_part,
+                "pages": current_part_pages
+            })
+
+        # Keep style-related requirements so edit endpoint can fallback to text-to-image mode
+        combined_requirements = project.extra_requirements or ""
+        if project.template_style_json:
+            combined_requirements = combined_requirements + f"\n\nppt页面风格指导(JSON)：\n<style_json>\n{project.template_style_json}\n</style_json>\n"
+        if project.template_style:
+            combined_requirements = combined_requirements + f"\n\n附加风格要求：\n{project.template_style}"
         
         # Create async task for image editing
         task = Task(
@@ -678,7 +727,7 @@ def edit_page_image(project_id, page_id):
             edit_page_image_task,
             project_id,
             page_id,
-            data['edit_instruction'],
+            edit_instruction,
             ai_service,
             file_service,
             project.image_aspect_ratio,
@@ -686,7 +735,11 @@ def edit_page_image(project_id, page_id):
             original_description,
             additional_ref_images if additional_ref_images else None,
             str(temp_dir) if temp_dir else None,
-            app
+            app,
+            outline=outline,
+            use_template=use_template,
+            extra_requirements=combined_requirements if combined_requirements.strip() else None,
+            language=language
         )
         
         # Return task_id immediately

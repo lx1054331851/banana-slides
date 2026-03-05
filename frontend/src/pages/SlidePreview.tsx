@@ -1284,7 +1284,7 @@ export const SlidePreview: React.FC = () => {
   }, [currentProject, selectedIndex, editOutlineTitle, editOutlinePoints, editDescription, updatePageLocal, show]);
 
   const handleSubmitEdit = useCallback(async () => {
-    if (!currentProject || !editPrompt.trim()) return;
+    if (!currentProject) return;
     
     const page = currentProject.pages[selectedIndex];
     if (!page.id) return;
@@ -2130,7 +2130,6 @@ export const SlidePreview: React.FC = () => {
           <Button
             variant="primary"
             onClick={handleSubmitEdit}
-            disabled={!editPrompt.trim()}
           >
             {t('preview.generateImage')}
           </Button>
@@ -2667,7 +2666,7 @@ export const SlidePreview: React.FC = () => {
 	              ) : (
 	                <div className="flex md:flex-col gap-2 md:gap-4 min-w-max md:min-w-0">
 	                  {currentProject.pages.map((page, index) => (
-	                    <div key={page.id || `list-${index}`} className="md:w-full flex-shrink-0 relative md:group">
+	                    <div key={page.id || `list-${index}`} className="md:w-full flex-shrink-0 relative group">
 	                      {/* 移动端：简化缩略图 */}
 	                      <div className="md:hidden relative">
 	                        <button

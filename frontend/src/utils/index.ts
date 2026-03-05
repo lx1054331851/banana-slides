@@ -119,6 +119,14 @@ export function normalizeErrorMessage(errorMessage: string | null | undefined): 
     return isZh
       ? '当前项目还没有模板，请先点击页面工具栏的"更换模板"按钮，选择或上传一张模板图片后再生成。'
       : 'No template found. Please select or upload a template image first.';
+  } else if (message.includes('page must have generated image first')) {
+    return isZh
+      ? '当前页面还没有已生成图片，系统将自动切换为文生图模式。若仍失败，请先补充页面描述后重试。'
+      : 'This page has no generated image yet. The system should fall back to text-to-image mode.';
+  } else if (message.includes('edit_instruction is required')) {
+    return isZh
+      ? '编辑指令为空时将自动切换为文生图模式。若仍失败，请补充页面描述后重试。'
+      : 'Empty edit instruction should fall back to text-to-image mode.';
   } else if (message.includes('page must have description content')) {
     return isZh
       ? '该页面还没有描述内容，请先在"编辑页面描述"步骤为此页生成或填写描述。'

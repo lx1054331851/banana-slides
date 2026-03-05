@@ -656,7 +656,11 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                          aspect_ratio: str = "16:9", resolution: str = "2K",
                          original_description: str = None,
                          additional_ref_images: List[str] = None,
-                         temp_dir: str = None, app=None):
+                         temp_dir: str = None, app=None,
+                         outline: Optional[List[Dict]] = None,
+                         use_template: bool = False,
+                         extra_requirements: Optional[str] = None,
+                         language: str = 'zh'):
     """
     Background task for editing a page image
     
@@ -679,28 +683,107 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
             page = Page.query.get(page_id)
             if not page or page.project_id != project_id:
                 raise ValueError(f"Page {page_id} not found")
-            
-            if not page.generated_image_path:
-                raise ValueError("Page must have generated image first")
-            
+
             # Update page status
             page.status = 'GENERATING'
             db.session.commit()
-            
-            # Get current image path
-            current_image_path = file_service.get_absolute_path(page.generated_image_path)
-            
-            # Edit image
-            logger.info(f"🎨 Editing image for page {page_id}...")
+
+            edit_instruction_text = (edit_instruction or '').strip()
+            current_image_rel_path = page.generated_image_path or page.preview_image_path
+            template_path = file_service.get_template_path(project_id) if use_template else None
+
+            # 有原图且输入了修改指令时走图像编辑；否则走文生图重绘模式
+            should_edit_existing_image = bool(current_image_rel_path and edit_instruction_text)
+
             try:
-                image = ai_service.edit_image(
-                    edit_instruction,
-                    current_image_path,
-                    aspect_ratio,
-                    resolution,
-                    original_description=original_description,
-                    additional_ref_images=additional_ref_images if additional_ref_images else None
-                )
+                if should_edit_existing_image:
+                    current_image_path = file_service.get_absolute_path(current_image_rel_path)
+                    merged_edit_refs: List[str] = []
+                    if template_path:
+                        merged_edit_refs.append(template_path)
+                    if additional_ref_images:
+                        merged_edit_refs.extend(additional_ref_images)
+
+                    logger.info(f"🎨 Editing image for page {page_id}...")
+                    image = ai_service.edit_image(
+                        edit_instruction_text,
+                        current_image_path,
+                        aspect_ratio,
+                        resolution,
+                        original_description=original_description,
+                        additional_ref_images=merged_edit_refs if merged_edit_refs else None
+                    )
+                else:
+                    desc_content = page.get_description_content() or {}
+                    desc_text = desc_content.get('text', '') or ''
+                    if not desc_text and desc_content.get('text_content'):
+                        text_content = desc_content.get('text_content', [])
+                        if isinstance(text_content, list):
+                            desc_text = '\n'.join(text_content)
+                        else:
+                            desc_text = str(text_content)
+
+                    if not desc_text and not edit_instruction_text:
+                        raise ValueError("No description content for page")
+
+                    desc_image_urls: List[str] = []
+                    if desc_text:
+                        desc_image_urls = ai_service.extract_image_urls_from_markdown(desc_text) or []
+                        if desc_image_urls:
+                            logger.info(f"Found {len(desc_image_urls)} image(s) in page {page_id} description")
+
+                    merged_ref_images: List[str] = []
+                    if additional_ref_images:
+                        merged_ref_images.extend(additional_ref_images)
+                    if desc_image_urls:
+                        merged_ref_images.extend(desc_image_urls)
+
+                    if template_path:
+                        merged_ref_images = [img for img in merged_ref_images if img != template_path]
+
+                    dedup_ref_images: List[str] = []
+                    seen = set()
+                    for img in merged_ref_images:
+                        if not isinstance(img, str):
+                            continue
+                        if img in seen:
+                            continue
+                        seen.add(img)
+                        dedup_ref_images.append(img)
+
+                    page_data = page.get_outline_content() or {}
+                    if page.part:
+                        page_data['part'] = page.part
+
+                    generation_outline = outline if outline else [page_data]
+
+                    merged_requirements = (extra_requirements or '').strip()
+                    if edit_instruction_text:
+                        edit_requirement = f"补充修改要求：\n{edit_instruction_text}"
+                        merged_requirements = (
+                            f"{merged_requirements}\n\n{edit_requirement}".strip()
+                            if merged_requirements else edit_requirement
+                        )
+
+                    prompt = ai_service.generate_image_prompt(
+                        generation_outline,
+                        page_data,
+                        desc_text or edit_instruction_text,
+                        page.order_index + 1,
+                        has_material_images=bool(desc_image_urls or dedup_ref_images),
+                        extra_requirements=merged_requirements if merged_requirements else None,
+                        language=language,
+                        has_template=bool(template_path)
+                    )
+
+                    logger.info(f"🎨 Regenerating image for page {page_id} (text-to-image mode)...")
+                    image = ai_service.generate_image(
+                        prompt,
+                        template_path,
+                        aspect_ratio,
+                        resolution,
+                        additional_ref_images=dedup_ref_images if dedup_ref_images else None
+                    )
             finally:
                 # Clean up temp directory if created
                 if temp_dir:
