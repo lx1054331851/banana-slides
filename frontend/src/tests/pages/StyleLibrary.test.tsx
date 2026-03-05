@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { StyleLibrary } from '@/pages/StyleLibrary';
 
-const { mockNavigate, mockListStyleTemplates, mockListStylePresets } = vi.hoisted(() => ({
+const { mockNavigate, mockListStyleTemplates, mockListStylePresets, mockDeleteStylePreset } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockListStyleTemplates: vi.fn(async () => ({
     data: {
@@ -29,6 +29,7 @@ const { mockNavigate, mockListStyleTemplates, mockListStylePresets } = vi.hoiste
       ],
     },
   })),
+  mockDeleteStylePreset: vi.fn(async () => ({ data: {} })),
 }));
 
 vi.mock('react-router-dom', async () => {
@@ -44,7 +45,7 @@ vi.mock('@/api/endpoints', () => ({
   listStylePresets: mockListStylePresets,
   createStyleTemplate: vi.fn(async () => ({ data: null })),
   deleteStyleTemplate: vi.fn(async () => ({ data: {} })),
-  deleteStylePreset: vi.fn(async () => ({ data: {} })),
+  deleteStylePreset: mockDeleteStylePreset,
 }));
 
 describe('StyleLibrary page', () => {
@@ -83,18 +84,94 @@ describe('StyleLibrary page', () => {
     expect(screen.getByTestId('style-library-presets-panel')).toBeInTheDocument();
   });
 
-  it('shows selected JSON in right panel for both tabs', async () => {
+  it('opens preset JSON drawer only when clicking "View JSON"', async () => {
     render(<StyleLibrary />);
 
+    expect(screen.queryByTestId('style-library-preset-json-drawer')).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByTestId('preset-s1-view-json'));
+
     await waitFor(() => {
-      expect(screen.getByTestId('style-library-json-viewer')).toHaveTextContent('{"preset":1}');
+      expect(screen.getByTestId('style-library-preset-json-drawer')).toBeInTheDocument();
+      expect(screen.getByTestId('style-library-preset-json-drawer')).toHaveTextContent('{"preset":1}');
     });
+  });
+
+  it('clicking preset row selects item but does not open JSON drawer', async () => {
+    render(<StyleLibrary />);
+
+    const row = await screen.findByTestId('preset-row-s1');
+    fireEvent.click(within(row).getAllByRole('button', { name: /Preset 1/i })[0]);
+
+    expect(screen.queryByTestId('style-library-preset-json-drawer')).not.toBeInTheDocument();
+  });
+
+  it('keeps template right-panel JSON viewer behavior unchanged', async () => {
+    render(<StyleLibrary />);
+
+    expect(screen.queryByTestId('style-library-json-viewer')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('style-library-tab-templates'));
+    await waitFor(() => {
+      expect(screen.getByTestId('style-library-json-viewer')).toBeInTheDocument();
+      expect(screen.getByTestId('style-library-json-viewer')).toHaveTextContent('{"template":1}');
+    });
+
     const tplRow = screen.getByTestId('template-row-t2');
     fireEvent.click(within(tplRow).getByRole('button', { name: /Template 2/i }));
 
     expect(screen.getByTestId('style-library-json-viewer')).toHaveTextContent('{"template":2}');
+  });
+
+  it('closes preset JSON drawer with close button and Escape', async () => {
+    render(<StyleLibrary />);
+
+    fireEvent.click(await screen.findByTestId('preset-s1-view-json'));
+    await waitFor(() => {
+      expect(screen.getByTestId('style-library-preset-json-drawer')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('style-library-preset-json-close'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('style-library-preset-json-drawer')).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('preset-s1-view-json'));
+    await waitFor(() => {
+      expect(screen.getByTestId('style-library-preset-json-drawer')).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByTestId('style-library-preset-json-drawer')).not.toBeInTheDocument();
+    });
+  });
+
+  it('closes preset JSON drawer after deleting the selected preset', async () => {
+    render(<StyleLibrary />);
+
+    fireEvent.click(await screen.findByTestId('preset-s1-view-json'));
+    await waitFor(() => {
+      expect(screen.getByTestId('style-library-preset-json-drawer')).toBeInTheDocument();
+    });
+
+    const row = screen.getByTestId('preset-row-s1');
+    fireEvent.click(within(row).getByRole('button', { name: /Delete|删除/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('dialog').length).toBeGreaterThan(1);
+    });
+    const confirmDialog = screen.getAllByRole('dialog').find((dialog) => (
+      within(dialog).queryByRole('button', { name: /Cancel|取消/i }) &&
+      within(dialog).queryByRole('button', { name: /Delete|删除/i })
+    ));
+    expect(confirmDialog).toBeTruthy();
+    fireEvent.click(within(confirmDialog as HTMLElement).getByRole('button', { name: /Delete|删除/i }));
+
+    await waitFor(() => {
+      expect(mockDeleteStylePreset).toHaveBeenCalledWith('s1');
+      expect(screen.queryByTestId('style-library-preset-json-drawer')).not.toBeInTheDocument();
+    });
   });
 
   it('renders preset row with four preview slots', async () => {

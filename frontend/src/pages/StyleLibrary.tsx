@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Code2, Copy, Eye, Globe, Home, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, Code2, Copy, Eye, Globe, Home, RefreshCw, Trash2, X } from 'lucide-react';
 import { Button, Card, ImageLightbox, useConfirm, useToast } from '@/components/shared';
 import { useT } from '@/hooks/useT';
 import { getImageUrl } from '@/api/client';
@@ -179,6 +180,9 @@ export const StyleLibrary: React.FC = () => {
   const [templateJsonText, setTemplateJsonText] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [selectedPresetId, setSelectedPresetId] = useState<string>('');
+  const [isPresetJsonDrawerOpen, setIsPresetJsonDrawerOpen] = useState(false);
+  const [isPresetJsonDrawerVisible, setIsPresetJsonDrawerVisible] = useState(false);
+  const [isPresetJsonDrawerAnimating, setIsPresetJsonDrawerAnimating] = useState(false);
 
   const [previewModal, setPreviewModal] = useState<{
     title: string;
@@ -203,6 +207,56 @@ export const StyleLibrary: React.FC = () => {
     if (typeof window === 'undefined') return;
     sessionStorage.setItem(TAB_STORAGE_KEY, activeTab);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'presets') {
+      setIsPresetJsonDrawerOpen(false);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (isPresetJsonDrawerOpen) {
+      setIsPresetJsonDrawerVisible(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setIsPresetJsonDrawerAnimating(true);
+        });
+      });
+
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+
+    setIsPresetJsonDrawerAnimating(false);
+    const timer = window.setTimeout(() => {
+      setIsPresetJsonDrawerVisible(false);
+    }, 220);
+    document.body.style.overflow = '';
+    return () => window.clearTimeout(timer);
+  }, [isPresetJsonDrawerOpen]);
+
+  useEffect(() => {
+    if (!isPresetJsonDrawerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsPresetJsonDrawerOpen(false);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isPresetJsonDrawerOpen]);
+
+  const openPresetJsonDrawer = useCallback((presetId: string) => {
+    setSelectedPresetId(presetId);
+    setIsPresetJsonDrawerOpen(true);
+  }, []);
+
+  const closePresetJsonDrawer = useCallback(() => {
+    setIsPresetJsonDrawerOpen(false);
+  }, []);
 
   const loadAll = async () => {
     setIsLoading(true);
@@ -322,6 +376,7 @@ export const StyleLibrary: React.FC = () => {
         setDeletingPresetId(preset.id);
         try {
           await deleteStylePreset(preset.id);
+          const shouldCloseDrawer = isPresetJsonDrawerOpen && selectedPresetId === preset.id;
           setPresets((prev) => {
             const next = prev.filter((item) => item.id !== preset.id);
             setSelectedPresetId((selected) => {
@@ -330,6 +385,9 @@ export const StyleLibrary: React.FC = () => {
             });
             return next;
           });
+          if (shouldCloseDrawer) {
+            setIsPresetJsonDrawerOpen(false);
+          }
           show({ message: t('presets.deleted'), type: 'success' });
         } catch (error: any) {
           show({
@@ -445,7 +503,7 @@ export const StyleLibrary: React.FC = () => {
           </div>
         </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4 items-start">
+        <div className={activeTab === 'templates' ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4 items-start' : ''}>
           <div className="space-y-4">
             {activeTab === 'templates' ? (
               <Card className="p-4 md:p-5 space-y-4" data-testid="style-library-templates-panel">
@@ -557,7 +615,12 @@ export const StyleLibrary: React.FC = () => {
                               <Button variant="ghost" size="sm" icon={<Eye size={14} />} onClick={() => openPresetPreview(preset)}>
                                 {t('presets.preview')}
                               </Button>
-                              <Button variant="ghost" size="sm" onClick={() => setSelectedPresetId(preset.id)}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openPresetJsonDrawer(preset.id)}
+                                data-testid={`preset-${preset.id}-view-json`}
+                              >
                                 {t('presets.viewJson')}
                               </Button>
                               <Button
@@ -611,35 +674,108 @@ export const StyleLibrary: React.FC = () => {
             )}
           </div>
 
-          <Card className="p-4 md:p-5 h-fit sticky top-20" data-testid="style-library-json-viewer">
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <div className="text-sm font-medium text-gray-800 dark:text-white">
-                {activeTab === 'templates' ? t('jsonViewer.titleTemplate') : t('jsonViewer.titlePreset')}
+          {activeTab === 'templates' ? (
+            <Card className="p-4 md:p-5 h-fit sticky top-20" data-testid="style-library-json-viewer">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <div className="text-sm font-medium text-gray-800 dark:text-white">
+                  {t('jsonViewer.titleTemplate')}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Copy size={14} />}
+                  onClick={() => void handleCopyJson()}
+                  disabled={!viewerJsonText}
+                >
+                  {t('jsonViewer.copy')}
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<Copy size={14} />}
-                onClick={() => void handleCopyJson()}
-                disabled={!viewerJsonText}
-              >
-                {t('jsonViewer.copy')}
-              </Button>
-            </div>
-            {viewerJsonText ? (
-              <div className="rounded-lg border border-gray-200 dark:border-border-primary bg-gray-50 dark:bg-background-tertiary max-h-[70vh] overflow-auto">
-                <pre className="p-3 text-xs font-mono whitespace-pre text-gray-800 dark:text-white">
-                  {viewerJsonText}
-                </pre>
-              </div>
-            ) : (
-              <div className="text-xs text-gray-500 dark:text-foreground-tertiary">
-                {activeTab === 'templates' ? t('templates.noSelection') : t('presets.noSelection')}
-              </div>
-            )}
-          </Card>
+              {viewerJsonText ? (
+                <div className="rounded-lg border border-gray-200 dark:border-border-primary bg-gray-50 dark:bg-background-tertiary max-h-[70vh] overflow-auto">
+                  <pre className="p-3 text-xs font-mono whitespace-pre text-gray-800 dark:text-white">
+                    {viewerJsonText}
+                  </pre>
+                </div>
+              ) : (
+                <div className="text-xs text-gray-500 dark:text-foreground-tertiary">
+                  {t('templates.noSelection')}
+                </div>
+              )}
+            </Card>
+          ) : null}
         </div>
       </main>
+
+      {activeTab === 'presets' && isPresetJsonDrawerVisible && typeof document !== 'undefined'
+        ? createPortal(
+            <div className="fixed inset-0 z-50" aria-hidden={!isPresetJsonDrawerOpen}>
+              <button
+                type="button"
+                className={`absolute inset-0 bg-black/45 backdrop-blur-sm transition-opacity duration-200 ${
+                  isPresetJsonDrawerAnimating ? 'opacity-100' : 'opacity-0'
+                }`}
+                onClick={closePresetJsonDrawer}
+                aria-label="close preset json drawer backdrop"
+              />
+
+              <div
+                role="dialog"
+                aria-modal="true"
+                data-testid="style-library-preset-json-drawer"
+                className={`absolute flex flex-col bg-white dark:bg-background-secondary border border-gray-200 dark:border-border-primary shadow-2xl transition-transform duration-200 ease-out
+                  left-0 right-0 bottom-0 max-h-[80vh] rounded-t-2xl
+                  md:left-auto md:right-0 md:top-0 md:bottom-0 md:w-[min(720px,90vw)] md:max-h-none md:rounded-none md:rounded-l-2xl
+                  ${isPresetJsonDrawerAnimating ? 'translate-y-0 md:translate-y-0 md:translate-x-0' : 'translate-y-full md:translate-y-0 md:translate-x-full'}`}
+              >
+                <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 dark:border-border-primary">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                      {t('jsonViewer.titlePreset')}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-foreground-tertiary truncate">
+                      {selectedPreset?.name || selectedPreset?.id || ''}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<Copy size={14} />}
+                      onClick={() => void handleCopyJson()}
+                      disabled={!viewerJsonText}
+                    >
+                      {t('jsonViewer.copy')}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={closePresetJsonDrawer}
+                      data-testid="style-library-preset-json-close"
+                      className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-gray-200 dark:border-border-primary text-gray-500 dark:text-foreground-tertiary hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-background-hover transition-colors"
+                      aria-label="close preset json drawer"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                {viewerJsonText ? (
+                  <div className="flex-1 overflow-auto p-4">
+                    <div className="rounded-lg border border-gray-200 dark:border-border-primary bg-gray-50 dark:bg-background-tertiary overflow-auto">
+                      <pre className="p-3 text-xs font-mono whitespace-pre text-gray-800 dark:text-white">
+                        {viewerJsonText}
+                      </pre>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 text-xs text-gray-500 dark:text-foreground-tertiary">
+                    {t('presets.noSelection')}
+                  </div>
+                )}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
 
       <ToastContainer />
       {ConfirmDialog}
