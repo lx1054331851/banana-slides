@@ -16,6 +16,10 @@ from utils.aspect_ratio_policy import (
     get_supported_aspect_ratios_for_model,
     is_aspect_ratio_supported_for_model,
 )
+from utils.image_resolution_policy import (
+    get_project_default_image_resolution,
+    resolve_effective_image_resolution,
+)
 from sqlalchemy.orm import joinedload
 from werkzeug.exceptions import BadRequest
 from werkzeug.utils import secure_filename
@@ -1120,6 +1124,9 @@ def generate_images(project_id):
         db.session.expire_all()
         
         data = request.get_json() or {}
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request("generation_override must be an object")
         
         # Get page_ids from request body and fetch filtered pages
         selected_page_ids = parse_page_ids_from_body(data)
@@ -1148,6 +1155,30 @@ def generate_images(project_id):
         max_workers = data.get('max_workers', current_app.config.get('MAX_IMAGE_WORKERS', 8))
         # use_template already normalized by actual presence
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+
+        try:
+            routing_bundle = resolve_routing_bundle(
+                project=project,
+                generation_override=generation_override,
+            )
+        except Exception as e:
+            return bad_request(str(e))
+
+        request_resolution = None
+        image_override = generation_override.get('image') or {}
+        if isinstance(image_override, dict):
+            request_resolution = image_override.get('resolution')
+        project_resolution = get_project_default_image_resolution(project)
+        try:
+            effective_resolution = resolve_effective_image_resolution(
+                routing_bundle.image.provider,
+                routing_bundle.image.model,
+                request_resolution=request_resolution,
+                project_resolution=project_resolution,
+                global_resolution=current_app.config.get('DEFAULT_RESOLUTION', '2K'),
+            )
+        except ValueError as e:
+            return bad_request(str(e))
         
         # Create task
         task = Task(
@@ -1164,8 +1195,8 @@ def generate_images(project_id):
         db.session.add(task)
         db.session.commit()
         
-        # Get singleton AI service instance
-        ai_service = get_ai_service()
+        # Get AI service instance (cached by route fingerprint when override/defaults are active)
+        ai_service = get_ai_service(routing_bundle=routing_bundle)
         
         # 合并额外要求和风格描述
         combined_requirements = project.extra_requirements or ""
@@ -1194,7 +1225,7 @@ def generate_images(project_id):
             use_template,
             max_workers,
             project.image_aspect_ratio,
-            current_app.config['DEFAULT_RESOLUTION'],
+            effective_resolution,
             app,
             combined_requirements if combined_requirements.strip() else None,
             language,

@@ -5,6 +5,10 @@ import logging
 from flask import Blueprint, request, current_app
 from models import db, Project, Page, PageImageVersion, Task
 from utils import success_response, error_response, not_found, bad_request
+from utils.image_resolution_policy import (
+    get_project_default_image_resolution,
+    resolve_effective_image_resolution,
+)
 from services import FileService, ProjectContext
 from services.ai_service_manager import get_ai_service
 from services.provider_routing import resolve_routing_bundle
@@ -423,6 +427,21 @@ def generate_page_image(project_id, page_id):
             return bad_request(str(e))
 
         ai_service = get_ai_service(routing_bundle=routing_bundle)
+        request_resolution = None
+        image_override = generation_override.get('image') or {}
+        if isinstance(image_override, dict):
+            request_resolution = image_override.get('resolution')
+        project_resolution = get_project_default_image_resolution(project)
+        try:
+            effective_resolution = resolve_effective_image_resolution(
+                routing_bundle.image.provider,
+                routing_bundle.image.model,
+                request_resolution=request_resolution,
+                project_resolution=project_resolution,
+                global_resolution=current_app.config.get('DEFAULT_RESOLUTION', '2K'),
+            )
+        except ValueError as e:
+            return bad_request(str(e))
         
         file_service = FileService(current_app.config['UPLOAD_FOLDER'])
         
@@ -500,7 +519,7 @@ def generate_page_image(project_id, page_id):
             outline,
             use_template,
             project.image_aspect_ratio,
-            current_app.config['DEFAULT_RESOLUTION'],
+            effective_resolution,
             app,
             combined_requirements if combined_requirements.strip() else None,
             language
@@ -591,6 +610,21 @@ def edit_page_image(project_id, page_id):
             return bad_request(str(e))
 
         ai_service = get_ai_service(routing_bundle=routing_bundle)
+        request_resolution = None
+        image_override = generation_override.get('image') or {}
+        if isinstance(image_override, dict):
+            request_resolution = image_override.get('resolution')
+        project_resolution = get_project_default_image_resolution(project)
+        try:
+            effective_resolution = resolve_effective_image_resolution(
+                routing_bundle.image.provider,
+                routing_bundle.image.model,
+                request_resolution=request_resolution,
+                project_resolution=project_resolution,
+                global_resolution=current_app.config.get('DEFAULT_RESOLUTION', '2K'),
+            )
+        except ValueError as e:
+            return bad_request(str(e))
         
         # Get original description if available
         original_description = None
@@ -738,7 +772,7 @@ def edit_page_image(project_id, page_id):
             ai_service,
             file_service,
             project.image_aspect_ratio,
-            current_app.config['DEFAULT_RESOLUTION'],
+            effective_resolution,
             original_description,
             additional_ref_images if additional_ref_images else None,
             str(temp_dir) if temp_dir else None,

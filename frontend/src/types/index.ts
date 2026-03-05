@@ -44,6 +44,7 @@ export interface PresentationMeta {
 export interface OverrideRoute {
   source?: string;
   model?: string;
+  resolution?: string;
   api_base_url?: string;
   api_key?: string;
   adapter?: string;

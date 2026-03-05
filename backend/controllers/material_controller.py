@@ -6,6 +6,10 @@ from models import db, Project, Material, Task
 from utils import success_response, error_response, not_found, bad_request
 from utils.validators import normalize_aspect_ratio
 from utils.aspect_ratio_policy import get_supported_aspect_ratios_for_model
+from utils.image_resolution_policy import (
+    get_project_default_image_resolution,
+    resolve_effective_image_resolution,
+)
 from services import FileService
 from services.ai_service_manager import get_ai_service
 from services.ai_providers import get_caption_provider
@@ -267,6 +271,22 @@ def generate_material_image(project_id):
             return bad_request(str(e))
 
         ai_service = get_ai_service(routing_bundle=routing_bundle)
+        request_resolution = None
+        image_override = generation_override.get('image') or {}
+        if isinstance(image_override, dict):
+            request_resolution = image_override.get('resolution')
+        project_resolution = get_project_default_image_resolution(project)
+        try:
+            effective_resolution = resolve_effective_image_resolution(
+                routing_bundle.image.provider,
+                routing_bundle.image.model,
+                request_resolution=request_resolution,
+                project_resolution=project_resolution,
+                global_resolution=current_app.config.get('DEFAULT_RESOLUTION', '2K'),
+            )
+        except ValueError as e:
+            return bad_request(str(e))
+
         file_service = FileService(current_app.config['UPLOAD_FOLDER'])
 
         # 创建临时目录保存参考图片（后台任务会清理）
@@ -322,7 +342,7 @@ def generate_material_image(project_id):
                 ref_path_str,
                 additional_ref_images if additional_ref_images else None,
                 aspect_ratio or (project.image_aspect_ratio if project else None) or current_app.config.get('DEFAULT_ASPECT_RATIO', '16:9'),
-                current_app.config['DEFAULT_RESOLUTION'],
+                effective_resolution,
                 temp_dir_str,
                 app
             )
@@ -546,4 +566,3 @@ def download_materials_zip():
         tmp.close()
         current_app.logger.exception("Failed to build materials zip")
         return error_response('SERVER_ERROR', 'Failed to create zip archive', 500)
-

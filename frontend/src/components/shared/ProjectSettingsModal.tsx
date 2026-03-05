@@ -135,8 +135,10 @@ interface ProjectSettingsModalProps {
   hasImages?: boolean;
   generationDefaultImageSource?: string;
   generationDefaultImageModel?: string;
+  generationDefaultImageResolution?: string;
   onGenerationDefaultImageSourceChange?: (value: string) => void;
   onGenerationDefaultImageModelChange?: (value: string) => void;
+  onGenerationDefaultImageResolutionChange?: (value: string) => void;
   onSaveGenerationDefaults?: () => void;
   isSavingGenerationDefaults?: boolean;
 }
@@ -148,7 +150,13 @@ const GEMINI_IMAGE_MODELS = [
   'gemini-3.1-flash-image-preview',
   'gemini-3-pro-image-preview',
 ] as const;
+type GeminiImageModel = (typeof GEMINI_IMAGE_MODELS)[number];
 const DEFAULT_GEMINI_IMAGE_MODEL = GEMINI_IMAGE_MODELS[0];
+const DEFAULT_GEMINI_IMAGE_RESOLUTION = '4K';
+const GEMINI_IMAGE_RESOLUTIONS: Record<GeminiImageModel, string[]> = {
+  'gemini-3.1-flash-image-preview': ['0.5K', '1K', '2K', '4K'],
+  'gemini-3-pro-image-preview': ['1K', '2K', '4K'],
+};
 const GEMINI_PRO_SUPPORTED_ASPECT_RATIOS = new Set([
   '1:1',
   '2:3',
@@ -196,8 +204,10 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   hasImages = false,
   generationDefaultImageSource = '',
   generationDefaultImageModel = '',
+  generationDefaultImageResolution = DEFAULT_GEMINI_IMAGE_RESOLUTION,
   onGenerationDefaultImageSourceChange,
   onGenerationDefaultImageModelChange,
+  onGenerationDefaultImageResolutionChange,
   onSaveGenerationDefaults,
   isSavingGenerationDefaults = false,
 }) => {
@@ -215,6 +225,16 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
     }
     return ASPECT_RATIO_OPTIONS.filter((opt) => GEMINI_PRO_SUPPORTED_ASPECT_RATIOS.has(opt.value));
   }, [selectedImageModel]);
+  const visibleResolutionOptions = useMemo(
+    () => GEMINI_IMAGE_RESOLUTIONS[selectedImageModel],
+    [selectedImageModel]
+  );
+  const selectedImageResolution = useMemo(
+    () => (visibleResolutionOptions.includes(generationDefaultImageResolution)
+      ? generationDefaultImageResolution
+      : DEFAULT_GEMINI_IMAGE_RESOLUTION),
+    [generationDefaultImageResolution, visibleResolutionOptions]
+  );
 
   useEffect(() => {
     if (generationDefaultImageSource !== GEMINI_PROVIDER) {
@@ -227,6 +247,12 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
       onGenerationDefaultImageModelChange?.(selectedImageModel);
     }
   }, [generationDefaultImageModel, onGenerationDefaultImageModelChange, selectedImageModel]);
+
+  useEffect(() => {
+    if (generationDefaultImageResolution !== selectedImageResolution) {
+      onGenerationDefaultImageResolutionChange?.(selectedImageResolution);
+    }
+  }, [generationDefaultImageResolution, onGenerationDefaultImageResolutionChange, selectedImageResolution]);
 
   useEffect(() => {
     if (!onAspectRatioChange || !aspectRatio || hasImages) return;
@@ -362,10 +388,10 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                   <div>
                     <h4 className="text-base font-semibold text-gray-900 dark:text-foreground-primary mb-2">AI 生成默认（项目级）</h4>
                     <p className="text-sm text-gray-600 dark:text-foreground-tertiary">
-                      配置当前项目默认的图片生成来源/模型（可在预览页临时覆盖）。
+                      配置当前项目默认的图片生成来源/模型/清晰度（可在预览页临时覆盖）。
                     </p>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="w-full">
                       <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
                         服务商
@@ -394,7 +420,26 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                         ))}
                       </select>
                     </div>
+                    <div className="w-full">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+                        图像清晰度
+                      </label>
+                      <select
+                        value={selectedImageResolution}
+                        onChange={(e) => onGenerationDefaultImageResolutionChange?.(e.target.value)}
+                        className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
+                      >
+                        {visibleResolutionOptions.map((resolution) => (
+                          <option key={resolution} value={resolution}>
+                            {resolution}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
+                  <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
+                    更高的清晰度会生成更详细的图像，但需要更长时间。
+                  </p>
                   {onSaveGenerationDefaults && (
                     <Button
                       variant="secondary"
