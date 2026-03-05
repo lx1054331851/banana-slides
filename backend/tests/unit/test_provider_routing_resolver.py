@@ -110,6 +110,39 @@ def test_profile_source_and_adapter_options(monkeypatch):
     assert route.adapter_options["path_style"] == "singular"
 
 
+def test_profile_adapter_options_parse_string_booleans(monkeypatch):
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("PROVIDER_ROUTING_STRICT", "true")
+    monkeypatch.setenv("IMAGE_API_KEY", "profile-image-key")
+    monkeypatch.setenv(
+        "PROVIDER_PROFILES_JSON",
+        json.dumps(
+            [
+                {
+                    "id": "openai_img",
+                    "provider": "openai",
+                    "api_base": "https://relay.example.com/v1",
+                    "api_key_env": "IMAGE_API_KEY",
+                    "adapter": "openai_image_compat",
+                    "adapter_options": {
+                        "chat_fallback": "false",
+                        "strict_params": "false",
+                    },
+                    "capabilities": ["image"],
+                }
+            ]
+        ),
+    )
+
+    route = resolve_provider_route(
+        "image",
+        generation_override={"image": {"source": "profile:openai_img"}},
+    )
+
+    assert route.adapter_options["chat_fallback"] is False
+    assert route.adapter_options["strict_params"] is False
+
+
 def test_profile_capability_mismatch_raises_when_strict(monkeypatch):
     _clear_env(monkeypatch)
     monkeypatch.setenv("PROVIDER_ROUTING_STRICT", "true")

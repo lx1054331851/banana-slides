@@ -112,8 +112,8 @@ class OpenAIImageProvider(ImageProvider):
             "b64_json",
             "IMAGE_OPENAI_RESPONSE_FORMAT",
         )
-        self.chat_fallback = bool(cfg.IMAGE_OPENAI_CHAT_FALLBACK if chat_fallback is None else chat_fallback)
-        self.strict_params = bool(cfg.IMAGE_OPENAI_STRICT_PARAMS if strict_params is None else strict_params)
+        self.chat_fallback = self._to_bool(chat_fallback, bool(cfg.IMAGE_OPENAI_CHAT_FALLBACK))
+        self.strict_params = self._to_bool(strict_params, bool(cfg.IMAGE_OPENAI_STRICT_PARAMS))
 
     @staticmethod
     def _normalize_enum(raw_value: Any, valid_values: set, default: str, key: str) -> str:
@@ -123,6 +123,21 @@ class OpenAIImageProvider(ImageProvider):
         if value:
             logger.warning("Invalid %s=%s, falling back to %s", key, raw_value, default)
         return default
+
+    @staticmethod
+    def _to_bool(raw_value: Any, default: bool) -> bool:
+        if raw_value is None:
+            return default
+        if isinstance(raw_value, bool):
+            return raw_value
+        if isinstance(raw_value, (int, float)):
+            return bool(raw_value)
+        text = str(raw_value).strip().lower()
+        if text in {"1", "true", "yes", "y", "on"}:
+            return True
+        if text in {"0", "false", "no", "n", "off", ""}:
+            return False
+        return bool(raw_value)
 
     def _build_extra_body(self, aspect_ratio: str, resolution: str) -> dict:
         resolution_upper = resolution.upper()
@@ -256,6 +271,53 @@ class OpenAIImageProvider(ImageProvider):
         if status_code in {400, 422} and any(k in text for k in endpoint_keywords):
             return True
         return False
+
+    def _is_model_unsupported_on_image_endpoint(
+        self,
+        status_code: Optional[int],
+        response_text: str,
+    ) -> bool:
+        """
+        Detect model/endpoint mismatch errors that should fall back to chat in auto mode.
+
+        Some OpenAI-compatible gateways return HTTP 5xx with messages such as
+        "not supported model for image generation" for /image(s)/generations even
+        though the same model works via /chat/completions.
+        """
+        if status_code is not None and status_code < 400:
+            return False
+
+        text = (response_text or "").lower()
+        if not text or "model" not in text:
+            return False
+
+        unsupported_markers = (
+            "not supported model",
+            "model not supported",
+            "unsupported model",
+            "model is not supported",
+            "not support model",
+            "model does not support",
+            "invalid model",
+            "unknown model",
+            "model not found",
+        )
+        image_markers = (
+            "image",
+            "generation",
+            "/images/",
+            "/image/",
+            "images/generations",
+            "image endpoint",
+        )
+        return any(m in text for m in unsupported_markers) and any(m in text for m in image_markers)
+
+    def _should_fallback_to_chat(self, err: "ImageApiRequestError") -> bool:
+        if self._is_model_unsupported_on_image_endpoint(err.status_code, err.response_text):
+            return True
+        # Some OpenAI-compatible relays return generic HTTP 5xx for image endpoints
+        # while the same model still works via chat/completions.
+        return bool(err.status_code and err.status_code >= 500)
 
     def _post_image_api(
         self,
@@ -557,6 +619,22 @@ class OpenAIImageProvider(ImageProvider):
                 f"aspect_ratio={aspect_ratio}, resolution={resolution}): {e}"
             ) from e
         except Exception as e:
+            if (
+                isinstance(e, ImageApiRequestError)
+                and self.endpoint_mode == "auto"
+                and self.chat_fallback
+                and self._should_fallback_to_chat(e)
+            ):
+                logger.warning(
+                    "Image endpoint rejected model=%s, falling back to chat/completions. "
+                    "status=%s, endpoint=%s, error=%s",
+                    self.model,
+                    e.status_code,
+                    e.url,
+                    e.response_text,
+                )
+                return self._call_via_chat_completions(prompt, refs, aspect_ratio, resolution)
+
             error_detail = (
                 f"Error generating image with OpenAI (model={self.model}, mode={self.endpoint_mode}, "
                 f"aspect_ratio={aspect_ratio}, resolution={resolution}): {type(e).__name__}: {str(e)}"
