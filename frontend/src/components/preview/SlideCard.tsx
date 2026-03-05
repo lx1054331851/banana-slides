@@ -34,6 +34,7 @@ interface SlideCardProps {
   onClick: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  showDelete?: boolean;
   isGenerating?: boolean;
   aspectRatio?: string;
 }
@@ -45,6 +46,7 @@ export const SlideCard: React.FC<SlideCardProps> = ({
   onClick,
   onEdit,
   onDelete,
+  showDelete = true,
   isGenerating = false,
   aspectRatio = '16:9',
 }) => {
@@ -70,20 +72,22 @@ export const SlideCard: React.FC<SlideCardProps> = ({
           isSelected ? 'bg-banana-500' : 'bg-transparent'
         }`}
       />
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-        className={`absolute top-2 right-2 z-20 p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-red-600 transition-opacity hover:bg-red-50 ${
-          hasImage ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : 'opacity-100'
-        }`}
-        aria-label={t('slideCard.confirmDeleteTitle')}
-        title={t('slideCard.confirmDeleteTitle')}
-      >
-        <Trash2 size={16} />
-      </button>
+      {showDelete && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className={`absolute top-2 right-2 z-20 p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-red-600 transition-opacity hover:bg-red-50 ${
+            hasImage ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : 'opacity-100'
+          }`}
+          aria-label={t('slideCard.confirmDeleteTitle')}
+          title={t('slideCard.confirmDeleteTitle')}
+        >
+          <Trash2 size={16} />
+        </button>
+      )}
 
       {/* 标题 */}
       <div className="flex items-start gap-2 pl-3">

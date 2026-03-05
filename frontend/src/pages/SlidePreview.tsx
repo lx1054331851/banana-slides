@@ -54,6 +54,9 @@ const previewI18n = {
       insertAfterPage: "在此页后新增页面",
       addPageFailed: "新增页面失败",
       sidebarView: { list: "列表", grid: "网格" },
+      gridZoomLabel: "网格缩放",
+      gridZoomSmall: "小",
+      gridZoomLarge: "大",
       templateModalDesc: "选择一个新的模板将应用到后续PPT页面生成（不影响已经生成的页面）。你可以选择预设模板、已有模板或上传新模板。",
       useTextStyle: "使用文字描述风格",
       applyStyle: "应用风格",
@@ -141,6 +144,9 @@ const previewI18n = {
       insertAfterPage: "Insert page after this one",
       addPageFailed: "Failed to add page",
       sidebarView: { list: "List", grid: "Grid" },
+      gridZoomLabel: "Grid Zoom",
+      gridZoomSmall: "Small",
+      gridZoomLarge: "Large",
       templateModalDesc: "Selecting a new template will apply to future PPT page generation (won't affect already generated pages). You can choose preset templates, existing templates, or upload a new one.",
       useTextStyle: "Use text description for style",
       applyStyle: "Apply Style",
@@ -192,6 +198,7 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  Trash2,
   Upload,
   Image as ImageIcon,
   ImagePlus,
@@ -240,6 +247,9 @@ export const SlidePreview: React.FC = () => {
   const t = useT(previewI18n);
   const { projectId } = useParams<{ projectId: string }>();
   const sidebarDefaultWidth = 320;
+  const sidebarGridThumbMinPx = 140;
+  const sidebarGridThumbMaxPx = 320;
+  const sidebarGridThumbDefaultPx = 180;
   const fromHistory = (location.state as any)?.from === 'history';
   const {
     currentProject,
@@ -289,6 +299,17 @@ export const SlidePreview: React.FC = () => {
     } catch {
       return 'list';
     }
+  });
+  const [sidebarGridThumbMaxWidthPx, setSidebarGridThumbMaxWidthPx] = useState(() => {
+    try {
+      const stored = Number(localStorage.getItem('previewSidebarGridThumbMaxWidthPx'));
+      if (Number.isFinite(stored) && stored >= sidebarGridThumbMinPx && stored <= sidebarGridThumbMaxPx) {
+        return stored;
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return sidebarGridThumbDefaultPx;
   });
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [sidebarWidthPxExpanded, setSidebarWidthPxExpanded] = useState(sidebarDefaultWidth);
@@ -367,6 +388,14 @@ export const SlidePreview: React.FC = () => {
       // ignore storage errors
     }
   }, [sidebarViewMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('previewSidebarGridThumbMaxWidthPx', String(sidebarGridThumbMaxWidthPx));
+    } catch {
+      // ignore storage errors
+    }
+  }, [sidebarGridThumbMaxWidthPx]);
 
   useEffect(() => {
     if (!viewportWidth) return;
@@ -1822,12 +1851,11 @@ export const SlidePreview: React.FC = () => {
   const isSidebarCompact = !isMobileView && !isSidebarCollapsed && sidebarWidthPx <= 200;
   const isSidebarGridMode = !isSidebarCompact && sidebarViewMode === 'grid';
   const sidebarGridGapPx = 12;
-  const sidebarGridMaxThumbWidthPx = 180;
   const sidebarGridHorizontalPaddingPx = isMobileView ? 24 : 32;
   const sidebarGridAvailableWidthPx = Math.max(0, sidebarWidthPx - sidebarGridHorizontalPaddingPx);
   const sidebarGridColumns = Math.max(
     2,
-    Math.ceil((sidebarGridAvailableWidthPx + sidebarGridGapPx) / (sidebarGridMaxThumbWidthPx + sidebarGridGapPx))
+    Math.ceil((sidebarGridAvailableWidthPx + sidebarGridGapPx) / (sidebarGridThumbMaxWidthPx + sidebarGridGapPx))
   );
   const generateButtonText =
     isMultiSelectMode && selectedPageIds.size > 0
@@ -2403,35 +2431,65 @@ export const SlidePreview: React.FC = () => {
                 </Button>
               )}
             {!isSidebarCollapsed && !isSidebarCompact && !isMobileView && (
-              <div className="inline-flex w-full rounded-lg border border-gray-200 dark:border-border-primary overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setSidebarViewMode('list')}
-                  className={`flex-1 h-8 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors ${
-                    sidebarViewMode === 'list'
-                      ? 'bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
-                      : 'bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
-                  }`}
-                  title={t('preview.sidebarView.list')}
-                  aria-label={t('preview.sidebarView.list')}
-                >
-                  <List size={14} />
-                  <span>{t('preview.sidebarView.list')}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSidebarViewMode('grid')}
-                  className={`flex-1 h-8 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors border-l border-gray-200 dark:border-border-primary ${
-                    sidebarViewMode === 'grid'
-                      ? 'bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
-                      : 'bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
-                  }`}
-                  title={t('preview.sidebarView.grid')}
-                  aria-label={t('preview.sidebarView.grid')}
-                >
-                  <LayoutGrid size={14} />
-                  <span>{t('preview.sidebarView.grid')}</span>
-                </button>
+              <div className="space-y-2">
+                <div className="inline-flex w-full rounded-lg border border-gray-200 dark:border-border-primary overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setSidebarViewMode('list')}
+                    className={`flex-1 h-8 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors ${
+                      sidebarViewMode === 'list'
+                        ? 'bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
+                        : 'bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
+                    }`}
+                    title={t('preview.sidebarView.list')}
+                    aria-label={t('preview.sidebarView.list')}
+                  >
+                    <List size={14} />
+                    <span>{t('preview.sidebarView.list')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarViewMode('grid')}
+                    className={`flex-1 h-8 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors border-l border-gray-200 dark:border-border-primary ${
+                      sidebarViewMode === 'grid'
+                        ? 'bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
+                        : 'bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
+                    }`}
+                    title={t('preview.sidebarView.grid')}
+                    aria-label={t('preview.sidebarView.grid')}
+                  >
+                    <LayoutGrid size={14} />
+                    <span>{t('preview.sidebarView.grid')}</span>
+                  </button>
+                </div>
+                {sidebarViewMode === 'grid' && (
+                  <div className="rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary px-2 py-1.5">
+                    <div className="mb-1 flex items-center justify-between text-[11px] text-gray-500 dark:text-foreground-tertiary">
+                      <span>{t('preview.gridZoomLabel')}</span>
+                      <span>{sidebarGridThumbMaxWidthPx}px</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-400 dark:text-foreground-tertiary">{t('preview.gridZoomSmall')}</span>
+                      <input
+                        type="range"
+                        min={sidebarGridThumbMinPx}
+                        max={sidebarGridThumbMaxPx}
+                        step={10}
+                        value={sidebarGridThumbMaxWidthPx}
+                        onChange={(e) => {
+                          const next = Number(e.target.value);
+                          if (!Number.isFinite(next)) return;
+                          const clamped = Math.min(Math.max(next, sidebarGridThumbMinPx), sidebarGridThumbMaxPx);
+                          setSidebarGridThumbMaxWidthPx(clamped);
+                        }}
+                        className="h-1.5 w-full cursor-pointer accent-banana-500"
+                        aria-label={t('preview.gridZoomLabel')}
+                        title={t('preview.gridZoomLabel')}
+                      />
+                      <span className="text-[10px] text-gray-400 dark:text-foreground-tertiary">{t('preview.gridZoomLarge')}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2519,12 +2577,14 @@ export const SlidePreview: React.FC = () => {
 	                    </span>
 	                  )}
 	              </div>
-	              {isSidebarGridMode ? (
+		              {isSidebarGridMode ? (
 	                <div
                     className="grid gap-3"
                     style={{ gridTemplateColumns: `repeat(${sidebarGridColumns}, minmax(0, 1fr))` }}
                   >
-	                  {currentProject.pages.map((page, index) => (
+	                  {currentProject.pages.map((page, index) => {
+                      const hasImage = Boolean(page.preview_image_path || page.generated_image_path);
+                      return (
 	                    <div key={page.id || `grid-${index}`} className="relative group">
 	                      <button
 	                        onClick={() => {
@@ -2557,7 +2617,7 @@ export const SlidePreview: React.FC = () => {
 	                          )}
 	                        </div>
 	                      </button>
-		                      {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
+		                      {isMultiSelectMode && page.id && hasImage && (
 		                        <button
 	                          onClick={(e) => {
 	                            e.stopPropagation();
@@ -2569,21 +2629,25 @@ export const SlidePreview: React.FC = () => {
 	                              : 'bg-white/90 border border-gray-300 dark:border-border-primary'
 	                          }`}
 	                        >
-	                          {selectedPageIds.has(page.id) && <Check size={12} />}
+		                          {selectedPageIds.has(page.id) && <Check size={12} />}
 		                        </button>
 		                      )}
-		                      <button
-		                        type="button"
-		                        onClick={(e) => {
-		                          e.stopPropagation();
-		                          void handleDeletePage(page);
-		                        }}
-		                        className="absolute top-2 left-2 z-10 w-5 h-5 rounded flex items-center justify-center bg-white/90 border border-gray-200 dark:border-border-primary text-red-600 hover:bg-red-50"
-		                        title={t('common.delete')}
-		                        aria-label={t('common.delete')}
-		                      >
-		                        <X size={12} />
-		                      </button>
+                              {!isMultiSelectMode && (
+		                        <button
+		                          type="button"
+		                          onClick={(e) => {
+		                            e.stopPropagation();
+                                    handleDeletePage(page);
+		                          }}
+                                  className={`absolute top-2 right-2 z-20 p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-red-600 transition-opacity hover:bg-red-50 ${
+                                    hasImage ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : 'opacity-100'
+                                  }`}
+                                  title={t('preview.confirmDeleteTitle')}
+                                  aria-label={t('preview.confirmDeleteTitle')}
+		                        >
+                                  <Trash2 size={16} />
+		                        </button>
+                              )}
 		                      <button
 		                        type="button"
 		                        onClick={(e) => {
@@ -2597,7 +2661,8 @@ export const SlidePreview: React.FC = () => {
 	                        <Plus size={13} />
 	                      </button>
 	                    </div>
-	                  ))}
+                    );
+                    })}
 	                </div>
 	              ) : (
 	                <div className="flex md:flex-col gap-2 md:gap-4 min-w-max md:min-w-0">
@@ -2680,6 +2745,7 @@ export const SlidePreview: React.FC = () => {
 	                            handleEditPage();
 	                          }}
 	                          onDelete={() => handleDeletePage(page)}
+                              showDelete={!isMultiSelectMode}
 	                          isGenerating={page.id ? isPageGenerating(page) : false}
 	                          aspectRatio={aspectRatio}
 	                        />
@@ -2691,7 +2757,7 @@ export const SlidePreview: React.FC = () => {
 	                          }}
 	                          title={t('preview.insertAfterPage')}
 	                          aria-label={t('preview.insertAfterPage')}
-	                          className="absolute left-1/2 -bottom-3 -translate-x-1/2 z-20 h-7 w-7 hidden md:inline-flex items-center justify-center rounded-full border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-secondary shadow-sm hover:bg-banana-50 dark:hover:bg-background-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-400"
+	                          className="absolute left-1/2 -bottom-3 -translate-x-1/2 z-20 h-7 w-7 hidden md:inline-flex items-center justify-center rounded-full border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-secondary shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity hover:bg-banana-50 dark:hover:bg-background-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-400"
 	                        >
 	                          <Plus size={13} />
 	                        </button>
