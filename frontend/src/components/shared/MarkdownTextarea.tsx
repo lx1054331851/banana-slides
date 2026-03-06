@@ -35,6 +35,7 @@ interface MarkdownTextareaProps {
   /** Called when files are dropped or selected via upload button */
   onFiles?: (files: File[]) => void;
   onBlur?: () => void;
+  onFocus?: () => void;
   placeholder?: string;
   label?: string;
   error?: string;
@@ -268,6 +269,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   onPaste,
   onFiles,
   onBlur,
+  onFocus,
   placeholder,
   label,
   error,
@@ -471,7 +473,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
 
   // --- Key handling ---
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (isComposingRef.current || e.isComposing || (e.key as any) === 'Process' || (e as any).keyCode === 229) return;
+    if (isComposingRef.current || (e.nativeEvent as KeyboardEvent).isComposing || (e.key as any) === 'Process' || (e as any).keyCode === 229) return;
     if (!editorRef.current) return;
 
     if (e.key === 'Backspace') {
@@ -665,7 +667,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   const isEmpty = !value.trim();
   const editorStyle: React.CSSProperties = {
     minHeight: `${minHeight}px`,
-    direction,
+    ...(direction === 'auto' ? {} : { direction }),
     unicodeBidi: 'plaintext',
     textAlign: direction === 'rtl' ? 'right' : 'left',
   };
@@ -713,6 +715,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
               onDragOver={handleDragOver}
               onDrop={handleDrop}
               onBlur={onBlur}
+              onFocus={onFocus}
               style={editorStyle}
               className={cn(
                 "w-full px-4 py-3 outline-none overflow-y-auto whitespace-pre-wrap break-words text-gray-900 dark:text-foreground-primary",
