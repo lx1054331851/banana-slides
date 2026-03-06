@@ -674,17 +674,31 @@ export const refineSinglePageDescription = async (
   language?: OutputLanguage
 ): Promise<ApiResponse<{ refined_description: string; message: string }>> => {
   const lang = language || await getStoredOutputLanguage();
-  const response = await apiClient.post<ApiResponse<{ refined_description: string; message: string }>>(
-    `/api/projects/${projectId}/pages/${pageId}/refine/description`,
-    {
-      user_requirement: userRequirement,
-      current_description: currentDescription,
-      outline_content: outlineContent,
-      previous_requirements: previousRequirements || [],
-      language: lang,
+  const payload = {
+    user_requirement: userRequirement,
+    current_description: currentDescription,
+    outline_content: outlineContent,
+    previous_requirements: previousRequirements || [],
+    language: lang,
+  };
+
+  try {
+    const response = await apiClient.post<ApiResponse<{ refined_description: string; message: string }>>(
+      `/api/projects/${projectId}/pages/${pageId}/description/refine`,
+      payload
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error?.response?.status !== 404) {
+      throw error;
     }
-  );
-  return response.data;
+
+    const response = await apiClient.post<ApiResponse<{ refined_description: string; message: string }>>(
+      `/api/projects/${projectId}/pages/${pageId}/refine/description`,
+      payload
+    );
+    return response.data;
+  }
 };
 
 /**

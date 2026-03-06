@@ -239,6 +239,7 @@ def update_page_description(project_id, page_id):
 
 
 @page_bp.route('/<project_id>/pages/<page_id>/refine/description', methods=['POST'])
+@page_bp.route('/<project_id>/pages/<page_id>/description/refine', methods=['POST'])
 def refine_page_description(project_id, page_id):
     """
     POST /api/projects/{project_id}/pages/{page_id}/refine/description - Refine single page description draft

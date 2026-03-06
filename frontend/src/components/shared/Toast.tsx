@@ -127,7 +127,7 @@ export const useToast = (options: UseToastOptions = {}) => {
     ToastContainer: () => {
       const positionClass = position === 'bottom-right' ? 'bottom-4 right-4' : 'top-20 right-4';
       const container = (
-        <div className={cn('fixed z-[120] flex flex-col items-end gap-2 pointer-events-none', positionClass)}>
+        <div className={cn('fixed z-[9999] flex flex-col items-end gap-2 pointer-events-none', positionClass)}>
           {toasts.map((toast) => (
             <div key={toast.id} className="pointer-events-auto">
               <Toast

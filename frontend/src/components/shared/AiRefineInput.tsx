@@ -6,16 +6,16 @@ import { useT } from '@/hooks/useT';
 const aiRefineI18n = {
   zh: {
     aiRefine: {
-      ctrlEnterSubmit: "（Ctrl+Enter 提交）", history: "历史",
+      enterSubmitHint: "（Enter 提交，Shift+Enter 换行）", history: "历史",
       viewHistory: "查看 {{count}} 条历史修改", previousRequirements: "之前的修改要求：",
-      submitTooltip: "提交 (Ctrl+Enter)"
+      submitTooltip: "提交 (Enter)"
     }
   },
   en: {
     aiRefine: {
-      ctrlEnterSubmit: "(Ctrl+Enter to submit)", history: "History",
+      enterSubmitHint: "(Enter to submit, Shift+Enter for newline)", history: "History",
       viewHistory: "View {{count}} previous edits", previousRequirements: "Previous edit requests:",
-      submitTooltip: "Submit (Ctrl+Enter)"
+      submitTooltip: "Submit (Enter)"
     }
   }
 };
@@ -67,9 +67,12 @@ const AiRefineInputComponent: React.FC<AiRefineInputProps> = ({
     }
   };
 
-  // 处理 Ctrl+Enter 快捷键
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.nativeEvent as KeyboardEvent).isComposing) {
+      return;
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
@@ -90,7 +93,7 @@ const AiRefineInputComponent: React.FC<AiRefineInputProps> = ({
           <div className="flex items-center gap-2">
             <Sparkles size={16} className="text-purple-600 md:w-[18px] md:h-[18px]" />
             <h3 className="text-xs md:text-sm font-semibold text-gray-800 dark:text-foreground-primary">{title}</h3>
-            <span className="text-xs text-gray-500 dark:text-foreground-tertiary hidden sm:inline">{t('aiRefine.ctrlEnterSubmit')}</span>
+            <span className="text-xs text-gray-500 dark:text-foreground-tertiary hidden sm:inline">{t('aiRefine.enterSubmitHint')}</span>
           </div>
           {history.length > 0 && (
             <button
@@ -121,7 +124,7 @@ const AiRefineInputComponent: React.FC<AiRefineInputProps> = ({
         </div>
       )}
       
-      <div className="flex gap-2 items-center relative">
+      <div className="flex gap-2 items-end relative">
         {/* 紧凑模式下显示图标和历史按钮 */}
         {isCompactMode && (
           <>
@@ -140,13 +143,13 @@ const AiRefineInputComponent: React.FC<AiRefineInputProps> = ({
         )}
         
         <div className="flex-1 relative">
-          <input
-            type="text"
+          <textarea
             value={requirement}
             onChange={(e) => setRequirement(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
-            className={`w-full px-3 py-1.5 text-sm border ${isCompactMode ? 'border-gray-200 dark:border-border-primary' : 'border-gray-300 dark:border-border-primary'} rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all ${
+            rows={2}
+            className={`w-full px-3 py-2 text-sm border ${isCompactMode ? 'border-gray-200 dark:border-border-primary' : 'border-gray-300 dark:border-border-primary'} rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-[border-color,box-shadow,background-color] duration-150 resize-y min-h-[42px] max-h-40 ${
               isSubmitting ? 'animate-gradient-x bg-gradient-to-r from-purple-100 via-purple-200 to-purple-100 bg-[length:200%_100%]' : 'bg-white dark:bg-background-secondary'
             }`}
             disabled={isSubmitting}
@@ -163,11 +166,11 @@ const AiRefineInputComponent: React.FC<AiRefineInputProps> = ({
         <button
           onClick={handleSubmit}
           disabled={!requirement.trim() || isSubmitting}
-          className={`flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg transition-all ${
+          className={`flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg transition-[background-color,color,transform] duration-150 ${
             !requirement.trim() || isSubmitting
               ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
               : 'bg-purple-500 text-white hover:bg-purple-600 active:scale-95'
-          } md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100`}
+          }`}
           title={t('aiRefine.submitTooltip')}
         >
           <Send size={16} className={isSubmitting ? 'animate-pulse' : ''} />

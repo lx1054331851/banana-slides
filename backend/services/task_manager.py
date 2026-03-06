@@ -46,6 +46,15 @@ from services.export_helpers import maybe_compress_export_images
 logger = logging.getLogger(__name__)
 
 
+def _get_existing_page_image_path(page: Page) -> Optional[str]:
+    """Return the best available stored image path for page edits."""
+    return (
+        page.generated_image_path
+        or page.cached_image_path
+        or getattr(page, 'preview_image_path', None)
+    )
+
+
 def _generation_logs_enabled() -> bool:
     try:
         from flask import current_app, has_app_context
@@ -820,7 +829,7 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
             db.session.commit()
 
             edit_instruction_text = (edit_instruction or '').strip()
-            current_image_rel_path = page.generated_image_path or page.preview_image_path
+            current_image_rel_path = _get_existing_page_image_path(page)
             template_path = file_service.get_template_path(project_id) if use_template else None
 
             # 有原图且输入了修改指令时走图像编辑；否则走文生图重绘模式
