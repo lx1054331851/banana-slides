@@ -1970,7 +1970,7 @@ export const SlidePreview: React.FC = () => {
               value={editDescription}
               onChange={(e) => setEditDescription(e.target.value)}
               rows={8}
-              className="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-700 bg-white dark:bg-background-secondary text-gray-900 dark:text-foreground-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-banana-500 resize-none"
+              className="w-full min-h-[12rem] px-3 py-2 text-sm border border-blue-300 dark:border-blue-700 bg-white dark:bg-background-secondary text-gray-900 dark:text-foreground-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-banana-500 resize-y"
               placeholder={t('preview.enterDescription')}
             />
           </div>
