@@ -502,6 +502,12 @@ class FileService:
         templates_dir = self.upload_folder / "user-templates"
         templates_dir.mkdir(exist_ok=True, parents=True)
         return templates_dir
+
+    def _get_preset_templates_dir(self) -> Path:
+        """Get preset templates directory"""
+        templates_dir = self.upload_folder / "preset-templates"
+        templates_dir.mkdir(exist_ok=True, parents=True)
+        return templates_dir
     
     def save_user_template(self, file, template_id: str) -> str:
         """
@@ -528,6 +534,30 @@ class FileService:
         
         # Return relative path
         return filepath.relative_to(self.upload_folder).as_posix()
+
+    def save_preset_template(self, file, template_id: str) -> str:
+        """
+        Save preset template image file
+
+        Args:
+            file: FileStorage object from Flask request
+            template_id: Template ID
+
+        Returns:
+            Relative file path from upload folder
+        """
+        templates_dir = self._get_preset_templates_dir()
+        template_dir = templates_dir / template_id
+        template_dir.mkdir(exist_ok=True, parents=True)
+
+        original_filename = secure_filename(file.filename)
+        ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else 'png'
+        filename = f"template.{ext}"
+
+        filepath = template_dir / filename
+        file.save(str(filepath))
+
+        return filepath.relative_to(self.upload_folder).as_posix()
     
     def delete_user_template(self, template_id: str) -> bool:
         """
@@ -541,6 +571,24 @@ class FileService:
         """
         import shutil
         templates_dir = self._get_user_templates_dir()
+        template_dir = templates_dir / template_id
+
+        if template_dir.exists():
+            shutil.rmtree(template_dir)
+
+        return True
+
+    def delete_preset_template(self, template_id: str) -> bool:
+        """
+        Delete preset template
+
+        Args:
+            template_id: Template ID
+
+        Returns:
+            True if deleted successfully
+        """
+        templates_dir = self._get_preset_templates_dir()
         template_dir = templates_dir / template_id
 
         if template_dir.exists():
@@ -580,6 +628,44 @@ class FileService:
 
             # Save thumbnail
             templates_dir = self._get_user_templates_dir()
+            template_dir = templates_dir / template_id
+            template_dir.mkdir(exist_ok=True, parents=True)
+
+            thumb_filename = "template-thumb.webp"
+            thumb_filepath = template_dir / thumb_filename
+
+            image.save(str(thumb_filepath), 'WEBP', quality=quality)
+            image.close()
+
+            return thumb_filepath.relative_to(self.upload_folder).as_posix()
+        except Exception:
+            return None
+
+    def save_preset_template_thumbnail(self, template_id: str, original_path: str,
+                                       quality: int = 80, max_width: int = 600) -> Optional[str]:
+        """
+        Generate and save thumbnail for preset template
+
+        Args:
+            template_id: Template ID
+            original_path: Relative path to original template image
+            quality: WEBP quality (1-100), default 80
+            max_width: Maximum thumbnail width in pixels (default 600)
+
+        Returns:
+            Relative file path to thumbnail, or None if failed
+        """
+        try:
+            original_full_path = self.upload_folder / original_path.replace('\\', '/')
+
+            if not original_full_path.exists():
+                return None
+
+            image = Image.open(str(original_full_path))
+            image = resize_image_for_thumbnail(image, max_width)
+            image = convert_image_to_rgb(image)
+
+            templates_dir = self._get_preset_templates_dir()
             template_dir = templates_dir / template_id
             template_dir.mkdir(exist_ok=True, parents=True)
 

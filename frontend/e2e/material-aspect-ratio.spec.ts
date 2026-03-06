@@ -21,19 +21,29 @@ test.describe('Material generation aspect ratio selector', () => {
   });
 
   async function openMaterialGeneratorModal(page: Page) {
-    // Use dispatchEvent to reliably trigger the click on the 素材生成 button
-    // (regular click may be blocked by overlay elements)
-    const materialBtn = page.locator('button', { hasText: /素材生成/ }).first();
-    await expect(materialBtn).toBeAttached({ timeout: 5000 });
-    await materialBtn.dispatchEvent('click');
-    // Wait for the MaterialGeneratorModal dialog to appear (identified by its title)
-    await expect(page.getByRole('dialog', { name: /素材生成|Generate Material/ })).toBeVisible({ timeout: 5000 });
+    // Prefer opening from Home nav; fallback to direct route to keep the test stable.
+    const materialManageBtn = page.locator('button', { hasText: /素材管理|Material Management/ }).first();
+    const hasManageBtn = (await materialManageBtn.count()) > 0;
+    if (hasManageBtn) {
+      await materialManageBtn.dispatchEvent('click');
+      await page.waitForURL('**/materials', { timeout: 10000 });
+    } else {
+      await page.goto('/materials');
+      await page.waitForURL('**/materials', { timeout: 10000 });
+    }
+
+    const generateBtn = page.locator('button', { hasText: /生成素材|Generate Material/ }).first();
+    await expect(generateBtn).toBeVisible({ timeout: 10000 });
+    await generateBtn.click();
+
+    // Wait for desktop drawer (role dialog) or mobile full-screen generator dialog
+    await expect(page.getByRole('dialog', { name: /生成素材|素材生成|Generate Material/ })).toBeVisible({ timeout: 5000 });
   }
 
   test('should render aspect ratio selector with all options in material generator modal', async ({ page }) => {
     await openMaterialGeneratorModal(page);
 
-    const dialog = page.getByRole('dialog', { name: /素材生成|Generate Material/ });
+    const dialog = page.getByRole('dialog', { name: /生成素材|素材生成|Generate Material/ });
 
     // Check the aspect ratio label is visible
     await expect(dialog.getByText(/生成比例|Aspect Ratio/)).toBeVisible();
@@ -47,7 +57,7 @@ test.describe('Material generation aspect ratio selector', () => {
   test('should default to 16:9 and allow changing aspect ratio selection', async ({ page }) => {
     await openMaterialGeneratorModal(page);
 
-    const dialog = page.getByRole('dialog', { name: /素材生成|Generate Material/ });
+    const dialog = page.getByRole('dialog', { name: /生成素材|素材生成|Generate Material/ });
 
     // 16:9 should be the default selected ratio
     const btn169 = dialog.locator('button', { hasText: '16:9' }).first();
@@ -107,7 +117,7 @@ test.describe('Material generation aspect ratio selector', () => {
 
     await openMaterialGeneratorModal(page);
 
-    const dialog = page.getByRole('dialog', { name: /素材生成|Generate Material/ });
+    const dialog = page.getByRole('dialog', { name: /生成素材|素材生成|Generate Material/ });
 
     // Select 1:1 ratio
     await dialog.locator('button', { hasText: '1:1' }).first().click();

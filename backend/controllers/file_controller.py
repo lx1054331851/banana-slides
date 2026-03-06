@@ -123,6 +123,35 @@ def serve_user_template(template_id, filename):
         return error_response('SERVER_ERROR', str(e), 500)
 
 
+@file_bp.route('/preset-templates/<template_id>/<filename>', methods=['GET'])
+def serve_preset_template(template_id, filename):
+    """
+    GET /files/preset-templates/{template_id}/{filename} - Serve preset template files
+
+    Args:
+        template_id: Template UUID
+        filename: File name
+    """
+    try:
+        file_dir = os.path.join(
+            current_app.config['UPLOAD_FOLDER'],
+            'preset-templates',
+            template_id
+        )
+
+        if not os.path.exists(file_dir):
+            return not_found('File')
+
+        file_path = os.path.join(file_dir, filename)
+        if not os.path.exists(file_path):
+            return not_found('File')
+
+        return send_from_directory(file_dir, filename)
+
+    except Exception as e:
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
 @file_bp.route('/materials/<filename>', methods=['GET'])
 def serve_global_material(filename):
     """

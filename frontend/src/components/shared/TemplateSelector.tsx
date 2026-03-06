@@ -6,8 +6,10 @@ import {
   listUserTemplates,
   uploadUserTemplate,
   deleteUserTemplate,
+  listPresetTemplates,
   listStylePresets,
   type UserTemplate,
+  type PresetTemplate,
   type Material,
   type StylePreset,
   type StylePresetPreviewImages,
@@ -15,15 +17,18 @@ import {
 import { materialUrlToFile } from '@/components/shared/MaterialSelector';
 import { ImagePlus, X } from 'lucide-react';
 
-// Template 组件自包含翻译
+export type TemplateSource = 'user' | 'preset' | 'upload';
+
 const templateI18n = {
   zh: {
     template: {
       myTemplates: '我的模板',
       presetTemplates: '预设模板',
       styleTemplates: '风格模板',
+      morePresetTemplates: '更多预设模板',
       moreStyleTemplates: '更多风格模板',
       more: '更多',
+      noPresetTemplates: '暂无预设模板',
       noStyleTemplates: '暂无风格模板',
       uploadTemplate: '上传模板',
       deleteTemplate: '删除模板',
@@ -32,10 +37,6 @@ const templateI18n = {
       selectFromMaterials: '从素材库选择',
       selectAsTemplate: '从素材库选择作为模板',
       cannotDeleteInUse: '当前使用中的模板不能删除，请先取消选择或切换',
-      presets: {
-        retroScroll: '复古卷轴', vectorIllustration: '矢量插画', glassEffect: '拟物玻璃',
-        techBlue: '科技蓝', simpleBusiness: '简约商务', academicReport: '学术报告'
-      },
       messages: {
         uploadSuccess: '模板上传成功',
         uploadFailed: '模板上传失败',
@@ -45,15 +46,23 @@ const templateI18n = {
         styleTemplateApplyFailed: '选择风格模板失败',
       }
     },
-    material: { messages: { savedToLibrary: '素材已保存到模板库', selectedAsTemplate: '已从素材库选择作为模板', loadMaterialFailed: '加载素材失败' } }
+    material: {
+      messages: {
+        savedToLibrary: '素材已保存到模板库',
+        selectedAsTemplate: '已从素材库选择作为模板',
+        loadMaterialFailed: '加载素材失败'
+      }
+    }
   },
   en: {
     template: {
       myTemplates: 'My Templates',
       presetTemplates: 'Preset Templates',
       styleTemplates: 'Style Templates',
+      morePresetTemplates: 'More Preset Templates',
       moreStyleTemplates: 'More Style Templates',
       more: 'More',
+      noPresetTemplates: 'No preset templates',
       noStyleTemplates: 'No style templates',
       uploadTemplate: 'Upload Template',
       deleteTemplate: 'Delete Template',
@@ -62,14 +71,6 @@ const templateI18n = {
       selectFromMaterials: 'Select from Materials',
       selectAsTemplate: 'Select from materials as template',
       cannotDeleteInUse: 'Cannot delete template in use, please deselect or switch first',
-      presets: {
-        retroScroll: 'Retro Scroll',
-        vectorIllustration: 'Vector Illustration',
-        glassEffect: 'Glass Effect',
-        techBlue: 'Tech Blue',
-        simpleBusiness: 'Simple Business',
-        academicReport: 'Academic Report'
-      },
       messages: {
         uploadSuccess: 'Template uploaded successfully',
         uploadFailed: 'Failed to upload template',
@@ -79,12 +80,18 @@ const templateI18n = {
         styleTemplateApplyFailed: 'Failed to select style template',
       }
     },
-    material: { messages: { savedToLibrary: 'Material saved to template library', selectedAsTemplate: 'Selected from library as template', loadMaterialFailed: 'Failed to load materials' } }
+    material: {
+      messages: {
+        savedToLibrary: 'Material saved to template library',
+        selectedAsTemplate: 'Selected from library as template',
+        loadMaterialFailed: 'Failed to load materials'
+      }
+    }
   }
 };
 
 interface TemplateSelectorProps {
-  onSelect: (templateFile: File | null, templateId?: string) => void;
+  onSelect: (templateFile: File | null, templateId?: string, source?: TemplateSource) => void;
   onSelectStylePreset?: (preset: StylePreset | null) => Promise<void> | void;
   selectedTemplateId?: string | null;
   selectedPresetTemplateId?: string | null;
@@ -104,24 +111,22 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
 }) => {
   const t = useT(templateI18n);
   const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([]);
+  const [presetTemplates, setPresetTemplates] = useState<PresetTemplate[]>([]);
   const [stylePresets, setStylePresets] = useState<StylePreset[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [isLoadingPresetTemplates, setIsLoadingPresetTemplates] = useState(false);
   const [isLoadingStylePresets, setIsLoadingStylePresets] = useState(false);
   const [isMaterialSelectorOpen, setIsMaterialSelectorOpen] = useState(false);
+  const [isPresetTemplateModalOpen, setIsPresetTemplateModalOpen] = useState(false);
   const [isStylePresetModalOpen, setIsStylePresetModalOpen] = useState(false);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [selectingStylePresetId, setSelectingStylePresetId] = useState<string | null>(null);
   const [saveToLibrary, setSaveToLibrary] = useState(true);
   const { show, ToastContainer } = useToast();
 
-  const presetTemplates = [
-    { id: '1', nameKey: 'template.presets.retroScroll', preview: '/templates/template_y.png', thumb: '/templates/template_y-thumb.webp' },
-    { id: '2', nameKey: 'template.presets.vectorIllustration', preview: '/templates/template_vector_illustration.png', thumb: '/templates/template_vector_illustration-thumb.webp' },
-    { id: '3', nameKey: 'template.presets.glassEffect', preview: '/templates/template_glass.png', thumb: '/templates/template_glass-thumb.webp' },
-  ];
-
   useEffect(() => {
     void loadUserTemplates();
+    void loadPresetTemplates();
     void loadStylePresets();
   }, []);
 
@@ -129,13 +134,23 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
     setIsLoadingTemplates(true);
     try {
       const response = await listUserTemplates();
-      if (response.data?.templates) {
-        setUserTemplates(response.data.templates);
-      }
+      setUserTemplates(response.data?.templates || []);
     } catch (error: any) {
       console.error('Failed to load user templates:', error);
     } finally {
       setIsLoadingTemplates(false);
+    }
+  };
+
+  const loadPresetTemplates = async () => {
+    setIsLoadingPresetTemplates(true);
+    try {
+      const response = await listPresetTemplates();
+      setPresetTemplates(response.data?.templates || []);
+    } catch (error: any) {
+      console.error('Failed to load preset templates:', error);
+    } finally {
+      setIsLoadingPresetTemplates(false);
     }
   };
 
@@ -156,7 +171,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
     try {
       await onSelectStylePreset(null);
     } catch {
-      // Parent handles toast if needed
+      // Parent handles toast if needed.
     }
   };
 
@@ -170,23 +185,21 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
             const template = response.data;
             setUserTemplates(prev => [template, ...prev]);
             await clearStylePresetSelection();
-            onSelect(null, template.template_id);
+            onSelect(file, template.template_id, 'user');
             show({ message: t('template.messages.uploadSuccess'), type: 'success' });
           }
-        } else {
-          if (saveToLibrary) {
-            const response = await uploadUserTemplate(file);
-            if (response.data) {
-              const template = response.data;
-              setUserTemplates(prev => [template, ...prev]);
-              await clearStylePresetSelection();
-              onSelect(file, template.template_id);
-              show({ message: t('material.messages.savedToLibrary'), type: 'success' });
-            }
-          } else {
+        } else if (saveToLibrary) {
+          const response = await uploadUserTemplate(file);
+          if (response.data) {
+            const template = response.data;
+            setUserTemplates(prev => [template, ...prev]);
             await clearStylePresetSelection();
-            onSelect(file);
+            onSelect(file, template.template_id, 'user');
+            show({ message: t('material.messages.savedToLibrary'), type: 'success' });
           }
+        } else {
+          await clearStylePresetSelection();
+          onSelect(file, undefined, 'upload');
         }
       } catch (error: any) {
         console.error('Failed to upload template:', error);
@@ -198,13 +211,15 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
 
   const handleSelectUserTemplate = async (template: UserTemplate) => {
     await clearStylePresetSelection();
-    onSelect(null, template.template_id);
+    onSelect(null, template.template_id, 'user');
   };
 
-  const handleSelectPresetTemplate = async (templateId: string, preview: string) => {
-    if (!preview) return;
+  const handleSelectPresetTemplate = async (template: PresetTemplate, closeModal: boolean = false) => {
     await clearStylePresetSelection();
-    onSelect(null, templateId);
+    onSelect(null, template.template_id, 'preset');
+    if (closeModal) {
+      setIsPresetTemplateModalOpen(false);
+    }
   };
 
   const handleSelectStylePreset = async (preset: StylePreset, closeModal: boolean = false) => {
@@ -239,12 +254,12 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
           const template = response.data;
           setUserTemplates(prev => [template, ...prev]);
           await clearStylePresetSelection();
-          onSelect(file, template.template_id);
+          onSelect(file, template.template_id, 'user');
           show({ message: t('material.messages.savedToLibrary'), type: 'success' });
         }
       } else {
         await clearStylePresetSelection();
-        onSelect(file);
+        onSelect(file, undefined, 'upload');
         show({ message: t('material.messages.selectedAsTemplate'), type: 'success' });
       }
     } catch (error: any) {
@@ -262,7 +277,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
     setDeletingTemplateId(template.template_id);
     try {
       await deleteUserTemplate(template.template_id);
-      setUserTemplates((prev) => prev.filter((t) => t.template_id !== template.template_id));
+      setUserTemplates((prev) => prev.filter((item) => item.template_id !== template.template_id));
       show({ message: t('template.messages.deleteSuccess'), type: 'success' });
     } catch (error: any) {
       console.error('Failed to delete template:', error);
@@ -277,83 +292,49 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
     return preview.cover_url || preview.toc_url || preview.detail_url || preview.ending_url || '';
   };
 
+  const visiblePresetTemplates = useMemo(() => presetTemplates.slice(0, 4), [presetTemplates]);
+  const hasMorePresetTemplates = presetTemplates.length > 4;
   const visibleStylePresets = useMemo(() => stylePresets.slice(0, 4), [stylePresets]);
   const hasMoreStylePresets = stylePresets.length > 4;
 
   return (
     <>
       <div className="space-y-4">
-        {userTemplates.length > 0 && (
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">{t('template.myTemplates')}</h4>
-            <div className="grid grid-cols-4 gap-4 mb-4">
-              {userTemplates.map((template) => (
-                <div
-                  key={template.template_id}
-                  onClick={() => void handleSelectUserTemplate(template)}
-                  className={`aspect-[4/3] rounded-lg border-2 cursor-pointer transition-all relative group ${
-                    selectedTemplateId === template.template_id
-                      ? 'border-banana-500 ring-2 ring-banana-200'
-                      : 'border-gray-200 dark:border-border-primary hover:border-banana-300'
-                  }`}
-                >
-                  <img
-                    src={getImageUrl(template.thumb_url || template.template_image_url)}
-                    alt={template.name || 'Template'}
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                  {selectedTemplateId !== template.template_id && (
-                    <button
-                      type="button"
-                      onClick={(e) => void handleDeleteUserTemplate(template, e)}
-                      disabled={deletingTemplateId === template.template_id}
-                      className={`absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow z-20 opacity-0 group-hover:opacity-100 transition-opacity ${
-                        deletingTemplateId === template.template_id ? 'opacity-60 cursor-not-allowed' : ''
-                      }`}
-                      aria-label={t('template.deleteTemplate')}
-                    >
-                      <X size={12} />
-                    </button>
-                  )}
-                  {selectedTemplateId === template.template_id && (
-                    <div className="absolute inset-0 bg-banana-500 bg-opacity-20 flex items-center justify-center pointer-events-none">
-                      <span className="text-white font-semibold text-sm">{t('template.templateSelected')}</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         <div>
-          <h4 className="text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">{t('template.presetTemplates')}</h4>
-          <div className="grid grid-cols-4 gap-4">
-            {presetTemplates.map((template) => (
+          <h4 className="text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">{t('template.myTemplates')}</h4>
+          <div className="grid grid-cols-4 gap-4 mb-4">
+            {userTemplates.map((template) => (
               <div
-                key={template.id}
-                onClick={() => template.preview && void handleSelectPresetTemplate(template.id, template.preview)}
-                className={`aspect-[4/3] rounded-lg border-2 cursor-pointer transition-all bg-gray-100 dark:bg-background-secondary flex items-center justify-center relative ${
-                  selectedPresetTemplateId === template.id
+                key={template.template_id}
+                onClick={() => void handleSelectUserTemplate(template)}
+                className={`aspect-[4/3] rounded-lg border-2 cursor-pointer transition-all relative group ${
+                  selectedTemplateId === template.template_id
                     ? 'border-banana-500 ring-2 ring-banana-200'
-                    : 'border-gray-200 dark:border-border-primary hover:border-banana-500'
+                    : 'border-gray-200 dark:border-border-primary hover:border-banana-300'
                 }`}
               >
-                {template.preview ? (
-                  <>
-                    <img
-                      src={template.thumb || template.preview}
-                      alt={t(template.nameKey)}
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
-                    {selectedPresetTemplateId === template.id && (
-                      <div className="absolute inset-0 bg-banana-500 bg-opacity-20 flex items-center justify-center pointer-events-none">
-                        <span className="text-white font-semibold text-sm">{t('template.templateSelected')}</span>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-sm text-gray-500 dark:text-foreground-tertiary">{t(template.nameKey)}</span>
+                <img
+                  src={getImageUrl(template.thumb_url || template.template_image_url)}
+                  alt={template.name || 'Template'}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+                {selectedTemplateId !== template.template_id && (
+                  <button
+                    type="button"
+                    onClick={(e) => void handleDeleteUserTemplate(template, e)}
+                    disabled={deletingTemplateId === template.template_id}
+                    className={`absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow z-20 opacity-0 group-hover:opacity-100 transition-opacity ${
+                      deletingTemplateId === template.template_id ? 'opacity-60 cursor-not-allowed' : ''
+                    }`}
+                    aria-label={t('template.deleteTemplate')}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+                {selectedTemplateId === template.template_id && (
+                  <div className="absolute inset-0 bg-banana-500 bg-opacity-20 flex items-center justify-center pointer-events-none">
+                    <span className="text-white font-semibold text-sm">{t('template.templateSelected')}</span>
+                  </div>
                 )}
               </div>
             ))}
@@ -384,6 +365,58 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                   {t('template.saveToLibraryOnUpload')}
                 </span>
               </label>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-medium text-gray-700 dark:text-foreground-secondary">{t('template.presetTemplates')}</h4>
+            {hasMorePresetTemplates && (
+              <button
+                type="button"
+                data-testid="preset-template-more-button"
+                onClick={() => setIsPresetTemplateModalOpen(true)}
+                className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-border-primary hover:border-banana-500 hover:text-banana-600 dark:hover:text-banana transition-colors"
+              >
+                {t('template.more')}
+              </button>
+            )}
+          </div>
+          {isLoadingPresetTemplates ? (
+            <div className="text-xs text-gray-500 dark:text-foreground-tertiary">Loading…</div>
+          ) : presetTemplates.length === 0 ? (
+            <div className="text-xs text-gray-500 dark:text-foreground-tertiary">{t('template.noPresetTemplates')}</div>
+          ) : (
+            <div className="grid grid-cols-4 gap-4" data-testid="preset-templates-grid">
+              {visiblePresetTemplates.map((template) => {
+                const isSelected = selectedPresetTemplateId === template.template_id;
+                return (
+                  <div
+                    key={template.template_id}
+                    onClick={() => void handleSelectPresetTemplate(template)}
+                    className={`aspect-[4/3] rounded-lg border-2 cursor-pointer transition-all bg-gray-100 dark:bg-background-secondary relative overflow-hidden flex items-center justify-center ${
+                      isSelected
+                        ? 'border-banana-500 ring-2 ring-banana-200'
+                        : 'border-gray-200 dark:border-border-primary hover:border-banana-500'
+                    }`}
+                  >
+                    <img
+                      src={getImageUrl(template.thumb_url || template.template_image_url)}
+                      alt={template.name || 'Preset Template'}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute left-1 right-1 bottom-1 px-1 py-0.5 rounded bg-black/45 text-white text-[10px] truncate">
+                      {template.name || template.template_id}
+                    </div>
+                    {isSelected && (
+                      <div className="absolute inset-0 bg-banana-500 bg-opacity-20 flex items-center justify-center pointer-events-none">
+                        <span className="text-white font-semibold text-sm">{t('template.templateSelected')}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -466,6 +499,40 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
       <ToastContainer />
 
       <Modal
+        isOpen={isPresetTemplateModalOpen}
+        onClose={() => setIsPresetTemplateModalOpen(false)}
+        title={t('template.morePresetTemplates')}
+        size="xl"
+      >
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {presetTemplates.map((template) => {
+            const isSelected = selectedPresetTemplateId === template.template_id;
+            return (
+              <button
+                key={template.template_id}
+                type="button"
+                onClick={() => void handleSelectPresetTemplate(template, true)}
+                className={`relative aspect-[4/3] rounded-lg border-2 overflow-hidden text-left transition-all flex items-center justify-center bg-gray-100 dark:bg-background-secondary ${
+                  isSelected
+                    ? 'border-banana-500 ring-2 ring-banana-200'
+                    : 'border-gray-200 dark:border-border-primary hover:border-banana-400'
+                }`}
+              >
+                <img
+                  src={getImageUrl(template.thumb_url || template.template_image_url)}
+                  alt={template.name || 'Preset Template'}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-x-0 bottom-0 px-2 py-1 bg-black/45 text-white text-xs truncate">
+                  {template.name || template.template_id}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </Modal>
+
+      <Modal
         isOpen={isStylePresetModalOpen}
         onClose={() => setIsStylePresetModalOpen(false)}
         title={t('template.moreStyleTemplates')}
@@ -523,36 +590,47 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
 
 export const getTemplateFile = async (
   templateId: string,
-  userTemplates: UserTemplate[]
+  userTemplates: UserTemplate[],
+  source: Exclude<TemplateSource, 'upload'> = 'user'
 ): Promise<File | null> => {
-  const presetTemplates = [
-    { id: '1', preview: '/templates/template_y.png' },
-    { id: '2', preview: '/templates/template_vector_illustration.png' },
-    { id: '3', preview: '/templates/template_glass.png' },
-  ];
+  const loadFromTemplateUrl = async (templateImageUrl: string, fallbackName = 'template.png') => {
+    const imageUrl = getImageUrl(templateImageUrl);
+    const response = await fetch(imageUrl);
+    const blob = await response.blob();
+    return new File([blob], fallbackName, { type: blob.type });
+  };
 
-  const presetTemplate = presetTemplates.find(t => t.id === templateId);
-  if (presetTemplate && presetTemplate.preview) {
+  if (source === 'preset') {
     try {
-      const response = await fetch(presetTemplate.preview);
-      const blob = await response.blob();
-      return new File([blob], presetTemplate.preview.split('/').pop() || 'template.png', { type: blob.type });
+      const presetResponse = await listPresetTemplates();
+      const presetTemplate = (presetResponse.data?.templates || []).find((t) => t.template_id === templateId);
+      if (presetTemplate?.template_image_url) {
+        return await loadFromTemplateUrl(presetTemplate.template_image_url, 'preset-template.png');
+      }
     } catch (error) {
       console.error('Failed to load preset template:', error);
+    }
+  }
+
+  const userTemplate = userTemplates.find((t) => t.template_id === templateId);
+  if (userTemplate?.template_image_url) {
+    try {
+      return await loadFromTemplateUrl(userTemplate.template_image_url, 'template.png');
+    } catch (error) {
+      console.error('Failed to load user template:', error);
       return null;
     }
   }
 
-  const userTemplate = userTemplates.find(t => t.template_id === templateId);
-  if (userTemplate) {
+  if (source !== 'preset') {
     try {
-      const imageUrl = getImageUrl(userTemplate.template_image_url);
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      return new File([blob], 'template.png', { type: blob.type });
+      const presetResponse = await listPresetTemplates();
+      const presetTemplate = (presetResponse.data?.templates || []).find((t) => t.template_id === templateId);
+      if (presetTemplate?.template_image_url) {
+        return await loadFromTemplateUrl(presetTemplate.template_image_url, 'preset-template.png');
+      }
     } catch (error) {
-      console.error('Failed to load user template:', error);
-      return null;
+      console.error('Fallback load preset template failed:', error);
     }
   }
 

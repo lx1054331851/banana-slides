@@ -1094,6 +1094,46 @@ export const deleteUserTemplate = async (templateId: string): Promise<ApiRespons
   return response.data;
 };
 
+// ===== 预设模板（全局库） =====
+
+export interface PresetTemplate {
+  template_id: string;
+  name?: string;
+  template_image_url: string;
+  thumb_url?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export const uploadPresetTemplate = async (
+  templateImage: File,
+  name?: string
+): Promise<ApiResponse<PresetTemplate>> => {
+  const formData = new FormData();
+  formData.append('template_image', templateImage);
+  if (name) {
+    formData.append('name', name);
+  }
+
+  const response = await apiClient.post<ApiResponse<PresetTemplate>>(
+    '/api/preset-templates',
+    formData
+  );
+  return response.data;
+};
+
+export const listPresetTemplates = async (): Promise<ApiResponse<{ templates: PresetTemplate[] }>> => {
+  const response = await apiClient.get<ApiResponse<{ templates: PresetTemplate[] }>>(
+    '/api/preset-templates'
+  );
+  return response.data;
+};
+
+export const deletePresetTemplate = async (templateId: string): Promise<ApiResponse> => {
+  const response = await apiClient.delete<ApiResponse>(`/api/preset-templates/${templateId}`);
+  return response.data;
+};
+
 // ===== 参考文件相关 API =====
 
 export interface ReferenceFile {

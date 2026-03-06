@@ -226,7 +226,7 @@ import {
 } from 'lucide-react';
 import { Button, Loading, Modal, Textarea, AiRefineInput, useToast, useConfirm, MaterialSelector, ProjectSettingsModal, ExportTasksPanel, TextStyleSelector, StyleWorkflowPanel } from '@/components/shared';
 import { MaterialGeneratorModal } from '@/components/shared/MaterialGeneratorModal';
-import { TemplateSelector, getTemplateFile } from '@/components/shared/TemplateSelector';
+import { TemplateSelector, getTemplateFile, type TemplateSource } from '@/components/shared/TemplateSelector';
 import { listUserTemplates, type UserTemplate, type StylePreset } from '@/api/endpoints';
 import { materialUrlToFile } from '@/components/shared/MaterialSelector';
 import type { Material } from '@/api/endpoints';
@@ -1784,13 +1784,13 @@ export const SlidePreview: React.FC = () => {
     }
   }, [currentProject, projectId, aspectRatio, syncProject, show]);
 
-  const handleTemplateSelect = async (templateFile: File | null, templateId?: string) => {
+  const handleTemplateSelect = async (templateFile: File | null, templateId?: string, source?: TemplateSource) => {
     if (!projectId) return;
     
     // 如果有templateId，按需加载File
     let file = templateFile;
     if (templateId && !file) {
-      file = await getTemplateFile(templateId, userTemplates);
+      file = await getTemplateFile(templateId, userTemplates, source === 'preset' ? 'preset' : 'user');
       if (!file) {
         show({ message: t('slidePreview.loadTemplateFailed'), type: 'error' });
         return;
@@ -1814,8 +1814,7 @@ export const SlidePreview: React.FC = () => {
       
       // 更新选择状态
       if (templateId) {
-        // 判断是用户模板还是预设模板（短ID通常是预设模板）
-        if (templateId.length <= 3 && /^\d+$/.test(templateId)) {
+        if (source === 'preset') {
           setSelectedPresetTemplateId(templateId);
           setSelectedTemplateId(null);
         } else {

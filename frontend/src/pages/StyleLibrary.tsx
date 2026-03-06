@@ -1,24 +1,28 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Code2, Copy, Eye, Globe, Home, RefreshCw, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Code2, Copy, Eye, Globe, Home, RefreshCw, Trash2, Upload, X } from 'lucide-react';
 import { Button, Card, ImageLightbox, useConfirm, useToast } from '@/components/shared';
 import { useT } from '@/hooks/useT';
 import { getImageUrl } from '@/api/client';
 import {
   createStyleTemplate,
+  deletePresetTemplate,
   deleteStylePreset,
   deleteStyleTemplate,
+  listPresetTemplates,
   listStylePresets,
   listStyleTemplates,
+  uploadPresetTemplate,
+  type PresetTemplate,
   type StylePreset,
   type StylePresetPreviewImages,
   type StyleTemplate,
 } from '@/api/endpoints';
 
 type PreviewKey = 'cover_url' | 'toc_url' | 'detail_url' | 'ending_url';
-type StyleTab = 'templates' | 'presets';
+type StyleTab = 'templates' | 'presets' | 'presetTemplates';
 
 const styleLibraryI18n = {
   zh: {
@@ -33,6 +37,7 @@ const styleLibraryI18n = {
     tabs: {
       templates: '风格模板骨架',
       presets: '风格预设',
+      presetTemplates: '预设模板',
     },
     templates: {
       title: '风格模板骨架',
@@ -51,6 +56,17 @@ const styleLibraryI18n = {
       invalidJson: 'JSON 解析失败',
       jsonRequired: '请先输入模板 JSON 骨架',
       noSelection: '请选择一个模板查看 JSON',
+    },
+    presetTemplates: {
+      title: '预设模板',
+      subtitle: '用于首页模板选择的图像预设库',
+      name: '模板名称（可选）',
+      upload: '上传预设模板',
+      empty: '暂无预设模板',
+      delete: '删除',
+      uploaded: '预设模板已上传',
+      deleted: '预设模板已删除',
+      deleteConfirm: '将删除该预设模板，此操作不可撤销。确定继续？',
     },
     presets: {
       title: '风格预设',
@@ -96,6 +112,7 @@ const styleLibraryI18n = {
     tabs: {
       templates: 'Style Template Skeletons',
       presets: 'Style Presets',
+      presetTemplates: 'Preset Templates',
     },
     templates: {
       title: 'Style Template Skeletons',
@@ -114,6 +131,17 @@ const styleLibraryI18n = {
       invalidJson: 'Invalid JSON',
       jsonRequired: 'Please enter template JSON skeleton first',
       noSelection: 'Select a template to view JSON',
+    },
+    presetTemplates: {
+      title: 'Preset Templates',
+      subtitle: 'Image template presets used by the home template selector',
+      name: 'Template name (optional)',
+      upload: 'Upload Preset Template',
+      empty: 'No preset templates',
+      delete: 'Delete',
+      uploaded: 'Preset template uploaded',
+      deleted: 'Preset template deleted',
+      deleteConfirm: 'This will permanently delete this preset template. Continue?',
     },
     presets: {
       title: 'Style Presets',
@@ -164,23 +192,29 @@ export const StyleLibrary: React.FC = () => {
   const t = useT(styleLibraryI18n);
   const { show, ToastContainer } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
+  const presetTemplateInputRef = useRef<HTMLInputElement>(null);
 
   const [templates, setTemplates] = useState<StyleTemplate[]>([]);
   const [presets, setPresets] = useState<StylePreset[]>([]);
+  const [presetTemplates, setPresetTemplates] = useState<PresetTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [isUploadingPresetTemplate, setIsUploadingPresetTemplate] = useState(false);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [deletingPresetId, setDeletingPresetId] = useState<string | null>(null);
+  const [deletingPresetTemplateId, setDeletingPresetTemplateId] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<StyleTab>(() => {
     if (typeof window === 'undefined') return 'presets';
     const saved = sessionStorage.getItem(TAB_STORAGE_KEY);
-    return saved === 'templates' || saved === 'presets' ? saved : 'presets';
+    return saved === 'templates' || saved === 'presets' || saved === 'presetTemplates' ? saved : 'presets';
   });
   const [templateName, setTemplateName] = useState('');
   const [templateJsonText, setTemplateJsonText] = useState('');
+  const [presetTemplateName, setPresetTemplateName] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [selectedPresetId, setSelectedPresetId] = useState<string>('');
+  const [selectedPresetTemplateId, setSelectedPresetTemplateId] = useState<string>('');
   const [isPresetJsonDrawerOpen, setIsPresetJsonDrawerOpen] = useState(false);
   const [isPresetJsonDrawerVisible, setIsPresetJsonDrawerVisible] = useState(false);
   const [isPresetJsonDrawerAnimating, setIsPresetJsonDrawerAnimating] = useState(false);
@@ -202,7 +236,7 @@ export const StyleLibrary: React.FC = () => {
 
   const viewerJsonText = activeTab === 'templates'
     ? (selectedTemplate?.template_json || '')
-    : (selectedPreset?.style_json || '');
+    : (activeTab === 'presets' ? (selectedPreset?.style_json || '') : '');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -262,13 +296,20 @@ export const StyleLibrary: React.FC = () => {
   const loadAll = async () => {
     setIsLoading(true);
     try {
-      const [tplResp, presetResp] = await Promise.all([listStyleTemplates(), listStylePresets()]);
+      const [tplResp, presetResp, presetTemplateResp] = await Promise.all([
+        listStyleTemplates(),
+        listStylePresets(),
+        listPresetTemplates(),
+      ]);
       const nextTemplates = tplResp.data?.templates || [];
       const nextPresets = presetResp.data?.presets || [];
+      const nextPresetTemplates = presetTemplateResp.data?.templates || [];
       setTemplates(nextTemplates);
       setPresets(nextPresets);
+      setPresetTemplates(nextPresetTemplates);
       setSelectedTemplateId((prev) => (prev && nextTemplates.some((x) => x.id === prev) ? prev : (nextTemplates[0]?.id || '')));
       setSelectedPresetId((prev) => (prev && nextPresets.some((x) => x.id === prev) ? prev : (nextPresets[0]?.id || '')));
+      setSelectedPresetTemplateId((prev) => (prev && nextPresetTemplates.some((x) => x.template_id === prev) ? prev : (nextPresetTemplates[0]?.template_id || '')));
     } catch (error: any) {
       show({
         message: `${t('messages.loadFailed')}: ${error?.message || t('messages.unknownError')}`,
@@ -281,7 +322,6 @@ export const StyleLibrary: React.FC = () => {
 
   useEffect(() => {
     void loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleBack = () => {
@@ -341,6 +381,33 @@ export const StyleLibrary: React.FC = () => {
     }
   };
 
+  const handleUploadPresetTemplate = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setIsUploadingPresetTemplate(true);
+    try {
+      const resp = await uploadPresetTemplate(file, presetTemplateName.trim() || undefined);
+      const created = resp.data;
+      if (created?.template_id) {
+        setPresetTemplates((prev) => [created, ...prev]);
+        setSelectedPresetTemplateId(created.template_id);
+      } else {
+        await loadAll();
+      }
+      setPresetTemplateName('');
+      show({ message: t('presetTemplates.uploaded'), type: 'success' });
+    } catch (error: any) {
+      show({
+        message: `${t('messages.saveFailed')}: ${error?.message || t('messages.unknownError')}`,
+        type: 'error',
+      });
+    } finally {
+      setIsUploadingPresetTemplate(false);
+    }
+  };
+
   const handleDeleteTemplate = (template: StyleTemplate) => {
     confirm(
       t('templates.deleteConfirm'),
@@ -367,6 +434,35 @@ export const StyleLibrary: React.FC = () => {
         }
       },
       { title: t('templates.delete'), confirmText: t('templates.delete'), variant: 'danger' }
+    );
+  };
+
+  const handleDeletePresetTemplate = (template: PresetTemplate) => {
+    confirm(
+      t('presetTemplates.deleteConfirm'),
+      async () => {
+        setDeletingPresetTemplateId(template.template_id);
+        try {
+          await deletePresetTemplate(template.template_id);
+          setPresetTemplates((prev) => {
+            const next = prev.filter((item) => item.template_id !== template.template_id);
+            setSelectedPresetTemplateId((selected) => {
+              if (selected !== template.template_id) return selected;
+              return next[0]?.template_id || '';
+            });
+            return next;
+          });
+          show({ message: t('presetTemplates.deleted'), type: 'success' });
+        } catch (error: any) {
+          show({
+            message: `${t('messages.deleteFailed')}: ${error?.message || t('messages.unknownError')}`,
+            type: 'error',
+          });
+        } finally {
+          setDeletingPresetTemplateId(null);
+        }
+      },
+      { title: t('presetTemplates.delete'), confirmText: t('presetTemplates.delete'), variant: 'danger' }
     );
   };
 
@@ -476,7 +572,7 @@ export const StyleLibrary: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-4">
         <Card className="p-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={() => setActiveTab('presets')}
@@ -500,6 +596,18 @@ export const StyleLibrary: React.FC = () => {
               }`}
             >
               {t('tabs.templates')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('presetTemplates')}
+              data-testid="style-library-tab-preset-templates"
+              className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                activeTab === 'presetTemplates'
+                  ? 'bg-banana-500 text-white'
+                  : 'text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'
+              }`}
+            >
+              {t('tabs.presetTemplates')}
             </button>
           </div>
         </Card>
@@ -578,6 +686,87 @@ export const StyleLibrary: React.FC = () => {
                   )}
                 </div>
               </Card>
+            ) : activeTab === 'presetTemplates' ? (
+              <Card className="p-4 md:p-5 space-y-4" data-testid="style-library-preset-templates-panel">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('presetTemplates.title')}</h2>
+                  <p className="text-xs text-gray-600 dark:text-foreground-tertiary">{t('presetTemplates.subtitle')}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <input
+                    value={presetTemplateName}
+                    onChange={(e) => setPresetTemplateName(e.target.value)}
+                    placeholder={t('presetTemplates.name')}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-tertiary dark:text-white"
+                  />
+                  <input
+                    ref={presetTemplateInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleUploadPresetTemplate}
+                  />
+                  <Button
+                    size="sm"
+                    icon={<Upload size={14} />}
+                    loading={isUploadingPresetTemplate}
+                    onClick={() => presetTemplateInputRef.current?.click()}
+                  >
+                    {t('presetTemplates.upload')}
+                  </Button>
+                </div>
+
+                {presetTemplates.length === 0 ? (
+                  <div className="text-xs text-gray-500 dark:text-foreground-tertiary">{t('presetTemplates.empty')}</div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {presetTemplates.map((presetTemplate) => {
+                      const isSelected = selectedPresetTemplateId === presetTemplate.template_id;
+                      return (
+                        <div
+                          key={presetTemplate.template_id}
+                          className={`rounded-xl border p-2 space-y-2 transition-colors ${
+                            isSelected
+                              ? 'border-banana-500 bg-banana-50/60 dark:bg-background-hover'
+                              : 'border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary'
+                          }`}
+                          data-testid={`preset-template-row-${presetTemplate.template_id}`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPresetTemplateId(presetTemplate.template_id)}
+                            className="w-full aspect-[4/3] rounded-lg overflow-hidden border border-gray-200 dark:border-border-primary"
+                          >
+                            <img
+                              src={getImageUrl(presetTemplate.thumb_url || presetTemplate.template_image_url)}
+                              alt={presetTemplate.name || presetTemplate.template_id}
+                              className="w-full h-full object-cover"
+                            />
+                          </button>
+                          <div className="flex items-center justify-between gap-2">
+                            <div
+                              className="text-xs text-gray-700 dark:text-foreground-secondary truncate"
+                              title={presetTemplate.name || presetTemplate.template_id}
+                            >
+                              {presetTemplate.name || presetTemplate.template_id}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              icon={<Trash2 size={14} />}
+                              loading={deletingPresetTemplateId === presetTemplate.template_id}
+                              onClick={() => handleDeletePresetTemplate(presetTemplate)}
+                            >
+                              {t('presetTemplates.delete')}
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </Card>
             ) : (
               <Card className="p-4 md:p-5 space-y-4" data-testid="style-library-presets-panel">
                 <div>
@@ -589,7 +778,7 @@ export const StyleLibrary: React.FC = () => {
                   <div className="text-xs text-gray-500 dark:text-foreground-tertiary">{t('presets.empty')}</div>
                 ) : (
                   <div className="space-y-3">
-                      {presets.map((preset) => {
+                    {presets.map((preset) => {
                       const preview: Partial<StylePresetPreviewImages> = preset.preview_images || {};
                       const isSelected = selectedPresetId === preset.id;
                       return (

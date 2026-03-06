@@ -10,9 +10,9 @@ from urllib.parse import urlparse
 from flask import Blueprint, request, current_app
 from werkzeug.utils import secure_filename
 
-from models import db, StyleTemplate, StylePreset
+from models import db, StyleTemplate, StylePreset, PresetTemplate
 from services import FileService
-from utils import success_response, error_response, not_found, bad_request
+from utils import success_response, error_response, not_found, bad_request, allowed_file
 
 logger = logging.getLogger(__name__)
 
@@ -206,4 +206,96 @@ def delete_style_preset(preset_id: str):
     except Exception as e:
         db.session.rollback()
         logger.error(f"delete_style_preset failed: {str(e)}", exc_info=True)
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
+@style_library_bp.route('/preset-templates', methods=['GET'])
+def list_preset_templates():
+    """
+    GET /api/preset-templates - list globally managed preset templates
+    """
+    try:
+        templates = PresetTemplate.query.order_by(PresetTemplate.created_at.desc()).all()
+        return success_response({'templates': [t.to_dict() for t in templates]})
+    except Exception as e:
+        logger.error(f"list_preset_templates failed: {str(e)}", exc_info=True)
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
+@style_library_bp.route('/preset-templates', methods=['POST'])
+def create_preset_template():
+    """
+    POST /api/preset-templates - upload preset template image
+
+    Content-Type: multipart/form-data
+    Form:
+      - template_image=@file.png
+      - name?=Template name
+    """
+    created_template_id = None
+    try:
+        if 'template_image' not in request.files:
+            return bad_request("No file uploaded")
+
+        file = request.files['template_image']
+        if file.filename == '':
+            return bad_request("No file selected")
+
+        if not allowed_file(file.filename, current_app.config['ALLOWED_EXTENSIONS']):
+            return bad_request("Invalid file type. Allowed types: png, jpg, jpeg, gif, webp")
+
+        name = (request.form.get('name') or '').strip() or None
+
+        file.seek(0, 2)
+        file_size = file.tell()
+        file.seek(0)
+
+        import uuid
+        template_id = str(uuid.uuid4())
+        created_template_id = template_id
+        file_service = FileService(current_app.config['UPLOAD_FOLDER'])
+        file_path = file_service.save_preset_template(file, template_id)
+        thumb_path = file_service.save_preset_template_thumbnail(template_id, file_path)
+
+        obj = PresetTemplate(
+            id=template_id,
+            name=name,
+            file_path=file_path,
+            thumb_path=thumb_path,
+            file_size=file_size
+        )
+        db.session.add(obj)
+        db.session.commit()
+
+        return success_response(obj.to_dict(), status_code=201)
+    except Exception as e:
+        db.session.rollback()
+        if created_template_id:
+            try:
+                FileService(current_app.config['UPLOAD_FOLDER']).delete_preset_template(created_template_id)
+            except Exception:
+                pass
+        logger.error(f"create_preset_template failed: {str(e)}", exc_info=True)
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
+@style_library_bp.route('/preset-templates/<template_id>', methods=['DELETE'])
+def delete_preset_template(template_id: str):
+    """
+    DELETE /api/preset-templates/{id}
+    """
+    try:
+        obj = PresetTemplate.query.get(template_id)
+        if not obj:
+            return not_found('PresetTemplate')
+        db.session.delete(obj)
+        db.session.commit()
+        try:
+            FileService(current_app.config['UPLOAD_FOLDER']).delete_preset_template(template_id)
+        except Exception as cleanup_error:
+            logger.warning(f"delete_preset_template cleanup failed: {cleanup_error}")
+        return success_response(message="PresetTemplate deleted successfully")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delete_preset_template failed: {str(e)}", exc_info=True)
         return error_response('SERVER_ERROR', str(e), 500)

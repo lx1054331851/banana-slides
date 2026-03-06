@@ -9,6 +9,7 @@ import { SlidePreview } from './pages/SlidePreview';
 import { StyleWorkflow } from './pages/StyleWorkflow';
 import { SettingsPage } from './pages/Settings';
 import { StyleLibrary } from './pages/StyleLibrary';
+import { MaterialManagement } from './pages/MaterialManagement';
 import { useProjectStore } from './store/useProjectStore';
 import { useToast, AccessCodeGuard } from './components/shared';
 
@@ -40,6 +41,7 @@ function App() {
           <Route path="/landing" element={<Landing />} />
           <Route path="/history" element={<History />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/materials" element={<MaterialManagement />} />
           <Route path="/style-library" element={<StyleLibrary />} />
           <Route path="/project/:projectId/outline" element={<OutlineEditor />} />
           <Route path="/project/:projectId/detail" element={<DetailEditor />} />
@@ -54,4 +56,3 @@ function App() {
 }
 
 export default App;
-
