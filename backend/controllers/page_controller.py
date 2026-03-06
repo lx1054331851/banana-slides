@@ -238,6 +238,80 @@ def update_page_description(project_id, page_id):
         return error_response('SERVER_ERROR', str(e), 500)
 
 
+@page_bp.route('/<project_id>/pages/<page_id>/refine/description', methods=['POST'])
+def refine_page_description(project_id, page_id):
+    """
+    POST /api/projects/{project_id}/pages/{page_id}/refine/description - Refine single page description draft
+    """
+    try:
+        page = Page.query.get(page_id)
+        if not page or page.project_id != project_id:
+            return not_found('Page')
+
+        project = Project.query.get(project_id)
+        if not project:
+            return not_found('Project')
+
+        data = request.get_json() or {}
+        user_requirement = (data.get('user_requirement') or '').strip()
+        if not user_requirement:
+            return bad_request("user_requirement is required")
+
+        current_description = data.get('current_description')
+        if current_description is None:
+            desc_content = page.get_description_content()
+            if isinstance(desc_content, dict):
+                current_description = desc_content.get('text', '')
+            else:
+                current_description = ''
+
+        outline_content = data.get('outline_content') or page.get_outline_content() or {
+            'title': f'第{page.order_index + 1}页',
+            'points': [],
+        }
+        if page.part and 'part' not in outline_content:
+            outline_content = {**outline_content, 'part': page.part}
+
+        current_descriptions = [{
+            'index': page.order_index,
+            'title': outline_content.get('title', '未命名'),
+            'description_content': {'text': current_description or ''},
+        }]
+
+        reference_files_content = []
+        try:
+            from controllers.project_controller import _get_project_reference_files_content
+            reference_files_content = _get_project_reference_files_content(project_id)
+        except Exception:
+            logger.warning('Failed to load reference files for single page description refinement', exc_info=True)
+
+        previous_requirements = data.get('previous_requirements', [])
+        language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+
+        ai_service = get_ai_service()
+        project_context = ProjectContext(project, reference_files_content)
+        refined_descriptions = ai_service.refine_descriptions(
+            current_descriptions=current_descriptions,
+            user_requirement=user_requirement,
+            project_context=project_context,
+            outline=[outline_content],
+            previous_requirements=previous_requirements,
+            language=language,
+        )
+
+        if not isinstance(refined_descriptions, list) or len(refined_descriptions) != 1:
+            return error_response('AI_SERVICE_ERROR', 'Expected a single refined description', 503)
+
+        return success_response({
+            'refined_description': refined_descriptions[0],
+            'message': '页面描述优化成功'
+        })
+
+    except Exception as e:
+        logger.error(f"refine_page_description failed: {str(e)}", exc_info=True)
+        return error_response('AI_SERVICE_ERROR', str(e), 503)
+
+
 @page_bp.route('/<project_id>/pages/<page_id>/generate/description', methods=['POST'])
 def generate_page_description(project_id, page_id):
     """

@@ -39,6 +39,9 @@ const previewI18n = {
       versions: "版本", version: "版本", current: "当前", editPage: "编辑页面",
       regionSelect: "区域选图", endRegionSelect: "结束区域选图",
       pageOutline: "页面大纲（可编辑）", pageDescription: "页面描述（可编辑）",
+      refineDescription: "AI 优化", refineDescriptionTooltip: "AI 优化当前页描述",
+      refinePlaceholder: "例如：让描述更具体，突出核心结论，改成更适合商务汇报的语气... · Ctrl+Enter提交",
+      refineApplied: "AI 优化已应用到当前描述草稿", refineFailed: "页面描述优化失败，请稍后重试",
       enterTitle: "输入页面标题", pointsPerLine: "要点（每行一个）",
       enterPointsPerLine: "每行输入一个要点", enterDescription: "输入页面的详细描述内容",
       selectContextImages: "选择上下文图片（可选）", useTemplateImage: "使用模板图片",
@@ -131,6 +134,9 @@ const previewI18n = {
       versions: "Versions", version: "Version", current: "Current", editPage: "Edit Page",
       regionSelect: "Region Select", endRegionSelect: "End Region Select",
       pageOutline: "Page Outline (Editable)", pageDescription: "Page Description (Editable)",
+      refineDescription: "AI Refine", refineDescriptionTooltip: "Refine current page description with AI",
+      refinePlaceholder: "e.g., Make the description more specific, highlight the key conclusion, and use a business presentation tone... · Ctrl+Enter",
+      refineApplied: "AI refinement applied to the current draft", refineFailed: "Failed to refine page description",
       enterTitle: "Enter page title", pointsPerLine: "Key Points (one per line)",
       enterPointsPerLine: "Enter one key point per line", enterDescription: "Enter detailed page description",
       selectContextImages: "Select Context Images (Optional)", useTemplateImage: "Use Template Image",
@@ -218,7 +224,7 @@ import {
   List,
   LayoutGrid,
 } from 'lucide-react';
-import { Button, Loading, Modal, Textarea, useToast, useConfirm, MaterialSelector, ProjectSettingsModal, ExportTasksPanel, TextStyleSelector, StyleWorkflowPanel } from '@/components/shared';
+import { Button, Loading, Modal, Textarea, AiRefineInput, useToast, useConfirm, MaterialSelector, ProjectSettingsModal, ExportTasksPanel, TextStyleSelector, StyleWorkflowPanel } from '@/components/shared';
 import { MaterialGeneratorModal } from '@/components/shared/MaterialGeneratorModal';
 import { TemplateSelector, getTemplateFile } from '@/components/shared/TemplateSelector';
 import { listUserTemplates, type UserTemplate, type StylePreset } from '@/api/endpoints';
@@ -238,6 +244,7 @@ import {
   exportImagesTask as apiExportImagesTask,
   exportEditablePPTX as apiExportEditablePPTX,
   getSettings,
+  refineSinglePageDescription,
   startStyleRecommendations,
 } from '@/api/endpoints';
 import type { ImageVersion, DescriptionContent, ExportExtractorMethod, ExportInpaintMethod, Page, GenerationOverride } from '@/types';
@@ -520,6 +527,8 @@ export const SlidePreview: React.FC = () => {
   const [editOutlineTitle, setEditOutlineTitle] = useState('');
   const [editOutlinePoints, setEditOutlinePoints] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [isAiRefiningDescription, setIsAiRefiningDescription] = useState(false);
+  const [showDescriptionRefineInput, setShowDescriptionRefineInput] = useState(false);
   const lastSelectedPageKeyRef = useRef<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showExportTasksPanel, setShowExportTasksPanel] = useState(false);
@@ -1222,6 +1231,8 @@ export const SlidePreview: React.FC = () => {
   const closeEditModal = useCallback(() => {
     setIsEditModalOpen(false);
     setEditRunImageModel(projectDefaultImageModel);
+    setShowDescriptionRefineInput(false);
+    setIsAiRefiningDescription(false);
   }, [projectDefaultImageModel]);
 
   // 保存大纲和描述修改
@@ -1309,6 +1320,38 @@ export const SlidePreview: React.FC = () => {
 
     closeEditModal();
   }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, handleSaveOutlineAndDescription, saveAllPages, closeEditModal]);
+
+  const handleAiRefineDescription = useCallback(async (requirement: string, previousRequirements: string[]) => {
+    if (!currentProject || !projectId) return;
+
+    const page = currentProject.pages[selectedIndex];
+    if (!page?.id) return;
+
+    try {
+      const response = await refineSinglePageDescription(
+        projectId,
+        page.id,
+        requirement,
+        editDescription,
+        {
+          title: editOutlineTitle,
+          points: editOutlinePoints.split('\n').filter((point) => point.trim()),
+        },
+        previousRequirements
+      );
+
+      setEditDescription(response.data?.refined_description || '');
+      show({
+        message: response.data?.message || t('preview.refineApplied'),
+        type: 'success',
+      });
+    } catch (error: any) {
+      console.error('页面描述优化失败:', error);
+      const errorMessage = error?.response?.data?.error?.message || error?.message || t('preview.refineFailed');
+      show({ message: errorMessage, type: 'error' });
+      throw error;
+    }
+  }, [currentProject, projectId, selectedIndex, editDescription, editOutlineTitle, editOutlinePoints, show, t]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -1958,20 +2001,47 @@ export const SlidePreview: React.FC = () => {
           className="w-full px-4 py-3 flex items-center justify-between hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
         >
           <h4 className="text-sm font-semibold text-gray-700 dark:text-foreground-secondary">{t('preview.pageDescription')}</h4>
-          {isDescriptionExpanded ? (
-            <ChevronUp size={18} className="text-gray-500 dark:text-foreground-tertiary" />
-          ) : (
-            <ChevronDown size={18} className="text-gray-500 dark:text-foreground-tertiary" />
-          )}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsDescriptionExpanded(true);
+                setShowDescriptionRefineInput((prev) => !prev);
+              }}
+              className="inline-flex items-center gap-1 rounded-md border border-blue-300 dark:border-blue-600 bg-white/80 dark:bg-background-secondary px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 hover:bg-white dark:hover:bg-background-hover transition-colors"
+              title={t('preview.refineDescriptionTooltip')}
+            >
+              <Sparkles size={14} />
+              <span>{t('preview.refineDescription')}</span>
+            </button>
+            {isDescriptionExpanded ? (
+              <ChevronUp size={18} className="text-gray-500 dark:text-foreground-tertiary" />
+            ) : (
+              <ChevronDown size={18} className="text-gray-500 dark:text-foreground-tertiary" />
+            )}
+          </div>
         </button>
         {isDescriptionExpanded && (
-          <div className="px-4 pb-4">
+          <div className="px-4 pb-4 space-y-3">
+            {showDescriptionRefineInput && (
+              <div className="rounded-lg border border-blue-200 dark:border-blue-700 bg-white/70 dark:bg-background-secondary/80 p-2">
+                <AiRefineInput
+                  title=""
+                  placeholder={t('preview.refinePlaceholder')}
+                  onSubmit={handleAiRefineDescription}
+                  className="!p-0 !bg-transparent !border-0"
+                  onStatusChange={setIsAiRefiningDescription}
+                />
+              </div>
+            )}
             <textarea
               value={editDescription}
               onChange={(e) => setEditDescription(e.target.value)}
               rows={8}
               className="w-full min-h-[12rem] px-3 py-2 text-sm border border-blue-300 dark:border-blue-700 bg-white dark:bg-background-secondary text-gray-900 dark:text-foreground-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-banana-500 resize-y"
               placeholder={t('preview.enterDescription')}
+              readOnly={isAiRefiningDescription}
             />
           </div>
         )}
@@ -2135,6 +2205,7 @@ export const SlidePreview: React.FC = () => {
             handleSaveOutlineAndDescription();
             closeEditModal();
           }}
+          disabled={isAiRefiningDescription}
         >
           {t('preview.saveOutlineOnly')}
         </Button>
@@ -2145,6 +2216,7 @@ export const SlidePreview: React.FC = () => {
           <Button
             variant="primary"
             onClick={handleSubmitEdit}
+            disabled={isAiRefiningDescription}
           >
             {t('preview.generateImage')}
           </Button>

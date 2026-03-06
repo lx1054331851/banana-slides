@@ -10,6 +10,7 @@ const slideCardI18n = {
   zh: {
     slideCard: {
       notGenerated: "未生成",
+      editPage: "编辑页面",
       confirmDeletePage: "确定要删除这一页吗？",
       confirmDeleteTitle: "确认删除",
       coverPage: "封面",
@@ -19,6 +20,7 @@ const slideCardI18n = {
   en: {
     slideCard: {
       notGenerated: "Not Generated",
+      editPage: "Edit Page",
       confirmDeletePage: "Are you sure you want to delete this page?",
       confirmDeleteTitle: "Confirm Delete",
       coverPage: "Cover",
@@ -72,22 +74,38 @@ export const SlideCard: React.FC<SlideCardProps> = ({
           isSelected ? 'bg-banana-500' : 'bg-transparent'
         }`}
       />
-      {showDelete && (
+      <div
+        className={`absolute top-2 right-2 z-20 flex items-center gap-1.5 transition-opacity ${
+          hasImage ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : 'opacity-100'
+        }`}
+      >
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onDelete();
+            onEdit();
           }}
-          className={`absolute top-2 right-2 z-20 p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-red-600 transition-opacity hover:bg-red-50 ${
-            hasImage ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : 'opacity-100'
-          }`}
-          aria-label={t('slideCard.confirmDeleteTitle')}
-          title={t('slideCard.confirmDeleteTitle')}
+          className="p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-gray-700 dark:text-foreground-secondary transition-colors hover:bg-banana-50 dark:hover:bg-background-hover"
+          aria-label={t('slideCard.editPage')}
+          title={t('slideCard.editPage')}
         >
-          <Trash2 size={16} />
+          <Edit2 size={16} />
         </button>
-      )}
+        {showDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-red-600 transition-colors hover:bg-red-50"
+            aria-label={t('slideCard.confirmDeleteTitle')}
+            title={t('slideCard.confirmDeleteTitle')}
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
+      </div>
 
       {/* 标题 */}
       <div className="flex items-start gap-2 pl-3">
@@ -141,22 +159,6 @@ export const SlideCard: React.FC<SlideCardProps> = ({
               alt={`Slide ${index + 1}`}
               className="w-full h-full object-cover"
             />
-            {/* 悬停操作 */}
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit();
-                }}
-                  className="pointer-events-auto p-2 bg-white dark:bg-background-secondary rounded-lg hover:bg-banana-50 dark:hover:bg-background-hover transition-colors"
-                  aria-label="Edit"
-                >
-                  <Edit2 size={18} />
-                </button>
-              </div>
-            </div>
           </>
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-400">

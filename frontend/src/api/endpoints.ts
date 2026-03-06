@@ -662,6 +662,32 @@ export const updatePageDescription = async (
 };
 
 /**
+ * AI 优化单页描述草稿
+ */
+export const refineSinglePageDescription = async (
+  projectId: string,
+  pageId: string,
+  userRequirement: string,
+  currentDescription: string,
+  outlineContent?: any,
+  previousRequirements?: string[],
+  language?: OutputLanguage
+): Promise<ApiResponse<{ refined_description: string; message: string }>> => {
+  const lang = language || await getStoredOutputLanguage();
+  const response = await apiClient.post<ApiResponse<{ refined_description: string; message: string }>>(
+    `/api/projects/${projectId}/pages/${pageId}/refine/description`,
+    {
+      user_requirement: userRequirement,
+      current_description: currentDescription,
+      outline_content: outlineContent,
+      previous_requirements: previousRequirements || [],
+      language: lang,
+    }
+  );
+  return response.data;
+};
+
+/**
  * 更新页面大纲
  */
 export const updatePageOutline = async (
