@@ -14,6 +14,7 @@ from PIL import Image
 from models import db, Task, Page, Material, PageImageVersion
 from utils import get_filtered_pages
 from utils.image_utils import check_image_resolution
+from utils.text_normalization import normalize_user_text
 
 
 def _get_image_prompt_field_names() -> set | None:
@@ -828,7 +829,7 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
             page.status = 'GENERATING'
             db.session.commit()
 
-            edit_instruction_text = (edit_instruction or '').strip()
+            edit_instruction_text = normalize_user_text(edit_instruction)
             current_image_rel_path = _get_existing_page_image_path(page)
             template_path = file_service.get_template_path(project_id) if use_template else None
 

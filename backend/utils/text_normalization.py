@@ -5,22 +5,31 @@ from __future__ import annotations
 from typing import Iterable, List
 
 
-_ZERO_WIDTH_CHARS = {
+_INVISIBLE_CHARS = {
     ord('\u200b'): None,
     ord('\u200c'): None,
     ord('\u200d'): None,
     ord('\u2060'): None,
     ord('\ufeff'): None,
 }
+_INVISIBLE_CHARS.update({codepoint: None for codepoint in range(0x00, 0x20) if codepoint not in (0x09, 0x0A)})
+_INVISIBLE_CHARS.update({codepoint: None for codepoint in range(0x7F, 0xA0)})
 
 
 def normalize_user_text(value: object) -> str:
-    """Remove invisible separators and surrounding whitespace from user input."""
+    """Normalize line breaks and remove invisible/control chars from user input."""
     if not isinstance(value, str):
         return ''
 
-    normalized = value.replace('\r\n', '\n').replace('\r', '\n')
-    normalized = normalized.translate(_ZERO_WIDTH_CHARS)
+    normalized = (
+        value
+        .replace('\r\n', '\n')
+        .replace('\r', '\n')
+        .replace('\u2028', '\n')
+        .replace('\u2029', '\n')
+        .replace('\u0085', '\n')
+    )
+    normalized = normalized.translate(_INVISIBLE_CHARS)
     return normalized.strip()
 
 

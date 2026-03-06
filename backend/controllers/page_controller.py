@@ -301,11 +301,49 @@ def refine_page_description(project_id, page_id):
             language=language,
         )
 
-        if not isinstance(refined_descriptions, list) or len(refined_descriptions) != 1:
-            return error_response('AI_SERVICE_ERROR', 'Expected a single refined description', 503)
+        if not isinstance(refined_descriptions, list):
+            logger.error(
+                "Single-page refine returned non-list result: type=%s",
+                type(refined_descriptions).__name__,
+            )
+            return error_response(
+                'AI_SERVICE_ERROR',
+                f'Expected a single refined description, got {type(refined_descriptions).__name__}',
+                503,
+            )
+
+        normalized_descriptions = [
+            str(item).strip()
+            for item in refined_descriptions
+            if str(item).strip()
+        ]
+
+        if len(normalized_descriptions) == 1:
+            final_refined_description = normalized_descriptions[0]
+        elif len(normalized_descriptions) > 1:
+            logger.warning(
+                "Single-page refine returned %d descriptions; fallback to first. project_id=%s page_id=%s sample=%s",
+                len(normalized_descriptions),
+                project_id,
+                page_id,
+                normalized_descriptions[:2],
+            )
+            final_refined_description = normalized_descriptions[0]
+        else:
+            logger.error(
+                "Single-page refine returned empty descriptions. project_id=%s page_id=%s raw=%s",
+                project_id,
+                page_id,
+                refined_descriptions,
+            )
+            return error_response(
+                'AI_SERVICE_ERROR',
+                'Expected a single refined description, but got 0 valid descriptions',
+                503,
+            )
 
         return success_response({
-            'refined_description': refined_descriptions[0],
+            'refined_description': final_refined_description,
             'message': '页面描述优化成功'
         })
 
@@ -671,7 +709,7 @@ def edit_page_image(project_id, page_id):
                 except Exception:
                     data['generation_override'] = {}
 
-        edit_instruction = (data.get('edit_instruction') or '').strip()
+        edit_instruction = normalize_user_text(data.get('edit_instruction'))
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
 
         generation_override = data.get('generation_override') or {}

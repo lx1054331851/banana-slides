@@ -10,6 +10,7 @@ from utils.image_resolution_policy import (
     get_project_default_image_resolution,
     resolve_effective_image_resolution,
 )
+from utils.text_normalization import normalize_user_text
 from services import FileService
 from services.ai_service_manager import get_ai_service
 from services.ai_providers import get_caption_provider
@@ -215,12 +216,12 @@ def generate_material_image(project_id):
         # Parse request data (prioritize multipart for file uploads)
         if request.is_json:
             data = request.get_json() or {}
-            prompt = data.get('prompt', '').strip()
+            prompt = normalize_user_text(data.get('prompt'))
             ref_file = None
             extra_files = []
         else:
             data = request.form.to_dict()
-            prompt = (data.get('prompt') or '').strip()
+            prompt = normalize_user_text(data.get('prompt'))
             ref_file = request.files.get('ref_image')
             extra_files = request.files.getlist('extra_images') or []
             if data.get('generation_override'):

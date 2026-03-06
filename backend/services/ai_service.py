@@ -188,7 +188,32 @@ class AIService:
     ) -> List[str]:
         """Normalize model output for page description workflows."""
         if isinstance(descriptions, list):
-            return [str(desc) for desc in descriptions]
+            normalized: List[str] = []
+            for desc in descriptions:
+                if isinstance(desc, str):
+                    normalized.append(desc)
+                    continue
+                if isinstance(desc, dict):
+                    extracted = None
+                    for key in ('description', 'refined_description', 'text', 'content'):
+                        value = desc.get(key)
+                        if isinstance(value, str):
+                            extracted = value
+                            break
+                    if extracted is not None:
+                        normalized.append(extracted)
+                    else:
+                        normalized.append(json.dumps(desc, ensure_ascii=False))
+                    continue
+                normalized.append(str(desc))
+            if expected_count is not None and len(normalized) != expected_count:
+                logger.warning(
+                    "Description count mismatch after normalization: expected=%s actual=%s sample=%s",
+                    expected_count,
+                    len(normalized),
+                    normalized[:2],
+                )
+            return normalized
 
         if isinstance(descriptions, str):
             if expected_count == 1:
@@ -199,7 +224,16 @@ class AIService:
             for key in ('descriptions', 'page_descriptions', 'refined_descriptions'):
                 value = descriptions.get(key)
                 if isinstance(value, list):
-                    return [str(desc) for desc in value]
+                    normalized = [str(desc) for desc in value]
+                    if expected_count is not None and len(normalized) != expected_count:
+                        logger.warning(
+                            "Description count mismatch from dict key '%s': expected=%s actual=%s sample=%s",
+                            key,
+                            expected_count,
+                            len(normalized),
+                            normalized[:2],
+                        )
+                    return normalized
 
             if expected_count == 1:
                 for key in ('description', 'refined_description', 'text', 'content'):
