@@ -4,6 +4,14 @@ import { Button, Textarea, Input } from '@/components/shared';
 import { useT } from '@/hooks/useT';
 import type { ExportExtractorMethod, ExportInpaintMethod } from '@/types';
 import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
+import {
+  PROJECT_DEFAULT_IMAGE_MODEL,
+  PROJECT_DEFAULT_IMAGE_RESOLUTION,
+  PROJECT_DEFAULT_IMAGE_SOURCE,
+  PROJECT_IMAGE_RESOLUTION_OPTIONS,
+  PROJECT_SUPPORTED_IMAGE_MODELS,
+  type ProjectSupportedImageModel,
+} from '@/config/projectAiDefaults';
 
 // ProjectSettings 组件自包含翻译
 const projectSettingsI18n = {
@@ -145,18 +153,6 @@ interface ProjectSettingsModalProps {
 
 type SettingsTab = 'project' | 'export';
 
-const GEMINI_PROVIDER = 'gemini';
-const GEMINI_IMAGE_MODELS = [
-  'gemini-3.1-flash-image-preview',
-  'gemini-3-pro-image-preview',
-] as const;
-type GeminiImageModel = (typeof GEMINI_IMAGE_MODELS)[number];
-const DEFAULT_GEMINI_IMAGE_MODEL = GEMINI_IMAGE_MODELS[0];
-const DEFAULT_GEMINI_IMAGE_RESOLUTION = '4K';
-const GEMINI_IMAGE_RESOLUTIONS: Record<GeminiImageModel, string[]> = {
-  'gemini-3.1-flash-image-preview': ['0.5K', '1K', '2K', '4K'],
-  'gemini-3-pro-image-preview': ['1K', '2K', '4K'],
-};
 const GEMINI_PRO_SUPPORTED_ASPECT_RATIOS = new Set([
   '1:1',
   '2:3',
@@ -204,7 +200,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   hasImages = false,
   generationDefaultImageSource = '',
   generationDefaultImageModel = '',
-  generationDefaultImageResolution = DEFAULT_GEMINI_IMAGE_RESOLUTION,
+  generationDefaultImageResolution = PROJECT_DEFAULT_IMAGE_RESOLUTION,
   onGenerationDefaultImageSourceChange,
   onGenerationDefaultImageModelChange,
   onGenerationDefaultImageResolutionChange,
@@ -214,9 +210,9 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   const t = useT(projectSettingsI18n);
   const [activeTab, setActiveTab] = useState<SettingsTab>('project');
   const selectedImageModel = useMemo(
-    () => (GEMINI_IMAGE_MODELS.includes(generationDefaultImageModel as (typeof GEMINI_IMAGE_MODELS)[number])
-      ? generationDefaultImageModel
-      : DEFAULT_GEMINI_IMAGE_MODEL),
+    () => (PROJECT_SUPPORTED_IMAGE_MODELS.includes(generationDefaultImageModel as ProjectSupportedImageModel)
+      ? (generationDefaultImageModel as ProjectSupportedImageModel)
+      : PROJECT_DEFAULT_IMAGE_MODEL),
     [generationDefaultImageModel]
   );
   const visibleAspectRatioOptions = useMemo(() => {
@@ -226,19 +222,19 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
     return ASPECT_RATIO_OPTIONS.filter((opt) => GEMINI_PRO_SUPPORTED_ASPECT_RATIOS.has(opt.value));
   }, [selectedImageModel]);
   const visibleResolutionOptions = useMemo(
-    () => GEMINI_IMAGE_RESOLUTIONS[selectedImageModel],
+    () => PROJECT_IMAGE_RESOLUTION_OPTIONS[selectedImageModel],
     [selectedImageModel]
   );
   const selectedImageResolution = useMemo(
     () => (visibleResolutionOptions.includes(generationDefaultImageResolution)
       ? generationDefaultImageResolution
-      : DEFAULT_GEMINI_IMAGE_RESOLUTION),
+      : PROJECT_DEFAULT_IMAGE_RESOLUTION),
     [generationDefaultImageResolution, visibleResolutionOptions]
   );
 
   useEffect(() => {
-    if (generationDefaultImageSource !== GEMINI_PROVIDER) {
-      onGenerationDefaultImageSourceChange?.(GEMINI_PROVIDER);
+    if (generationDefaultImageSource !== PROJECT_DEFAULT_IMAGE_SOURCE) {
+      onGenerationDefaultImageSourceChange?.(PROJECT_DEFAULT_IMAGE_SOURCE);
     }
   }, [generationDefaultImageSource, onGenerationDefaultImageSourceChange]);
 
@@ -397,11 +393,11 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                         服务商
                       </label>
                       <select
-                        value={GEMINI_PROVIDER}
+                        value={PROJECT_DEFAULT_IMAGE_SOURCE}
                         onChange={(e) => onGenerationDefaultImageSourceChange?.(e.target.value)}
                         className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
                       >
-                        <option value={GEMINI_PROVIDER}>gemini</option>
+                        <option value={PROJECT_DEFAULT_IMAGE_SOURCE}>{PROJECT_DEFAULT_IMAGE_SOURCE}</option>
                       </select>
                     </div>
                     <div className="w-full">
@@ -413,7 +409,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                         onChange={(e) => onGenerationDefaultImageModelChange?.(e.target.value)}
                         className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
                       >
-                        {GEMINI_IMAGE_MODELS.map((model) => (
+                        {PROJECT_SUPPORTED_IMAGE_MODELS.map((model) => (
                           <option key={model} value={model}>
                             {model}
                           </option>

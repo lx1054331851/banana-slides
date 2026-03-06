@@ -44,6 +44,8 @@ const previewI18n = {
       selectContextImages: "选择上下文图片（可选）", useTemplateImage: "使用模板图片",
       imagesInDescription: "描述中的图片", uploadImages: "上传图片",
       selectFromMaterials: "从素材库选择", upload: "上传",
+      editRunImageModelLabel: "本次生成模型",
+      editRunImageModelHint: "仅对本次生成生效，不会保存到项目设置",
       editPromptLabel: "输入修改指令(将自动添加页面描述)",
       editPromptPlaceholder: "例如：将框选区域内的素材移除、把背景改成蓝色、增大标题字号、更改文本框样式为虚线...",
       saveOutlineOnly: "仅保存大纲/描述", generateImage: "生成图片",
@@ -134,6 +136,8 @@ const previewI18n = {
       selectContextImages: "Select Context Images (Optional)", useTemplateImage: "Use Template Image",
       imagesInDescription: "Images in Description", uploadImages: "Upload Images",
       selectFromMaterials: "Select from Materials", upload: "Upload",
+      editRunImageModelLabel: "Model For This Run",
+      editRunImageModelHint: "Only applies to this generation and will not be saved to project settings.",
       editPromptLabel: "Enter edit instructions (page description will be auto-added)",
       editPromptPlaceholder: "e.g., Remove elements in selected area, change background to blue, increase title font size, change text box style to dashed...",
       saveOutlineOnly: "Save Outline/Description Only", generateImage: "Generate Image",
@@ -235,37 +239,17 @@ import {
   exportEditablePPTX as apiExportEditablePPTX,
   getSettings,
   startStyleRecommendations,
-  getProviderProfiles,
 } from '@/api/endpoints';
 import type { ImageVersion, DescriptionContent, ExportExtractorMethod, ExportInpaintMethod, Page, GenerationOverride } from '@/types';
-import type { ProviderProfileSummary } from '@/api/endpoints';
 import { normalizeErrorMessage } from '@/utils';
-
-const PROJECT_DEFAULT_IMAGE_SOURCE = 'gemini';
-const PROJECT_SUPPORTED_IMAGE_MODELS = [
-  'gemini-3.1-flash-image-preview',
-  'gemini-3-pro-image-preview',
-] as const;
-const PROJECT_DEFAULT_IMAGE_MODEL = PROJECT_SUPPORTED_IMAGE_MODELS[0];
-const PROJECT_DEFAULT_IMAGE_RESOLUTION = '4K';
-const PROJECT_IMAGE_RESOLUTION_OPTIONS: Record<(typeof PROJECT_SUPPORTED_IMAGE_MODELS)[number], string[]> = {
-  'gemini-3.1-flash-image-preview': ['0.5K', '1K', '2K', '4K'],
-  'gemini-3-pro-image-preview': ['1K', '2K', '4K'],
-};
-
-const normalizeProjectDefaultImageModel = (value?: string): string => {
-  const model = String(value || '').trim();
-  return PROJECT_SUPPORTED_IMAGE_MODELS.includes(model as (typeof PROJECT_SUPPORTED_IMAGE_MODELS)[number])
-    ? model
-    : PROJECT_DEFAULT_IMAGE_MODEL;
-};
-
-const normalizeProjectDefaultImageResolution = (value?: string, model?: string): string => {
-  const normalizedModel = normalizeProjectDefaultImageModel(model);
-  const options = PROJECT_IMAGE_RESOLUTION_OPTIONS[normalizedModel as (typeof PROJECT_SUPPORTED_IMAGE_MODELS)[number]];
-  const resolution = String(value || '').trim().toUpperCase();
-  return options.includes(resolution) ? resolution : PROJECT_DEFAULT_IMAGE_RESOLUTION;
-};
+import {
+  PROJECT_DEFAULT_IMAGE_MODEL,
+  PROJECT_DEFAULT_IMAGE_SOURCE,
+  PROJECT_DEFAULT_IMAGE_RESOLUTION,
+  PROJECT_SUPPORTED_IMAGE_MODELS,
+  normalizeProjectDefaultImageModel,
+  normalizeProjectDefaultImageResolution,
+} from '@/config/projectAiDefaults';
 
 export const SlidePreview: React.FC = () => {
   const navigate = useNavigate();
@@ -605,12 +589,10 @@ export const SlidePreview: React.FC = () => {
   );
   const [isSavingAspectRatio, setIsSavingAspectRatio] = useState(false);
   const [isSavingGenerationDefaults, setIsSavingGenerationDefaults] = useState(false);
-  const [providerProfiles, setProviderProfiles] = useState<ProviderProfileSummary[]>([]);
-  const [overrideImageSource, setOverrideImageSource] = useState<string>('');
-  const [overrideImageModel, setOverrideImageModel] = useState<string>('');
   const [projectDefaultImageSource, setProjectDefaultImageSource] = useState<string>(PROJECT_DEFAULT_IMAGE_SOURCE);
   const [projectDefaultImageModel, setProjectDefaultImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   const [projectDefaultImageResolution, setProjectDefaultImageResolution] = useState<string>(PROJECT_DEFAULT_IMAGE_RESOLUTION);
+  const [editRunImageModel, setEditRunImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   // 根据画面比例计算 CSS aspect-ratio
   const aspectRatioStyle = useMemo(() => {
     const parts = aspectRatio.split(':');
@@ -643,34 +625,6 @@ export const SlidePreview: React.FC = () => {
       uploadedFiles: File[];
     };
   }>>({});
-
-  const runGenerationOverride = useMemo<GenerationOverride | undefined>(() => {
-    const imageOverride: Record<string, any> = {};
-    if (overrideImageSource.trim()) imageOverride.source = overrideImageSource.trim();
-    if (overrideImageModel.trim()) imageOverride.model = overrideImageModel.trim();
-    if (!Object.keys(imageOverride).length) return undefined;
-    return { image: imageOverride };
-  }, [overrideImageSource, overrideImageModel]);
-  const overrideSourceOptions = useMemo(() => {
-    const base = [
-      { value: '', label: 'Use Project Default' },
-      { value: 'gemini', label: 'Gemini' },
-      { value: 'openai', label: 'OpenAI' },
-      { value: 'qwen', label: 'Qwen' },
-      { value: 'doubao', label: 'Doubao' },
-      { value: 'deepseek', label: 'DeepSeek' },
-      { value: 'glm', label: 'GLM' },
-      { value: 'siliconflow', label: 'SiliconFlow' },
-      { value: 'sensenova', label: 'SenseNova' },
-      { value: 'minimax', label: 'MiniMax' },
-      { value: 'kimi', label: 'Kimi' },
-    ];
-    const profiles = providerProfiles.map((p) => ({
-      value: `profile:${p.id}`,
-      label: `Profile: ${p.id} (${String(p.provider || '').toUpperCase()})`,
-    }));
-    return [...base, ...profiles];
-  }, [providerProfiles]);
 
   useEffect(() => {
     if (!showExportMenu && !showExportTasksPanel) return;
@@ -860,17 +814,7 @@ export const SlidePreview: React.FC = () => {
         console.error('Failed to load user templates:', error);
       }
     };
-    const loadProfiles = async () => {
-      try {
-        const response = await getProviderProfiles();
-        setProviderProfiles(response.data?.profiles || []);
-      } catch (error) {
-        console.warn('Failed to load provider profiles:', error);
-        setProviderProfiles([]);
-      }
-    };
     loadTemplates();
-    loadProfiles();
   }, [projectId, currentProject, syncProject]);
 
   // 监听警告消息
@@ -1025,7 +969,7 @@ export const SlidePreview: React.FC = () => {
 
   const handleBatchGenerate = useCallback(async (pageIds?: string[]) => {
     try {
-      await generateImages(pageIds, runGenerationOverride);
+      await generateImages(pageIds);
     } catch (error: any) {
       console.error('批量生成错误:', error);
       console.error('错误响应:', error?.response?.data);
@@ -1061,7 +1005,7 @@ export const SlidePreview: React.FC = () => {
         type: 'error',
       });
     }
-  }, [generateImages, runGenerationOverride, show, t]);
+  }, [generateImages, show, t]);
 
   const handleGenerateAll = async () => {
     // 先检查分辨率，如果是1K则显示警告
@@ -1144,7 +1088,7 @@ export const SlidePreview: React.FC = () => {
     await checkResolutionAndExecute(async () => {
       try {
         // 使用统一的 generateImages，传入单个页面 ID
-        await generateImages([page.id!], runGenerationOverride);
+        await generateImages([page.id!]);
         show({ message: t('slidePreview.generationStarted'), type: 'success' });
       } catch (error: any) {
         // 提取后端返回的更具体错误信息
@@ -1175,7 +1119,7 @@ export const SlidePreview: React.FC = () => {
         });
       }
     });
-  }, [currentProject, selectedIndex, generateImages, runGenerationOverride, show, checkResolutionAndExecute, isPageGenerating]);
+  }, [currentProject, selectedIndex, generateImages, show, checkResolutionAndExecute, isPageGenerating]);
 
   const handleSwitchVersion = async (versionId: string) => {
     if (!currentProject || !selectedPage?.id || !projectId) return;
@@ -1270,9 +1214,15 @@ export const SlidePreview: React.FC = () => {
     setSelectionStart(null);
     setSelectionRect(null);
     setIsSelectingRegion(false);
+    setEditRunImageModel(projectDefaultImageModel);
 
     setIsEditModalOpen(true);
   };
+
+  const closeEditModal = useCallback(() => {
+    setIsEditModalOpen(false);
+    setEditRunImageModel(projectDefaultImageModel);
+  }, [projectDefaultImageModel]);
 
   // 保存大纲和描述修改
   const handleSaveOutlineAndDescription = useCallback(() => {
@@ -1325,6 +1275,10 @@ export const SlidePreview: React.FC = () => {
     handleSaveOutlineAndDescription();
     // 等待本地防抖更新真正落库，避免后端读到旧的 description_content
     await saveAllPages();
+    const normalizedEditModel = normalizeProjectDefaultImageModel(editRunImageModel || projectDefaultImageModel);
+    const editGenerationOverride: GenerationOverride = {
+      image: { model: normalizedEditModel },
+    };
 
     // 调用后端编辑接口
     await editPageImage(
@@ -1337,7 +1291,7 @@ export const SlidePreview: React.FC = () => {
           ? selectedContextImages.uploadedFiles 
           : undefined,
       },
-      runGenerationOverride
+      editGenerationOverride
     );
 
     // 缓存当前页的编辑上下文，便于后续快速重复执行
@@ -1353,8 +1307,8 @@ export const SlidePreview: React.FC = () => {
       },
     }));
 
-    setIsEditModalOpen(false);
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, runGenerationOverride, handleSaveOutlineAndDescription, saveAllPages]);
+    closeEditModal();
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, handleSaveOutlineAndDescription, saveAllPages, closeEditModal]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -1426,11 +1380,11 @@ export const SlidePreview: React.FC = () => {
   useEffect(() => {
     if (!isEditModalOpen || isMobileView) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsEditModalOpen(false);
+      if (e.key === 'Escape') closeEditModal();
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isEditModalOpen, isMobileView]);
+  }, [isEditModalOpen, isMobileView, closeEditModal]);
 
   // ========== 预览图矩形选择相关逻辑（编辑弹窗内） ==========
   const handleSelectionMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -2146,6 +2100,26 @@ export const SlidePreview: React.FC = () => {
         </div>
       </div>
 
+      <div className="bg-gray-50 dark:bg-background-primary rounded-lg border border-gray-200 dark:border-border-primary p-4 space-y-2">
+        <label className="block text-sm font-semibold text-gray-700 dark:text-foreground-secondary">
+          {t('preview.editRunImageModelLabel')}
+        </label>
+        <select
+          value={editRunImageModel}
+          onChange={(e) => setEditRunImageModel(e.target.value)}
+          className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary text-sm text-gray-900 dark:text-foreground-primary focus:outline-none focus:ring-2 focus:ring-banana-500"
+        >
+          {PROJECT_SUPPORTED_IMAGE_MODELS.map((model) => (
+            <option key={model} value={model}>
+              {model}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
+          {t('preview.editRunImageModelHint')}
+        </p>
+      </div>
+
       {/* 编辑框 */}
       <Textarea
         label={t('preview.editPromptLabel')}
@@ -2159,13 +2133,13 @@ export const SlidePreview: React.FC = () => {
           variant="secondary" 
           onClick={() => {
             handleSaveOutlineAndDescription();
-            setIsEditModalOpen(false);
+            closeEditModal();
           }}
         >
           {t('preview.saveOutlineOnly')}
         </Button>
         <div className="flex gap-3">
-          <Button variant="ghost" onClick={() => setIsEditModalOpen(false)}>
+          <Button variant="ghost" onClick={closeEditModal}>
             {t('common.cancel')}
           </Button>
           <Button
@@ -2369,41 +2343,6 @@ export const SlidePreview: React.FC = () => {
           </div>
         </div>
       </header>
-
-      <div className="px-4 md:px-6 py-2 border-b border-gray-200 dark:border-border-primary bg-gray-50 dark:bg-background-primary">
-        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 text-xs">
-          <span className="font-medium text-gray-700 dark:text-foreground-secondary">This Run Override</span>
-          <select
-            value={overrideImageSource}
-            onChange={(e) => setOverrideImageSource(e.target.value)}
-            className="h-8 px-2 rounded border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary"
-          >
-            {overrideSourceOptions.map((opt) => (
-              <option key={opt.value || '__default'} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          <input
-            type="text"
-            value={overrideImageModel}
-            onChange={(e) => setOverrideImageModel(e.target.value)}
-            placeholder="Image model override (optional)"
-            className="h-8 px-2 rounded border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary md:min-w-[240px]"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              setOverrideImageSource('');
-              setOverrideImageModel('');
-            }}
-            className="h-8 px-2 rounded border border-gray-200 dark:border-border-primary hover:bg-gray-100 dark:hover:bg-background-hover"
-          >
-            Restore Project Default
-          </button>
-          <span className="text-gray-500 dark:text-foreground-tertiary">
-            Project default: source={projectDefaultImageSource || '(global)'} model={projectDefaultImageModel || '(global)'} resolution={projectDefaultImageResolution || '(global)'}
-          </span>
-        </div>
-      </div>
 
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-w-0 min-h-0">
@@ -3070,7 +3009,7 @@ export const SlidePreview: React.FC = () => {
       {isMobileView ? (
         <Modal
           isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
+          onClose={closeEditModal}
           title={t('preview.editPage')}
           size="lg"
         >
@@ -3093,7 +3032,7 @@ export const SlidePreview: React.FC = () => {
                 {t('preview.editPage')}
               </h2>
               <button
-                onClick={() => setIsEditModalOpen(false)}
+                onClick={closeEditModal}
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-background-hover transition-colors"
                 aria-label="关闭"
               >
@@ -3161,7 +3100,6 @@ export const SlidePreview: React.FC = () => {
                     template_json: templateJson,
                     style_requirements: styleRequirements || '',
                     generate_previews: typeof generatePreviews === 'boolean' ? generatePreviews : false,
-                    ...(runGenerationOverride ? { generation_override: runGenerationOverride } : {}),
                   });
                   const taskId = (resp.data as any)?.task_id;
                   if (!taskId) throw new Error('未返回任务ID');
@@ -3177,7 +3115,6 @@ export const SlidePreview: React.FC = () => {
                   projectId={projectId!}
                   taskId={stylePreviewTaskId}
                   templateJson={stylePreviewTemplateJson}
-                  generationOverride={runGenerationOverride}
                   applyMode="apply_only"
                   onTaskIdChange={(newTaskId) => setStylePreviewTaskId(newTaskId)}
                   onBackToProject={() => {
