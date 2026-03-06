@@ -42,6 +42,16 @@ from utils.aspect_ratio_policy import (
 logger = logging.getLogger(__name__)
 
 
+def _generation_logs_enabled() -> bool:
+    try:
+        from flask import current_app, has_app_context
+        if has_app_context() and current_app and hasattr(current_app, 'config'):
+            return bool(current_app.config.get('LOG_GENERATION_DETAILS', True))
+    except Exception:
+        pass
+    return bool(get_config().LOG_GENERATION_DETAILS)
+
+
 class ProjectContext:
     """项目上下文数据类，统一管理 AI 需要的所有项目信息"""
     
@@ -638,6 +648,16 @@ class AIService:
             extra_fields=extra_field_names,
         )
 
+        if _generation_logs_enabled():
+            logger.info(
+                "[Generate Description] page=%s title=%s language=%s detail=%s extra_fields=%s",
+                page_index,
+                page_outline.get('title', 'Untitled'),
+                language,
+                detail_level,
+                len(extra_field_names),
+            )
+
         # 根据 enable_text_reasoning 配置调整 thinking_budget
         actual_budget = self._get_text_thinking_budget()
         response_text = self.text_provider.generate_text(desc_prompt, thinking_budget=actual_budget)
@@ -648,6 +668,14 @@ class AIService:
         result = {'text': description_text}
         if extra_fields:
             result['extra_fields'] = extra_fields
+        if _generation_logs_enabled():
+            logger.info(
+                "[Generate Description Done] page=%s title=%s chars=%s extra_fields=%s",
+                page_index,
+                page_outline.get('title', 'Untitled'),
+                len(description_text or ''),
+                len(extra_fields or {}),
+            )
         return result
 
     def generate_descriptions_stream(self, project_context: ProjectContext,
@@ -1014,6 +1042,16 @@ class AIService:
             Exception with detailed error message if generation fails
         """
         try:
+            if _generation_logs_enabled():
+                logger.info(
+                    "[Generate Image] model=%s aspect_ratio=%s resolution=%s has_template=%s extra_refs=%s prompt_chars=%s",
+                    self.image_model,
+                    aspect_ratio,
+                    resolution,
+                    bool(ref_image_path),
+                    len(additional_ref_images or []),
+                    len(prompt or ''),
+                )
             if get_config().LOG_IMAGE_PROMPTS:
                 logger.info(
                     "Image prompt (aspect_ratio=%s, resolution=%s):\n%s",
@@ -1081,7 +1119,7 @@ class AIService:
             
             # 使用 image_provider 生成图片
             # 根据 enable_image_reasoning 配置控制图像生成的思考模式
-            return self.image_provider.generate_image(
+            image = self.image_provider.generate_image(
                 prompt=prompt,
                 ref_images=ref_images if ref_images else None,
                 aspect_ratio=aspect_ratio,
@@ -1089,6 +1127,15 @@ class AIService:
                 enable_thinking=self.enable_image_reasoning,
                 thinking_budget=self._get_image_thinking_budget()
             )
+            if _generation_logs_enabled() and image is not None:
+                logger.info(
+                    "[Generate Image Done] size=%sx%s mode=%s refs=%s",
+                    image.width,
+                    image.height,
+                    image.mode,
+                    len(ref_images),
+                )
+            return image
             
         except Exception as e:
             error_detail = f"Error generating image: {type(e).__name__}: {str(e)}"

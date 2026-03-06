@@ -46,6 +46,16 @@ from services.export_helpers import maybe_compress_export_images
 logger = logging.getLogger(__name__)
 
 
+def _generation_logs_enabled() -> bool:
+    try:
+        from flask import current_app, has_app_context
+        if has_app_context() and current_app and hasattr(current_app, 'config'):
+            return bool(current_app.config.get('LOG_GENERATION_DETAILS', True))
+    except Exception:
+        pass
+    return True
+
+
 class TaskManager:
     """Simple task manager using ThreadPoolExecutor"""
     
@@ -194,6 +204,16 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
     # 在整个任务中保持应用上下文
     with app.app_context():
         try:
+            if _generation_logs_enabled():
+                logger.info(
+                    "[Descriptions Task Start] task=%s project=%s pages=%s workers=%s language=%s detail=%s",
+                    task_id,
+                    project_id,
+                    len(outline) if outline else 0,
+                    max_workers,
+                    language,
+                    detail_level,
+                )
             # 重要：在后台线程开始时就获取task和设置状态
             task = Task.query.get(task_id)
             if not task:
@@ -209,6 +229,15 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
             
             # Get all pages for this project
             pages = Page.query.filter_by(project_id=project_id).order_by(Page.order_index).all()
+
+            if _generation_logs_enabled():
+                logger.info(
+                    "[Descriptions Task Pages] task=%s project=%s db_pages=%s outline_pages=%s",
+                    task_id,
+                    project_id,
+                    len(pages),
+                    len(pages_data),
+                )
             
             if len(pages) != len(pages_data):
                 raise ValueError("Page count mismatch")
@@ -237,6 +266,14 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                 # 关键修复：在子线程中也需要应用上下文
                 with app.app_context():
                     try:
+                        if _generation_logs_enabled():
+                            logger.info(
+                                "[Description Page Start] task=%s page=%s index=%s title=%s",
+                                task_id,
+                                page_id,
+                                page_index,
+                                page_outline.get('title', 'Untitled'),
+                            )
                         # Get singleton AI service instance
                         from services.ai_service_manager import get_ai_service
                         ai_service = get_ai_service()
@@ -254,6 +291,14 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                         }
                         if desc_result.get('extra_fields'):
                             desc_content['extra_fields'] = desc_result['extra_fields']
+                        if _generation_logs_enabled():
+                            logger.info(
+                                "[Description Page Done] task=%s page=%s index=%s chars=%s",
+                                task_id,
+                                page_id,
+                                page_index,
+                                len(desc_result.get('text') or ''),
+                            )
                         
                         return (page_id, desc_content, None)
                     except Exception as e:
@@ -287,6 +332,13 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                         if error:
                             page.status = 'FAILED'
                             failed += 1
+                            if _generation_logs_enabled():
+                                logger.error(
+                                    "[Description Page Failed] task=%s page=%s error=%s",
+                                    task_id,
+                                    page_id,
+                                    error,
+                                )
                         else:
                             page.set_description_content(desc_content)
                             page.status = 'DESCRIPTION_GENERATED'
@@ -318,6 +370,7 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                 logger.info(f"Project {project_id} status updated to DESCRIPTIONS_GENERATED")
         
         except Exception as e:
+            logger.error(f"Task {task_id} FAILED while generating descriptions: {e}", exc_info=True)
             # Mark task as failed
             task = Task.query.get(task_id)
             if task:
@@ -349,6 +402,17 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
     
     with app.app_context():
         try:
+            if _generation_logs_enabled():
+                logger.info(
+                    "[Images Task Start] task=%s project=%s workers=%s use_template=%s aspect_ratio=%s resolution=%s page_filter=%s",
+                    task_id,
+                    project_id,
+                    max_workers,
+                    use_template,
+                    aspect_ratio,
+                    resolution,
+                    len(page_ids) if page_ids else 'all',
+                )
             # Update task status to PROCESSING
             task = Task.query.get(task_id)
             if not task:
@@ -360,6 +424,14 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
             # Get pages for this project (filtered by page_ids if provided)
             pages = get_filtered_pages(project_id, page_ids)
             all_pages_data = ai_service.flatten_outline(outline)
+
+            if _generation_logs_enabled():
+                logger.info(
+                    "[Images Task Pages] task=%s selected_pages=%s outline_pages=%s",
+                    task_id,
+                    len(pages),
+                    len(all_pages_data),
+                )
 
             # Build mapping from order_index to page_data so filtered pages
             # get matched to the correct outline entry (not just first N)
@@ -391,6 +463,13 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                 # 关键修复：在子线程中也需要应用上下文
                 with app.app_context():
                     try:
+                        if _generation_logs_enabled():
+                            logger.info(
+                                "[Image Page Start] task=%s page=%s index=%s",
+                                task_id,
+                                page_id,
+                                page_index,
+                            )
                         logger.debug(f"Starting image generation for page {page_id}, index {page_index}")
                         # Get page from database in this thread
                         page_obj = Page.query.get(page_id)
@@ -473,6 +552,15 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                         image_path, next_version = save_image_with_version(
                             image, project_id, page_id, file_service, page_obj=page_obj
                         )
+                        if _generation_logs_enabled():
+                            logger.info(
+                                "[Image Page Done] task=%s page=%s index=%s version=%s path=%s",
+                                task_id,
+                                page_id,
+                                page_index,
+                                next_version,
+                                image_path,
+                            )
                         
                         return (page_id, image_path, None, not is_match)
                         
@@ -509,6 +597,13 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                         if error:
                             page.status = 'FAILED'
                             failed += 1
+                            if _generation_logs_enabled():
+                                logger.error(
+                                    "[Image Page Failed] task=%s page=%s error=%s",
+                                    task_id,
+                                    page_id,
+                                    error,
+                                )
                             db.session.commit()
                         else:
                             # 图片已在子线程中保存并创建版本记录，这里只需要更新计数
@@ -548,6 +643,7 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                 logger.info(f"Project {project_id} status updated to COMPLETED")
         
         except Exception as e:
+            logger.error(f"Task {task_id} FAILED while generating images: {e}", exc_info=True)
             # Mark task as failed
             task = Task.query.get(task_id)
             if task:

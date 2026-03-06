@@ -101,6 +101,14 @@ uv run python app.py
 ```
 服务将在 `http://localhost:5000` 启动。
 
+生成过程终端日志默认开启。可选环境变量：
+
+```env
+LOG_GENERATION_DETAILS=true   # 输出描述/图片生成的开始、进度、完成、失败日志
+LOG_IMAGE_PROMPTS=false       # 如需连图片提示词一起打印，改为 true
+LOG_LEVEL=INFO                # 如需更细粒度的底层日志，可改为 DEBUG
+```
+
 ## API文档
 
 完整的API文档请参考项目根目录的 `API设计文档.md`。

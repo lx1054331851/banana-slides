@@ -121,6 +121,7 @@ class Config:
     
     # 日志配置
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+    LOG_GENERATION_DETAILS = os.getenv('LOG_GENERATION_DETAILS', 'true').lower() in ('1', 'true', 'yes', 'y', 'on')
     
     # CORS配置
     CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')
