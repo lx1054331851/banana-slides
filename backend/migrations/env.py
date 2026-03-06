@@ -7,6 +7,7 @@ from sqlalchemy import engine_from_config, pool
 
 # Add the backend directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+os.environ.setdefault('BANANA_SKIP_DB_SETTINGS_LOAD', '1')
 
 from app import create_app
 from models import db
@@ -25,7 +26,7 @@ target_metadata = db.metadata
 
 def get_url() -> str:
     """Get database URL from Flask application config."""
-    app = create_app()
+    app = create_app(load_settings_from_db=False)
     return app.config["SQLALCHEMY_DATABASE_URI"]
 
 
@@ -45,7 +46,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    app = create_app()
+    app = create_app(load_settings_from_db=False)
     connectable = engine_from_config(
         {"sqlalchemy.url": app.config["SQLALCHEMY_DATABASE_URI"]},
         prefix="sqlalchemy.",

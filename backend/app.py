@@ -50,7 +50,12 @@ def set_sqlite_pragma(dbapi_conn, connection_record):
         cursor.close()
 
 
-def create_app():
+def _should_load_settings_from_db() -> bool:
+    skip_load = os.getenv('BANANA_SKIP_DB_SETTINGS_LOAD', '').strip().lower()
+    return skip_load not in ('1', 'true', 'yes', 'y', 'on')
+
+
+def create_app(load_settings_from_db=None):
     """Application factory"""
     app = Flask(__name__)
     
@@ -132,9 +137,13 @@ def create_app():
     app.register_blueprint(style_bp)
     app.register_blueprint(style_library_bp)
 
-    with app.app_context():
-        # Load settings from database and sync to app.config
-        _load_settings_to_config(app)
+    if load_settings_from_db is None:
+        load_settings_from_db = _should_load_settings_from_db()
+
+    if load_settings_from_db:
+        with app.app_context():
+            # Load settings from database and sync to app.config
+            _load_settings_to_config(app)
 
     # Access code enforcement on all /api/ routes
     @app.before_request
