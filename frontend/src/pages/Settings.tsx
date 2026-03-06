@@ -740,17 +740,21 @@ export const Settings: React.FC = () => {
       const pollInterval = setInterval(async () => {
         try {
           const statusResponse = await api.getTestStatus(taskId);
-          const taskStatus = statusResponse.data.status;
+          const statusData = statusResponse.data;
+          if (!statusData) {
+            return;
+          }
+          const taskStatus = statusData.status;
 
           if (taskStatus === 'COMPLETED') {
             clearInterval(pollInterval);
-            const detail = formatDetail(statusResponse.data.result || {});
-            const message = statusResponse.data.message || t('settings.messages.testSuccess');
+            const detail = formatDetail(statusData.result || {});
+            const message = statusData.message || t('settings.messages.testSuccess');
             updateServiceTest(key, { status: 'success', message, detail });
             show({ message, type: 'success' });
           } else if (taskStatus === 'FAILED') {
             clearInterval(pollInterval);
-            const errorMessage = statusResponse.data.error || t('settings.serviceTest.testFailed');
+            const errorMessage = statusData.error || t('settings.serviceTest.testFailed');
             updateServiceTest(key, { status: 'error', message: errorMessage });
             show({ message: `${t('settings.serviceTest.testFailed')}: ${errorMessage}`, type: 'error' });
           }

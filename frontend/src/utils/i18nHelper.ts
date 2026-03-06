@@ -20,7 +20,7 @@ function getNestedValue(obj: NestedRecord, path: string): string | undefined {
  * Same pattern as useT but without React hooks.
  */
 export function getT<T extends Translations>(translations: T) {
-  return (key: string, params?: Record<string, string | number>): string => {
+  return (key: string, params?: Record<string, unknown>): string => {
     const lang = i18n.language?.startsWith('zh') ? 'zh' : 'en';
     const dict = translations[lang] || translations['zh'];
     const localValue = getNestedValue(dict, key);
@@ -36,6 +36,6 @@ export function getT<T extends Translations>(translations: T) {
     }
 
     // Fallback to global i18n
-    return i18n.t(key, params as any);
+    return i18n.t(key, params as any) as string;
   };
 }

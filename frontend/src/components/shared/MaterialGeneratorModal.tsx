@@ -185,11 +185,14 @@ export const MaterialGeneratorModal: React.FC<MaterialGeneratorModalProps> = ({
       try {
         attempts++;
         const response = await getTaskStatus(targetProjectId, taskId);
-        const task: Task = response.data;
+          const task = response.data as Task | undefined;
+          if (!task) {
+            throw new Error('Missing task data');
+          }
 
         if (task.status === 'COMPLETED') {
-          const progress = task.progress || {};
-          const imageUrl = progress.image_url;
+            const progress = (task.progress || {}) as { image_url?: string };
+            const imageUrl = progress.image_url;
           
           if (imageUrl) {
             setPreviewUrl(getImageUrl(imageUrl));
@@ -419,7 +422,7 @@ export const MaterialGeneratorModal: React.FC<MaterialGeneratorModalProps> = ({
               <div className="flex-1 space-y-2 min-w-[180px]">
                 <div className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t('material.extraReference')}</div>
                 <div className="flex flex-wrap gap-2">
-                  {extraImages.map((file, idx) => (
+                  {extraImages.map((_, idx) => (
                     <div key={idx} className="relative group">
                       <img
                         src={extraImageUrls.current[idx] || ''}
@@ -467,7 +470,7 @@ export const MaterialGeneratorModal: React.FC<MaterialGeneratorModalProps> = ({
         </div>
       </div>
       <MaterialSelector
-        projectId={projectId}
+        projectId={projectId ?? undefined}
         isOpen={isMaterialSelectorOpen}
         onClose={() => setIsMaterialSelectorOpen(false)}
         onSelect={handleSelectMaterials}

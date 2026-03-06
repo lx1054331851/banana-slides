@@ -158,7 +158,7 @@ export interface OutlineStreamPage {
 
 export interface OutlineStreamCallbacks {
   onPage: (page: OutlineStreamPage) => void;
-  onDone: (data: { total: number; pages: Page[] }) => void;
+  onDone: (data: { total: number; pages: Page[]; complete?: boolean }) => void;
   onError: (message: string) => void;
 }
 
@@ -349,7 +349,7 @@ export interface DescriptionStreamEvent {
 
 export interface DescriptionStreamCallbacks {
   onDescription: (data: DescriptionStreamEvent) => void;
-  onDone: (data: { total: number; pages: Page[] }) => void;
+  onDone: (data: { total: number; pages: Page[]; warning?: string }) => void;
   onError: (message: string) => void;
 }
 

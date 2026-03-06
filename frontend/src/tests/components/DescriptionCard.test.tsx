@@ -16,11 +16,11 @@ vi.mock('@/api/endpoints', () => ({
 // Mock MarkdownTextarea as a plain textarea so getByDisplayValue works
 vi.mock('@/components/shared/MarkdownTextarea', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const React = require('react')
+  const React = require('react') as typeof import('react')
   return {
     MarkdownTextarea: React.forwardRef(
       ({ value, onChange, onPaste, onFocus, placeholder, label }: any, ref: any) => {
-        const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+        const textareaRef = React.useRef(null as HTMLTextAreaElement | null)
         React.useImperativeHandle(ref, () => ({
           insertAtCursor: (text: string) => {
             // Simulate inserting text at end
@@ -75,12 +75,13 @@ if (typeof URL.createObjectURL === 'undefined') {
 describe('DescriptionCard', () => {
   const mockPage: Page = {
     id: 'page-1',
+    page_id: 'page-1',
     project_id: 'proj-1',
     order_index: 0,
     status: 'DESCRIPTION_GENERATED',
     description_content: { text: 'Test description content' },
     outline_content: { title: 'Test Page', points: ['point 1'] },
-  } as Page
+  } as unknown as Page
 
   const defaultProps = {
     page: mockPage,

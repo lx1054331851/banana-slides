@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { TemplateSelector } from '@/components/shared/TemplateSelector';
 

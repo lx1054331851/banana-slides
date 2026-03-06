@@ -13,6 +13,7 @@ import {
   listStylePresets,
   listStyleTemplates,
   type StylePreset,
+  type StylePresetPreviewImages,
   type StyleTemplate,
 } from '@/api/endpoints';
 
@@ -403,7 +404,7 @@ export const StyleLibrary: React.FC = () => {
   };
 
   const openPresetPreview = (preset: StylePreset, key: PreviewKey = 'cover_url') => {
-    const preview = preset.preview_images || {};
+    const preview: Partial<StylePresetPreviewImages> = preset.preview_images || {};
     const items = PREVIEW_ORDER.map(([k, labelKey]) => {
       const src = preview[k] ? getImageUrl(preview[k]) : '';
       return src ? { src, title: `${preset.name || preset.id}-${t(labelKey)}` } : null;
@@ -588,8 +589,8 @@ export const StyleLibrary: React.FC = () => {
                   <div className="text-xs text-gray-500 dark:text-foreground-tertiary">{t('presets.empty')}</div>
                 ) : (
                   <div className="space-y-3">
-                    {presets.map((preset) => {
-                      const preview = preset.preview_images || {};
+                      {presets.map((preset) => {
+                      const preview: Partial<StylePresetPreviewImages> = preset.preview_images || {};
                       const isSelected = selectedPresetId === preset.id;
                       return (
                         <div
