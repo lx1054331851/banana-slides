@@ -34,6 +34,7 @@ from .prompts import (
 from .ai_providers import get_text_provider, get_image_provider, get_caption_provider, TextProvider, ImageProvider
 from config import get_config
 from services.provider_routing.types import RoutingBundle
+from utils.text_normalization import normalize_user_text, normalize_user_text_list
 from utils.aspect_ratio_policy import (
     get_supported_aspect_ratios_for_model,
     is_aspect_ratio_supported_for_model,
@@ -179,6 +180,36 @@ class AIService:
             如果启用图像推理则返回配置的 budget，否则返回 0
         """
         return self.image_thinking_budget if self.enable_image_reasoning else 0
+
+    @staticmethod
+    def _normalize_page_descriptions_result(
+        descriptions: Union[Dict, List, str],
+        expected_count: Optional[int] = None,
+    ) -> List[str]:
+        """Normalize model output for page description workflows."""
+        if isinstance(descriptions, list):
+            return [str(desc) for desc in descriptions]
+
+        if isinstance(descriptions, str):
+            if expected_count == 1:
+                return [descriptions]
+            raise ValueError("Expected a list of page descriptions, but got a single description string")
+
+        if isinstance(descriptions, dict):
+            for key in ('descriptions', 'page_descriptions', 'refined_descriptions'):
+                value = descriptions.get(key)
+                if isinstance(value, list):
+                    return [str(desc) for desc in value]
+
+            if expected_count == 1:
+                for key in ('description', 'refined_description', 'text', 'content'):
+                    value = descriptions.get(key)
+                    if isinstance(value, str):
+                        return [value]
+
+            raise ValueError("Expected a list of page descriptions, but got an unsupported dict structure")
+
+        raise ValueError("Expected a list of page descriptions, but got: " + str(type(descriptions)))
 
     def _ensure_aspect_ratio_supported_for_current_model(self, aspect_ratio: str):
         if is_aspect_ratio_supported_for_model(self.image_model, aspect_ratio):
@@ -1213,12 +1244,7 @@ class AIService:
 
         split_prompt = get_description_split_prompt(project_context, outline, language)
         descriptions = self.generate_json(split_prompt, thinking_budget=1000)
-        
-        # 确保返回的是字符串列表
-        if isinstance(descriptions, list):
-            return [str(desc) for desc in descriptions]
-        else:
-            raise ValueError("Expected a list of page descriptions, but got: " + str(type(descriptions)))
+        return self._normalize_page_descriptions_result(descriptions, expected_count=len(outline or []))
 
     def detect_cover_ending_fields(self, project_context: ProjectContext,
                                    cover_text: str,
@@ -1256,6 +1282,9 @@ class AIService:
         Returns:
             修改后的大纲结构
         """
+        user_requirement = normalize_user_text(user_requirement)
+        previous_requirements = normalize_user_text_list(previous_requirements)
+
         refinement_prompt = get_outline_refinement_prompt(
             current_outline=current_outline,
             user_requirement=user_requirement,
@@ -1284,6 +1313,9 @@ class AIService:
         Returns:
             修改后的页面描述列表（字符串列表）
         """
+        user_requirement = normalize_user_text(user_requirement)
+        previous_requirements = normalize_user_text_list(previous_requirements)
+
         refinement_prompt = get_descriptions_refinement_prompt(
             current_descriptions=current_descriptions,
             user_requirement=user_requirement,
@@ -1293,12 +1325,10 @@ class AIService:
             language=language
         )
         descriptions = self.generate_json(refinement_prompt, thinking_budget=1000)
-
-        # 确保返回的是字符串列表
-        if isinstance(descriptions, list):
-            return [str(desc) for desc in descriptions]
-        else:
-            raise ValueError("Expected a list of page descriptions, but got: " + str(type(descriptions)))
+        return self._normalize_page_descriptions_result(
+            descriptions,
+            expected_count=len(current_descriptions or []),
+        )
 
     def extract_page_content(self, markdown_text: str, language: str = 'zh') -> Dict:
         """

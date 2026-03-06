@@ -20,6 +20,7 @@ from utils.image_resolution_policy import (
     get_project_default_image_resolution,
     resolve_effective_image_resolution,
 )
+from utils.text_normalization import normalize_user_text, normalize_user_text_list
 from sqlalchemy.orm import joinedload
 from werkzeug.exceptions import BadRequest
 from werkzeug.utils import secure_filename
@@ -47,6 +48,88 @@ from utils import (
 logger = logging.getLogger(__name__)
 
 project_bp = Blueprint('projects', __name__, url_prefix='/api/projects')
+
+
+def _recover_stale_generation_state(project: Project) -> None:
+    """
+    Recover stale task/page statuses for a project.
+
+    This endpoint-level recovery is important after backend restarts:
+    - tasks can remain PENDING/PROCESSING/RUNNING in DB while no worker is active
+    - pages can remain QUEUED/GENERATING forever
+    """
+    running_statuses = {'PENDING', 'PROCESSING', 'RUNNING'}
+    timeout_task_types = {
+        'GENERATE_IMAGES',
+        'GENERATE_PAGE_IMAGE',
+        'EDIT_PAGE_IMAGE',
+        'GENERATE_MATERIAL',
+        'STYLE_RECOMMENDATIONS',
+        'STYLE_PREVIEW_REGENERATE',
+    }
+    image_task_types = {'GENERATE_IMAGES', 'GENERATE_PAGE_IMAGE', 'EDIT_PAGE_IMAGE'}
+    now = datetime.utcnow()
+    stale_timeout = int(current_app.config.get('TASK_STALE_TIMEOUT_SECONDS', 1800) or 0)
+
+    changed = False
+
+    # 1) Recover stale in-flight tasks.
+    for task in project.tasks:
+        if task.status not in running_statuses or task.completed_at is not None:
+            continue
+
+        fail_reason = None
+        is_active = task_manager.is_task_active(task.id)
+        if not is_active:
+            fail_reason = "Task is not active. The server may have restarted or the worker crashed."
+        elif task.task_type in timeout_task_types and stale_timeout > 0 and task.created_at:
+            running_seconds = int((now - task.created_at).total_seconds())
+            if running_seconds > stale_timeout:
+                fail_reason = (
+                    f"Task exceeded maximum runtime ({stale_timeout}s). "
+                    "This usually indicates an upstream model/network timeout."
+                )
+
+        if fail_reason:
+            task.status = 'FAILED'
+            task.error_message = task.error_message or fail_reason
+            task.completed_at = now
+            changed = True
+
+    # 2) If there is no active image-generation task, release stuck page statuses.
+    has_active_image_task = any(
+        task.status in running_statuses
+        and task.completed_at is None
+        and task.task_type in image_task_types
+        and task_manager.is_task_active(task.id)
+        for task in project.tasks
+    )
+
+    if not has_active_image_task:
+        for page in project.pages:
+            if page.status not in ('QUEUED', 'GENERATING'):
+                continue
+
+            # If image already exists, generation has effectively produced a
+            # usable result for this page; recover to COMPLETED.
+            if page.generated_image_path or page.cached_image_path:
+                page.status = 'COMPLETED'
+            else:
+                page.status = 'FAILED'
+            page.updated_at = now
+            changed = True
+
+    # 3) If project was stuck in GENERATING_IMAGES, recover to a terminal/consistent status.
+    if changed and project.status == 'GENERATING_IMAGES':
+        pages = list(project.pages or [])
+        if pages and all(p.status == 'COMPLETED' for p in pages):
+            project.status = 'COMPLETED'
+        else:
+            has_any_desc = any(bool(p.description_content) for p in pages)
+            project.status = 'DESCRIPTIONS_GENERATED' if has_any_desc else 'OUTLINE_GENERATED'
+
+    if changed:
+        db.session.commit()
 
 
 def _validate_aspect_ratio_for_current_image_model(aspect_ratio: str):
@@ -351,6 +434,8 @@ def get_project(project_id):
         
         if not project:
             return not_found('Project')
+
+        _recover_stale_generation_state(project)
         
         return success_response(project.to_dict(include_pages=True))
     
@@ -1637,12 +1722,11 @@ def refine_outline(project_id):
         if not project:
             return not_found('Project')
         
-        data = request.get_json()
-        
-        if not data or not data.get('user_requirement'):
+        data = request.get_json() or {}
+
+        user_requirement = normalize_user_text(data.get('user_requirement'))
+        if not user_requirement:
             return bad_request("user_requirement is required")
-        
-        user_requirement = data['user_requirement']
         
         # IMPORTANT: Expire all cached objects to ensure we get fresh data from database
         # This prevents issues when multiple refine operations are called in sequence
@@ -1673,7 +1757,7 @@ def refine_outline(project_id):
         project_context = ProjectContext(project.to_dict(), reference_files_content)
         
         # Get previous requirements and language from request
-        previous_requirements = data.get('previous_requirements', [])
+        previous_requirements = normalize_user_text_list(data.get('previous_requirements', []))
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
         
         # Refine outline
@@ -1734,12 +1818,11 @@ def refine_descriptions(project_id):
         if not project:
             return not_found('Project')
         
-        data = request.get_json()
-        
-        if not data or not data.get('user_requirement'):
+        data = request.get_json() or {}
+
+        user_requirement = normalize_user_text(data.get('user_requirement'))
+        if not user_requirement:
             return bad_request("user_requirement is required")
-        
-        user_requirement = data['user_requirement']
         
         db.session.expire_all()
         
@@ -1785,7 +1868,7 @@ def refine_descriptions(project_id):
         project_context = ProjectContext(project.to_dict(), reference_files_content)
         
         # Get previous requirements and language from request
-        previous_requirements = data.get('previous_requirements', [])
+        previous_requirements = normalize_user_text_list(data.get('previous_requirements', []))
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
         
         # Refine descriptions

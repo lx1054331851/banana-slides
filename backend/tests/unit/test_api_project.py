@@ -3,6 +3,7 @@
 """
 
 import pytest
+from unittest.mock import patch
 from conftest import assert_success_response, assert_error_response
 
 
@@ -78,6 +79,132 @@ class TestProjectGet:
         
         # 可能返回404或400
         assert response.status_code in [400, 404]
+
+    def test_get_project_recovers_stale_generating_pages(self, client, sample_project):
+        """测试获取项目时会恢复服务重启后卡住的生成状态"""
+        if not sample_project:
+            pytest.skip("项目创建失败")
+
+        project_id = sample_project['project_id']
+
+        from models import db, Page, Task, Project
+
+        project = Project.query.get(project_id)
+        assert project is not None
+
+        page = Page(
+            project_id=project_id,
+            order_index=0,
+            status='GENERATING',
+        )
+        page.set_outline_content({'title': '测试页', 'points': ['要点']})
+        page.set_description_content({'text': '描述'})
+        db.session.add(page)
+
+        task = Task(
+            project_id=project_id,
+            task_type='GENERATE_IMAGES',
+            status='PROCESSING',
+        )
+        db.session.add(task)
+        db.session.commit()
+
+        # 模拟服务重启：任务在数据库中是处理中，但进程内无活跃任务
+        with patch('controllers.project_controller.task_manager.is_task_active', return_value=False):
+            response = client.get(f'/api/projects/{project_id}')
+
+        data = assert_success_response(response)
+        pages = data['data'].get('pages') or []
+        assert len(pages) == 1
+        assert pages[0]['status'] == 'FAILED'
+
+        refreshed_task = Task.query.get(task.id)
+        assert refreshed_task is not None
+        assert refreshed_task.status == 'FAILED'
+
+    def test_get_project_keeps_generating_when_task_active(self, client, sample_project):
+        """测试任务仍活跃时，不应错误恢复页面状态"""
+        if not sample_project:
+            pytest.skip("项目创建失败")
+
+        project_id = sample_project['project_id']
+
+        from models import db, Page, Task, Project
+
+        project = Project.query.get(project_id)
+        assert project is not None
+
+        page = Page(
+            project_id=project_id,
+            order_index=0,
+            status='GENERATING',
+        )
+        page.set_outline_content({'title': '测试页', 'points': ['要点']})
+        page.set_description_content({'text': '描述'})
+        db.session.add(page)
+
+        task = Task(
+            project_id=project_id,
+            task_type='GENERATE_IMAGES',
+            status='PROCESSING',
+        )
+        db.session.add(task)
+        db.session.commit()
+
+        with patch('controllers.project_controller.task_manager.is_task_active', return_value=True):
+            response = client.get(f'/api/projects/{project_id}')
+
+        data = assert_success_response(response)
+        pages = data['data'].get('pages') or []
+        assert len(pages) == 1
+        assert pages[0]['status'] == 'GENERATING'
+
+        refreshed_task = Task.query.get(task.id)
+        assert refreshed_task is not None
+        assert refreshed_task.status == 'PROCESSING'
+
+    def test_get_project_recovers_generating_with_image_to_completed(self, client, sample_project):
+        """测试卡住状态下，已有图片的页面恢复为 COMPLETED"""
+        if not sample_project:
+            pytest.skip("项目创建失败")
+
+        project_id = sample_project['project_id']
+
+        from models import db, Page, Task, Project
+
+        project = Project.query.get(project_id)
+        assert project is not None
+
+        page = Page(
+            project_id=project_id,
+            order_index=0,
+            status='GENERATING',
+            generated_image_path=f'uploads/generated/{project_id}/p1.png',
+            cached_image_path=f'uploads/generated/{project_id}/p1_cached.jpg',
+        )
+        page.set_outline_content({'title': '测试页', 'points': ['要点']})
+        page.set_description_content({'text': '描述'})
+        db.session.add(page)
+
+        task = Task(
+            project_id=project_id,
+            task_type='GENERATE_IMAGES',
+            status='PROCESSING',
+        )
+        db.session.add(task)
+        db.session.commit()
+
+        with patch('controllers.project_controller.task_manager.is_task_active', return_value=False):
+            response = client.get(f'/api/projects/{project_id}')
+
+        data = assert_success_response(response)
+        pages = data['data'].get('pages') or []
+        assert len(pages) == 1
+        assert pages[0]['status'] == 'COMPLETED'
+
+        refreshed_task = Task.query.get(task.id)
+        assert refreshed_task is not None
+        assert refreshed_task.status == 'FAILED'
 
 
 class TestProjectUpdate:

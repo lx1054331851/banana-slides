@@ -57,8 +57,10 @@ export const SlideCard: React.FC<SlideCardProps> = ({
     ? getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)
     : '';
   const hasImage = Boolean(page.preview_image_path || page.generated_image_path);
-  
-  const generating = isGenerating || page.status === 'QUEUED' || page.status === 'GENERATING';
+
+  const generatingByStatus = page.status === 'QUEUED' || page.status === 'GENERATING';
+  const generating = !hasImage && (isGenerating || generatingByStatus);
+  const badgeStatus = hasImage && generatingByStatus ? 'COMPLETED' : page.status;
 
   return (
     <div
@@ -171,7 +173,7 @@ export const SlideCard: React.FC<SlideCardProps> = ({
         
         {/* 状态标签 */}
         <div className="absolute bottom-2 right-2 scale-90 origin-bottom-right">
-          <StatusBadge status={page.status} />
+          <StatusBadge status={badgeStatus} />
         </div>
       </div>
     </div>

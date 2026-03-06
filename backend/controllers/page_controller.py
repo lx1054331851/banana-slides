@@ -9,6 +9,7 @@ from utils.image_resolution_policy import (
     get_project_default_image_resolution,
     resolve_effective_image_resolution,
 )
+from utils.text_normalization import normalize_user_text, normalize_user_text_list
 from services import FileService, ProjectContext
 from services.ai_service_manager import get_ai_service
 from services.provider_routing import resolve_routing_bundle
@@ -254,7 +255,7 @@ def refine_page_description(project_id, page_id):
             return not_found('Project')
 
         data = request.get_json() or {}
-        user_requirement = (data.get('user_requirement') or '').strip()
+        user_requirement = normalize_user_text(data.get('user_requirement'))
         if not user_requirement:
             return bad_request("user_requirement is required")
 
@@ -286,7 +287,7 @@ def refine_page_description(project_id, page_id):
         except Exception:
             logger.warning('Failed to load reference files for single page description refinement', exc_info=True)
 
-        previous_requirements = data.get('previous_requirements', [])
+        previous_requirements = normalize_user_text_list(data.get('previous_requirements', []))
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
 
         ai_service = get_ai_service()

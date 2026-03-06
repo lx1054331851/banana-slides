@@ -285,7 +285,10 @@ export const SlidePreview: React.FC = () => {
 
   const isPageGenerating = useCallback((page?: Page | null) => {
     if (!page?.id) return false;
-    return Boolean(pageGeneratingTasks[page.id]) || page.status === 'GENERATING';
+    const hasImage = Boolean(page.generated_image_path || page.preview_image_path);
+    // "Generating" should not block UI when page already has a renderable image.
+    // Active task map still takes precedence for in-session running tasks.
+    return Boolean(pageGeneratingTasks[page.id]) || (!hasImage && (page.status === 'QUEUED' || page.status === 'GENERATING'));
   }, [pageGeneratingTasks]);
   
   const { addTask, pollTask: pollExportTask, tasks: exportTasks, restoreActiveTasks } = useExportTasksStore();
