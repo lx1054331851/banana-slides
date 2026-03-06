@@ -23,7 +23,7 @@ type StyleTab = 'templates' | 'presets';
 const styleLibraryI18n = {
   zh: {
     nav: {
-      title: '风格模板管理',
+      title: '模板管理',
       back: '返回',
       home: '主页',
       refresh: '刷新',
