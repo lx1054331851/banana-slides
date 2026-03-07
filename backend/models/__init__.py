@@ -27,5 +27,27 @@ from .settings import Settings
 from .style_template import StyleTemplate
 from .style_preset import StylePreset
 from .preset_template import PresetTemplate
+from .data_source import DataSource, DataSourceTable, DataSourceColumn, DataSourceRelation
+from .db_analysis import DbAnalysisSession, DbAnalysisRound, DbInteraction
 
-__all__ = ['db', 'Project', 'Page', 'Task', 'UserTemplate', 'PageImageVersion', 'Material', 'ReferenceFile', 'Settings', 'StyleTemplate', 'StylePreset', 'PresetTemplate']
+__all__ = [
+    'db',
+    'Project',
+    'Page',
+    'Task',
+    'UserTemplate',
+    'PageImageVersion',
+    'Material',
+    'ReferenceFile',
+    'Settings',
+    'StyleTemplate',
+    'StylePreset',
+    'PresetTemplate',
+    'DataSource',
+    'DataSourceTable',
+    'DataSourceColumn',
+    'DataSourceRelation',
+    'DbAnalysisSession',
+    'DbAnalysisRound',
+    'DbInteraction',
+]

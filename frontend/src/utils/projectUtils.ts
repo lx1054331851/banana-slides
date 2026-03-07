@@ -136,6 +136,10 @@ export const getStatusColor = (project: Project): string => {
 export const getProjectRoute = (project: Project): string => {
   const projectId = project.id || project.project_id;
   if (!projectId) return '/';
+
+  if (project.creation_type === 'db_analysis') {
+    return `/project/${projectId}/db-analysis`;
+  }
   
   if (project.pages && project.pages.length > 0) {
     const hasImages = project.pages.some(p => p.generated_image_path);

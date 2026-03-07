@@ -1,0 +1,352 @@
+"""
+API tests for DB analysis mode workflow.
+"""
+
+from unittest.mock import patch
+
+from models import db, DbAnalysisRound, DataSourceTable
+
+
+def _mock_round(session_obj, previous_round=None, previous_answers=None):
+    round_number = 1 if previous_round is None else previous_round.round_number + 1
+    round_obj = DbAnalysisRound(
+        session_id=session_obj.id,
+        round_number=round_number,
+        page_title=f'第{round_number}页：测试分析',
+        sql_draft='SELECT 1 AS x',
+        sql_final='SELECT 1 AS x',
+        status='WAITING_INPUT',
+    )
+    round_obj.set_query_result({'columns': ['x'], 'rows': [{'x': round_number}]})
+    round_obj.set_next_dimension_candidates(['时间趋势', '地区分布', '渠道表现'])
+    round_obj.set_interaction_schema(
+        [
+            {
+                'id': 'next_dimension',
+                'label': '下一页重点分析哪个维度？',
+                'type': 'single_select',
+                'required': True,
+                'options': ['时间趋势', '地区分布', '渠道表现'],
+            }
+        ]
+    )
+    return round_obj
+
+
+def _create_datasource(client, name='db-analysis-test'):
+    response = client.post(
+        '/api/data-sources',
+        json={
+            'name': name,
+            'host': '127.0.0.1',
+            'port': 3306,
+            'username': 'readonly_user',
+            'password': 'readonly_password',
+            'database_name': 'analytics_db',
+        },
+    )
+    assert response.status_code == 201
+    payload = response.get_json()
+    assert payload['success'] is True
+    return payload['data']['data_source']
+
+
+def test_start_db_analysis_project_success(client):
+    datasource = _create_datasource(client, name='db-analysis-start')
+
+    with patch('controllers.db_analysis_controller.DbAnalysisService.generate_round', side_effect=_mock_round):
+        response = client.post(
+            '/api/projects/db-analysis/start',
+            json={
+                'datasource_id': datasource['id'],
+                'business_context': '测试业务背景',
+                'analysis_goal': '测试分析目标',
+            },
+        )
+
+    assert response.status_code == 201
+    payload = response.get_json()
+    assert payload['success'] is True
+    data = payload['data']
+    assert data['project']['creation_type'] == 'db_analysis'
+    assert data['project']['datasource_id'] == datasource['id']
+    assert data['session']['status'] == 'ACTIVE'
+    assert len(data['session']['rounds']) == 1
+    assert data['session']['rounds'][0]['round_number'] == 1
+
+
+def test_db_analysis_requires_answer_before_next_round(client):
+    datasource = _create_datasource(client, name='db-analysis-next')
+
+    with patch('controllers.db_analysis_controller.DbAnalysisService.generate_round', side_effect=_mock_round):
+        start_resp = client.post(
+            '/api/projects/db-analysis/start',
+            json={
+                'datasource_id': datasource['id'],
+                'business_context': '测试业务背景',
+                'analysis_goal': '测试分析目标',
+            },
+        )
+
+        start_data = start_resp.get_json()['data']
+        project_id = start_data['project_id']
+        first_round = start_data['session']['rounds'][0]
+
+        blocked_resp = client.post(f'/api/projects/{project_id}/db-analysis/round/next', json={})
+        assert blocked_resp.status_code == 400
+
+        answer_resp = client.post(
+            f"/api/projects/{project_id}/db-analysis/round/{first_round['id']}/answers",
+            json={'answers': {'next_dimension': '时间趋势'}},
+        )
+        assert answer_resp.status_code == 200
+
+        next_resp = client.post(f'/api/projects/{project_id}/db-analysis/round/next', json={})
+        assert next_resp.status_code == 200
+        next_payload = next_resp.get_json()
+        assert next_payload['success'] is True
+        assert next_payload['data']['round']['round_number'] == 2
+
+
+def test_schema_preview_endpoint_supports_table_filter(client):
+    datasource = _create_datasource(client, name='db-analysis-preview')
+
+    fake_preview = [
+        {
+            'table_name': 'orders',
+            'table_comment': '订单',
+            'columns': [
+                {'column_name': 'id', 'data_type': 'bigint', 'ordinal_position': 1},
+            ],
+        }
+    ]
+
+    with patch('controllers.datasource_controller.DataSourceService.fetch_schema_preview', return_value=fake_preview) as mock_preview:
+        response = client.post(
+            f"/api/data-sources/{datasource['id']}/schema-preview",
+            json={'selected_tables': ['orders']},
+        )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert payload['data']['schema_tables'][0]['table_name'] == 'orders'
+    assert mock_preview.call_count == 1
+    assert mock_preview.call_args.kwargs.get('selected_tables') == ['orders']
+
+
+def test_import_schema_endpoint_accepts_selected_columns(client):
+    datasource = _create_datasource(client, name='db-analysis-import-filter')
+    fake_import_result = {'table_count': 1, 'tables': []}
+
+    with patch('controllers.datasource_controller.DataSourceService.import_schema', return_value=fake_import_result) as mock_import:
+        response = client.post(
+            f"/api/data-sources/{datasource['id']}/import-schema",
+            json={
+                'selected_tables': ['orders'],
+                'selected_columns': {'orders': ['id', 'created_at']},
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert payload['data']['import_result']['table_count'] == 1
+    assert mock_import.call_count == 1
+    assert mock_import.call_args.kwargs.get('selected_tables') == ['orders']
+    assert mock_import.call_args.kwargs.get('selected_columns') == {'orders': ['id', 'created_at']}
+
+
+def test_suggest_relations_endpoint_upserts_candidates(client):
+    datasource = _create_datasource(client, name='db-analysis-rel-suggest')
+    candidates = [
+        {
+            'source_table': 'order_items',
+            'source_column': 'order_id',
+            'target_table': 'orders',
+            'target_column': 'id',
+            'relation_type': 'many_to_one',
+            'origin': 'AUTO',
+            'confidence': 0.95,
+        }
+    ]
+    with patch('controllers.datasource_controller.DataSourceService.fetch_relation_candidates', return_value=candidates) as mock_fetch:
+        response = client.post(
+            f"/api/data-sources/{datasource['id']}/relations/suggest",
+            json={'selected_tables': ['orders', 'order_items']},
+        )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert payload['data']['candidate_count'] == 1
+    assert payload['data']['inserted_count'] == 1
+    assert payload['data']['relations'][0]['source_table'] == 'order_items'
+    assert payload['data']['used_tables'] == ['orders', 'order_items']
+    assert mock_fetch.call_count == 1
+    assert mock_fetch.call_args.kwargs.get('selected_tables') == ['orders', 'order_items']
+
+
+def test_suggest_relations_endpoint_falls_back_to_imported_tables(client):
+    datasource = _create_datasource(client, name='db-analysis-rel-suggest-imported')
+    db.session.add(DataSourceTable(datasource_id=datasource['id'], table_name='orders', table_comment=''))
+    db.session.add(DataSourceTable(datasource_id=datasource['id'], table_name='order_items', table_comment=''))
+    db.session.commit()
+
+    with patch('controllers.datasource_controller.DataSourceService.fetch_relation_candidates', return_value=[]) as mock_fetch:
+        response = client.post(
+            f"/api/data-sources/{datasource['id']}/relations/suggest",
+            json={},
+        )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert sorted(payload['data']['used_tables']) == ['order_items', 'orders']
+    assert mock_fetch.call_count == 1
+    assert sorted(mock_fetch.call_args.kwargs.get('selected_tables')) == ['order_items', 'orders']
+
+
+
+
+def test_import_schema_endpoint_allows_clearing_cached_schema(client):
+    datasource = _create_datasource(client, name='db-analysis-import-clear')
+    preview_tables = [
+        {
+            'table_name': 'orders',
+            'table_comment': '订单',
+            'columns': [
+                {'column_name': 'id', 'data_type': 'bigint', 'ordinal_position': 1},
+                {'column_name': 'created_at', 'data_type': 'datetime', 'ordinal_position': 2},
+            ],
+        }
+    ]
+
+    def _preview_side_effect(_data_source, selected_tables=None):
+        if selected_tables is not None and len(selected_tables) == 0:
+            return []
+        if selected_tables is None:
+            return preview_tables
+        selected_set = set(selected_tables)
+        return [table for table in preview_tables if table['table_name'] in selected_set]
+
+    with patch('services.data_source_service.DataSourceService.fetch_schema_preview', side_effect=_preview_side_effect):
+        first_resp = client.post(
+            f"/api/data-sources/{datasource['id']}/import-schema",
+            json={
+                'selected_tables': ['orders'],
+                'selected_columns': {'orders': ['id', 'created_at']},
+            },
+        )
+        assert first_resp.status_code == 200
+
+        clear_resp = client.post(
+            f"/api/data-sources/{datasource['id']}/import-schema",
+            json={
+                'selected_tables': [],
+                'selected_columns': {},
+            },
+        )
+
+    assert clear_resp.status_code == 200
+    clear_payload = clear_resp.get_json()
+    assert clear_payload['success'] is True
+    assert clear_payload['data']['import_result']['table_count'] == 0
+    assert clear_payload['data']['data_source']['schema_tables'] == []
+
+
+def test_import_schema_prunes_relations_for_removed_tables_and_columns(client):
+    datasource = _create_datasource(client, name='db-analysis-import-prune-relations')
+    preview_tables = [
+        {
+            'table_name': 'orders',
+            'table_comment': '订单',
+            'columns': [
+                {'column_name': 'id', 'data_type': 'bigint', 'ordinal_position': 1},
+                {'column_name': 'created_at', 'data_type': 'datetime', 'ordinal_position': 2},
+            ],
+        },
+        {
+            'table_name': 'order_items',
+            'table_comment': '订单明细',
+            'columns': [
+                {'column_name': 'id', 'data_type': 'bigint', 'ordinal_position': 1},
+                {'column_name': 'order_id', 'data_type': 'bigint', 'ordinal_position': 2},
+            ],
+        },
+    ]
+
+    def _preview_side_effect(_data_source, selected_tables=None):
+        if selected_tables is not None and len(selected_tables) == 0:
+            return []
+        if selected_tables is None:
+            return preview_tables
+        selected_set = set(selected_tables)
+        return [table for table in preview_tables if table['table_name'] in selected_set]
+
+    with patch('services.data_source_service.DataSourceService.fetch_schema_preview', side_effect=_preview_side_effect):
+        import_resp = client.post(
+            f"/api/data-sources/{datasource['id']}/import-schema",
+            json={
+                'selected_tables': ['orders', 'order_items'],
+                'selected_columns': {
+                    'orders': ['id', 'created_at'],
+                    'order_items': ['id', 'order_id'],
+                },
+            },
+        )
+        assert import_resp.status_code == 200
+
+        relation_resp = client.post(
+            f"/api/data-sources/{datasource['id']}/relations",
+            json={
+                'source_table': 'order_items',
+                'source_column': 'order_id',
+                'target_table': 'orders',
+                'target_column': 'id',
+                'relation_type': 'many_to_one',
+            },
+        )
+        assert relation_resp.status_code == 201
+
+        prune_resp = client.post(
+            f"/api/data-sources/{datasource['id']}/import-schema",
+            json={
+                'selected_tables': ['orders'],
+                'selected_columns': {'orders': ['id']},
+            },
+        )
+
+    assert prune_resp.status_code == 200
+    list_resp = client.get(f"/api/data-sources/{datasource['id']}/relations")
+    assert list_resp.status_code == 200
+    list_payload = list_resp.get_json()
+    assert list_payload['data']['relations'] == []
+
+def test_manual_relation_create_and_delete(client):
+    datasource = _create_datasource(client, name='db-analysis-rel-manual')
+    create_resp = client.post(
+        f"/api/data-sources/{datasource['id']}/relations",
+        json={
+            'source_table': 'sales',
+            'source_column': 'customer_id',
+            'target_table': 'customers',
+            'target_column': 'id',
+            'relation_type': 'many_to_one',
+        },
+    )
+    assert create_resp.status_code == 201
+    create_payload = create_resp.get_json()
+    relation_id = create_payload['data']['relation']['id']
+
+    list_resp = client.get(f"/api/data-sources/{datasource['id']}/relations")
+    assert list_resp.status_code == 200
+    list_payload = list_resp.get_json()
+    assert len(list_payload['data']['relations']) == 1
+
+    delete_resp = client.delete(f"/api/data-sources/{datasource['id']}/relations/{relation_id}")
+    assert delete_resp.status_code == 200
+
+    list_resp_2 = client.get(f"/api/data-sources/{datasource['id']}/relations")
+    list_payload_2 = list_resp_2.get_json()
+    assert len(list_payload_2['data']['relations']) == 0

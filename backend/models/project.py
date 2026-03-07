@@ -20,7 +20,8 @@ class Project(db.Model):
     extra_requirements = db.Column(db.Text, nullable=True)  # 额外要求，应用到每个页面的AI提示词
     outline_requirements = db.Column(db.Text, nullable=True)  # 大纲生成要求
     description_requirements = db.Column(db.Text, nullable=True)  # 页面描述生成要求
-    creation_type = db.Column(db.String(20), nullable=False, default='idea')  # idea|outline|descriptions
+    creation_type = db.Column(db.String(20), nullable=False, default='idea')  # idea|outline|descriptions|db_analysis
+    datasource_id = db.Column(db.String(36), db.ForeignKey('data_sources.id'), nullable=True)  # db_analysis 模式绑定的数据源
     template_image_path = db.Column(db.String(500), nullable=True)
     template_style = db.Column(db.Text, nullable=True)  # 风格描述文本（无模板图模式）
     template_style_json = db.Column(db.Text, nullable=True)  # 风格指导 JSON（字符串，优先级高于 template_style）
@@ -50,6 +51,7 @@ class Project(db.Model):
                            cascade='all, delete-orphan')
     materials = db.relationship('Material', back_populates='project', lazy='select',
                            cascade='all, delete-orphan')
+    datasource = db.relationship('DataSource', back_populates='projects', lazy='select')
     
     def to_dict(self, include_pages=False):
         """Convert to dictionary"""
@@ -82,6 +84,7 @@ class Project(db.Model):
             'outline_requirements': self.outline_requirements,
             'description_requirements': self.description_requirements,
             'creation_type': self.creation_type,
+            'datasource_id': self.datasource_id,
             'template_image_url': f'/files/{self.id}/template/{self.template_image_path.split("/")[-1]}' if self.template_image_path else None,
             'template_style': self.template_style,
             'template_style_json': self.template_style_json,

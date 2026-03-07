@@ -7,6 +7,20 @@ from .file_controller import file_bp
 from .material_controller import material_bp
 from .settings_controller import settings_bp
 from .style_library_controller import style_library_bp
+from .datasource_controller import datasource_bp
+from .db_analysis_controller import db_analysis_bp
 
-__all__ = ['project_bp', 'style_bp', 'page_bp', 'template_bp', 'user_template_bp', 'export_bp', 'file_bp', 'material_bp', 'settings_bp', 'style_library_bp']
-
+__all__ = [
+    'project_bp',
+    'style_bp',
+    'page_bp',
+    'template_bp',
+    'user_template_bp',
+    'export_bp',
+    'file_bp',
+    'material_bp',
+    'settings_bp',
+    'style_library_bp',
+    'datasource_bp',
+    'db_analysis_bp',
+]

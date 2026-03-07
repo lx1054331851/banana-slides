@@ -27,6 +27,8 @@ from controllers.material_controller import material_bp, material_global_bp
 from controllers.reference_file_controller import reference_file_bp
 from controllers.settings_controller import settings_bp
 from controllers import project_bp, page_bp, template_bp, user_template_bp, export_bp, file_bp, style_bp, style_library_bp
+from controllers.datasource_controller import datasource_bp
+from controllers.db_analysis_controller import db_analysis_bp
 
 
 # Enable SQLite WAL mode for all connections
@@ -136,6 +138,8 @@ def create_app(load_settings_from_db=None):
     app.register_blueprint(settings_bp)
     app.register_blueprint(style_bp)
     app.register_blueprint(style_library_bp)
+    app.register_blueprint(datasource_bp)
+    app.register_blueprint(db_analysis_bp)
 
     if load_settings_from_db is None:
         load_settings_from_db = _should_load_settings_from_db()

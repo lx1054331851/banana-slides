@@ -160,8 +160,9 @@ export const History: React.FC = () => {
       // 同步项目数据
       await syncProject(projectId);
       
-      // 跳转到指定页面
-      navigate(`/project/${projectId}/${target}`, { state: { from: 'history' } });
+      // DB analysis projects have a dedicated workspace route.
+      const routeTarget = project.creation_type === 'db_analysis' ? 'db-analysis' : target;
+      navigate(`/project/${projectId}/${routeTarget}`, { state: { from: 'history' } });
     } catch (err: any) {
       console.error('打开项目失败:', err);
       show({

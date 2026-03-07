@@ -7,6 +7,10 @@ import type {
   Page,
   CoverEndingFieldDetect,
   GenerationOverride,
+  DataSource,
+  DataSourceRelation,
+  DbAnalysisSession,
+  DbAnalysisRound,
 } from '@/types';
 import type { Settings } from '../types/index';
 
@@ -1621,6 +1625,214 @@ export const regenerateStyleRecommendationPreviews = async (
       language: lang,
       ...(data.generation_override ? { generation_override: data.generation_override } : {}),
     }
+  );
+  return response.data;
+};
+
+// ===== DB Analysis 模式 API =====
+
+export const listDataSources = async (): Promise<ApiResponse<{ data_sources: DataSource[] }>> => {
+  const response = await apiClient.get<ApiResponse<{ data_sources: DataSource[] }>>('/api/data-sources');
+  return response.data;
+};
+
+export const createDataSource = async (payload: {
+  name: string;
+  db_type?: string;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  database_name: string;
+  whitelist_tables?: string[];
+  is_active?: boolean;
+}): Promise<ApiResponse<{ data_source: DataSource }>> => {
+  const response = await apiClient.post<ApiResponse<{ data_source: DataSource }>>('/api/data-sources', payload);
+  return response.data;
+};
+
+export const updateDataSource = async (
+  datasourceId: string,
+  payload: Partial<{
+    name: string;
+    db_type: string;
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    database_name: string;
+    whitelist_tables: string[];
+    is_active: boolean;
+  }>
+): Promise<ApiResponse<{ data_source: DataSource }>> => {
+  const response = await apiClient.put<ApiResponse<{ data_source: DataSource }>>(`/api/data-sources/${datasourceId}`, payload);
+  return response.data;
+};
+
+export const deleteDataSource = async (datasourceId: string): Promise<ApiResponse> => {
+  const response = await apiClient.delete<ApiResponse>(`/api/data-sources/${datasourceId}`);
+  return response.data;
+};
+
+export const getDataSource = async (datasourceId: string): Promise<ApiResponse<{ data_source: DataSource }>> => {
+  const response = await apiClient.get<ApiResponse<{ data_source: DataSource }>>(`/api/data-sources/${datasourceId}`);
+  return response.data;
+};
+
+export const testDataSource = async (datasourceId: string): Promise<ApiResponse<{ ok: boolean; message: string }>> => {
+  const response = await apiClient.post<ApiResponse<{ ok: boolean; message: string }>>(`/api/data-sources/${datasourceId}/test`, {});
+  return response.data;
+};
+
+export const getDataSourceSchemaPreview = async (
+  datasourceId: string,
+  payload?: { selected_tables?: string[] }
+): Promise<ApiResponse<{
+  schema_tables: any[];
+}>> => {
+  const response = await apiClient.post<ApiResponse<{
+    schema_tables: any[];
+  }>>(`/api/data-sources/${datasourceId}/schema-preview`, payload || {});
+  return response.data;
+};
+
+export const importDataSourceSchema = async (
+  datasourceId: string,
+  payload?: {
+    selected_tables?: string[];
+    selected_columns?: Record<string, string[]>;
+  }
+): Promise<ApiResponse<{
+  import_result: { table_count: number; tables: any[] };
+  data_source: DataSource;
+}>> => {
+  const response = await apiClient.post<ApiResponse<{
+    import_result: { table_count: number; tables: any[] };
+    data_source: DataSource;
+  }>>(`/api/data-sources/${datasourceId}/import-schema`, payload || {});
+  return response.data;
+};
+
+export const listDataSourceRelations = async (
+  datasourceId: string
+): Promise<ApiResponse<{ relations: DataSourceRelation[] }>> => {
+  const response = await apiClient.get<ApiResponse<{ relations: DataSourceRelation[] }>>(
+    `/api/data-sources/${datasourceId}/relations`
+  );
+  return response.data;
+};
+
+export const suggestDataSourceRelations = async (
+  datasourceId: string,
+  payload?: { selected_tables?: string[] }
+): Promise<ApiResponse<{
+  relations: DataSourceRelation[];
+  used_tables?: string[];
+  candidate_count: number;
+  inserted_count: number;
+  updated_count: number;
+}>> => {
+  const response = await apiClient.post<ApiResponse<{
+    relations: DataSourceRelation[];
+    used_tables?: string[];
+    candidate_count: number;
+    inserted_count: number;
+    updated_count: number;
+  }>>(`/api/data-sources/${datasourceId}/relations/suggest`, payload || {});
+  return response.data;
+};
+
+export const createDataSourceRelation = async (
+  datasourceId: string,
+  payload: {
+    source_table: string;
+    source_column: string;
+    target_table: string;
+    target_column: string;
+    relation_type?: string;
+    note?: string;
+  }
+): Promise<ApiResponse<{ relation: DataSourceRelation }>> => {
+  const response = await apiClient.post<ApiResponse<{ relation: DataSourceRelation }>>(
+    `/api/data-sources/${datasourceId}/relations`,
+    payload
+  );
+  return response.data;
+};
+
+export const deleteDataSourceRelation = async (
+  datasourceId: string,
+  relationId: string
+): Promise<ApiResponse<{ message: string }>> => {
+  const response = await apiClient.delete<ApiResponse<{ message: string }>>(
+    `/api/data-sources/${datasourceId}/relations/${relationId}`
+  );
+  return response.data;
+};
+
+export const startDbAnalysisProject = async (payload: {
+  datasource_id: string;
+  business_context: string;
+  analysis_goal: string;
+}): Promise<ApiResponse<{ project_id: string; session: DbAnalysisSession; project: Project }>> => {
+  const response = await apiClient.post<ApiResponse<{ project_id: string; session: DbAnalysisSession; project: Project }>>(
+    '/api/projects/db-analysis/start',
+    payload
+  );
+  return response.data;
+};
+
+export const getDbAnalysisState = async (projectId: string): Promise<ApiResponse<{
+  project: Project;
+  session: DbAnalysisSession;
+  datasource: DataSource | null;
+}>> => {
+  const response = await apiClient.get<ApiResponse<{
+    project: Project;
+    session: DbAnalysisSession;
+    datasource: DataSource | null;
+  }>>(`/api/projects/${projectId}/db-analysis/state`);
+  return response.data;
+};
+
+export const submitDbAnalysisAnswers = async (
+  projectId: string,
+  roundId: string,
+  answers: Record<string, any>
+): Promise<ApiResponse<{ round: DbAnalysisRound }>> => {
+  const response = await apiClient.post<ApiResponse<{ round: DbAnalysisRound }>>(
+    `/api/projects/${projectId}/db-analysis/round/${roundId}/answers`,
+    { answers }
+  );
+  return response.data;
+};
+
+export const generateNextDbAnalysisRound = async (projectId: string): Promise<ApiResponse<{ round: DbAnalysisRound }>> => {
+  const response = await apiClient.post<ApiResponse<{ round: DbAnalysisRound }>>(
+    `/api/projects/${projectId}/db-analysis/round/next`,
+    {}
+  );
+  return response.data;
+};
+
+export const stopDbAnalysis = async (projectId: string): Promise<ApiResponse<{
+  session: DbAnalysisSession;
+  project: Project;
+}>> => {
+  const response = await apiClient.post<ApiResponse<{
+    session: DbAnalysisSession;
+    project: Project;
+  }>>(`/api/projects/${projectId}/db-analysis/stop`, {});
+  return response.data;
+};
+
+export const exportDbAnalysisEditablePptx = async (
+  projectId: string,
+  filename?: string
+): Promise<ApiResponse<{ download_url: string; download_url_absolute: string }>> => {
+  const response = await apiClient.post<ApiResponse<{ download_url: string; download_url_absolute: string }>>(
+    `/api/projects/${projectId}/db-analysis/export/editable-pptx`,
+    filename ? { filename } : {}
   );
   return response.data;
 };

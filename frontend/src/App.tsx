@@ -10,6 +10,9 @@ import { StyleWorkflow } from './pages/StyleWorkflow';
 import { SettingsPage } from './pages/Settings';
 import { StyleLibrary } from './pages/StyleLibrary';
 import { MaterialManagement } from './pages/MaterialManagement';
+import { DataSourceManagement } from './pages/DataSourceManagement';
+import { DataSourceErEditor } from './pages/DataSourceErEditor';
+import { DbAnalysisWorkspace } from './pages/DbAnalysisWorkspace';
 import { useProjectStore } from './store/useProjectStore';
 import { useToast, AccessCodeGuard } from './components/shared';
 
@@ -42,9 +45,12 @@ function App() {
           <Route path="/history" element={<History />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/materials" element={<MaterialManagement />} />
+          <Route path="/datasources" element={<DataSourceManagement />} />
+          <Route path="/datasources/:datasourceId/er" element={<DataSourceErEditor />} />
           <Route path="/style-library" element={<StyleLibrary />} />
           <Route path="/project/:projectId/outline" element={<OutlineEditor />} />
           <Route path="/project/:projectId/detail" element={<DetailEditor />} />
+          <Route path="/project/:projectId/db-analysis" element={<DbAnalysisWorkspace />} />
           <Route path="/project/:projectId/style" element={<StyleWorkflow />} />
           <Route path="/project/:projectId/preview" element={<SlidePreview />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -223,3 +223,106 @@ export interface Settings {
   created_at?: string;
   updated_at?: string;
 }
+
+export interface DataSourceColumn {
+  id: string;
+  table_id: string;
+  column_name: string;
+  data_type: string;
+  column_type?: string | null;
+  ordinal_position: number;
+  is_nullable: boolean;
+  is_primary: boolean;
+  column_comment?: string | null;
+}
+
+export interface DataSourceTable {
+  id: string;
+  datasource_id: string;
+  table_name: string;
+  table_comment?: string | null;
+  columns?: DataSourceColumn[];
+}
+
+export interface DataSource {
+  id: string;
+  name: string;
+  db_type: string;
+  host: string;
+  port: number;
+  username: string;
+  database_name: string;
+  whitelist_tables: string[];
+  is_active: boolean;
+  password_set?: boolean;
+  schema_tables?: DataSourceTable[];
+  relations?: DataSourceRelation[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DataSourceRelation {
+  id: string;
+  datasource_id: string;
+  source_table: string;
+  source_column: string;
+  target_table: string;
+  target_column: string;
+  relation_type: string;
+  origin: 'AUTO' | 'MANUAL' | string;
+  confidence?: number | null;
+  is_active: boolean;
+  note?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type DbInteractionQuestionType = 'date_range' | 'single_select' | 'multi_select' | 'text_input';
+
+export interface DbInteractionQuestion {
+  id: string;
+  label: string;
+  type: DbInteractionQuestionType;
+  required: boolean;
+  options?: string[];
+  placeholder?: string;
+  reason?: string;
+}
+
+export interface DbQueryResult {
+  columns: string[];
+  rows: Record<string, any>[];
+  truncated_rows?: boolean;
+  truncated_cols?: boolean;
+}
+
+export interface DbAnalysisRound {
+  id: string;
+  session_id: string;
+  round_number: number;
+  page_title: string;
+  sql_draft?: string;
+  sql_final: string;
+  sql_rewrite_reason?: string;
+  query_result: DbQueryResult;
+  query_error?: string;
+  key_findings?: string;
+  next_dimension_candidates: string[];
+  interaction_schema: DbInteractionQuestion[];
+  interaction_answers: Record<string, any>;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DbAnalysisSession {
+  id: string;
+  project_id: string;
+  datasource_id: string;
+  business_context: string;
+  analysis_goal: string;
+  status: string;
+  started_at?: string;
+  ended_at?: string;
+  rounds: DbAnalysisRound[];
+}
