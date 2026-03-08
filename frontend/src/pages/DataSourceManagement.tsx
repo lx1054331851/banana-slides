@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Database, Play, Plus, RefreshCw, Settings, Trash2, Workflow } from 'lucide-react';
+import { ArrowLeft, Database, Plus, RefreshCw, Settings, Trash2, Workflow } from 'lucide-react';
 
-import { Button, Card, Input, Modal, Textarea, useConfirm, useToast } from '@/components/shared';
+import { Button, Card, Input, Modal, useConfirm, useToast } from '@/components/shared';
 import {
   createDataSource,
   deleteDataSource,
@@ -10,9 +10,9 @@ import {
   getDataSourceSchemaPreview,
   importDataSourceSchema,
   listDataSources,
-  startDbAnalysisProject,
   testDataSource,
 } from '@/api/endpoints';
+import { DB_ANALYSIS_SELECTED_SOURCE_STORAGE_KEY } from '@/config/dbAnalysis';
 import type { DataSource, DataSourceColumn, DataSourceTable } from '@/types';
 
 interface CreateSourceForm {
@@ -100,6 +100,28 @@ const buildImportPayloadFromTables = (
   }, {}),
 });
 
+const toggleSelectionItem = (current: string[], value: string, checked: boolean): string[] => {
+  const next = new Set(current);
+  if (checked) {
+    next.add(value);
+  } else {
+    next.delete(value);
+  }
+  return Array.from(next);
+};
+
+const toggleSelectionItems = (current: string[], values: string[], checked: boolean): string[] => {
+  const next = new Set(current);
+  values.forEach((value) => {
+    if (checked) {
+      next.add(value);
+    } else {
+      next.delete(value);
+    }
+  });
+  return Array.from(next);
+};
+
 const formatDateTime = (value?: number): string => {
   if (!value) return '';
   return new Date(value).toLocaleString('zh-CN', {
@@ -134,9 +156,6 @@ export const DataSourceManagement: React.FC = () => {
   const [isAddTablesModalOpen, setIsAddTablesModalOpen] = useState(false);
   const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
 
-  const [businessContext, setBusinessContext] = useState('');
-  const [analysisGoal, setAnalysisGoal] = useState('');
-
   const [connectionStatusMap, setConnectionStatusMap] = useState<Record<string, ConnectionStatus>>({});
   const [schemaPreviewTables, setSchemaPreviewTables] = useState<PreviewTable[]>([]);
   const [schemaTableSearch, setSchemaTableSearch] = useState('');
@@ -144,6 +163,8 @@ export const DataSourceManagement: React.FC = () => {
   const [selectedStructureTables, setSelectedStructureTables] = useState<string[]>([]);
   const [selectedStructureColumns, setSelectedStructureColumns] = useState<Record<string, string[]>>({});
   const [selectedAddTables, setSelectedAddTables] = useState<string[]>([]);
+  const [selectedImportedTableNames, setSelectedImportedTableNames] = useState<string[]>([]);
+  const [selectedImportedFieldNames, setSelectedImportedFieldNames] = useState<string[]>([]);
 
   const selectedSourceSummary = useMemo(
     () => sources.find((item) => item.id === selectedSourceId) || null,
@@ -176,6 +197,26 @@ export const DataSourceManagement: React.FC = () => {
     if (!importedTables.length) return null;
     return importedTableMap.get(selectedImportedTableName) || importedTables[0] || null;
   }, [importedTableMap, importedTables, selectedImportedTableName]);
+
+  const filteredImportedTableNames = useMemo(
+    () => filteredImportedTables.map((table) => table.table_name),
+    [filteredImportedTables],
+  );
+
+  const activeImportedFieldNames = useMemo(
+    () => (activeImportedTable?.columns || []).map((column) => column.column_name),
+    [activeImportedTable],
+  );
+
+  const allFilteredImportedTablesSelected = useMemo(
+    () => filteredImportedTableNames.length > 0 && filteredImportedTableNames.every((tableName) => selectedImportedTableNames.includes(tableName)),
+    [filteredImportedTableNames, selectedImportedTableNames],
+  );
+
+  const allActiveImportedFieldsSelected = useMemo(
+    () => activeImportedFieldNames.length > 0 && activeImportedFieldNames.every((columnName) => selectedImportedFieldNames.includes(columnName)),
+    [activeImportedFieldNames, selectedImportedFieldNames],
+  );
 
   const currentStructureActiveTable = useMemo(() => {
     const keyword = schemaTableSearch.trim().toLowerCase();
@@ -212,6 +253,14 @@ export const DataSourceManagement: React.FC = () => {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, selectedSourceId, setSearchParams]);
+
+  useEffect(() => {
+    if (selectedSourceId) {
+      localStorage.setItem(DB_ANALYSIS_SELECTED_SOURCE_STORAGE_KEY, selectedSourceId);
+    } else {
+      localStorage.removeItem(DB_ANALYSIS_SELECTED_SOURCE_STORAGE_KEY);
+    }
+  }, [selectedSourceId]);
 
   const loadSources = useCallback(async () => {
     setLoading(true);
@@ -273,6 +322,8 @@ export const DataSourceManagement: React.FC = () => {
     setSelectedAddTables([]);
     setSelectedStructureTables([]);
     setSelectedStructureColumns({});
+    setSelectedImportedTableNames([]);
+    setSelectedImportedFieldNames([]);
     if (selectedSourceId) {
       void loadSourceDetail(selectedSourceId);
     }
@@ -288,6 +339,19 @@ export const DataSourceManagement: React.FC = () => {
     }
     setSelectedImportedTableName(importedTables[0].table_name);
   }, [importedTableMap, importedTables, selectedImportedTableName]);
+
+  useEffect(() => {
+    setSelectedImportedTableNames((prev) => prev.filter((tableName) => importedTableMap.has(tableName)));
+  }, [importedTableMap]);
+
+  useEffect(() => {
+    setSelectedImportedFieldNames([]);
+  }, [activeImportedTable?.table_name]);
+
+  useEffect(() => {
+    const activeFieldSet = new Set(activeImportedFieldNames);
+    setSelectedImportedFieldNames((prev) => prev.filter((columnName) => activeFieldSet.has(columnName)));
+  }, [activeImportedFieldNames]);
 
   const handleFormChange = (key: keyof CreateSourceForm, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -510,24 +574,58 @@ export const DataSourceManagement: React.FC = () => {
     setIsStructureModalOpen(false);
   };
 
-  const handleDeleteImportedTable = async (tableName: string) => {
-    if (!detailSource) return;
-    const nextTables = (detailSource.schema_tables || []).filter((table) => table.table_name !== tableName);
-    await handleImportStructure(buildImportPayloadFromTables(nextTables), `已移除表 ${tableName}`);
+  const handleToggleImportedTableSelection = (tableName: string, checked: boolean) => {
+    setSelectedImportedTableNames((prev) => toggleSelectionItem(prev, tableName, checked));
   };
 
-  const handleDeleteImportedField = async (tableName: string, columnName: string) => {
-    if (!detailSource) return;
+  const handleToggleAllImportedTables = (checked: boolean) => {
+    setSelectedImportedTableNames((prev) => toggleSelectionItems(prev, filteredImportedTableNames, checked));
+  };
+
+  const handleToggleImportedFieldSelection = (columnName: string, checked: boolean) => {
+    setSelectedImportedFieldNames((prev) => toggleSelectionItem(prev, columnName, checked));
+  };
+
+  const handleToggleAllImportedFields = (checked: boolean) => {
+    setSelectedImportedFieldNames((prev) => toggleSelectionItems(prev, activeImportedFieldNames, checked));
+  };
+
+  const handleDeleteImportedTables = async (tableNames: string[]) => {
+    if (!detailSource || tableNames.length === 0) return;
+    const tableNameSet = new Set(tableNames);
+    const nextTables = (detailSource.schema_tables || []).filter((table) => !tableNameSet.has(table.table_name));
+    await handleImportStructure(
+      buildImportPayloadFromTables(nextTables),
+      tableNames.length === 1 ? `已移除表 ${tableNames[0]}` : `已移除 ${tableNames.length} 张表`,
+    );
+    setSelectedImportedTableNames((prev) => prev.filter((tableName) => !tableNameSet.has(tableName)));
+  };
+
+  const handleDeleteImportedTable = async (tableName: string) => {
+    await handleDeleteImportedTables([tableName]);
+  };
+
+  const handleDeleteImportedFields = async (tableName: string, columnNames: string[]) => {
+    if (!detailSource || columnNames.length === 0) return;
+    const columnNameSet = new Set(columnNames);
     const nextTables = (detailSource.schema_tables || [])
       .map((table) => {
         if (table.table_name !== tableName) return table;
         return {
           ...table,
-          columns: (table.columns || []).filter((column) => column.column_name !== columnName),
+          columns: (table.columns || []).filter((column) => !columnNameSet.has(column.column_name)),
         };
       })
       .filter((table) => (table.columns || []).length > 0);
-    await handleImportStructure(buildImportPayloadFromTables(nextTables), `已移除字段 ${tableName}.${columnName}`);
+    await handleImportStructure(
+      buildImportPayloadFromTables(nextTables),
+      columnNames.length === 1 ? `已移除字段 ${tableName}.${columnNames[0]}` : `已移除 ${columnNames.length} 个字段`,
+    );
+    setSelectedImportedFieldNames((prev) => prev.filter((columnName) => !columnNameSet.has(columnName)));
+  };
+
+  const handleDeleteImportedField = async (tableName: string, columnName: string) => {
+    await handleDeleteImportedFields(tableName, [columnName]);
   };
 
   const handleConfirmDeleteTable = (tableName: string) => {
@@ -564,6 +662,59 @@ export const DataSourceManagement: React.FC = () => {
     );
   };
 
+  const handleConfirmBatchDeleteTables = () => {
+    const tablesToDelete = importedTables
+      .map((table) => table.table_name)
+      .filter((tableName) => selectedImportedTableNames.includes(tableName));
+
+    if (tablesToDelete.length === 0) {
+      show({ message: '请至少选择一张表', type: 'warning' });
+      return;
+    }
+
+    confirm(
+      `确认从当前数据源配置中移除选中的 ${tablesToDelete.length} 张表吗？这不会删除真实数据库中的表。`,
+      () => {
+        void handleDeleteImportedTables(tablesToDelete);
+      },
+      {
+        title: '批量移除已导入表',
+        confirmText: '确认移除',
+        variant: 'warning',
+      },
+    );
+  };
+
+  const handleConfirmBatchDeleteFields = () => {
+    if (!activeImportedTable) return;
+
+    const columnsToDelete = (activeImportedTable.columns || [])
+      .map((column) => column.column_name)
+      .filter((columnName) => selectedImportedFieldNames.includes(columnName));
+
+    if (columnsToDelete.length === 0) {
+      show({ message: '请至少选择一个字段', type: 'warning' });
+      return;
+    }
+
+    const remainingCount = Math.max((activeImportedTable.columns || []).length - columnsToDelete.length, 0);
+    const message = remainingCount === 0
+      ? `删除选中的 ${columnsToDelete.length} 个字段后，系统会同时移除表 ${activeImportedTable.table_name}。确认继续吗？`
+      : `确认从当前数据源配置中移除表 ${activeImportedTable.table_name} 的 ${columnsToDelete.length} 个字段吗？`;
+
+    confirm(
+      message,
+      () => {
+        void handleDeleteImportedFields(activeImportedTable.table_name, columnsToDelete);
+      },
+      {
+        title: '批量移除已导入字段',
+        confirmText: '确认移除',
+        variant: 'warning',
+      },
+    );
+  };
+
   const handleDeleteSource = (sourceId: string) => {
     const sourceName = sources.find((item) => item.id === sourceId)?.name || '当前数据源';
     confirm(
@@ -591,36 +742,6 @@ export const DataSourceManagement: React.FC = () => {
         variant: 'danger',
       },
     );
-  };
-
-  const handleStartAnalysis = async () => {
-    if (!selectedSourceId) {
-      show({ message: '请先选择数据源', type: 'warning' });
-      return;
-    }
-    if (!businessContext.trim() || !analysisGoal.trim()) {
-      show({ message: '请填写业务背景和分析目标', type: 'warning' });
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const response = await startDbAnalysisProject({
-        datasource_id: selectedSourceId,
-        business_context: businessContext.trim(),
-        analysis_goal: analysisGoal.trim(),
-      });
-      const projectId = response.data?.project_id;
-      if (!projectId) {
-        throw new Error('未返回项目ID');
-      }
-      localStorage.setItem('currentProjectId', projectId);
-      navigate(`/project/${projectId}/db-analysis`);
-    } catch (error: any) {
-      show({ message: error?.response?.data?.error?.message || error?.message || '启动分析失败', type: 'error' });
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   return (
@@ -657,10 +778,18 @@ export const DataSourceManagement: React.FC = () => {
                 const isSelected = source.id === selectedSourceId;
                 const connectionStatus = connectionStatusMap[source.id];
                 return (
-                  <button
+                  <div
                     key={source.id}
-                    type="button"
                     onClick={() => setSelectedSourceId(source.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelectedSourceId(source.id);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isSelected}
                     className={`w-full text-left rounded-xl border px-4 py-3 transition-all ${
                       isSelected
                         ? 'border-banana-500 bg-banana-50/70 shadow-sm'
@@ -686,7 +815,24 @@ export const DataSourceManagement: React.FC = () => {
                         {connectionStatus.ok ? '最近连接成功' : '最近连接失败'} · {formatDateTime(connectionStatus.at)}
                       </div>
                     )}
-                  </button>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <div className="text-[11px] text-gray-400">点击卡片查看结构详情</div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                        icon={<Trash2 size={14} />}
+                        aria-label={`删除数据源 ${source.name}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDeleteSource(source.id);
+                        }}
+                        disabled={workingId === source.id}
+                      >
+                        删除数据源
+                      </Button>
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -740,9 +886,6 @@ export const DataSourceManagement: React.FC = () => {
                           <Button size="sm" variant="secondary" icon={<Workflow size={14} />} onClick={() => navigate(`/datasources/${detailSource.id}/er`)}>
                             进入 ER 图
                           </Button>
-                          <Button size="sm" variant="ghost" icon={<Trash2 size={14} />} onClick={() => handleDeleteSource(detailSource.id)} disabled={workingId === detailSource.id}>
-                            删除数据源
-                          </Button>
                         </div>
                       </div>
 
@@ -769,12 +912,34 @@ export const DataSourceManagement: React.FC = () => {
                 {detailSource && (
                   <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] gap-5">
                     <Card className="p-5">
-                      <div className="flex items-center justify-between gap-3 mb-4">
+                      <div className="flex flex-col gap-3 mb-4 lg:flex-row lg:items-start lg:justify-between">
                         <div>
                           <h3 className="text-lg font-semibold text-gray-900 dark:text-foreground-primary">已导入表</h3>
-                          <p className="text-xs text-gray-500 dark:text-foreground-tertiary mt-1">默认只展示当前已导入配置，点击行查看字段。</p>
+                          <p className="text-xs text-gray-500 dark:text-foreground-tertiary mt-1">默认只展示当前已导入配置，点击行查看字段，支持多选删除。</p>
                         </div>
-                        <div className="text-xs text-gray-400">{filteredImportedTables.length}/{importedTables.length}</div>
+                        <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+                          <label className="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-foreground-tertiary cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={allFilteredImportedTablesSelected}
+                              onChange={(event) => handleToggleAllImportedTables(event.target.checked)}
+                              aria-label="全选当前已导入表列表"
+                            />
+                            全选当前列表
+                          </label>
+                          <div className="text-xs text-gray-400">已选 {selectedImportedTableNames.length} / {importedTables.length}</div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                            icon={<Trash2 size={14} />}
+                            aria-label="批量删除已导入表"
+                            onClick={handleConfirmBatchDeleteTables}
+                            disabled={workingId === detailSource.id || selectedImportedTableNames.length === 0}
+                          >
+                            批量删除
+                          </Button>
+                        </div>
                       </div>
                       <Input
                         value={importedTableSearch}
@@ -789,6 +954,7 @@ export const DataSourceManagement: React.FC = () => {
                         )}
                         {filteredImportedTables.map((table) => {
                           const isActive = table.table_name === activeImportedTable?.table_name;
+                          const checked = selectedImportedTableNames.includes(table.table_name);
                           return (
                             <div
                               key={table.id || table.table_name}
@@ -799,6 +965,14 @@ export const DataSourceManagement: React.FC = () => {
                               }`}
                             >
                               <div className="flex items-start justify-between gap-3">
+                                <label className="pt-0.5 cursor-pointer" onClick={(event) => event.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    aria-label={`选择表 ${table.table_name}`}
+                                    onChange={(event) => handleToggleImportedTableSelection(table.table_name, event.target.checked)}
+                                  />
+                                </label>
                                 <button
                                   type="button"
                                   onClick={() => setSelectedImportedTableName(table.table_name)}
@@ -813,8 +987,10 @@ export const DataSourceManagement: React.FC = () => {
                                 <Button
                                   size="sm"
                                   variant="ghost"
+                                  className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
                                   icon={<Trash2 size={14} />}
                                   onClick={() => handleConfirmDeleteTable(table.table_name)}
+                                  aria-label={`删除表 ${table.table_name}`}
                                   disabled={workingId === detailSource.id}
                                 >
                                   删除
@@ -827,12 +1003,35 @@ export const DataSourceManagement: React.FC = () => {
                     </Card>
 
                     <Card className="p-5">
-                      <div className="flex items-center justify-between gap-3 mb-4">
+                      <div className="flex flex-col gap-3 mb-4 lg:flex-row lg:items-start lg:justify-between">
                         <div>
                           <h3 className="text-lg font-semibold text-gray-900 dark:text-foreground-primary">字段详情</h3>
-                          <p className="text-xs text-gray-500 dark:text-foreground-tertiary mt-1">在这里裁剪字段；删除最后一个字段会连带移除整张表。</p>
+                          <p className="text-xs text-gray-500 dark:text-foreground-tertiary mt-1">在这里裁剪字段；删除最后一个字段会连带移除整张表，支持多选删除。</p>
                         </div>
-                        <div className="text-xs text-gray-400">{activeImportedTable?.columns?.length || 0} 字段</div>
+                        <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+                          <label className="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-foreground-tertiary cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={allActiveImportedFieldsSelected}
+                              onChange={(event) => handleToggleAllImportedFields(event.target.checked)}
+                              aria-label="全选当前字段列表"
+                              disabled={!activeImportedTable}
+                            />
+                            全选当前表字段
+                          </label>
+                          <div className="text-xs text-gray-400">已选 {selectedImportedFieldNames.length} / {activeImportedTable?.columns?.length || 0}</div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                            icon={<Trash2 size={14} />}
+                            aria-label="批量删除字段"
+                            onClick={handleConfirmBatchDeleteFields}
+                            disabled={workingId === detailSource.id || !activeImportedTable || selectedImportedFieldNames.length === 0}
+                          >
+                            批量删除
+                          </Button>
+                        </div>
                       </div>
                       {!activeImportedTable && (
                         <div className="rounded-lg border border-dashed border-gray-200 dark:border-border-primary px-4 py-10 text-center text-sm text-gray-500 dark:text-foreground-tertiary">
@@ -848,9 +1047,19 @@ export const DataSourceManagement: React.FC = () => {
                             )}
                           </div>
                           <div className="space-y-2 max-h-[520px] overflow-auto pr-1">
-                            {(activeImportedTable.columns || []).map((column) => (
+                            {(activeImportedTable.columns || []).map((column) => {
+                              const checked = selectedImportedFieldNames.includes(column.column_name);
+                              return (
                               <div key={column.id || column.column_name} className="rounded-xl border border-gray-200 dark:border-border-primary px-4 py-3 bg-white dark:bg-background-secondary">
                                 <div className="flex items-start justify-between gap-3">
+                                  <label className="pt-0.5 cursor-pointer" onClick={(event) => event.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      aria-label={`选择字段 ${column.column_name}`}
+                                      onChange={(event) => handleToggleImportedFieldSelection(column.column_name, event.target.checked)}
+                                    />
+                                  </label>
                                   <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <span className="text-sm font-semibold text-gray-900 dark:text-foreground-primary">{column.column_name}</span>
@@ -871,15 +1080,18 @@ export const DataSourceManagement: React.FC = () => {
                                   <Button
                                     size="sm"
                                     variant="ghost"
+                                    className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
                                     icon={<Trash2 size={14} />}
                                     onClick={() => handleConfirmDeleteField(activeImportedTable.table_name, column)}
+                                    aria-label={`删除字段 ${column.column_name}`}
                                     disabled={workingId === detailSource.id}
                                   >
                                     删除
                                   </Button>
                                 </div>
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -888,31 +1100,22 @@ export const DataSourceManagement: React.FC = () => {
                 )}
 
                 <Card className="p-5">
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-foreground-primary mb-4 flex items-center gap-2">
-                    <Play size={18} />
-                    开始 DB Analysis
-                  </h2>
-                  <div className="text-sm text-gray-600 dark:text-foreground-secondary mb-3">
-                    当前选择：{detailSource?.name || selectedSourceSummary?.name || '未选择数据源'}
-                  </div>
-                  <div className="grid grid-cols-1 gap-4">
-                    <Textarea
-                      label="业务背景"
-                      value={businessContext}
-                      onChange={(event) => setBusinessContext(event.target.value)}
-                      placeholder="例如：我们是跨境电商平台，最近连续三个月利润率下滑，希望找到主要影响因素。"
-                      rows={4}
-                    />
-                    <Textarea
-                      label="分析目标"
-                      value={analysisGoal}
-                      onChange={(event) => setAnalysisGoal(event.target.value)}
-                      placeholder="例如：找出利润下滑最显著的维度，并形成逐页分析结论。"
-                      rows={3}
-                    />
-                  </div>
-                  <div className="mt-4">
-                    <Button onClick={() => void handleStartAnalysis()} loading={submitting}>一键开始分析</Button>
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900 dark:text-foreground-primary mb-2 flex items-center gap-2">
+                        <Database size={18} />
+                        DB Analysis 入口已移至首页
+                      </h2>
+                      <p className="text-sm text-gray-600 dark:text-foreground-secondary">
+                        现在可从首页直接选择数据源、填写业务背景与分析目标，然后进入独立分析工作页。
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-foreground-secondary mt-2">
+                        当前选择：{detailSource?.name || selectedSourceSummary?.name || '未选择数据源'}，返回首页后会自动带入。
+                      </p>
+                    </div>
+                    <Button className="w-full md:w-auto" onClick={() => navigate('/')}>
+                      前往首页工作台
+                    </Button>
                   </div>
                 </Card>
               </>

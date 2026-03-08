@@ -2,16 +2,18 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Sparkles, FileText, FileEdit, Paperclip, Palette, Lightbulb, Settings, FolderOpen, HelpCircle, History, Sun, Moon, Globe, Monitor, ChevronDown, Upload, RefreshCw, Database } from 'lucide-react';
-import { Button, Card, useToast, ReferenceFileList, ReferenceFileSelector, FilePreviewModal, HelpModal, TextStyleSelector, StyleWorkflowPanel } from '@/components/shared';
+import { Button, Card, DbAnalysisEntry, useToast, ReferenceFileList, ReferenceFileSelector, FilePreviewModal, HelpModal, TextStyleSelector, StyleWorkflowPanel } from '@/components/shared';
 import { MarkdownTextarea, type MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
 import { TemplateSelector, getTemplateFile, type TemplateSource } from '@/components/shared/TemplateSelector';
-import { listUserTemplates, type UserTemplate, type StylePreset, uploadReferenceFile, type ReferenceFile, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject, createProject, startStyleRecommendations, updateProject } from '@/api/endpoints';
+import { listDataSources, listUserTemplates, type UserTemplate, type StylePreset, uploadReferenceFile, type ReferenceFile, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject, createProject, startDbAnalysisProject, startStyleRecommendations, updateProject } from '@/api/endpoints';
+import type { DataSource } from '@/types';
 import { useProjectStore } from '@/store/useProjectStore';
 import { devLog } from '@/utils/logger';
 import { useTheme } from '@/hooks/useTheme';
 import { useImagePaste } from '@/hooks/useImagePaste';
 import { useT } from '@/hooks/useT';
 import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
+import { DB_ANALYSIS_SELECTED_SOURCE_STORAGE_KEY } from '@/config/dbAnalysis';
 import mammoth from 'mammoth/mammoth.browser';
 
 type CreationType = 'idea' | 'outline' | 'description' | 'ppt_renovation';
@@ -72,6 +74,23 @@ const homeI18n = {
         title: '选择风格模板',
         useTextStyle: '使用文字描述风格',
       },
+      dbAnalysis: {
+        title: 'DB Analysis 工作台',
+        description: '从首页直接选择数据源并填写分析背景，启动后进入独立分析工作页。',
+        sourceLabel: '数据源',
+        sourcePlaceholder: '请选择一个数据源',
+        currentSelection: '当前选择',
+        currentSelectionEmpty: '未选择数据源',
+        emptyState: '暂无可用数据源，请先到数据源页创建并导入结构。',
+        loadingSources: '正在加载数据源...',
+        manageSources: '管理数据源',
+        businessContextLabel: '业务背景',
+        businessContextPlaceholder: '例如：我们是跨境电商平台，最近连续三个月利润率下滑，希望找到主要影响因素。',
+        analysisGoalLabel: '分析目标',
+        analysisGoalPlaceholder: '例如：找出利润下滑最显著的维度，并形成逐页分析结论。',
+        start: '一键开始分析',
+        tip: '启动后会进入独立 DB Analysis 工作页，继续多轮分析并导出可编辑 PPT。',
+      },
       actions: {
         selectFile: '选择参考文件',
         parsing: '解析中...',
@@ -105,6 +124,10 @@ const homeI18n = {
         parseSourceFailed: '拆分失败',
         parseSourceEmpty: '请先选择文件或粘贴原文',
         unsupportedSourceFile: '仅支持 .docx / .txt / .md 文件',
+        selectDataSource: '请先选择数据源',
+        fillDbAnalysisFields: '请填写业务背景和分析目标',
+        dataSourceLoadFailed: '加载数据源失败',
+        dbAnalysisStartFailed: '启动分析失败',
       },
     },
   },
@@ -162,6 +185,23 @@ const homeI18n = {
         title: 'Select Style Template',
         useTextStyle: 'Use text description for style',
       },
+      dbAnalysis: {
+        title: 'DB Analysis Workspace',
+        description: 'Pick a data source on the home page, define the analysis context, and jump into the standalone analysis workspace.',
+        sourceLabel: 'Data Source',
+        sourcePlaceholder: 'Select a data source',
+        currentSelection: 'Current selection',
+        currentSelectionEmpty: 'No data source selected',
+        emptyState: 'No data source is available yet. Create one and import its schema first.',
+        loadingSources: 'Loading data sources...',
+        manageSources: 'Manage data sources',
+        businessContextLabel: 'Business context',
+        businessContextPlaceholder: 'Example: We run a cross-border e-commerce platform and our profit margin has declined for three consecutive months. We want to find the key drivers.',
+        analysisGoalLabel: 'Analysis goal',
+        analysisGoalPlaceholder: 'Example: Identify the most significant dimensions behind the profit decline and produce slide-by-slide conclusions.',
+        start: 'Start analysis',
+        tip: 'After starting, you will enter the standalone DB Analysis workspace for multi-round analysis and editable PPT export.',
+      },
       actions: {
         selectFile: 'Select reference file',
         parsing: 'Parsing...',
@@ -195,6 +235,10 @@ const homeI18n = {
         parseSourceFailed: 'Split failed',
         parseSourceEmpty: 'Please choose a file or paste source text first',
         unsupportedSourceFile: 'Only .docx, .txt, or .md files are supported',
+        selectDataSource: 'Please select a data source first',
+        fillDbAnalysisFields: 'Please fill in the business context and analysis goal',
+        dataSourceLoadFailed: 'Failed to load data sources',
+        dbAnalysisStartFailed: 'Failed to start analysis',
       },
     },
   },
@@ -222,6 +266,12 @@ export const Home: React.FC = () => {
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [isFileSelectorOpen, setIsFileSelectorOpen] = useState(false);
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
+  const [dbSources, setDbSources] = useState<DataSource[]>([]);
+  const [dbSourcesLoading, setDbSourcesLoading] = useState(false);
+  const [selectedDbSourceId, setSelectedDbSourceId] = useState('');
+  const [dbBusinessContext, setDbBusinessContext] = useState('');
+  const [dbAnalysisGoal, setDbAnalysisGoal] = useState('');
+  const [dbSubmitting, setDbSubmitting] = useState(false);
 
   const [useTemplateStyle, setUseTemplateStyle] = useState(false);
   const [templateStyle, setTemplateStyle] = useState('');
@@ -309,6 +359,11 @@ export const Home: React.FC = () => {
   useEffect(() => {
     const projectId = localStorage.getItem('currentProjectId');
     setCurrentProjectId(projectId);
+
+    const savedDbSourceId = localStorage.getItem(DB_ANALYSIS_SELECTED_SOURCE_STORAGE_KEY) || '';
+    if (savedDbSourceId) {
+      setSelectedDbSourceId(savedDbSourceId);
+    }
 
     // 加载用户模板列表（用于按需获取File）
     const loadTemplates = async () => {
@@ -699,6 +754,107 @@ export const Home: React.FC = () => {
     t,
     show
   ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fallbackMessage = i18n.language?.startsWith('zh') ? '加载数据源失败' : 'Failed to load data sources';
+
+    const loadDbSources = async () => {
+      setDbSourcesLoading(true);
+      try {
+        const response = await listDataSources();
+        const nextSources = response.data?.data_sources || [];
+        if (cancelled) return;
+        setDbSources(nextSources);
+        setSelectedDbSourceId((current) => {
+          if (current && nextSources.some((item) => item.id === current)) {
+            return current;
+          }
+          const saved = localStorage.getItem(DB_ANALYSIS_SELECTED_SOURCE_STORAGE_KEY) || '';
+          if (saved && nextSources.some((item) => item.id === saved)) {
+            return saved;
+          }
+          return nextSources.length === 1 ? nextSources[0].id : '';
+        });
+      } catch (error: any) {
+        if (!cancelled) {
+          show({
+            message: error?.response?.data?.error?.message || error?.message || fallbackMessage,
+            type: 'error',
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setDbSourcesLoading(false);
+        }
+      }
+    };
+
+    void loadDbSources();
+    return () => {
+      cancelled = true;
+    };
+  }, [i18n.language, show]);
+
+  useEffect(() => {
+    if (selectedDbSourceId) {
+      localStorage.setItem(DB_ANALYSIS_SELECTED_SOURCE_STORAGE_KEY, selectedDbSourceId);
+    } else {
+      localStorage.removeItem(DB_ANALYSIS_SELECTED_SOURCE_STORAGE_KEY);
+    }
+  }, [selectedDbSourceId]);
+
+  const dbSourceOptions = useMemo(
+    () => dbSources.map((source) => ({
+      id: source.id,
+      name: source.name,
+      meta: `${source.db_type}://${source.username}@${source.host}:${source.port}/${source.database_name}`,
+    })),
+    [dbSources],
+  );
+
+  const handleOpenDataSources = useCallback(() => {
+    if (!selectedDbSourceId) {
+      navigate('/datasources');
+      return;
+    }
+    const params = new URLSearchParams({ selected: selectedDbSourceId });
+    navigate(`/datasources?${params.toString()}`);
+  }, [navigate, selectedDbSourceId]);
+
+  const handleStartDbAnalysis = useCallback(async () => {
+    if (!selectedDbSourceId) {
+      show({ message: t('home.messages.selectDataSource'), type: 'warning' });
+      return;
+    }
+    if (!dbBusinessContext.trim() || !dbAnalysisGoal.trim()) {
+      show({ message: t('home.messages.fillDbAnalysisFields'), type: 'warning' });
+      return;
+    }
+
+    setDbSubmitting(true);
+    try {
+      const response = await startDbAnalysisProject({
+        datasource_id: selectedDbSourceId,
+        business_context: dbBusinessContext.trim(),
+        analysis_goal: dbAnalysisGoal.trim(),
+      });
+      const projectId = response.data?.project_id;
+      if (!projectId) {
+        throw new Error('未返回项目ID');
+      }
+      localStorage.setItem('currentProjectId', projectId);
+      localStorage.setItem(DB_ANALYSIS_SELECTED_SOURCE_STORAGE_KEY, selectedDbSourceId);
+      navigate(`/project/${projectId}/db-analysis`);
+    } catch (error: any) {
+      show({
+        message: error?.response?.data?.error?.message || error?.message || t('home.messages.dbAnalysisStartFailed'),
+        type: 'error',
+      });
+    } finally {
+      setDbSubmitting(false);
+    }
+  }, [dbAnalysisGoal, dbBusinessContext, navigate, selectedDbSourceId, show, t]);
 
   const tabConfig = {
     idea: {
@@ -1504,6 +1660,39 @@ export const Home: React.FC = () => {
           </div>
 
         </Card>
+
+        <div className="mt-6">
+          <DbAnalysisEntry
+            labels={{
+              title: t('home.dbAnalysis.title'),
+              description: t('home.dbAnalysis.description'),
+              sourceLabel: t('home.dbAnalysis.sourceLabel'),
+              sourcePlaceholder: t('home.dbAnalysis.sourcePlaceholder'),
+              currentSelection: t('home.dbAnalysis.currentSelection'),
+              currentSelectionEmpty: t('home.dbAnalysis.currentSelectionEmpty'),
+              emptyState: t('home.dbAnalysis.emptyState'),
+              loadingSources: t('home.dbAnalysis.loadingSources'),
+              manageSources: t('home.dbAnalysis.manageSources'),
+              businessContextLabel: t('home.dbAnalysis.businessContextLabel'),
+              businessContextPlaceholder: t('home.dbAnalysis.businessContextPlaceholder'),
+              analysisGoalLabel: t('home.dbAnalysis.analysisGoalLabel'),
+              analysisGoalPlaceholder: t('home.dbAnalysis.analysisGoalPlaceholder'),
+              start: t('home.dbAnalysis.start'),
+              tip: t('home.dbAnalysis.tip'),
+            }}
+            sourceOptions={dbSourceOptions}
+            selectedSourceId={selectedDbSourceId}
+            onSelectedSourceIdChange={setSelectedDbSourceId}
+            businessContext={dbBusinessContext}
+            onBusinessContextChange={setDbBusinessContext}
+            analysisGoal={dbAnalysisGoal}
+            onAnalysisGoalChange={setDbAnalysisGoal}
+            onStart={() => void handleStartDbAnalysis()}
+            onManageSources={handleOpenDataSources}
+            loading={dbSubmitting}
+            sourcesLoading={dbSourcesLoading}
+          />
+        </div>
       </main>
       <ToastContainer />
       {/* 参考文件选择器 */}
