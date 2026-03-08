@@ -34,49 +34,49 @@ const styleLibraryI18n = {
       loading: '加载中...',
     },
     tabs: {
-      templates: '风格模板骨架',
-      presets: '风格预设',
-      presetTemplates: '预设模板',
+      templates: 'JSON文本模版骨架',
+      presets: 'JSON文本模版',
+      presetTemplates: '图片模版',
     },
     templates: {
-      title: '风格模板骨架',
-      subtitle: '用于约束 AI 生成 style_json 的字段结构',
-      name: '模板名称（可选）',
-      json: '模板 JSON 骨架',
+      title: 'JSON文本模版骨架',
+      subtitle: '用于约束 AI 生成 JSON文本模版的字段结构',
+      name: '模版名称（可选）',
+      json: 'JSON文本模版骨架',
       jsonHint: '必须是合法 JSON',
-      save: '保存模板',
+      save: '保存模版',
       list: '已保存骨架',
-      empty: '暂无模板骨架',
+      empty: '暂无JSON文本模版骨架',
       view: '查看',
       delete: '删除',
-      deleteConfirm: '将删除该风格模板骨架，此操作不可撤销。确定继续？',
-      saved: '模板骨架已保存',
-      deleted: '模板骨架已删除',
+      deleteConfirm: '将删除该JSON文本模版骨架，此操作不可撤销。确定继续？',
+      saved: 'JSON文本模版骨架已保存',
+      deleted: 'JSON文本模版骨架已删除',
       invalidJson: 'JSON 解析失败',
-      jsonRequired: '请先输入模板 JSON 骨架',
-      noSelection: '请选择一个模板查看 JSON',
+      jsonRequired: '请先输入JSON文本模版骨架',
+      noSelection: '请选择一个JSON文本模版骨架查看 JSON',
     },
     presetTemplates: {
-      title: '预设模板',
-      subtitle: '用于首页模板选择的图像预设库',
-      name: '模板名称（可选）',
-      upload: '上传预设模板',
-      empty: '暂无预设模板',
+      title: '图片模版',
+      subtitle: '用于首页模板选择的图片模版库',
+      name: '模版名称（可选）',
+      upload: '上传图片模版',
+      empty: '暂无图片模版',
       delete: '删除',
-      uploaded: '预设模板已上传',
-      deleted: '预设模板已删除',
-      deleteConfirm: '将删除该预设模板，此操作不可撤销。确定继续？',
+      uploaded: '图片模版已上传',
+      deleted: '图片模版已删除',
+      deleteConfirm: '将删除该图片模版，此操作不可撤销。确定继续？',
     },
     presets: {
-      title: '风格预设',
+      title: 'JSON文本模版',
       subtitle: '可直接应用到项目的 style_json + 4 张预览图',
-      empty: '暂无风格预设',
+      empty: '暂无JSON文本模版',
       viewJson: '查看 JSON',
       preview: '预览',
       delete: '删除',
-      deleteConfirm: '将删除该风格预设，此操作不可撤销。确定继续？',
-      deleted: '风格预设已删除',
-      noSelection: '请选择一个风格预设查看 JSON',
+      deleteConfirm: '将删除该JSON文本模版，此操作不可撤销。确定继续？',
+      deleted: 'JSON文本模版已删除',
+      noSelection: '请选择一个JSON文本模版查看 JSON',
       noPreview: '无预览',
       labels: {
         cover: '封面',
@@ -86,8 +86,8 @@ const styleLibraryI18n = {
       },
     },
     jsonViewer: {
-      titleTemplate: '模板 JSON 预览',
-      titlePreset: '预设 style_json',
+      titleTemplate: 'JSON文本模版骨架预览',
+      titlePreset: 'JSON文本模版预览',
       copy: '复制',
       copySuccess: 'JSON 已复制',
       copyFailed: '复制失败',
@@ -108,49 +108,49 @@ const styleLibraryI18n = {
       loading: 'Loading...',
     },
     tabs: {
-      templates: 'Style Template Skeletons',
-      presets: 'Style Presets',
-      presetTemplates: 'Preset Templates',
+      templates: 'JSON Text Template Skeletons',
+      presets: 'JSON Text Templates',
+      presetTemplates: 'Image Templates',
     },
     templates: {
-      title: 'Style Template Skeletons',
-      subtitle: 'JSON skeletons used to constrain AI style_json structure',
+      title: 'JSON Text Template Skeletons',
+      subtitle: 'JSON skeletons used to constrain AI-generated JSON text template structure',
       name: 'Template name (optional)',
-      json: 'Template JSON skeleton',
+      json: 'JSON text template skeleton',
       jsonHint: 'Must be valid JSON',
       save: 'Save Template',
       list: 'Saved Skeletons',
-      empty: 'No style template skeletons',
+      empty: 'No JSON text template skeletons',
       view: 'View',
       delete: 'Delete',
-      deleteConfirm: 'This will permanently delete this style template skeleton. Continue?',
-      saved: 'Style template skeleton saved',
-      deleted: 'Style template skeleton deleted',
+      deleteConfirm: 'This will permanently delete this JSON text template skeleton. Continue?',
+      saved: 'JSON text template skeleton saved',
+      deleted: 'JSON text template skeleton deleted',
       invalidJson: 'Invalid JSON',
-      jsonRequired: 'Please enter template JSON skeleton first',
-      noSelection: 'Select a template to view JSON',
+      jsonRequired: 'Please enter a JSON text template skeleton first',
+      noSelection: 'Select a JSON text template skeleton to view JSON',
     },
     presetTemplates: {
-      title: 'Preset Templates',
-      subtitle: 'Image template presets used by the home template selector',
+      title: 'Image Templates',
+      subtitle: 'Image template library used by the home template selector',
       name: 'Template name (optional)',
-      upload: 'Upload Preset Template',
-      empty: 'No preset templates',
+      upload: 'Upload Image Template',
+      empty: 'No image templates',
       delete: 'Delete',
-      uploaded: 'Preset template uploaded',
-      deleted: 'Preset template deleted',
-      deleteConfirm: 'This will permanently delete this preset template. Continue?',
+      uploaded: 'Image template uploaded',
+      deleted: 'Image template deleted',
+      deleteConfirm: 'This will permanently delete this image template. Continue?',
     },
     presets: {
-      title: 'Style Presets',
+      title: 'JSON Text Templates',
       subtitle: 'Directly applicable style_json with 4 preview images',
-      empty: 'No style presets',
+      empty: 'No JSON text templates',
       viewJson: 'View JSON',
       preview: 'Preview',
       delete: 'Delete',
-      deleteConfirm: 'This will permanently delete this style preset. Continue?',
-      deleted: 'Style preset deleted',
-      noSelection: 'Select a style preset to view JSON',
+      deleteConfirm: 'This will permanently delete this JSON text template. Continue?',
+      deleted: 'JSON text template deleted',
+      noSelection: 'Select a JSON text template to view JSON',
       noPreview: 'No preview',
       labels: {
         cover: 'Cover',
@@ -160,8 +160,8 @@ const styleLibraryI18n = {
       },
     },
     jsonViewer: {
-      titleTemplate: 'Template JSON',
-      titlePreset: 'Preset style_json',
+      titleTemplate: 'JSON Text Template Skeleton',
+      titlePreset: 'JSON Text Template',
       copy: 'Copy',
       copySuccess: 'JSON copied',
       copyFailed: 'Copy failed',
@@ -571,12 +571,24 @@ export const StyleLibrary: React.FC = () => {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
+              onClick={() => setActiveTab('presetTemplates')}
+              data-testid="style-library-tab-preset-templates"
+              className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                activeTab === 'presetTemplates'
+                  ? 'bg-banana-500 text-black'
+                  : 'text-black hover:bg-gray-100 dark:hover:bg-background-hover'
+              }`}
+            >
+              {t('tabs.presetTemplates')}
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('presets')}
               data-testid="style-library-tab-presets"
               className={`px-4 py-2 text-sm rounded-lg transition-colors ${
                 activeTab === 'presets'
-                  ? 'bg-banana-500 text-white'
-                  : 'text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'
+                  ? 'bg-banana-500 text-black'
+                  : 'text-black hover:bg-gray-100 dark:hover:bg-background-hover'
               }`}
             >
               {t('tabs.presets')}
@@ -587,23 +599,11 @@ export const StyleLibrary: React.FC = () => {
               data-testid="style-library-tab-templates"
               className={`px-4 py-2 text-sm rounded-lg transition-colors ${
                 activeTab === 'templates'
-                  ? 'bg-banana-500 text-white'
-                  : 'text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'
+                  ? 'bg-banana-500 text-black'
+                  : 'text-black hover:bg-gray-100 dark:hover:bg-background-hover'
               }`}
             >
               {t('tabs.templates')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('presetTemplates')}
-              data-testid="style-library-tab-preset-templates"
-              className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-                activeTab === 'presetTemplates'
-                  ? 'bg-banana-500 text-white'
-                  : 'text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'
-              }`}
-            >
-              {t('tabs.presetTemplates')}
             </button>
           </div>
         </Card>

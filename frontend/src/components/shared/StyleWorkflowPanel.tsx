@@ -230,24 +230,24 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
   };
 
   const handleSaveTemplate = async () => {
-    const name = templateName.trim() || '未命名模板';
+    const name = templateName.trim() || '未命名模版';
     const text = templateJsonText.trim();
     if (!text) {
-      show({ message: '请先粘贴风格模板 JSON 骨架', type: 'error' });
+      show({ message: '请先粘贴JSON文本模版骨架', type: 'error' });
       return;
     }
     try {
       JSON.parse(text);
     } catch (e: any) {
-      show({ message: `模板 JSON 解析失败：${e?.message || ''}`, type: 'error' });
+      show({ message: `JSON文本模版骨架解析失败：${e?.message || ''}`, type: 'error' });
       return;
     }
     try {
       await api.createStyleTemplate({ name, template_json: text });
-      show({ message: '模板已保存', type: 'success' });
+      show({ message: 'JSON文本模版骨架已保存', type: 'success' });
       setTemplateName('');
     } catch (e: any) {
-      show({ message: `保存模板失败：${e?.message || ''}`, type: 'error' });
+      show({ message: `保存模版骨架失败：${e?.message || ''}`, type: 'error' });
     }
   };
 
@@ -392,9 +392,9 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
         style_json: jsonText,
         preview_images: previewImages,
       });
-      show({ message: '已保存为风格预设', type: 'success' });
+      show({ message: '已保存为JSON文本模版', type: 'success' });
     } catch (e: any) {
-      show({ message: `保存预设失败：${e?.message || ''}`, type: 'error' });
+      show({ message: `保存JSON文本模版失败：${e?.message || ''}`, type: 'error' });
     }
   };
 
@@ -452,13 +452,13 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
   const handleRestartRecommendations = async () => {
     const text = templateJsonText.trim();
     if (!text) {
-      show({ message: '请先粘贴风格模板 JSON 骨架', type: 'error' });
+      show({ message: '请先粘贴JSON文本模版骨架', type: 'error' });
       return;
     }
     try {
       JSON.parse(text);
     } catch (e: any) {
-      show({ message: `模板 JSON 解析失败：${e?.message || ''}`, type: 'error' });
+      show({ message: `JSON文本模版骨架解析失败：${e?.message || ''}`, type: 'error' });
       return;
     }
     setIsRestarting(true);
@@ -602,15 +602,15 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
       {showTemplateControls ? (
         <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <div className="text-sm font-semibold text-gray-900 dark:text-white">保存风格模板骨架</div>
+            <div className="text-sm font-semibold text-gray-900 dark:text-white">保存JSON文本模版骨架</div>
             <div className="flex flex-wrap items-center gap-2 justify-end">
               <input
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
-                placeholder="模板名称（可选）"
+                placeholder="模版名称（可选）"
                 className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-tertiary dark:text-white"
               />
-              <Button size="sm" className="whitespace-nowrap" onClick={handleSaveTemplate}>保存模板</Button>
+              <Button size="sm" className="whitespace-nowrap" onClick={handleSaveTemplate}>保存模版骨架</Button>
               <Button size="sm" className="whitespace-nowrap" loading={isRestarting} onClick={handleRestartRecommendations}>重新生成推荐</Button>
             </div>
           </div>

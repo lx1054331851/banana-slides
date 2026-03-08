@@ -23,13 +23,13 @@ const templateI18n = {
   zh: {
     template: {
       myTemplates: '我的模板',
-      presetTemplates: '预设模板',
-      styleTemplates: '风格模板',
-      morePresetTemplates: '更多预设模板',
-      moreStyleTemplates: '更多风格模板',
+      presetTemplates: '图片模版',
+      styleTemplates: 'JSON文本模版',
+      morePresetTemplates: '更多图片模版',
+      moreStyleTemplates: '更多JSON文本模版',
       more: '更多',
-      noPresetTemplates: '暂无预设模板',
-      noStyleTemplates: '暂无风格模板',
+      noPresetTemplates: '暂无图片模版',
+      noStyleTemplates: '暂无JSON文本模版',
       uploadTemplate: '上传模板',
       deleteTemplate: '删除模板',
       templateSelected: '已选择',
@@ -42,8 +42,8 @@ const templateI18n = {
         uploadFailed: '模板上传失败',
         deleteSuccess: '模板已删除',
         deleteFailed: '删除模板失败',
-        styleTemplateApplied: '已选择风格模板',
-        styleTemplateApplyFailed: '选择风格模板失败',
+        styleTemplateApplied: '已选择JSON文本模版',
+        styleTemplateApplyFailed: '选择JSON文本模版失败',
       }
     },
     material: {
@@ -57,13 +57,13 @@ const templateI18n = {
   en: {
     template: {
       myTemplates: 'My Templates',
-      presetTemplates: 'Preset Templates',
-      styleTemplates: 'Style Templates',
-      morePresetTemplates: 'More Preset Templates',
-      moreStyleTemplates: 'More Style Templates',
+      presetTemplates: 'Image Templates',
+      styleTemplates: 'JSON Text Templates',
+      morePresetTemplates: 'More Image Templates',
+      moreStyleTemplates: 'More JSON Text Templates',
       more: 'More',
-      noPresetTemplates: 'No preset templates',
-      noStyleTemplates: 'No style templates',
+      noPresetTemplates: 'No image templates',
+      noStyleTemplates: 'No JSON text templates',
       uploadTemplate: 'Upload Template',
       deleteTemplate: 'Delete Template',
       templateSelected: 'Selected',
@@ -76,8 +76,8 @@ const templateI18n = {
         uploadFailed: 'Failed to upload template',
         deleteSuccess: 'Template deleted',
         deleteFailed: 'Failed to delete template',
-        styleTemplateApplied: 'Style template selected',
-        styleTemplateApplyFailed: 'Failed to select style template',
+        styleTemplateApplied: 'JSON text template selected',
+        styleTemplateApplyFailed: 'Failed to select JSON text template',
       }
     },
     material: {
@@ -403,7 +403,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                   >
                     <img
                       src={getImageUrl(template.thumb_url || template.template_image_url)}
-                      alt={template.name || 'Preset Template'}
+                      alt={template.name || 'Image Template'}
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute left-1 right-1 bottom-1 px-1 py-0.5 rounded bg-black/45 text-white text-[10px] truncate">
@@ -457,7 +457,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                     {coverUrl ? (
                       <img
                         src={getImageUrl(coverUrl)}
-                        alt={preset.name || 'Style Preset'}
+                        alt={preset.name || 'JSON Text Template'}
                         className="w-full h-full object-contain object-center"
                       />
                     ) : (
@@ -520,7 +520,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
               >
                 <img
                   src={getImageUrl(template.thumb_url || template.template_image_url)}
-                  alt={template.name || 'Preset Template'}
+                  alt={template.name || 'Image Template'}
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-x-0 bottom-0 px-2 py-1 bg-black/45 text-white text-xs truncate">
@@ -557,7 +557,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                 {coverUrl ? (
                   <img
                     src={getImageUrl(coverUrl)}
-                    alt={preset.name || 'Style Preset'}
+                    alt={preset.name || 'JSON Text Template'}
                     className="w-full h-full object-contain object-center"
                   />
                 ) : (
