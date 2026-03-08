@@ -514,3 +514,71 @@ class DataSourceService:
             'table_count': len(imported_tables),
             'tables': [table_obj.to_dict(include_columns=True) for table_obj, _ in imported_tables],
         }
+
+    @staticmethod
+    def mutate_cached_schema(
+        data_source: DataSource,
+        remove_tables: list[str] | None = None,
+        remove_columns: dict[str, list[str]] | None = None,
+    ) -> dict:
+        remove_table_set = {
+            str(table_name).strip()
+            for table_name in (remove_tables or [])
+            if str(table_name).strip()
+        }
+        remove_columns_map = {
+            str(table_name).strip(): {
+                str(column_name).strip()
+                for column_name in (column_names or [])
+                if str(column_name).strip()
+            }
+            for table_name, column_names in (remove_columns or {}).items()
+            if str(table_name).strip()
+        }
+
+        cached_tables = DataSourceTable.query.filter_by(datasource_id=data_source.id).all()
+        removed_tables: list[str] = []
+        removed_columns_result: dict[str, list[str]] = {}
+        valid_columns_by_table: dict[str, set[str]] = {}
+
+        for table in cached_tables:
+            table_name = str(table.table_name or '').strip()
+            if not table_name:
+                db.session.delete(table)
+                continue
+
+            if table_name in remove_table_set:
+                db.session.delete(table)
+                removed_tables.append(table_name)
+                continue
+
+            remove_column_set = remove_columns_map.get(table_name, set())
+            remaining_columns: list[str] = []
+            removed_columns: list[str] = []
+
+            for column in list(table.columns):
+                column_name = str(column.column_name or '').strip()
+                if column_name and column_name in remove_column_set:
+                    db.session.delete(column)
+                    removed_columns.append(column_name)
+                    continue
+                if column_name:
+                    remaining_columns.append(column_name)
+
+            if removed_columns:
+                removed_columns_result[table_name] = removed_columns
+
+            if remaining_columns:
+                valid_columns_by_table[table_name] = set(remaining_columns)
+                continue
+
+            db.session.delete(table)
+            removed_tables.append(table_name)
+
+        DataSourceService._prune_relations_for_import(data_source, valid_columns_by_table)
+
+        return {
+            'table_count': len(valid_columns_by_table),
+            'removed_tables': removed_tables,
+            'removed_columns': removed_columns_result,
+        }

@@ -4,7 +4,7 @@ API tests for DB analysis mode workflow.
 
 from unittest.mock import patch
 
-from models import db, DbAnalysisRound, DataSourceTable
+from models import db, DbAnalysisRound, DataSourceTable, DataSourceColumn, DataSourceRelation
 
 
 def _mock_round(session_obj, previous_round=None, previous_answers=None):
@@ -49,6 +49,32 @@ def _create_datasource(client, name='db-analysis-test'):
     payload = response.get_json()
     assert payload['success'] is True
     return payload['data']['data_source']
+
+
+def _seed_cached_schema(datasource_id: str) -> None:
+    orders = DataSourceTable(datasource_id=datasource_id, table_name='orders', table_comment='订单')
+    order_items = DataSourceTable(datasource_id=datasource_id, table_name='order_items', table_comment='订单明细')
+    db.session.add_all([orders, order_items])
+    db.session.flush()
+
+    db.session.add_all([
+        DataSourceColumn(table_id=orders.id, column_name='id', data_type='bigint', ordinal_position=1, is_primary=True),
+        DataSourceColumn(table_id=orders.id, column_name='created_at', data_type='datetime', ordinal_position=2),
+        DataSourceColumn(table_id=order_items.id, column_name='id', data_type='bigint', ordinal_position=1, is_primary=True),
+        DataSourceColumn(table_id=order_items.id, column_name='order_id', data_type='bigint', ordinal_position=2),
+    ])
+    db.session.add(
+        DataSourceRelation(
+            datasource_id=datasource_id,
+            source_table='order_items',
+            source_column='order_id',
+            target_table='orders',
+            target_column='id',
+            relation_type='many_to_one',
+            origin='MANUAL',
+        )
+    )
+    db.session.commit()
 
 
 def test_start_db_analysis_project_success(client):
@@ -322,6 +348,56 @@ def test_import_schema_prunes_relations_for_removed_tables_and_columns(client):
     assert list_resp.status_code == 200
     list_payload = list_resp.get_json()
     assert list_payload['data']['relations'] == []
+
+
+def test_cached_schema_mutation_removes_tables_locally_without_fetching_remote_schema(client):
+    datasource = _create_datasource(client, name='db-analysis-local-delete-table')
+    _seed_cached_schema(datasource['id'])
+
+    with patch('controllers.datasource_controller.DataSourceService.fetch_schema_preview', side_effect=AssertionError('should not fetch remote schema')) as mock_preview:
+        response = client.post(
+            f"/api/data-sources/{datasource['id']}/cached-schema/mutate",
+            json={'remove_tables': ['order_items']},
+        )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert payload['data']['mutation_result']['removed_tables'] == ['order_items']
+    assert [table['table_name'] for table in payload['data']['data_source']['schema_tables']] == ['orders']
+    assert payload['data']['data_source']['relations'] == []
+    assert mock_preview.call_count == 0
+
+
+def test_cached_schema_mutation_removes_columns_locally_and_drops_empty_tables(client):
+    datasource = _create_datasource(client, name='db-analysis-local-delete-column')
+    _seed_cached_schema(datasource['id'])
+
+    with patch('controllers.datasource_controller.DataSourceService.fetch_schema_preview', side_effect=AssertionError('should not fetch remote schema')) as mock_preview:
+        response = client.post(
+            f"/api/data-sources/{datasource['id']}/cached-schema/mutate",
+            json={
+                'remove_columns': {
+                    'orders': ['created_at'],
+                    'order_items': ['id', 'order_id'],
+                }
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert payload['data']['mutation_result']['removed_tables'] == ['order_items']
+    assert payload['data']['mutation_result']['removed_columns'] == {
+        'orders': ['created_at'],
+        'order_items': ['id', 'order_id'],
+    }
+    schema_tables = payload['data']['data_source']['schema_tables']
+    assert len(schema_tables) == 1
+    assert schema_tables[0]['table_name'] == 'orders'
+    assert [column['column_name'] for column in schema_tables[0]['columns']] == ['id']
+    assert payload['data']['data_source']['relations'] == []
+    assert mock_preview.call_count == 0
 
 def test_manual_relation_create_and_delete(client):
     datasource = _create_datasource(client, name='db-analysis-rel-manual')

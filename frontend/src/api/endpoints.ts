@@ -1713,6 +1713,31 @@ export const importDataSourceSchema = async (
   return response.data;
 };
 
+export const mutateDataSourceCachedSchema = async (
+  datasourceId: string,
+  payload?: {
+    remove_tables?: string[];
+    remove_columns?: Record<string, string[]>;
+  }
+): Promise<ApiResponse<{
+  mutation_result: {
+    table_count: number;
+    removed_tables: string[];
+    removed_columns: Record<string, string[]>;
+  };
+  data_source: DataSource;
+}>> => {
+  const response = await apiClient.post<ApiResponse<{
+    mutation_result: {
+      table_count: number;
+      removed_tables: string[];
+      removed_columns: Record<string, string[]>;
+    };
+    data_source: DataSource;
+  }>>(`/api/data-sources/${datasourceId}/cached-schema/mutate`, payload || {});
+  return response.data;
+};
+
 export const listDataSourceRelations = async (
   datasourceId: string
 ): Promise<ApiResponse<{ relations: DataSourceRelation[] }>> => {

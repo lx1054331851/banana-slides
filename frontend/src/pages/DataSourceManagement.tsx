@@ -10,6 +10,7 @@ import {
   getDataSourceSchemaPreview,
   importDataSourceSchema,
   listDataSources,
+  mutateDataSourceCachedSchema,
   testDataSource,
 } from '@/api/endpoints';
 import { DB_ANALYSIS_SELECTED_SOURCE_STORAGE_KEY } from '@/config/dbAnalysis';
@@ -468,6 +469,22 @@ export const DataSourceManagement: React.FC = () => {
     }
   };
 
+  const handleMutateCachedStructure = async (
+    payload: { remove_tables?: string[]; remove_columns?: Record<string, string[]> },
+    successMessage: string,
+  ) => {
+    if (!selectedSourceId) return;
+    setWorkingId(selectedSourceId);
+    try {
+      const response = await mutateDataSourceCachedSchema(selectedSourceId, payload);
+      applyImportedSource(response.data?.data_source, successMessage);
+    } catch (error: any) {
+      show({ message: error?.response?.data?.error?.message || error?.message || '本地缓存更新失败', type: 'error' });
+    } finally {
+      setWorkingId(null);
+    }
+  };
+
   const handleOpenAddTablesModal = async () => {
     if (!detailSource) return;
     const tables = await ensureSchemaPreview(detailSource.id);
@@ -593,10 +610,9 @@ export const DataSourceManagement: React.FC = () => {
   const handleDeleteImportedTables = async (tableNames: string[]) => {
     if (!detailSource || tableNames.length === 0) return;
     const tableNameSet = new Set(tableNames);
-    const nextTables = (detailSource.schema_tables || []).filter((table) => !tableNameSet.has(table.table_name));
-    await handleImportStructure(
-      buildImportPayloadFromTables(nextTables),
-      tableNames.length === 1 ? `已移除表 ${tableNames[0]}` : `已移除 ${tableNames.length} 张表`,
+    await handleMutateCachedStructure(
+      { remove_tables: tableNames },
+      tableNames.length === 1 ? `已从本地缓存移除表 ${tableNames[0]}` : `已从本地缓存移除 ${tableNames.length} 张表`,
     );
     setSelectedImportedTableNames((prev) => prev.filter((tableName) => !tableNameSet.has(tableName)));
   };
@@ -608,18 +624,9 @@ export const DataSourceManagement: React.FC = () => {
   const handleDeleteImportedFields = async (tableName: string, columnNames: string[]) => {
     if (!detailSource || columnNames.length === 0) return;
     const columnNameSet = new Set(columnNames);
-    const nextTables = (detailSource.schema_tables || [])
-      .map((table) => {
-        if (table.table_name !== tableName) return table;
-        return {
-          ...table,
-          columns: (table.columns || []).filter((column) => !columnNameSet.has(column.column_name)),
-        };
-      })
-      .filter((table) => (table.columns || []).length > 0);
-    await handleImportStructure(
-      buildImportPayloadFromTables(nextTables),
-      columnNames.length === 1 ? `已移除字段 ${tableName}.${columnNames[0]}` : `已移除 ${columnNames.length} 个字段`,
+    await handleMutateCachedStructure(
+      { remove_columns: { [tableName]: columnNames } },
+      columnNames.length === 1 ? `已从本地缓存移除字段 ${tableName}.${columnNames[0]}` : `已从本地缓存移除 ${columnNames.length} 个字段`,
     );
     setSelectedImportedFieldNames((prev) => prev.filter((columnName) => !columnNameSet.has(columnName)));
   };
@@ -630,7 +637,7 @@ export const DataSourceManagement: React.FC = () => {
 
   const handleConfirmDeleteTable = (tableName: string) => {
     confirm(
-      `确认从当前数据源配置中移除表 ${tableName} 吗？这不会删除真实数据库中的表。`,
+      `确认从当前数据源的本地导入缓存中移除表 ${tableName} 吗？这只会修改本地配置，不会删除远程真实数据库中的表。`,
       () => {
         void handleDeleteImportedTable(tableName);
       },
@@ -646,8 +653,8 @@ export const DataSourceManagement: React.FC = () => {
     const table = importedTableMap.get(tableName);
     const remainingCount = Math.max(((table?.columns || []).length || 0) - 1, 0);
     const message = remainingCount === 0
-      ? `删除字段 ${column.column_name} 后，这张表将不再保留任何字段，系统会同时移除表 ${tableName}。确认继续吗？`
-      : `确认从当前数据源配置中移除字段 ${tableName}.${column.column_name} 吗？`;
+      ? `删除字段 ${column.column_name} 后，这张表的本地缓存将不再保留任何字段，系统会同时移除本地缓存中的表 ${tableName}。确认继续吗？`
+      : `确认从当前数据源的本地导入缓存中移除字段 ${tableName}.${column.column_name} 吗？`;
 
     confirm(
       message,
@@ -673,7 +680,7 @@ export const DataSourceManagement: React.FC = () => {
     }
 
     confirm(
-      `确认从当前数据源配置中移除选中的 ${tablesToDelete.length} 张表吗？这不会删除真实数据库中的表。`,
+      `确认从当前数据源的本地导入缓存中移除选中的 ${tablesToDelete.length} 张表吗？这只会修改本地配置，不会删除远程真实数据库中的表。`,
       () => {
         void handleDeleteImportedTables(tablesToDelete);
       },
@@ -699,8 +706,8 @@ export const DataSourceManagement: React.FC = () => {
 
     const remainingCount = Math.max((activeImportedTable.columns || []).length - columnsToDelete.length, 0);
     const message = remainingCount === 0
-      ? `删除选中的 ${columnsToDelete.length} 个字段后，系统会同时移除表 ${activeImportedTable.table_name}。确认继续吗？`
-      : `确认从当前数据源配置中移除表 ${activeImportedTable.table_name} 的 ${columnsToDelete.length} 个字段吗？`;
+      ? `删除选中的 ${columnsToDelete.length} 个字段后，系统会同时移除本地缓存中的表 ${activeImportedTable.table_name}。确认继续吗？`
+      : `确认从当前数据源的本地导入缓存中移除表 ${activeImportedTable.table_name} 的 ${columnsToDelete.length} 个字段吗？`;
 
     confirm(
       message,
@@ -915,7 +922,7 @@ export const DataSourceManagement: React.FC = () => {
                       <div className="flex flex-col gap-3 mb-4 lg:flex-row lg:items-start lg:justify-between">
                         <div>
                           <h3 className="text-lg font-semibold text-gray-900 dark:text-foreground-primary">已导入表</h3>
-                          <p className="text-xs text-gray-500 dark:text-foreground-tertiary mt-1">默认只展示当前已导入配置，点击行查看字段，支持多选删除。</p>
+                          <p className="text-xs text-gray-500 dark:text-foreground-tertiary mt-1">默认只展示当前本地已导入缓存，点击行查看字段，支持多选删除。</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-3 lg:justify-end">
                           <label className="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-foreground-tertiary cursor-pointer">
@@ -1006,7 +1013,7 @@ export const DataSourceManagement: React.FC = () => {
                       <div className="flex flex-col gap-3 mb-4 lg:flex-row lg:items-start lg:justify-between">
                         <div>
                           <h3 className="text-lg font-semibold text-gray-900 dark:text-foreground-primary">字段详情</h3>
-                          <p className="text-xs text-gray-500 dark:text-foreground-tertiary mt-1">在这里裁剪字段；删除最后一个字段会连带移除整张表，支持多选删除。</p>
+                          <p className="text-xs text-gray-500 dark:text-foreground-tertiary mt-1">在这里裁剪本地缓存字段；删除最后一个字段会连带移除整张表，支持多选删除。</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-3 lg:justify-end">
                           <label className="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-foreground-tertiary cursor-pointer">

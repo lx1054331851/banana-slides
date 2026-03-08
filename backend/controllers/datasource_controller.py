@@ -237,6 +237,32 @@ def import_data_source_schema(datasource_id):
         return error_response('SERVER_ERROR', str(exc), 500)
 
 
+@datasource_bp.route('/<datasource_id>/cached-schema/mutate', methods=['POST'])
+def mutate_data_source_cached_schema(datasource_id):
+    try:
+        source = DataSource.query.get(datasource_id)
+        if not source:
+            return not_found('DataSource')
+
+        data = request.get_json() or {}
+        remove_tables = _parse_str_list(data.get('remove_tables'))
+        remove_columns = _parse_selected_columns(data.get('remove_columns'))
+
+        result = DataSourceService.mutate_cached_schema(
+            source,
+            remove_tables=remove_tables,
+            remove_columns=remove_columns or None,
+        )
+        db.session.commit()
+
+        source = DataSource.query.get(datasource_id)
+        return success_response({'mutation_result': result, 'data_source': source.to_dict(include_schema=True)})
+    except Exception as exc:
+        db.session.rollback()
+        logger.error('mutate_data_source_cached_schema failed: %s', exc, exc_info=True)
+        return error_response('SERVER_ERROR', str(exc), 500)
+
+
 @datasource_bp.route('/<datasource_id>/relations', methods=['GET'])
 def list_data_source_relations(datasource_id):
     try:
