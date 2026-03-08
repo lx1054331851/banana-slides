@@ -2,10 +2,9 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Sparkles, FileText, FileEdit, Paperclip, Palette, Lightbulb, Settings, FolderOpen, HelpCircle, History, Sun, Moon, Globe, Monitor, ChevronDown, Upload, RefreshCw } from 'lucide-react';
-import { Button, Card, useToast, ReferenceFileList, ReferenceFileSelector, FilePreviewModal, HelpModal, TextStyleSelector, StyleWorkflowPanel } from '@/components/shared';
+import { Button, Card, useToast, ReferenceFileList, ReferenceFileSelector, FilePreviewModal, HelpModal } from '@/components/shared';
 import { MarkdownTextarea, type MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
-import { TemplateSelector, getTemplateFile, type TemplateSource } from '@/components/shared/TemplateSelector';
-import { listUserTemplates, type UserTemplate, type StylePreset, uploadReferenceFile, type ReferenceFile, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject, createProject, startStyleRecommendations, updateProject } from '@/api/endpoints';
+import { uploadReferenceFile, type ReferenceFile, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject } from '@/api/endpoints';
 import { useProjectStore } from '@/store/useProjectStore';
 import { devLog } from '@/utils/logger';
 import { useTheme } from '@/hooks/useTheme';
@@ -152,10 +151,6 @@ const homeI18n = {
         outline: '格式示例：\n\n第一页：AI 的起源\n- 1956年达特茅斯会议\n- 早期研究者的愿景\n\n第二页：机器学习的发展\n- 从规则驱动到数据驱动\n- 经典算法介绍\n\n第三页：未来展望\n- 趋势与挑战\n\n支持标题+要点的形式，也可以只写标题。AI 会自动切分为结构化大纲。',
         description: '格式示例：\n\n第一页：AI 的起源\n介绍人工智能概念的诞生，从1956年达特茅斯会议讲起。页面采用左文右图布局，左侧展示时间线，右侧配一张复古风格的计算机插画。\n\n第二页：机器学习的发展\n讲解从规则驱动到数据驱动的转变。使用深蓝色背景，中央放置算法对比图表，底部列出关键里程碑。\n\n每页可包含内容描述、排版布局、视觉风格等，用空行分隔各页。',
       },
-      template: {
-        title: '选择风格模板',
-        useTextStyle: '使用文字描述风格',
-      },
       actions: {
         selectFile: '选择参考文件',
         parsing: '解析中...',
@@ -246,10 +241,6 @@ const homeI18n = {
         outline: 'Format example:\n\nSlide 1: The Origins of AI\n- 1956 Dartmouth Conference\n- Vision of early researchers\n\nSlide 2: The Rise of Machine Learning\n- From rule-based to data-driven\n- Classic algorithms overview\n\nSlide 3: Future Outlook\n- Trends and challenges\n\nTitles with bullet points, or titles only. AI will split it into a structured outline.',
         description: 'Format example:\n\nSlide 1: The Origins of AI\nIntroduce the birth of AI, starting from the 1956 Dartmouth Conference. Use a left-text right-image layout with a timeline on the left and a retro-style computer illustration on the right.\n\nSlide 2: The Rise of Machine Learning\nExplain the shift from rule-based to data-driven approaches. Dark blue background, algorithm comparison chart in the center, key milestones at the bottom.\n\nEach slide can include content, layout, and visual style. Separate slides with blank lines.',
       },
-      template: {
-        title: 'Select Style Template',
-        useTextStyle: 'Use text description for style',
-      },
       actions: {
         selectFile: 'Select reference file',
         parsing: 'Parsing...',
@@ -302,25 +293,13 @@ export const Home: React.FC = () => {
   );
   const [activeTextMode, setActiveTextMode] = useState<TextCreationType>(initialHomeDraftState.activeTextMode);
   const [textDrafts, setTextDrafts] = useState<TextDraftMap>(initialHomeDraftState.textDrafts);
-  const [selectedTemplate, setSelectedTemplate] = useState<File | null>(null);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [selectedPresetTemplateId, setSelectedPresetTemplateId] = useState<string | null>(null);
-  const [selectedStylePresetId, setSelectedStylePresetId] = useState<string | null>(null);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
-  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
-  const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([]);
   const [referenceFiles, setReferenceFiles] = useState<ReferenceFile[]>([]);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [isFileSelectorOpen, setIsFileSelectorOpen] = useState(false);
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
 
-  const [useTemplateStyle, setUseTemplateStyle] = useState(false);
-  const [templateStyle, setTemplateStyle] = useState('');
-  const [pendingStylePresetJson, setPendingStylePresetJson] = useState<string>('');
-  const [stylePreviewProjectId, setStylePreviewProjectId] = useState<string | null>(null);
-  const [stylePreviewTaskId, setStylePreviewTaskId] = useState<string | null>(null);
-  const [stylePreviewTemplateJson, setStylePreviewTemplateJson] = useState<string>('');
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [isAspectRatioOpen, setIsAspectRatioOpen] = useState(false);
   const [renovationFile, setRenovationFile] = useState<File | null>(null);
@@ -424,25 +403,6 @@ export const Home: React.FC = () => {
     return cancelScheduledSave;
   }, [activeTextMode, mainTab, textDrafts]);
 
-
-  // 检查是否有当前项目 & 加载用户模板
-  useEffect(() => {
-    const projectId = localStorage.getItem('currentProjectId');
-    setCurrentProjectId(projectId);
-
-    // 加载用户模板列表（用于按需获取File）
-    const loadTemplates = async () => {
-      try {
-        const response = await listUserTemplates();
-        if (response.data?.templates) {
-          setUserTemplates(response.data.templates);
-        }
-      } catch (error) {
-        console.error('加载用户模板失败:', error);
-      }
-    };
-    loadTemplates();
-  }, []);
 
   // 首次访问自动弹出帮助模态框
   useEffect(() => {
@@ -874,42 +834,6 @@ export const Home: React.FC = () => {
 
   const currentTextConfig = textModeConfig[activeTextMode];
 
-  const handleTemplateSelect = async (templateFile: File | null, templateId?: string, source?: TemplateSource) => {
-    // 同步文件选择状态，避免保留过期的本地 File
-    setSelectedTemplate(templateFile || null);
-    setPendingStylePresetJson('');
-    setSelectedStylePresetId(null);
-    
-    // 处理模板 ID
-    if (templateId) {
-      if (source === 'preset') {
-        setSelectedPresetTemplateId(templateId);
-        setSelectedTemplateId(null);
-      } else {
-        setSelectedTemplateId(templateId);
-        setSelectedPresetTemplateId(null);
-      }
-    } else {
-      // 如果没有 templateId，可能是直接上传的文件
-      // 清空所有选择状态
-      setSelectedTemplateId(null);
-      setSelectedPresetTemplateId(null);
-    }
-  };
-
-  const handleSelectStylePreset = async (preset: StylePreset | null) => {
-    if (!preset) {
-      setPendingStylePresetJson('');
-      setSelectedStylePresetId(null);
-      return;
-    }
-    setPendingStylePresetJson((preset.style_json || '').trim());
-    setSelectedStylePresetId(preset.id);
-    setSelectedTemplate(null);
-    setSelectedTemplateId(null);
-    setSelectedPresetTemplateId(null);
-  };
-
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const clearPersistedTextDrafts = useCallback(() => {
@@ -924,76 +848,6 @@ export const Home: React.FC = () => {
       // Ignore storage failures.
     }
   }, []);
-
-  const handleGenerateStylePreviews = async (args: { templateJson: string; styleRequirements: string; generatePreviews?: boolean }) => {
-    if (!content.trim()) {
-      const label = activeTextMode === 'idea' ? '想法/主题' : activeTextMode === 'outline' ? '大纲' : '原文';
-      show({ message: `请先填写${label}内容，再生成风格推荐`, type: 'error' });
-      return;
-    }
-    // 检查是否有正在解析的文件
-    const parsingFiles = referenceFiles.filter(f =>
-      f.parse_status === 'pending' || f.parse_status === 'parsing'
-    );
-    if (parsingFiles.length > 0) {
-      show({
-        message: t('home.messages.filesParsing', { count: parsingFiles.length }),
-        type: 'info'
-      });
-      return;
-    }
-
-    if (activeTab === 'ppt_renovation') {
-      show({ message: 'PPT 翻新模式暂不支持风格预览工作流', type: 'error' });
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const request: any = {};
-      if (activeTextMode === 'idea') request.idea_prompt = content;
-      else if (activeTextMode === 'outline') request.outline_text = content;
-      else if (activeTextMode === 'description') request.description_text = content;
-
-      const styleDesc = (args.styleRequirements || '').trim();
-      if (styleDesc) request.template_style = styleDesc;
-      if (aspectRatio) request.image_aspect_ratio = aspectRatio;
-
-      const resp = await createProject(request);
-      const projectId = (resp.data as any)?.project_id;
-      if (!projectId) throw new Error('项目创建失败：未返回项目ID');
-      localStorage.setItem('currentProjectId', projectId);
-
-      // 关联已完成解析的参考文件到项目（确保后端能读取内容用于推荐）
-      const refFileIds = referenceFiles
-        .filter(f => f.parse_status === 'completed')
-        .map(f => f.id);
-      if (refFileIds.length > 0) {
-        try {
-          await Promise.all(refFileIds.map(fileId => associateFileToProject(fileId, projectId)));
-        } catch (e) {
-          console.warn('Failed to associate reference files for style recommendations:', e);
-        }
-      }
-
-      const taskResp = await startStyleRecommendations(projectId, {
-        template_json: args.templateJson,
-        style_requirements: styleDesc,
-        generate_previews: typeof args.generatePreviews === 'boolean' ? args.generatePreviews : false,
-      });
-      const taskId = (taskResp.data as any)?.task_id;
-      if (!taskId) throw new Error('风格预览任务创建失败：未返回 task_id');
-
-      setStylePreviewProjectId(projectId);
-      setStylePreviewTaskId(taskId);
-      setStylePreviewTemplateJson(args.templateJson);
-    } catch (error: any) {
-      const msg = error?.response?.data?.error?.message || error?.message || '生成风格预览失败';
-      show({ message: msg, type: 'error' });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleSubmit = async () => {
     // For ppt_renovation, validate file instead of content
@@ -1023,10 +877,8 @@ export const Home: React.FC = () => {
     try {
       // PPT 翻新模式：走独立的上传+异步解析流程
       if (activeTab === 'ppt_renovation' && renovationFile) {
-        const styleDesc = templateStyle.trim() ? templateStyle.trim() : undefined;
         const result = await createPptRenovationProject(renovationFile, {
           keepLayout,
-          templateStyle: styleDesc,
         });
 
         const projectId = result.data?.project_id;
@@ -1050,40 +902,18 @@ export const Home: React.FC = () => {
         return;
       }
 
-      // 如果有模板ID但没有File，按需加载
-      let templateFile = selectedTemplate;
-      if (!templateFile && selectedTemplateId) {
-        templateFile = await getTemplateFile(selectedTemplateId, userTemplates, 'user');
-      }
-      if (!templateFile && selectedPresetTemplateId) {
-        templateFile = await getTemplateFile(selectedPresetTemplateId, userTemplates, 'preset');
-      }
-      
-      // 传递风格描述（只要有内容就传递，不管开关状态）
-      const styleDesc = templateStyle.trim() ? templateStyle.trim() : undefined;
-
       // 传递参考文件ID列表，确保 AI 生成时能读取参考文件内容
       const refFileIds = referenceFiles
         .filter(f => f.parse_status === 'completed')
         .map(f => f.id);
 
-      await initializeProject(activeTextMode, content, templateFile || undefined, styleDesc, refFileIds.length > 0 ? refFileIds : undefined, aspectRatio);
+      await initializeProject(activeTextMode, content, undefined, undefined, refFileIds.length > 0 ? refFileIds : undefined, aspectRatio);
       
       // 根据类型跳转到不同页面
       const projectId = localStorage.getItem('currentProjectId');
       if (!projectId) {
         show({ message: t('home.messages.projectCreateFailed'), type: 'error' });
         return;
-      }
-
-      // 如选择了风格预设（style_json），在项目创建后直接写入（不影响既有生成流程）
-      if (pendingStylePresetJson && pendingStylePresetJson.trim()) {
-        try {
-          await updateProject(projectId, { template_style_json: pendingStylePresetJson.trim() } as any);
-          show({ message: '已应用风格预设', type: 'success' });
-        } catch (e: any) {
-          console.warn('Failed to apply style preset json:', e);
-        }
       }
       
       // 关联未完成解析的参考文件（已完成的在 initializeProject 中关联）
@@ -1596,84 +1426,6 @@ export const Home: React.FC = () => {
             className="mb-4"
             showToast={show}
           />
-
-          {/* 模板选择 */}
-          <div className="mb-6 md:mb-8 pt-4 border-t border-gray-100 dark:border-border-primary">
-            <div className="flex items-center justify-between mb-3 md:mb-4">
-              <div className="flex items-center gap-2">
-                <Palette size={18} className="text-orange-600 dark:text-banana flex-shrink-0" />
-                <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white">
-                  {t('home.template.title')}
-                </h3>
-              </div>
-              {/* 无模板图模式开关 */}
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <span className="text-sm text-gray-600 dark:text-foreground-tertiary group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
-                  {t('home.template.useTextStyle')}
-                </span>
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={useTemplateStyle}
-                    onChange={(e) => {
-                      setUseTemplateStyle(e.target.checked);
-                      // 切换到无模板图模式时，清空模板选择
-                      if (e.target.checked) {
-                        setSelectedTemplate(null);
-                        setSelectedTemplateId(null);
-                        setSelectedPresetTemplateId(null);
-                        setPendingStylePresetJson('');
-                        setSelectedStylePresetId(null);
-                      } else {
-                        setStylePreviewProjectId(null);
-                        setStylePreviewTaskId(null);
-                        setStylePreviewTemplateJson('');
-                      }
-                      // 不再清空风格描述，允许用户保留已输入的内容
-                    }}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 dark:bg-background-hover peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-banana-300 dark:peer-focus:ring-banana/30 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white dark:after:bg-foreground-secondary after:border-gray-300 dark:after:border-border-hover after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-banana"></div>
-                </div>
-              </label>
-            </div>
-            
-            {/* 根据模式显示不同的内容 */}
-            {useTemplateStyle ? (
-              <>
-                <TextStyleSelector
-                  value={templateStyle}
-                  onChange={setTemplateStyle}
-                  onToast={show}
-                  onGenerateStylePreviews={handleGenerateStylePreviews}
-                />
-                {stylePreviewProjectId && stylePreviewTaskId ? (
-                  <StyleWorkflowPanel
-                    projectId={stylePreviewProjectId}
-                    taskId={stylePreviewTaskId}
-                    templateJson={stylePreviewTemplateJson}
-                    onTaskIdChange={(newTaskId) => setStylePreviewTaskId(newTaskId)}
-                    onBackToProject={() => {
-                      setStylePreviewProjectId(null);
-                      setStylePreviewTaskId(null);
-                      setStylePreviewTemplateJson('');
-                    }}
-                    backButtonText="关闭预览"
-                  />
-                ) : null}
-              </>
-            ) : (
-              <TemplateSelector
-                onSelect={handleTemplateSelect}
-                onSelectStylePreset={handleSelectStylePreset}
-                selectedTemplateId={selectedTemplateId}
-                selectedPresetTemplateId={selectedPresetTemplateId}
-                selectedStylePresetId={selectedStylePresetId}
-                showUpload={true} // 在主页上传的模板保存到用户模板库
-                projectId={currentProjectId}
-              />
-            )}
-          </div>
 
         </Card>
       </main>
