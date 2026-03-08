@@ -171,6 +171,7 @@ export const generateOutlineStream = async (
   projectId: string,
   callbacks: OutlineStreamCallbacks,
   language?: OutputLanguage,
+  lockPageCount?: boolean,
 ): Promise<void> => {
   const lang = language || await getStoredOutputLanguage();
   const accessCode = localStorage.getItem('banana-access-code');
@@ -181,7 +182,7 @@ export const generateOutlineStream = async (
       'Content-Type': 'application/json',
       ...(accessCode ? { 'X-Access-Code': accessCode } : {}),
     },
-    body: JSON.stringify({ language: lang }),
+    body: JSON.stringify({ language: lang, lock_page_count: lockPageCount }),
   });
 
   if (!response.ok || !response.body) {

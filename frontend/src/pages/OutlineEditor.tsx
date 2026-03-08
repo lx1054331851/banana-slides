@@ -31,8 +31,11 @@ const outlineI18n = {
       parsingSource: "解析中...",
       messages: {
         outlineEmpty: "大纲不能为空", generateSuccess: "描述生成完成", generateFailed: "生成描述失败",
-        confirmRegenerate: "已有大纲内容，重新生成将覆盖现有内容，确定继续吗？",
-        confirmRegenerateTitle: "确认重新生成", refineSuccess: "大纲修改成功",
+        generateIncomplete: "大纲生成可能不完整，请检查后重试",
+        confirmRegenerate: "重新生成将更新所有页面标题。已有的描述和图片会按位置保留，但如果新大纲页数减少，多出的页面及其内容将被删除。确定继续吗？",
+        confirmRegenerateTitle: "确认重新生成",
+        lockPageCount: "锁定页面数量（不允许减少，用空白页填补）",
+        refineSuccess: "大纲修改成功",
         refineFailed: "修改失败，请稍后重试", exportSuccess: "导出成功",
         importSuccess: "导入成功", importFailed: "导入失败，请检查文件格式", importEmpty: "文件中未找到有效页面",
         loadingProject: "加载项目中...", generatingOutline: "生成大纲中...",
@@ -70,8 +73,11 @@ const outlineI18n = {
       parsingSource: "Parsing...",
       messages: {
         outlineEmpty: "Outline cannot be empty", generateSuccess: "Descriptions generated successfully", generateFailed: "Failed to generate descriptions",
-        confirmRegenerate: "Existing outline will be overwritten. Continue?",
-        confirmRegenerateTitle: "Confirm Regenerate", refineSuccess: "Outline modified successfully",
+        generateIncomplete: "Outline generation may be incomplete, please review and retry",
+        confirmRegenerate: "Regenerating will update all page titles. Existing descriptions and images are preserved by position, but if the new outline has fewer pages, extra pages and their content will be removed. Continue?",
+        confirmRegenerateTitle: "Confirm Regenerate",
+        lockPageCount: "Lock page count (prevent reduction, fill with blank pages)",
+        refineSuccess: "Outline modified successfully",
         refineFailed: "Modification failed, please try again", exportSuccess: "Export successful",
         importSuccess: "Import successful", importFailed: "Import failed, please check file format", importEmpty: "No valid pages found in file",
         loadingProject: "Loading project...", generatingOutline: "Generating outline...",
@@ -172,6 +178,7 @@ export const OutlineEditor: React.FC = () => {
     deletePageById,
     addNewPage,
     generateOutline,
+    generateOutlineStream,
     isGlobalLoading,
   } = useProjectStore();
 
@@ -332,19 +339,31 @@ export const OutlineEditor: React.FC = () => {
   const handleGenerateOutline = async () => {
     if (!currentProject) return;
 
+    const doGenerate = async (lockPageCount?: boolean) => {
+      try {
+        const result = await generateOutlineStream(lockPageCount);
+        const { currentProject: updatedProject } = useProjectStore.getState();
+        const pageCount = updatedProject?.pages.length ?? 0;
+        if (result && (!result.complete || pageCount === 0)) {
+          show({ message: t('outline.messages.generateIncomplete'), type: 'warning' });
+        }
+      } catch (error: any) {
+        console.error('生成大纲失败:', error);
+        const message = error.friendlyMessage || error.message || t('outline.messages.generateFailed');
+        show({ message, type: 'error' });
+      }
+    };
+
     if (currentProject.pages.length > 0) {
       confirm(
         t('outline.messages.confirmRegenerate'),
-        async () => {
-          try {
-            await generateOutline();
-          } catch (error: any) {
-            console.error('生成大纲失败:', error);
-            const message = error.friendlyMessage || error.message || t('outline.messages.generateFailed');
-            show({ message, type: 'error' });
-          }
-        },
-        { title: t('outline.messages.confirmRegenerateTitle'), variant: 'warning' }
+        doGenerate,
+        {
+          title: t('outline.messages.confirmRegenerateTitle'),
+          variant: 'warning',
+          checkboxLabel: t('outline.messages.lockPageCount'),
+          checkboxDefaultChecked: false
+        }
       );
       return;
     }
@@ -583,7 +602,7 @@ export const OutlineEditor: React.FC = () => {
 
         {/* 移动端：AI 输入框 */}
         <div className="mt-2 md:hidden">
-            <AiRefineInput
+          <AiRefineInput
             title=""
             placeholder={t('outline.aiPlaceholderShort')}
             onSubmit={handleAiRefineOutline}
@@ -666,11 +685,10 @@ export const OutlineEditor: React.FC = () => {
             <button
               type="button"
               onClick={() => handleViewModeChange('list')}
-              className={`h-8 px-2.5 rounded-lg border text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                viewMode === 'list'
+              className={`h-8 px-2.5 rounded-lg border text-sm font-medium transition-colors flex items-center gap-1.5 ${viewMode === 'list'
                   ? 'border-banana-500 bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
                   : 'border-gray-200 dark:border-border-primary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
-              }`}
+                }`}
               title={t('outline.viewMode.list')}
             >
               <List size={16} />
@@ -679,11 +697,10 @@ export const OutlineEditor: React.FC = () => {
             <button
               type="button"
               onClick={() => handleViewModeChange('grid')}
-              className={`h-8 px-2.5 rounded-lg border text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                viewMode === 'grid'
+              className={`h-8 px-2.5 rounded-lg border text-sm font-medium transition-colors flex items-center gap-1.5 ${viewMode === 'grid'
                   ? 'border-banana-500 bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
                   : 'border-gray-200 dark:border-border-primary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
-              }`}
+                }`}
               title={t('outline.viewMode.grid')}
             >
               <LayoutGrid size={16} />
@@ -753,9 +770,8 @@ export const OutlineEditor: React.FC = () => {
               </div>
             )}
             <div
-              className={`bg-white dark:bg-background-secondary rounded-card shadow-md border border-gray-100 dark:border-border-primary overflow-hidden${
-                isDescriptionsProject ? ' mt-3' : ''
-              }`}
+              className={`bg-white dark:bg-background-secondary rounded-card shadow-md border border-gray-100 dark:border-border-primary overflow-hidden${isDescriptionsProject ? ' mt-3' : ''
+                }`}
             >
               <div className="px-4 py-2.5 flex items-center gap-2 border-b border-gray-100 dark:border-border-secondary">
                 {currentProject.creation_type === 'idea'
@@ -908,31 +924,31 @@ export const OutlineEditor: React.FC = () => {
                 collisionDetection={closestCenter}
                 onDragEnd={handleDragEnd}
               >
-              <SortableContext
-                items={currentProject.pages.map((p, idx) => p.id || `page-${idx}`)}
-                strategy={viewMode === 'grid' ? rectSortingStrategy : verticalListSortingStrategy}
-              >
-                <div className={viewMode === 'grid'
-                  ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4'
-                  : 'space-y-3 md:space-y-4'}
+                <SortableContext
+                  items={currentProject.pages.map((p, idx) => p.id || `page-${idx}`)}
+                  strategy={viewMode === 'grid' ? rectSortingStrategy : verticalListSortingStrategy}
                 >
-                  {currentProject.pages.map((page, index) => (
-                    <SortableCard
-                      key={page.id || `page-${index}`}
-                      page={page}
-                      index={index}
-                      projectId={projectId}
-                      showToast={show}
-                      onUpdate={(data) => page.id && updatePageLocal(page.id, data)}
-                      onDelete={() => handleDeletePage(page)}
-                      onClick={() => setSelectedPageId(page.id || null)}
-                      isSelected={selectedPageId === page.id}
-                      isAiRefining={isAiRefining}
-                      viewMode={viewMode}
-                      isExpanded={expandedCardId === page.id}
-                      onToggleExpand={(next) => setExpandedCardId(next ? (page.id || null) : null)}
-                    />
-                  ))}
+                  <div className={viewMode === 'grid'
+                    ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4'
+                    : 'space-y-3 md:space-y-4'}
+                  >
+                    {currentProject.pages.map((page, index) => (
+                      <SortableCard
+                        key={page.id || `page-${index}`}
+                        page={page}
+                        index={index}
+                        projectId={projectId}
+                        showToast={show}
+                        onUpdate={(data) => page.id && updatePageLocal(page.id, data)}
+                        onDelete={() => handleDeletePage(page)}
+                        onClick={() => setSelectedPageId(page.id || null)}
+                        isSelected={selectedPageId === page.id}
+                        isAiRefining={isAiRefining}
+                        viewMode={viewMode}
+                        isExpanded={expandedCardId === page.id}
+                        onToggleExpand={(next) => setExpandedCardId(next ? (page.id || null) : null)}
+                      />
+                    ))}
                   </div>
                 </SortableContext>
               </DndContext>
