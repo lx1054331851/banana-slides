@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Key, Image, Zap, Save, RotateCcw, Globe, FileText, Brain, ArrowUp, HelpCircle, RefreshCw } from 'lucide-react';
 import { useT } from '@/hooks/useT';
@@ -250,9 +250,16 @@ interface FieldConfig {
 }
 
 interface SectionConfig {
+  id: string;
   title: string;
   icon: React.ReactNode;
   fields: FieldConfig[];
+}
+
+interface SettingsNavItem {
+  id: string;
+  title: string;
+  icon: React.ReactNode;
 }
 
 type TestStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -262,6 +269,19 @@ interface ServiceTestState {
   message?: string;
   detail?: string;
 }
+
+const SETTINGS_SECTION_IDS = [
+  'api-config',
+  'model-config',
+  'mineru-config',
+  'image-config',
+  'performance-config',
+  'output-language',
+  'text-reasoning',
+  'image-reasoning',
+  'baidu-ocr',
+  'service-test',
+] as const;
 
 // LazyLLM 支持的厂商列表
 const LAZYLLM_SOURCES = [
@@ -428,11 +448,13 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState(initialFormData);
   const [serviceTestStates, setServiceTestStates] = useState<Record<string, ServiceTestState>>({});
+  const [activeSectionId, setActiveSectionId] = useState('api-config');
 
   // 配置驱动的表单区块定义（使用翻译）
   const settingsSections: SectionConfig[] = [
     // Global API config & Model config are rendered separately above
     {
+      id: 'mineru-config',
       title: t('settings.sections.mineruConfig'),
       icon: <FileText size={20} />,
       fields: [
@@ -456,6 +478,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       ],
     },
     {
+      id: 'image-config',
       title: t('settings.sections.imageConfig'),
       icon: <Image size={20} />,
       fields: [
@@ -473,6 +496,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       ],
     },
     {
+      id: 'performance-config',
       title: t('settings.sections.performanceConfig'),
       icon: <Zap size={20} />,
       fields: [
@@ -495,6 +519,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       ],
     },
     {
+      id: 'output-language',
       title: t('settings.sections.outputLanguage'),
       icon: <Globe size={20} />,
       fields: [
@@ -508,6 +533,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       ],
     },
     {
+      id: 'text-reasoning',
       title: t('settings.sections.textReasoning'),
       icon: <Brain size={20} />,
       fields: [
@@ -528,6 +554,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       ],
     },
     {
+      id: 'image-reasoning',
       title: t('settings.sections.imageReasoning'),
       icon: <Brain size={20} />,
       fields: [
@@ -548,6 +575,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       ],
     },
     {
+      id: 'baidu-ocr',
       title: t('settings.sections.baiduOcr'),
       icon: <FileText size={20} />,
       fields: [
@@ -564,6 +592,56 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       ],
     },
   ];
+
+  const settingsNavItems = useMemo<SettingsNavItem[]>(() => ([
+    { id: 'api-config', title: t('settings.sections.apiConfig'), icon: <Key size={18} /> },
+    { id: 'model-config', title: t('settings.sections.modelConfig'), icon: <FileText size={18} /> },
+    ...settingsSections.map((section) => ({
+      id: section.id,
+      title: section.title,
+      icon: section.icon,
+    })),
+    { id: 'service-test', title: t('settings.serviceTest.title'), icon: <HelpCircle size={18} /> },
+  ]), [settingsSections, t]);
+
+  const handleJumpToSection = useCallback((sectionId: string) => {
+    setActiveSectionId(sectionId);
+    if (typeof document === 'undefined') return;
+    const target = document.getElementById(sectionId);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  const renderModuleSection = ({
+    id,
+    title,
+    icon,
+    description,
+    children,
+    testId,
+  }: {
+    id: string;
+    title: string;
+    icon: React.ReactNode;
+    description?: string;
+    children: React.ReactNode;
+    testId?: string;
+  }) => (
+    <section key={id} id={id} data-testid={testId} className="scroll-mt-6 md:scroll-mt-8">
+      <Card className="p-5 md:p-6 space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-foreground-primary mb-1 flex items-center">
+            {icon}
+            <span className="ml-2">{title}</span>
+          </h2>
+          {description && (
+            <p className="text-sm text-gray-500 dark:text-foreground-tertiary">{description}</p>
+          )}
+        </div>
+        {children}
+      </Card>
+    </section>
+  );
 
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
@@ -596,6 +674,46 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
   useEffect(() => {
     void loadSettings();
   }, [loadSettings, refreshToken]);
+
+  useEffect(() => {
+    if (isLoading || typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') {
+      return;
+    }
+
+    const sectionElements = SETTINGS_SECTION_IDS
+      .map((sectionId) => document.getElementById(sectionId))
+      .filter((element): element is HTMLElement => Boolean(element));
+
+    if (sectionElements.length === 0) {
+      return;
+    }
+
+    let observer: IntersectionObserver;
+
+    try {
+      observer = new IntersectionObserver(
+        (entries) => {
+          const visibleEntries = entries
+            .filter((entry) => entry.isIntersecting)
+            .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+
+          if (visibleEntries[0]) {
+            setActiveSectionId(visibleEntries[0].target.id);
+          }
+        },
+        {
+          rootMargin: '-18% 0px -55% 0px',
+          threshold: [0.15, 0.35, 0.6],
+        },
+      );
+    } catch {
+      return;
+    }
+
+    sectionElements.forEach((element) => observer.observe(element));
+
+    return () => observer.disconnect();
+  }, [isLoading]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -1087,303 +1205,326 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
     <>
       <ToastContainer />
       {ConfirmDialog}
-      <div className="space-y-8">
-        {/* 默认 API 配置区块 */}
-        <div data-testid="global-api-config-section">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-foreground-primary mb-1 flex items-center">
-            <Key size={20} />
-            <span className="ml-2">{t('settings.sections.apiConfig')}</span>
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-foreground-tertiary mb-4">{t('settings.sections.apiConfigDesc')}</p>
-          <div className="p-4 bg-gray-50 dark:bg-background-primary border border-gray-200 dark:border-border-primary rounded-lg space-y-3">
-            {/* 提供商下拉 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-                {t('settings.fields.aiProviderFormat')}
-              </label>
-              <select
-                value={formData.ai_provider_format}
-                onChange={(e) => handleFieldChange('ai_provider_format', e.target.value)}
-                className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
-              >
-                {GLOBAL_PROVIDER_SOURCES.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-              <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">{t('settings.fields.aiProviderFormatDesc')}</p>
-            </div>
-
-            {/* Gemini/OpenAI: API Base URL + API Key */}
-            {API_KEY_PROVIDERS.has(formData.ai_provider_format) && (
-              <div className="space-y-3 pl-3 border-l-2 border-banana-300 dark:border-banana-600">
-                <Input
-                  label={t('settings.fields.apiBaseUrl')}
-                  type="text"
-                  placeholder={t('settings.fields.apiBaseUrlPlaceholder')}
-                  value={formData.api_base_url}
-                  onChange={(e) => handleFieldChange('api_base_url', e.target.value)}
-                />
-                <p className="-mt-2 text-sm text-gray-500 dark:text-foreground-tertiary">{t('settings.fields.apiBaseUrlDesc')}</p>
-                <div>
-                  <Input
-                    label={t('settings.fields.apiKey')}
-                    type="password"
-                    placeholder={
-                      settings && (settings.api_key_length as number) > 0
-                        ? t('settings.fields.apiKeySet', { length: settings.api_key_length })
-                        : t('settings.fields.apiKeyPlaceholder')
-                    }
-                    value={formData.api_key}
-                    onChange={(e) => handleFieldChange('api_key', e.target.value)}
-                  />
-                  <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">{t('settings.fields.apiKeyDesc')}</p>
-                </div>
-              </div>
-            )}
-
-            {/* LazyLLM 厂商: 厂商 API Key */}
-            {isLazyllmVendor(formData.ai_provider_format) && (
-              <GlobalVendorKeyInput vendor={formData.ai_provider_format} formData={formData} setFormData={setFormData} settings={settings} t={t} />
-            )}
-          </div>
-
-          {/* AIHubmix 提示 */}
-          <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
-            <p className="text-sm text-gray-700 dark:text-foreground-secondary">
-              {t('settings.apiKeyTip.before')}
-              <a href={['https://', 'aihubmix', '.com/?', 'aff=17EC'].join('')} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline font-medium">AIHubmix 申请 API key</a>
-            </p>
-          </div>
-
-          {/* API Key 获取指南 */}
-          <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
-            <p className="text-sm font-medium text-gray-800 dark:text-foreground-primary flex items-center gap-1.5 mb-2">
-              <HelpCircle size={15} className="text-blue-500" />
-              {t('settings.apiKeyHelp.title')}
-            </p>
-            <ol className="text-sm text-gray-700 dark:text-foreground-secondary space-y-1 list-decimal list-inside ml-1">
-              <li>
-                {t('settings.apiKeyHelp.step1', { link: '{{link}}' }).split('{{link}}')[0]}
-                <span className="inline-flex items-center gap-2">
-                  <a
-                    href={['https://', 'aihubmix', '.com/?', 'aff=17EC'].join('')}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 underline font-medium"
-                  >
-                    点击此处访问 AIHubmix →
-                  </a>
+      <div className="space-y-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-6 lg:space-y-0">
+        <aside className="lg:sticky lg:top-24 self-start">
+          <Card className="p-2 md:p-3">
+            <div className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
+              {settingsNavItems.map((item) => {
+                const active = activeSectionId === item.id;
+                return (
                   <button
-                    onClick={() => copyToClipboard('https://aihubmix.com/?aff=17EC')}
-                    className="text-xs px-2 py-0.5 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded transition-colors"
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleJumpToSection(item.id)}
+                    aria-current={active ? 'page' : undefined}
+                    className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2.5 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-banana-400 ${
+                      active
+                        ? 'bg-banana-500 text-white shadow-sm'
+                        : 'text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'
+                    }`}
                   >
-                    复制链接
+                    <span className="flex-shrink-0">{item.icon}</span>
+                    <span>{item.title}</span>
                   </button>
-                </span>
-                {t('settings.apiKeyHelp.step1', { link: '{{link}}' }).split('{{link}}')[1]}
-              </li>
-              <li>{t('settings.apiKeyHelp.step2')}</li>
-              <li>{t('settings.apiKeyHelp.step3')}</li>
-              <li>{t('settings.apiKeyHelp.step4')}</li>
-            </ol>
-          </div>
-        </div>
+                );
+              })}
+            </div>
+          </Card>
+        </aside>
 
-        {/* 模型配置区块 */}
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-foreground-primary mb-4 flex items-center">
-            <FileText size={20} />
-            <span className="ml-2">{t('settings.sections.modelConfig')}</span>
-          </h2>
-          <div className="space-y-4">
-            {modelConfigItems.map(renderModelConfigGroup)}
-          </div>
-        </div>
+        <div className="min-w-0 space-y-6">
+          {renderModuleSection({
+            id: 'api-config',
+            testId: 'global-api-config-section',
+            title: t('settings.sections.apiConfig'),
+            icon: <Key size={20} />,
+            description: t('settings.sections.apiConfigDesc'),
+            children: (
+              <>
+                <div className="p-4 bg-gray-50 dark:bg-background-primary border border-gray-200 dark:border-border-primary rounded-lg space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+                      {t('settings.fields.aiProviderFormat')}
+                    </label>
+                    <select
+                      value={formData.ai_provider_format}
+                      onChange={(e) => handleFieldChange('ai_provider_format', e.target.value)}
+                      className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
+                    >
+                      {GLOBAL_PROVIDER_SOURCES.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">{t('settings.fields.aiProviderFormatDesc')}</p>
+                  </div>
 
-        {/* 其余配置区块（配置驱动） */}
-        <div className="space-y-8">
-          {settingsSections.map((section) => (
-            <div key={section.title}>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-foreground-primary mb-4 flex items-center">
-                {section.icon}
-                <span className="ml-2">{section.title}</span>
-              </h2>
+                  {API_KEY_PROVIDERS.has(formData.ai_provider_format) && (
+                    <div className="space-y-3 pl-3 border-l-2 border-banana-300 dark:border-banana-600">
+                      <Input
+                        label={t('settings.fields.apiBaseUrl')}
+                        type="text"
+                        placeholder={t('settings.fields.apiBaseUrlPlaceholder')}
+                        value={formData.api_base_url}
+                        onChange={(e) => handleFieldChange('api_base_url', e.target.value)}
+                      />
+                      <p className="-mt-2 text-sm text-gray-500 dark:text-foreground-tertiary">{t('settings.fields.apiBaseUrlDesc')}</p>
+                      <div>
+                        <Input
+                          label={t('settings.fields.apiKey')}
+                          type="password"
+                          placeholder={
+                            settings && (settings.api_key_length as number) > 0
+                              ? t('settings.fields.apiKeySet', { length: settings.api_key_length })
+                              : t('settings.fields.apiKeyPlaceholder')
+                          }
+                          value={formData.api_key}
+                          onChange={(e) => handleFieldChange('api_key', e.target.value)}
+                        />
+                        <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">{t('settings.fields.apiKeyDesc')}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {isLazyllmVendor(formData.ai_provider_format) && (
+                    <GlobalVendorKeyInput vendor={formData.ai_provider_format} formData={formData} setFormData={setFormData} settings={settings} t={t} />
+                  )}
+                </div>
+
+                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
+                  <p className="text-sm text-gray-700 dark:text-foreground-secondary">
+                    {t('settings.apiKeyTip.before')}
+                    <a href={['https://', 'aihubmix', '.com/?', 'aff=17EC'].join('')} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline font-medium">AIHubmix 申请 API key</a>
+                  </p>
+                </div>
+
+                <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
+                  <p className="text-sm font-medium text-gray-800 dark:text-foreground-primary flex items-center gap-1.5 mb-2">
+                    <HelpCircle size={15} className="text-blue-500" />
+                    {t('settings.apiKeyHelp.title')}
+                  </p>
+                  <ol className="text-sm text-gray-700 dark:text-foreground-secondary space-y-1 list-decimal list-inside ml-1">
+                    <li>
+                      {t('settings.apiKeyHelp.step1', { link: '{{link}}' }).split('{{link}}')[0]}
+                      <span className="inline-flex items-center gap-2">
+                        <a
+                          href={['https://', 'aihubmix', '.com/?', 'aff=17EC'].join('')}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline font-medium"
+                        >
+                          点击此处访问 AIHubmix →
+                        </a>
+                        <button
+                          onClick={() => copyToClipboard('https://aihubmix.com/?aff=17EC')}
+                          className="text-xs px-2 py-0.5 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded transition-colors"
+                        >
+                          复制链接
+                        </button>
+                      </span>
+                      {t('settings.apiKeyHelp.step1', { link: '{{link}}' }).split('{{link}}')[1]}
+                    </li>
+                    <li>{t('settings.apiKeyHelp.step2')}</li>
+                    <li>{t('settings.apiKeyHelp.step3')}</li>
+                    <li>{t('settings.apiKeyHelp.step4')}</li>
+                  </ol>
+                </div>
+              </>
+            ),
+          })}
+
+          {renderModuleSection({
+            id: 'model-config',
+            title: t('settings.sections.modelConfig'),
+            icon: <FileText size={20} />,
+            children: (
+              <div className="space-y-4">
+                {modelConfigItems.map(renderModelConfigGroup)}
+              </div>
+            ),
+          })}
+
+          {settingsSections.map((section) => renderModuleSection({
+            id: section.id,
+            title: section.title,
+            icon: section.icon,
+            children: (
               <div className="space-y-4">
                 {section.fields.map((field) => renderField(field))}
               </div>
-            </div>
-          ))}
-        </div>
+            ),
+          }))}
 
-        {/* 服务测试区 */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-foreground-primary mb-2 flex items-center">
-            <FileText size={20} />
-            <span className="ml-2">{t('settings.serviceTest.title')}</span>
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-foreground-tertiary">
-            {t('settings.serviceTest.description')}
-          </p>
-          <div className="p-3 bg-yellow-50 dark:bg-background-primary border border-yellow-200 dark:border-yellow-700 rounded-lg">
-            <p className="text-sm text-gray-700 dark:text-foreground-secondary">
-              💡 {t('settings.serviceTest.tip')}
-            </p>
-          </div>
-          <div className="space-y-4">
-            {[
-              {
-                key: 'baidu-ocr',
-                titleKey: 'settings.serviceTest.tests.baiduOcr.title',
-                descriptionKey: 'settings.serviceTest.tests.baiduOcr.description',
-                resultKey: 'settings.serviceTest.results.recognizedText',
-                action: api.testBaiduOcr,
-                formatDetail: (data: any) => (data?.recognized_text ? t('settings.serviceTest.results.recognizedText', { text: data.recognized_text }) : ''),
-              },
-              {
-                key: 'text-model',
-                titleKey: 'settings.serviceTest.tests.textModel.title',
-                descriptionKey: 'settings.serviceTest.tests.textModel.description',
-                resultKey: 'settings.serviceTest.results.modelReply',
-                action: api.testTextModel,
-                formatDetail: (data: any) => (data?.reply ? t('settings.serviceTest.results.modelReply', { reply: data.reply }) : ''),
-              },
-              {
-                key: 'caption-model',
-                titleKey: 'settings.serviceTest.tests.captionModel.title',
-                descriptionKey: 'settings.serviceTest.tests.captionModel.description',
-                resultKey: 'settings.serviceTest.results.captionDesc',
-                action: api.testCaptionModel,
-                formatDetail: (data: any) => (data?.caption ? t('settings.serviceTest.results.captionDesc', { caption: data.caption }) : ''),
-              },
-              {
-                key: 'baidu-inpaint',
-                titleKey: 'settings.serviceTest.tests.baiduInpaint.title',
-                descriptionKey: 'settings.serviceTest.tests.baiduInpaint.description',
-                resultKey: 'settings.serviceTest.results.imageSize',
-                action: api.testBaiduInpaint,
-                formatDetail: (data: any) => (data?.image_size ? t('settings.serviceTest.results.imageSize', { width: data.image_size[0], height: data.image_size[1] }) : ''),
-              },
-              {
-                key: 'image-model',
-                titleKey: 'settings.serviceTest.tests.imageModel.title',
-                descriptionKey: 'settings.serviceTest.tests.imageModel.description',
-                resultKey: 'settings.serviceTest.results.imageSize',
-                action: api.testImageModel,
-                formatDetail: (data: any) => (data?.image_size ? t('settings.serviceTest.results.imageSize', { width: data.image_size[0], height: data.image_size[1] }) : ''),
-              },
-              {
-                key: 'mineru-pdf',
-                titleKey: 'settings.serviceTest.tests.mineruPdf.title',
-                descriptionKey: 'settings.serviceTest.tests.mineruPdf.description',
-                resultKey: 'settings.serviceTest.results.parsePreview',
-                action: api.testMineruPdf,
-                formatDetail: (data: any) => (data?.content_preview ? t('settings.serviceTest.results.parsePreview', { preview: data.content_preview }) : data?.message || ''),
-              },
-              {
-                key: 'mozjpeg',
-                titleKey: 'settings.serviceTest.tests.mozjpeg.title',
-                descriptionKey: 'settings.serviceTest.tests.mozjpeg.description',
-                resultKey: 'settings.serviceTest.results.mozjpegPath',
-                action: api.testMozjpeg,
-                formatDetail: (data: any) => {
-                  const parts = [];
-                  if (data?.cjpeg_path) {
-                    parts.push(t('settings.serviceTest.results.mozjpegPath', { path: data.cjpeg_path }));
-                  }
-                  if (data?.butteraugli_path) {
-                    parts.push(t('settings.serviceTest.results.butteraugliPath', { path: data.butteraugli_path }));
-                  } else if (data?.butteraugli_available === false) {
-                    parts.push(t('settings.serviceTest.results.butteraugliPath', { path: 'not found' }));
-                  }
-                  return parts.join(' ｜ ');
-                },
-                installHintKey: 'settings.serviceTest.results.mozjpegInstallHint',
-              },
-              {
-                key: 'oxipng',
-                titleKey: 'settings.serviceTest.tests.oxipng.title',
-                descriptionKey: 'settings.serviceTest.tests.oxipng.description',
-                resultKey: 'settings.serviceTest.results.oxipngPath',
-                action: api.testOxipng,
-                formatDetail: (data: any) => (data?.oxipng_path
-                  ? t('settings.serviceTest.results.oxipngPath', { path: data.oxipng_path })
-                  : ''),
-                installHintKey: 'settings.serviceTest.results.oxipngInstallHint',
-              },
-              {
-                key: 'pngquant',
-                titleKey: 'settings.serviceTest.tests.pngquant.title',
-                descriptionKey: 'settings.serviceTest.tests.pngquant.description',
-                resultKey: 'settings.serviceTest.results.pngquantPath',
-                action: api.testPngquant,
-                formatDetail: (data: any) => (data?.pngquant_path
-                  ? t('settings.serviceTest.results.pngquantPath', { path: data.pngquant_path })
-                  : ''),
-                installHintKey: 'settings.serviceTest.results.pngquantInstallHint',
-              },
-            ].map((item) => {
-              const testState = serviceTestStates[item.key] || { status: 'idle' as TestStatus };
-              const isLoadingTest = testState.status === 'loading';
-              return (
-                <div
-                  key={item.key}
-                  className="p-4 bg-gray-50 dark:bg-background-primary border border-gray-200 dark:border-border-primary rounded-lg space-y-2"
-                >
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <div className="text-base font-semibold text-gray-800 dark:text-foreground-primary">{t(item.titleKey)}</div>
-                      <div className="text-sm text-gray-500 dark:text-foreground-tertiary">{t(item.descriptionKey)}</div>
-                    </div>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      loading={isLoadingTest}
-                      onClick={() => handleServiceTest(item.key, item.action, item.formatDetail)}
-                    >
-                      {isLoadingTest ? t('settings.serviceTest.testing') : t('settings.serviceTest.startTest')}
-                    </Button>
-                  </div>
-                  {testState.status === 'success' && (
-                    <p className="text-sm text-green-600">
-                      {testState.message}{testState.detail ? `｜${testState.detail}` : ''}
-                    </p>
-                  )}
-                  {testState.status === 'error' && (
-                    <div className="space-y-1">
-                      <p className="text-sm text-red-600">
-                        {testState.message}
-                      </p>
-                      {item.installHintKey && (
-                        <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
-                          {t(item.installHintKey)}
-                        </p>
-                      )}
-                    </div>
-                  )}
+          {renderModuleSection({
+            id: 'service-test',
+            title: t('settings.serviceTest.title'),
+            icon: <FileText size={20} />,
+            description: t('settings.serviceTest.description'),
+            children: (
+              <div className="space-y-4">
+                <div className="p-3 bg-yellow-50 dark:bg-background-primary border border-yellow-200 dark:border-yellow-700 rounded-lg">
+                  <p className="text-sm text-gray-700 dark:text-foreground-secondary">
+                    💡 {t('settings.serviceTest.tip')}
+                  </p>
                 </div>
-              );
-            })}
-          </div>
-        </div>
+                <div className="space-y-4">
+                  {[
+                    {
+                      key: 'baidu-ocr',
+                      titleKey: 'settings.serviceTest.tests.baiduOcr.title',
+                      descriptionKey: 'settings.serviceTest.tests.baiduOcr.description',
+                      resultKey: 'settings.serviceTest.results.recognizedText',
+                      action: api.testBaiduOcr,
+                      formatDetail: (data: any) => (data?.recognized_text ? t('settings.serviceTest.results.recognizedText', { text: data.recognized_text }) : ''),
+                    },
+                    {
+                      key: 'text-model',
+                      titleKey: 'settings.serviceTest.tests.textModel.title',
+                      descriptionKey: 'settings.serviceTest.tests.textModel.description',
+                      resultKey: 'settings.serviceTest.results.modelReply',
+                      action: api.testTextModel,
+                      formatDetail: (data: any) => (data?.reply ? t('settings.serviceTest.results.modelReply', { reply: data.reply }) : ''),
+                    },
+                    {
+                      key: 'caption-model',
+                      titleKey: 'settings.serviceTest.tests.captionModel.title',
+                      descriptionKey: 'settings.serviceTest.tests.captionModel.description',
+                      resultKey: 'settings.serviceTest.results.captionDesc',
+                      action: api.testCaptionModel,
+                      formatDetail: (data: any) => (data?.caption ? t('settings.serviceTest.results.captionDesc', { caption: data.caption }) : ''),
+                    },
+                    {
+                      key: 'baidu-inpaint',
+                      titleKey: 'settings.serviceTest.tests.baiduInpaint.title',
+                      descriptionKey: 'settings.serviceTest.tests.baiduInpaint.description',
+                      resultKey: 'settings.serviceTest.results.imageSize',
+                      action: api.testBaiduInpaint,
+                      formatDetail: (data: any) => (data?.image_size ? t('settings.serviceTest.results.imageSize', { width: data.image_size[0], height: data.image_size[1] }) : ''),
+                    },
+                    {
+                      key: 'image-model',
+                      titleKey: 'settings.serviceTest.tests.imageModel.title',
+                      descriptionKey: 'settings.serviceTest.tests.imageModel.description',
+                      resultKey: 'settings.serviceTest.results.imageSize',
+                      action: api.testImageModel,
+                      formatDetail: (data: any) => (data?.image_size ? t('settings.serviceTest.results.imageSize', { width: data.image_size[0], height: data.image_size[1] }) : ''),
+                    },
+                    {
+                      key: 'mineru-pdf',
+                      titleKey: 'settings.serviceTest.tests.mineruPdf.title',
+                      descriptionKey: 'settings.serviceTest.tests.mineruPdf.description',
+                      resultKey: 'settings.serviceTest.results.parsePreview',
+                      action: api.testMineruPdf,
+                      formatDetail: (data: any) => (data?.content_preview ? t('settings.serviceTest.results.parsePreview', { preview: data.content_preview }) : data?.message || ''),
+                    },
+                    {
+                      key: 'mozjpeg',
+                      titleKey: 'settings.serviceTest.tests.mozjpeg.title',
+                      descriptionKey: 'settings.serviceTest.tests.mozjpeg.description',
+                      resultKey: 'settings.serviceTest.results.mozjpegPath',
+                      action: api.testMozjpeg,
+                      formatDetail: (data: any) => {
+                        const parts = [];
+                        if (data?.cjpeg_path) {
+                          parts.push(t('settings.serviceTest.results.mozjpegPath', { path: data.cjpeg_path }));
+                        }
+                        if (data?.butteraugli_path) {
+                          parts.push(t('settings.serviceTest.results.butteraugliPath', { path: data.butteraugli_path }));
+                        } else if (data?.butteraugli_available === false) {
+                          parts.push(t('settings.serviceTest.results.butteraugliPath', { path: 'not found' }));
+                        }
+                        return parts.join(' ｜ ');
+                      },
+                      installHintKey: 'settings.serviceTest.results.mozjpegInstallHint',
+                    },
+                    {
+                      key: 'oxipng',
+                      titleKey: 'settings.serviceTest.tests.oxipng.title',
+                      descriptionKey: 'settings.serviceTest.tests.oxipng.description',
+                      resultKey: 'settings.serviceTest.results.oxipngPath',
+                      action: api.testOxipng,
+                      formatDetail: (data: any) => (data?.oxipng_path
+                        ? t('settings.serviceTest.results.oxipngPath', { path: data.oxipng_path })
+                        : ''),
+                      installHintKey: 'settings.serviceTest.results.oxipngInstallHint',
+                    },
+                    {
+                      key: 'pngquant',
+                      titleKey: 'settings.serviceTest.tests.pngquant.title',
+                      descriptionKey: 'settings.serviceTest.tests.pngquant.description',
+                      resultKey: 'settings.serviceTest.results.pngquantPath',
+                      action: api.testPngquant,
+                      formatDetail: (data: any) => (data?.pngquant_path
+                        ? t('settings.serviceTest.results.pngquantPath', { path: data.pngquant_path })
+                        : ''),
+                      installHintKey: 'settings.serviceTest.results.pngquantInstallHint',
+                    },
+                  ].map((item) => {
+                    const testState = serviceTestStates[item.key] || { status: 'idle' as TestStatus };
+                    const isLoadingTest = testState.status === 'loading';
+                    return (
+                      <div
+                        key={item.key}
+                        className="p-4 bg-gray-50 dark:bg-background-primary border border-gray-200 dark:border-border-primary rounded-lg space-y-2"
+                      >
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <div className="text-base font-semibold text-gray-800 dark:text-foreground-primary">{t(item.titleKey)}</div>
+                            <div className="text-sm text-gray-500 dark:text-foreground-tertiary">{t(item.descriptionKey)}</div>
+                          </div>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            loading={isLoadingTest}
+                            onClick={() => handleServiceTest(item.key, item.action, item.formatDetail)}
+                          >
+                            {isLoadingTest ? t('settings.serviceTest.testing') : t('settings.serviceTest.startTest')}
+                          </Button>
+                        </div>
+                        {testState.status === 'success' && (
+                          <p className="text-sm text-green-600">
+                            {testState.message}{testState.detail ? `｜${testState.detail}` : ''}
+                          </p>
+                        )}
+                        {testState.status === 'error' && (
+                          <div className="space-y-1">
+                            <p className="text-sm text-red-600">
+                              {testState.message}
+                            </p>
+                            {item.installHintKey && (
+                              <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
+                                {t(item.installHintKey)}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ),
+          })}
 
-        {/* 操作按钮 */}
-        <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-border-primary">
-          <Button
-            variant="secondary"
-            icon={<RotateCcw size={18} />}
-            onClick={handleReset}
-            disabled={isSaving}
-          >
-            {t('settings.actions.resetToDefault')}
-          </Button>
-          <Button
-            variant="primary"
-            icon={<Save size={18} />}
-            onClick={handleSave}
-            loading={isSaving}
-          >
-            {isSaving ? t('settings.actions.saving') : t('settings.actions.save')}
-          </Button>
+          <Card className="p-4 md:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <Button
+                variant="secondary"
+                icon={<RotateCcw size={18} />}
+                onClick={handleReset}
+                disabled={isSaving}
+              >
+                {t('settings.actions.resetToDefault')}
+              </Button>
+              <Button
+                variant="primary"
+                icon={<Save size={18} />}
+                onClick={handleSave}
+                loading={isSaving}
+              >
+                {isSaving ? t('settings.actions.saving') : t('settings.actions.save')}
+              </Button>
+            </div>
+          </Card>
         </div>
       </div>
     </>
@@ -1441,17 +1582,13 @@ export const SettingsPage: React.FC = () => {
       />
 
       <main className={`${PAGE_CONTAINER_CLASS} py-6 md:py-8`}>
-        <Card className="p-6 md:p-8">
-          <div className="space-y-8">
-            <div className="pb-6 border-b border-gray-200 dark:border-border-primary">
-              <p className="text-sm text-gray-500 dark:text-foreground-tertiary mt-1">
-                {t('settings.subtitle')}
-              </p>
-            </div>
+        <div className="mb-6 md:mb-8">
+          <p className="text-sm md:text-base text-gray-600 dark:text-foreground-tertiary">
+            {t('settings.subtitle')}
+          </p>
+        </div>
 
-            <Settings refreshToken={refreshToken} onLoadingChange={setIsSettingsLoading} />
-          </div>
-        </Card>
+        <Settings refreshToken={refreshToken} onLoadingChange={setIsSettingsLoading} />
       </main>
 
       {showTop && (

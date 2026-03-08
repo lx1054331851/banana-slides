@@ -78,4 +78,13 @@ describe('SettingsPage', () => {
     expect(mockGetSettings).toHaveBeenCalledTimes(1);
     expect(mockGetProviderProfiles).toHaveBeenCalledTimes(1);
   });
+
+  it('renders modular navigation and default section', async () => {
+    render(<SettingsPage />);
+
+    expect(await screen.findByRole('button', { name: /默认 API 配置|Default API Configuration/i })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: /模型配置|Model Configuration/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /服务测试|Service Test/i })).toBeInTheDocument();
+    expect(screen.getByTestId('global-api-config-section')).toBeInTheDocument();
+  });
 });

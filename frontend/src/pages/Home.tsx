@@ -14,7 +14,87 @@ import { useT } from '@/hooks/useT';
 import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
 import mammoth from 'mammoth/mammoth.browser';
 
-type CreationType = 'idea' | 'outline' | 'description' | 'ppt_renovation';
+type TextCreationType = 'idea' | 'outline' | 'description';
+type CreationType = TextCreationType | 'ppt_renovation';
+type MainCreationType = 'text_generation' | 'ppt_renovation';
+type TextDraftMap = Record<TextCreationType, string>;
+
+const TEXT_CREATION_TYPES: TextCreationType[] = ['idea', 'outline', 'description'];
+const DEFAULT_TEXT_DRAFTS: TextDraftMap = {
+  idea: '',
+  outline: '',
+  description: '',
+};
+
+const HOME_DRAFTS_STORAGE_KEY = 'home-draft-contents';
+const HOME_TEXT_MODE_STORAGE_KEY = 'home-draft-text-mode';
+const HOME_MAIN_TAB_STORAGE_KEY = 'home-draft-main-tab';
+const LEGACY_HOME_DRAFT_CONTENT_KEY = 'home-draft-content';
+const LEGACY_HOME_DRAFT_TAB_KEY = 'home-draft-tab';
+
+const isTextCreationType = (value: string | null): value is TextCreationType =>
+  value !== null && TEXT_CREATION_TYPES.includes(value as TextCreationType);
+
+const isMainCreationType = (value: string | null): value is MainCreationType =>
+  value === 'text_generation' || value === 'ppt_renovation';
+
+const readInitialHomeDraftState = (): {
+  activeTab: CreationType;
+  activeTextMode: TextCreationType;
+  textDrafts: TextDraftMap;
+} => {
+  const textDrafts: TextDraftMap = { ...DEFAULT_TEXT_DRAFTS };
+  let activeTextMode: TextCreationType = 'idea';
+  let activeMainTab: MainCreationType = 'text_generation';
+
+  if (typeof window === 'undefined') {
+    return { activeTab: activeTextMode, activeTextMode, textDrafts };
+  }
+
+  try {
+    const storedDrafts = sessionStorage.getItem(HOME_DRAFTS_STORAGE_KEY);
+    if (storedDrafts) {
+      const parsed = JSON.parse(storedDrafts) as Partial<Record<TextCreationType, unknown>>;
+      for (const mode of TEXT_CREATION_TYPES) {
+        if (typeof parsed?.[mode] === 'string') {
+          textDrafts[mode] = parsed[mode];
+        }
+      }
+    }
+
+    const storedTextMode = sessionStorage.getItem(HOME_TEXT_MODE_STORAGE_KEY);
+    if (isTextCreationType(storedTextMode)) {
+      activeTextMode = storedTextMode;
+    }
+
+    const storedMainTab = sessionStorage.getItem(HOME_MAIN_TAB_STORAGE_KEY);
+    if (isMainCreationType(storedMainTab)) {
+      activeMainTab = storedMainTab;
+    }
+
+    if (!storedDrafts) {
+      const legacyTab = sessionStorage.getItem(LEGACY_HOME_DRAFT_TAB_KEY);
+      const legacyContent = sessionStorage.getItem(LEGACY_HOME_DRAFT_CONTENT_KEY) || '';
+
+      if (isTextCreationType(legacyTab)) {
+        activeTextMode = legacyTab;
+        if (legacyContent) {
+          textDrafts[legacyTab] = legacyContent;
+        }
+      } else if (legacyTab === 'ppt_renovation') {
+        activeMainTab = 'ppt_renovation';
+      }
+    }
+  } catch {
+    return { activeTab: activeTextMode, activeTextMode, textDrafts };
+  }
+
+  return {
+    activeTab: activeMainTab === 'ppt_renovation' ? 'ppt_renovation' : activeTextMode,
+    activeTextMode,
+    textDrafts,
+  };
+};
 
 // 页面特有翻译 - AI 可以直接看到所有文案，保留原始 key 结构
 const homeI18n = {
@@ -39,12 +119,16 @@ const homeI18n = {
         export: '一键导出 PPTX/PDF',
       },
       tabs: {
-        idea: '一句话生成',
-        outline: '从大纲生成',
-        description: '从描述生成',
+        text_generation: '文本生成',
         ppt_renovation: 'PPT 翻新',
       },
+      textModes: {
+        idea: '一句话',
+        outline: '大纲',
+        description: '长描述',
+      },
       tabDescriptions: {
+        text_generation: '通过一句话、大纲或长描述三种方式生成 PPT',
         idea: '输入你的想法，AI 将为你生成完整的 PPT',
         outline: '已有大纲？直接粘贴，AI 将自动切分为结构化大纲',
         description: '已有完整描述？AI 将自动解析并直接生成图片，跳过大纲步骤',
@@ -129,12 +213,16 @@ const homeI18n = {
         export: 'Export to PPTX/PDF',
       },
       tabs: {
-        idea: 'From Idea',
-        outline: 'From Outline',
-        description: 'From Description',
+        text_generation: 'Text Generation',
         ppt_renovation: 'PPT Renovation',
       },
+      textModes: {
+        idea: 'One Sentence',
+        outline: 'Outline',
+        description: 'Long Description',
+      },
       tabDescriptions: {
+        text_generation: 'Generate PPTs from a short idea, an outline, or a detailed description',
         idea: 'Enter your idea, AI will generate a complete PPT for you',
         outline: 'Have an outline? Paste it directly, AI will split it into a structured outline',
         description: 'Have detailed descriptions? AI will parse and generate images directly, skipping the outline step',
@@ -207,9 +295,13 @@ export const Home: React.FC = () => {
   const { theme, isDark, setTheme } = useTheme();
   const { initializeProject, isGlobalLoading } = useProjectStore();
   const { show, ToastContainer } = useToast();
+  const [initialHomeDraftState] = useState(readInitialHomeDraftState);
   
-  const [activeTab, setActiveTab] = useState<CreationType>('idea');
-  const [content, setContent] = useState('');
+  const [mainTab, setMainTab] = useState<MainCreationType>(
+    initialHomeDraftState.activeTab === 'ppt_renovation' ? 'ppt_renovation' : 'text_generation'
+  );
+  const [activeTextMode, setActiveTextMode] = useState<TextCreationType>(initialHomeDraftState.activeTextMode);
+  const [textDrafts, setTextDrafts] = useState<TextDraftMap>(initialHomeDraftState.textDrafts);
   const [selectedTemplate, setSelectedTemplate] = useState<File | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedPresetTemplateId, setSelectedPresetTemplateId] = useState<string | null>(null);
@@ -246,15 +338,40 @@ export const Home: React.FC = () => {
   const draftSaveHandleRef = useRef<{ type: 'timeout' | 'idle'; id: number } | null>(null);
   const [, startTransition] = useTransition();
 
+  const activeTab: CreationType = mainTab === 'ppt_renovation' ? 'ppt_renovation' : activeTextMode;
+  const content = textDrafts[activeTextMode];
+
+  const setTextDraft = useCallback((mode: TextCreationType, value: React.SetStateAction<string>) => {
+    setTextDrafts((prev) => {
+      const prevValue = prev[mode] || '';
+      const nextValue = typeof value === 'function'
+        ? (value as (prevState: string) => string)(prevValue)
+        : value;
+
+      if (nextValue === prevValue) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [mode]: nextValue,
+      };
+    });
+  }, []);
+
+  const setCurrentTextDraft = useCallback((value: React.SetStateAction<string>) => {
+    setTextDraft(activeTextMode, value);
+  }, [activeTextMode, setTextDraft]);
+
   const setContentOptimized = useCallback((next: string) => {
     // Large text updates can make the whole Home page re-render and block the UI.
     // Defer big updates so paste stays responsive.
     if ((next?.length || 0) >= 8000) {
-      startTransition(() => setContent(next));
+      startTransition(() => setCurrentTextDraft(next));
       return;
     }
-    setContent(next);
-  }, [startTransition]);
+    setCurrentTextDraft(next);
+  }, [setCurrentTextDraft, startTransition]);
 
   const setSourceTextOptimized = useCallback((next: string) => {
     if ((next?.length || 0) >= 8000) {
@@ -281,8 +398,15 @@ export const Home: React.FC = () => {
 
     const doSave = () => {
       try {
-        if (content) sessionStorage.setItem('home-draft-content', content);
-        else sessionStorage.removeItem('home-draft-content');
+        if (Object.values(textDrafts).some((value) => value.trim())) {
+          sessionStorage.setItem(HOME_DRAFTS_STORAGE_KEY, JSON.stringify(textDrafts));
+        } else {
+          sessionStorage.removeItem(HOME_DRAFTS_STORAGE_KEY);
+        }
+        sessionStorage.setItem(HOME_TEXT_MODE_STORAGE_KEY, activeTextMode);
+        sessionStorage.setItem(HOME_MAIN_TAB_STORAGE_KEY, mainTab);
+        sessionStorage.removeItem(LEGACY_HOME_DRAFT_CONTENT_KEY);
+        sessionStorage.removeItem(LEGACY_HOME_DRAFT_TAB_KEY);
       } catch {
         // Ignore storage failures (quota/disabled). Draft persistence is best-effort.
       }
@@ -298,11 +422,7 @@ export const Home: React.FC = () => {
     }
 
     return cancelScheduledSave;
-  }, [content]);
-
-  useEffect(() => {
-    sessionStorage.setItem('home-draft-tab', activeTab);
-  }, [activeTab]);
+  }, [activeTextMode, mainTab, textDrafts]);
 
 
   // 检查是否有当前项目 & 加载用户模板
@@ -361,7 +481,7 @@ export const Home: React.FC = () => {
   // 图片粘贴使用统一 hook（批量支持，不对非图片文件发出警告，由下方 handlePaste 处理文档）
   const { handlePaste: handleImagePaste, handleFiles: handleImageFiles, isUploading: isUploadingImage } = useImagePaste({
     projectId: null,
-    setContent,
+    setContent: setCurrentTextDraft,
     showToast: show,
     warnUnsupportedTypes: false,
     insertAtCursor,
@@ -624,15 +744,19 @@ export const Home: React.FC = () => {
         throw new Error(`HTTP_${response.status}`);
       }
 
-      setContent('');
+      setCurrentTextDraft('');
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
       let accumulated = '';
 
-      while (true) {
+      let isReading = true;
+      while (isReading) {
         const { value, done } = await reader.read();
-        if (done) break;
+        if (done) {
+          isReading = false;
+          continue;
+        }
         buffer += decoder.decode(value, { stream: true });
 
         let idx = buffer.indexOf('\n\n');
@@ -665,7 +789,7 @@ export const Home: React.FC = () => {
           }
           if (data) {
             accumulated += data;
-            setContent(accumulated);
+            setCurrentTextDraft(accumulated);
           }
           idx = buffer.indexOf('\n\n');
         }
@@ -679,7 +803,7 @@ export const Home: React.FC = () => {
         .replace(/^```(?:json)?\s*/i, '')
         .replace(/```$/i, '')
         .trim();
-      setContent(cleaned);
+      setCurrentTextDraft(cleaned);
       show({ message: t('home.messages.parseSourceSuccess'), type: 'success' });
     } catch (error: any) {
       const message = error?.response?.data?.error?.message
@@ -692,6 +816,7 @@ export const Home: React.FC = () => {
   }, [
     activeTab,
     isParsingSource,
+    setCurrentTextDraft,
     sourceText,
     sourceFile,
     readSourceFileText,
@@ -700,36 +825,54 @@ export const Home: React.FC = () => {
     show
   ]);
 
-  const tabConfig = {
+  const textModeConfig = {
     idea: {
       icon: <Sparkles size={20} />,
-      label: t('home.tabs.idea'),
+      label: t('home.textModes.idea'),
       placeholder: t('home.placeholders.idea'),
       description: t('home.tabDescriptions.idea'),
       example: null as string | null,
     },
     outline: {
       icon: <FileText size={20} />,
-      label: t('home.tabs.outline'),
+      label: t('home.textModes.outline'),
       placeholder: t('home.placeholders.outline'),
       description: t('home.tabDescriptions.outline'),
       example: t('home.examples.outline'),
     },
     description: {
       icon: <FileEdit size={20} />,
-      label: t('home.tabs.description'),
+      label: t('home.textModes.description'),
       placeholder: t('home.placeholders.description'),
       description: t('home.tabDescriptions.description'),
       example: t('home.examples.description'),
     },
+  } satisfies Record<TextCreationType, {
+    icon: React.ReactNode;
+    label: string;
+    placeholder: string;
+    description: string;
+    example: string | null;
+  }>;
+
+  const mainTabConfig = {
+    text_generation: {
+      icon: <Sparkles size={20} />,
+      label: t('home.tabs.text_generation'),
+      description: t('home.tabDescriptions.text_generation'),
+    },
     ppt_renovation: {
       icon: <RefreshCw size={20} />,
       label: t('home.tabs.ppt_renovation'),
-      placeholder: '',
       description: t('home.tabDescriptions.ppt_renovation'),
-      example: null as string | null,
     },
-  };
+  } satisfies Record<MainCreationType, {
+    icon: React.ReactNode;
+    label: string;
+    description: string;
+  }>;
+
+  const currentTextConfig = textModeConfig[activeTextMode];
 
   const handleTemplateSelect = async (templateFile: File | null, templateId?: string, source?: TemplateSource) => {
     // 同步文件选择状态，避免保留过期的本地 File
@@ -769,9 +912,22 @@ export const Home: React.FC = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const clearPersistedTextDrafts = useCallback(() => {
+    setTextDrafts({ ...DEFAULT_TEXT_DRAFTS });
+    try {
+      sessionStorage.removeItem(HOME_DRAFTS_STORAGE_KEY);
+      sessionStorage.removeItem(HOME_TEXT_MODE_STORAGE_KEY);
+      sessionStorage.removeItem(HOME_MAIN_TAB_STORAGE_KEY);
+      sessionStorage.removeItem(LEGACY_HOME_DRAFT_CONTENT_KEY);
+      sessionStorage.removeItem(LEGACY_HOME_DRAFT_TAB_KEY);
+    } catch {
+      // Ignore storage failures.
+    }
+  }, []);
+
   const handleGenerateStylePreviews = async (args: { templateJson: string; styleRequirements: string; generatePreviews?: boolean }) => {
     if (!content.trim()) {
-      const label = activeTab === 'idea' ? '想法/主题' : activeTab === 'outline' ? '大纲' : '原文';
+      const label = activeTextMode === 'idea' ? '想法/主题' : activeTextMode === 'outline' ? '大纲' : '原文';
       show({ message: `请先填写${label}内容，再生成风格推荐`, type: 'error' });
       return;
     }
@@ -795,9 +951,9 @@ export const Home: React.FC = () => {
     setIsSubmitting(true);
     try {
       const request: any = {};
-      if (activeTab === 'idea') request.idea_prompt = content;
-      else if (activeTab === 'outline') request.outline_text = content;
-      else if (activeTab === 'description') request.description_text = content;
+      if (activeTextMode === 'idea') request.idea_prompt = content;
+      else if (activeTextMode === 'outline') request.outline_text = content;
+      else if (activeTextMode === 'description') request.description_text = content;
 
       const styleDesc = (args.styleRequirements || '').trim();
       if (styleDesc) request.template_style = styleDesc;
@@ -887,8 +1043,7 @@ export const Home: React.FC = () => {
         }
 
         // Clear draft
-        sessionStorage.removeItem('home-draft-content');
-        sessionStorage.removeItem('home-draft-tab');
+        clearPersistedTextDrafts();
 
         // Navigate to detail editor (will poll for task completion with skeleton UI)
         navigate(`/project/${projectId}/detail`);
@@ -912,7 +1067,7 @@ export const Home: React.FC = () => {
         .filter(f => f.parse_status === 'completed')
         .map(f => f.id);
 
-      await initializeProject(activeTab as 'idea' | 'outline' | 'description', content, templateFile || undefined, styleDesc, refFileIds.length > 0 ? refFileIds : undefined, aspectRatio);
+      await initializeProject(activeTextMode, content, templateFile || undefined, styleDesc, refFileIds.length > 0 ? refFileIds : undefined, aspectRatio);
       
       // 根据类型跳转到不同页面
       const projectId = localStorage.getItem('currentProjectId');
@@ -970,9 +1125,9 @@ export const Home: React.FC = () => {
         devLog('No materials to associate');
       }
       
-      if (activeTab === 'idea' || activeTab === 'outline') {
+      if (activeTextMode === 'idea' || activeTextMode === 'outline') {
         navigate(`/project/${projectId}/outline`);
-      } else if (activeTab === 'description') {
+      } else if (activeTextMode === 'description') {
         // 从描述生成：直接跳到描述生成页（因为已经自动生成了大纲和描述）
         navigate(`/project/${projectId}/detail`);
       }
@@ -1117,16 +1272,16 @@ export const Home: React.FC = () => {
       <main className="relative max-w-5xl mx-auto px-3 md:px-4 py-8 md:py-12">
         {/* 创建卡片 */}
         <Card className="p-4 md:p-10 bg-white/90 dark:bg-background-secondary backdrop-blur-xl dark:backdrop-blur-none shadow-2xl dark:shadow-none border-0 dark:border dark:border-border-primary hover:shadow-3xl dark:hover:shadow-none transition-all duration-300 dark:rounded-2xl">
-          {/* 选项卡 */}
+          {/* 顶层模式 */}
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-6 md:mb-8">
-            {(Object.keys(tabConfig) as CreationType[]).map((type) => {
-              const config = tabConfig[type];
+            {(Object.keys(mainTabConfig) as MainCreationType[]).map((type) => {
+              const config = mainTabConfig[type];
               return (
                 <button
                   key={type}
-                  onClick={() => setActiveTab(type)}
+                  onClick={() => setMainTab(type)}
                   className={`flex-1 flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-6 py-2.5 md:py-3 rounded-lg dark:rounded-xl font-medium transition-all text-sm md:text-base touch-manipulation ${
-                    activeTab === type
+                    mainTab === type
                       ? 'bg-gradient-to-r from-banana-500 to-banana-600 dark:from-banana dark:to-banana text-black shadow-yellow dark:shadow-lg dark:shadow-banana/20'
                       : 'bg-white dark:bg-background-elevated border border-gray-200 dark:border-border-primary text-gray-700 dark:text-foreground-secondary hover:bg-banana-50 dark:hover:bg-background-hover active:bg-banana-100'
                   }`}
@@ -1144,13 +1299,13 @@ export const Home: React.FC = () => {
               <span className="inline-flex items-center gap-2 text-gray-600 dark:text-foreground-tertiary">
                 <Lightbulb size={16} className="text-banana-600 dark:text-banana flex-shrink-0" />
                 <span className="font-semibold">
-                  {tabConfig[activeTab].description}
+                  {activeTab === 'ppt_renovation' ? mainTabConfig.ppt_renovation.description : currentTextConfig.description}
                 </span>
-                {tabConfig[activeTab].example && (
+                {activeTab !== 'ppt_renovation' && currentTextConfig.example && (
                   <span className="relative group/tip inline-flex">
                     <HelpCircle size={15} className="text-gray-400 dark:text-foreground-tertiary hover:text-banana-600 dark:hover:text-banana cursor-help transition-colors" />
                     <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover/tip:block z-50 w-72 md:w-80 p-3 bg-white dark:bg-background-elevated border border-gray-200 dark:border-border-primary rounded-lg shadow-xl dark:shadow-none text-xs text-gray-700 dark:text-foreground-secondary whitespace-pre-line leading-relaxed">
-                      {tabConfig[activeTab].example}
+                      {currentTextConfig.example}
                       <span className="absolute left-1/2 -translate-x-1/2 top-full -mt-px w-2 h-2 bg-white dark:bg-background-elevated border-r border-b border-gray-200 dark:border-border-primary rotate-45" />
                     </span>
                   </span>
@@ -1253,7 +1408,7 @@ export const Home: React.FC = () => {
               </div>
             ) : (
             <>
-              {activeTab === 'description' && (
+              {activeTextMode === 'description' && (
                 <div className="mb-3 bg-white dark:bg-background-tertiary border-2 border-gray-200 dark:border-border-primary rounded-xl shadow-sm overflow-hidden">
                   <div className="px-4 py-2.5 flex items-center gap-2 border-b border-gray-100 dark:border-border-secondary">
                     <FileText size={14} className="text-banana-500 flex-shrink-0" />
@@ -1309,14 +1464,14 @@ export const Home: React.FC = () => {
               )}
               <MarkdownTextarea
                 ref={textareaRef}
-                placeholder={tabConfig[activeTab].placeholder}
+                placeholder={currentTextConfig.placeholder}
                 value={content}
                 onChange={setContentOptimized}
                 onPaste={handlePaste}
                 onFiles={handleImageFiles}
-                rows={activeTab === 'idea' ? 4 : 8}
+                rows={activeTextMode === 'idea' ? 4 : 8}
                 maxHeight={360}
-                collapsed={activeTab === 'description' && isContentCollapsed}
+                collapsed={activeTextMode === 'description' && isContentCollapsed}
                 className="text-sm md:text-base border-2 border-gray-200 dark:border-border-primary dark:bg-background-tertiary dark:text-white focus-within:border-banana-400 dark:focus-within:border-banana transition-colors duration-200"
                 toolbarLeft={
                   <div className="flex items-center gap-1">
@@ -1356,7 +1511,7 @@ export const Home: React.FC = () => {
                       </>
                     )}
                   </div>
-                  {activeTab === 'description' && (
+                  {activeTextMode === 'description' && (
                     <button
                       type="button"
                       onClick={() => setIsContentCollapsed((prev) => !prev)}
@@ -1367,6 +1522,32 @@ export const Home: React.FC = () => {
                   )}
                 </div>
               }
+                toolbarCenter={
+                  mainTab === 'text_generation' ? (
+                    <div className="flex items-center gap-1 rounded-xl border border-gray-200 dark:border-border-primary bg-white/90 dark:bg-background-elevated p-1 max-w-full overflow-x-auto">
+                      {TEXT_CREATION_TYPES.map((type) => {
+                        const config = textModeConfig[type];
+                        const selected = activeTextMode === type;
+                        return (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => setActiveTextMode(type)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium whitespace-nowrap transition-all ${
+                              selected
+                                ? 'bg-banana-500 text-black shadow-sm'
+                                : 'text-gray-500 dark:text-foreground-tertiary hover:text-gray-700 dark:hover:text-foreground-secondary hover:bg-banana-50 dark:hover:bg-background-hover'
+                            }`}
+                            title={config.description}
+                          >
+                            <span className="scale-90">{config.icon}</span>
+                            <span>{config.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null
+                }
                 toolbarRight={
                   <Button
                     size="sm"

@@ -51,6 +51,8 @@ interface MarkdownTextareaProps {
   showUploadButton?: boolean;
   /** Extra content rendered on the left side of the toolbar (after built-in buttons) */
   toolbarLeft?: React.ReactNode;
+  /** Content rendered in the center area of the toolbar */
+  toolbarCenter?: React.ReactNode;
   /** Content rendered on the right side of the toolbar */
   toolbarRight?: React.ReactNode;
   /** Show compact image preview strip. Default: true */
@@ -280,6 +282,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   collapsed = false,
   showUploadButton,
   toolbarLeft,
+  toolbarCenter,
   toolbarRight,
   showImagePreview = true,
   resizable = true,
@@ -299,7 +302,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   const dragCountRef = useRef(0);
 
   const shouldShowUpload = showUploadButton ?? !!onFiles;
-  const hasToolbar = shouldShowUpload || toolbarLeft || toolbarRight;
+  const hasToolbar = shouldShowUpload || toolbarLeft || toolbarCenter || toolbarRight;
 
   // Keep chip tooltips in a ref so imperative DOM functions can read the latest i18n
   const chipTooltipsRef = useRef({ edit: '', uploading: '' });
@@ -790,7 +793,9 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
               )}
               {toolbarLeft}
             </div>
-            <div className="flex-1" />
+            <div className="flex-1 flex justify-center px-2">
+              {toolbarCenter}
+            </div>
             {toolbarRight && (
               <div className="flex items-center gap-1">
                 {toolbarRight}
