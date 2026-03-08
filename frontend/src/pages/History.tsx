@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { Home, Trash2, Sun, Moon } from 'lucide-react';
-import { Button, Loading, Card, Pagination, useToast, useConfirm } from '@/components/shared';
+import { History as HistoryIcon, RefreshCw, Trash2 } from 'lucide-react';
+import { Button, Loading, Card, PageHeader, PAGE_CONTAINER_CLASS, Pagination, useToast, useConfirm } from '@/components/shared';
 import { ProjectCard } from '@/components/history/ProjectCard';
 import { useProjectStore } from '@/store/useProjectStore';
-import { useTheme } from '@/hooks/useTheme';
 import { useT } from '@/hooks/useT';
 import * as api from '@/api/endpoints';
 import { normalizeProject } from '@/utils';
@@ -16,7 +14,7 @@ import type { Project } from '@/types';
 const historyI18n = {
   zh: {
     home: { title: '蕉幻', actions: { createProject: '创建新项目' } },
-    nav: { home: '主页' },
+    nav: { back: '返回', home: '主页', refresh: '刷新', loading: '刷新中...' },
     settings: { language: { label: '界面语言' }, theme: { light: '浅色', dark: '深色' } },
     history: {
       title: '历史项目',
@@ -44,7 +42,7 @@ const historyI18n = {
   },
   en: {
     home: { title: 'Banana Slides', actions: { createProject: 'Create New Project' } },
-    nav: { home: 'Home' },
+    nav: { back: 'Back', home: 'Home', refresh: 'Refresh', loading: 'Refreshing...' },
     settings: { language: { label: 'Interface Language' }, theme: { light: 'Light', dark: 'Dark' } },
     history: {
       title: 'Project History',
@@ -77,9 +75,7 @@ const PAGE_SIZE_KEY = 'history_page_size';
 
 export const History: React.FC = () => {
   const navigate = useNavigate();
-  const { i18n } = useTranslation();
   const t = useT(historyI18n); // 组件内翻译 + 自动 fallback 到全局
-  const { isDark, setTheme } = useTheme();
   const { syncProject, setCurrentProject } = useProjectStore();
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -122,6 +118,14 @@ export const History: React.FC = () => {
   useEffect(() => {
     loadProjects(currentPage);
   }, [currentPage, pageSize]);
+
+  const handleBack = useCallback(() => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate('/');
+  }, [navigate]);
 
   const handlePageChange = useCallback((page: number) => {
     setSelectedProjects(new Set());
@@ -379,59 +383,29 @@ export const History: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-banana-50 dark:from-background-primary via-white dark:via-background-primary to-gray-50 dark:to-background-primary">
-      {/* 导航栏 */}
-      <nav className="h-14 md:h-16 bg-white dark:bg-background-secondary shadow-sm dark:shadow-background-primary/30 border-b border-gray-100 dark:border-border-primary">
-        <div className="max-w-7xl mx-auto px-3 md:px-4 h-full flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="flex items-center gap-2"
-            title={t('nav.home')}
+      <PageHeader
+        title={t('history.title')}
+        icon={<HistoryIcon size={18} />}
+        onBack={handleBack}
+        onHome={() => navigate('/')}
+        backLabel={t('nav.back')}
+        homeLabel={t('nav.home')}
+        actions={(
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />}
+            onClick={() => void loadProjects(currentPage)}
+            disabled={isLoading}
           >
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-banana-500 to-banana-600 rounded-lg flex items-center justify-center text-xl md:text-2xl">
-              🍌
-            </div>
-            <span className="text-lg md:text-xl font-bold text-gray-900 dark:text-foreground-primary">{t('home.title')}</span>
-          </button>
-          <div className="flex items-center gap-2 md:gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Home size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={() => navigate('/')}
-              className="text-xs md:text-sm"
-            >
-              {t('nav.home')}
-            </Button>
-            {/* 分隔线 */}
-            <div className="h-5 w-px bg-gray-300 dark:bg-border-primary" />
-            {/* 语言切换按钮 */}
-            <button
-              onClick={() => i18n.changeLanguage(i18n.language?.startsWith('zh') ? 'en' : 'zh')}
-              className="px-2 py-1 text-xs font-medium text-gray-600 dark:text-foreground-tertiary hover:text-gray-900 dark:hover:text-gray-100 hover:bg-banana-100/60 dark:hover:bg-background-hover rounded-md transition-all"
-              title={t('settings.language.label')}
-            >
-              {i18n.language?.startsWith('zh') ? 'EN' : '中'}
-            </button>
-            {/* 主题切换按钮 */}
-            <button
-              onClick={() => setTheme(isDark ? 'light' : 'dark')}
-              className="p-1.5 text-gray-600 dark:text-foreground-tertiary hover:text-gray-900 dark:hover:text-gray-100 hover:bg-banana-100/60 dark:hover:bg-background-hover rounded-md transition-all"
-              title={isDark ? t('settings.theme.light') : t('settings.theme.dark')}
-            >
-              {isDark ? <Sun size={16} /> : <Moon size={16} />}
-            </button>
-          </div>
-        </div>
-      </nav>
+            {isLoading ? t('nav.loading') : t('nav.refresh')}
+          </Button>
+        )}
+      />
 
-      {/* 主内容 */}
-      <main className="max-w-6xl mx-auto px-3 md:px-4 py-6 md:py-8">
+      <main className={`${PAGE_CONTAINER_CLASS} py-6 md:py-8`}>
         <div className="mb-6 md:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-foreground-primary mb-1 md:mb-2">{t('history.title')}</h1>
-            <p className="text-sm md:text-base text-gray-600 dark:text-foreground-tertiary">{t('history.subtitle')}</p>
-          </div>
+          <p className="text-sm md:text-base text-gray-600 dark:text-foreground-tertiary">{t('history.subtitle')}</p>
           {projects.length > 0 && selectedProjects.size > 0 && (
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-600 dark:text-foreground-tertiary">

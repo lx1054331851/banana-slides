@@ -33,3 +33,4 @@ export { TextStyleSelector } from './TextStyleSelector';
 export { StyleWorkflowPanel } from './StyleWorkflowPanel';
 export { ImageLightbox } from './ImageLightbox';
 export { Pagination } from './Pagination';
+export { PageHeader, PAGE_CONTAINER_CLASS } from './PageHeader';

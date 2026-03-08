@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 type NestedRecord = Record<string, unknown>;
@@ -64,7 +65,7 @@ export function useT<T extends Translations>(translations: T) {
 
   // 兼容 react-i18next 的多种调用方式：
   // t('key') / t('key', '默认值') / t('key', { param: value })
-  return (key: string, defaultOrParams?: string | Record<string, unknown>): string => {
+  return useCallback((key: string, defaultOrParams?: string | Record<string, unknown>): string => {
     // 解析第二个参数
     const params = typeof defaultOrParams === 'object' ? defaultOrParams : undefined;
     
@@ -84,5 +85,5 @@ export function useT<T extends Translations>(translations: T) {
     
     // 组件内没找到，fallback 到全局翻译（保持原始参数传递）
     return globalT(key, defaultOrParams as any) as string;
-  };
+  }, [dict, globalT]);
 }

@@ -2,10 +2,9 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Sparkles, FileText, FileEdit, Paperclip, Palette, Lightbulb, Settings, FolderOpen, HelpCircle, History, Sun, Moon, Globe, Monitor, ChevronDown, Upload, RefreshCw, Database } from 'lucide-react';
-import { Button, Card, DbAnalysisEntry, useToast, ReferenceFileList, ReferenceFileSelector, FilePreviewModal, HelpModal, TextStyleSelector, StyleWorkflowPanel } from '@/components/shared';
+import { Button, Card, DbAnalysisEntry, useToast, ReferenceFileList, ReferenceFileSelector, FilePreviewModal, HelpModal } from '@/components/shared';
 import { MarkdownTextarea, type MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
-import { TemplateSelector, getTemplateFile, type TemplateSource } from '@/components/shared/TemplateSelector';
-import { listDataSources, listUserTemplates, type UserTemplate, type StylePreset, uploadReferenceFile, type ReferenceFile, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject, createProject, startDbAnalysisProject, startStyleRecommendations, updateProject } from '@/api/endpoints';
+import { listDataSources, uploadReferenceFile, type ReferenceFile, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject, startDbAnalysisProject } from '@/api/endpoints';
 import type { DataSource } from '@/types';
 import { useProjectStore } from '@/store/useProjectStore';
 import { devLog } from '@/utils/logger';
@@ -16,7 +15,87 @@ import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
 import { DB_ANALYSIS_SELECTED_SOURCE_STORAGE_KEY } from '@/config/dbAnalysis';
 import mammoth from 'mammoth/mammoth.browser';
 
-type CreationType = 'idea' | 'outline' | 'description' | 'ppt_renovation';
+type TextCreationType = 'idea' | 'outline' | 'description';
+type CreationType = TextCreationType | 'ppt_renovation';
+type MainCreationType = 'text_generation' | 'ppt_renovation';
+type TextDraftMap = Record<TextCreationType, string>;
+
+const TEXT_CREATION_TYPES: TextCreationType[] = ['idea', 'outline', 'description'];
+const DEFAULT_TEXT_DRAFTS: TextDraftMap = {
+  idea: '',
+  outline: '',
+  description: '',
+};
+
+const HOME_DRAFTS_STORAGE_KEY = 'home-draft-contents';
+const HOME_TEXT_MODE_STORAGE_KEY = 'home-draft-text-mode';
+const HOME_MAIN_TAB_STORAGE_KEY = 'home-draft-main-tab';
+const LEGACY_HOME_DRAFT_CONTENT_KEY = 'home-draft-content';
+const LEGACY_HOME_DRAFT_TAB_KEY = 'home-draft-tab';
+
+const isTextCreationType = (value: string | null): value is TextCreationType =>
+  value !== null && TEXT_CREATION_TYPES.includes(value as TextCreationType);
+
+const isMainCreationType = (value: string | null): value is MainCreationType =>
+  value === 'text_generation' || value === 'ppt_renovation';
+
+const readInitialHomeDraftState = (): {
+  activeTab: CreationType;
+  activeTextMode: TextCreationType;
+  textDrafts: TextDraftMap;
+} => {
+  const textDrafts: TextDraftMap = { ...DEFAULT_TEXT_DRAFTS };
+  let activeTextMode: TextCreationType = 'idea';
+  let activeMainTab: MainCreationType = 'text_generation';
+
+  if (typeof window === 'undefined') {
+    return { activeTab: activeTextMode, activeTextMode, textDrafts };
+  }
+
+  try {
+    const storedDrafts = sessionStorage.getItem(HOME_DRAFTS_STORAGE_KEY);
+    if (storedDrafts) {
+      const parsed = JSON.parse(storedDrafts) as Partial<Record<TextCreationType, unknown>>;
+      for (const mode of TEXT_CREATION_TYPES) {
+        if (typeof parsed?.[mode] === 'string') {
+          textDrafts[mode] = parsed[mode];
+        }
+      }
+    }
+
+    const storedTextMode = sessionStorage.getItem(HOME_TEXT_MODE_STORAGE_KEY);
+    if (isTextCreationType(storedTextMode)) {
+      activeTextMode = storedTextMode;
+    }
+
+    const storedMainTab = sessionStorage.getItem(HOME_MAIN_TAB_STORAGE_KEY);
+    if (isMainCreationType(storedMainTab)) {
+      activeMainTab = storedMainTab;
+    }
+
+    if (!storedDrafts) {
+      const legacyTab = sessionStorage.getItem(LEGACY_HOME_DRAFT_TAB_KEY);
+      const legacyContent = sessionStorage.getItem(LEGACY_HOME_DRAFT_CONTENT_KEY) || '';
+
+      if (isTextCreationType(legacyTab)) {
+        activeTextMode = legacyTab;
+        if (legacyContent) {
+          textDrafts[legacyTab] = legacyContent;
+        }
+      } else if (legacyTab === 'ppt_renovation') {
+        activeMainTab = 'ppt_renovation';
+      }
+    }
+  } catch {
+    return { activeTab: activeTextMode, activeTextMode, textDrafts };
+  }
+
+  return {
+    activeTab: activeMainTab === 'ppt_renovation' ? 'ppt_renovation' : activeTextMode,
+    activeTextMode,
+    textDrafts,
+  };
+};
 
 // 页面特有翻译 - AI 可以直接看到所有文案，保留原始 key 结构
 const homeI18n = {
@@ -41,12 +120,16 @@ const homeI18n = {
         export: '一键导出 PPTX/PDF',
       },
       tabs: {
-        idea: '一句话生成',
-        outline: '从大纲生成',
-        description: '从描述生成',
+        text_generation: '文本生成',
         ppt_renovation: 'PPT 翻新',
       },
+      textModes: {
+        idea: '一句话',
+        outline: '大纲',
+        description: '长描述',
+      },
       tabDescriptions: {
+        text_generation: '通过一句话、大纲或长描述三种方式生成 PPT',
         idea: '输入你的想法，AI 将为你生成完整的 PPT',
         outline: '已有大纲？直接粘贴，AI 将自动切分为结构化大纲',
         description: '已有完整描述？AI 将自动解析并直接生成图片，跳过大纲步骤',
@@ -69,10 +152,6 @@ const homeI18n = {
       examples: {
         outline: '格式示例：\n\n第一页：AI 的起源\n- 1956年达特茅斯会议\n- 早期研究者的愿景\n\n第二页：机器学习的发展\n- 从规则驱动到数据驱动\n- 经典算法介绍\n\n第三页：未来展望\n- 趋势与挑战\n\n支持标题+要点的形式，也可以只写标题。AI 会自动切分为结构化大纲。',
         description: '格式示例：\n\n第一页：AI 的起源\n介绍人工智能概念的诞生，从1956年达特茅斯会议讲起。页面采用左文右图布局，左侧展示时间线，右侧配一张复古风格的计算机插画。\n\n第二页：机器学习的发展\n讲解从规则驱动到数据驱动的转变。使用深蓝色背景，中央放置算法对比图表，底部列出关键里程碑。\n\n每页可包含内容描述、排版布局、视觉风格等，用空行分隔各页。',
-      },
-      template: {
-        title: '选择风格模板',
-        useTextStyle: '使用文字描述风格',
       },
       dbAnalysis: {
         title: 'DB Analysis 工作台',
@@ -152,12 +231,16 @@ const homeI18n = {
         export: 'Export to PPTX/PDF',
       },
       tabs: {
-        idea: 'From Idea',
-        outline: 'From Outline',
-        description: 'From Description',
+        text_generation: 'Text Generation',
         ppt_renovation: 'PPT Renovation',
       },
+      textModes: {
+        idea: 'One Sentence',
+        outline: 'Outline',
+        description: 'Long Description',
+      },
       tabDescriptions: {
+        text_generation: 'Generate PPTs from a short idea, an outline, or a detailed description',
         idea: 'Enter your idea, AI will generate a complete PPT for you',
         outline: 'Have an outline? Paste it directly, AI will split it into a structured outline',
         description: 'Have detailed descriptions? AI will parse and generate images directly, skipping the outline step',
@@ -180,10 +263,6 @@ const homeI18n = {
       examples: {
         outline: 'Format example:\n\nSlide 1: The Origins of AI\n- 1956 Dartmouth Conference\n- Vision of early researchers\n\nSlide 2: The Rise of Machine Learning\n- From rule-based to data-driven\n- Classic algorithms overview\n\nSlide 3: Future Outlook\n- Trends and challenges\n\nTitles with bullet points, or titles only. AI will split it into a structured outline.',
         description: 'Format example:\n\nSlide 1: The Origins of AI\nIntroduce the birth of AI, starting from the 1956 Dartmouth Conference. Use a left-text right-image layout with a timeline on the left and a retro-style computer illustration on the right.\n\nSlide 2: The Rise of Machine Learning\nExplain the shift from rule-based to data-driven approaches. Dark blue background, algorithm comparison chart in the center, key milestones at the bottom.\n\nEach slide can include content, layout, and visual style. Separate slides with blank lines.',
-      },
-      template: {
-        title: 'Select Style Template',
-        useTextStyle: 'Use text description for style',
       },
       dbAnalysis: {
         title: 'DB Analysis Workspace',
@@ -251,17 +330,15 @@ export const Home: React.FC = () => {
   const { theme, isDark, setTheme } = useTheme();
   const { initializeProject, isGlobalLoading } = useProjectStore();
   const { show, ToastContainer } = useToast();
+  const [initialHomeDraftState] = useState(readInitialHomeDraftState);
   
-  const [activeTab, setActiveTab] = useState<CreationType>('idea');
-  const [content, setContent] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState<File | null>(null);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [selectedPresetTemplateId, setSelectedPresetTemplateId] = useState<string | null>(null);
-  const [selectedStylePresetId, setSelectedStylePresetId] = useState<string | null>(null);
+  const [mainTab, setMainTab] = useState<MainCreationType>(
+    initialHomeDraftState.activeTab === 'ppt_renovation' ? 'ppt_renovation' : 'text_generation'
+  );
+  const [activeTextMode, setActiveTextMode] = useState<TextCreationType>(initialHomeDraftState.activeTextMode);
+  const [textDrafts, setTextDrafts] = useState<TextDraftMap>(initialHomeDraftState.textDrafts);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
-  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
-  const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([]);
   const [referenceFiles, setReferenceFiles] = useState<ReferenceFile[]>([]);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [isFileSelectorOpen, setIsFileSelectorOpen] = useState(false);
@@ -273,12 +350,6 @@ export const Home: React.FC = () => {
   const [dbAnalysisGoal, setDbAnalysisGoal] = useState('');
   const [dbSubmitting, setDbSubmitting] = useState(false);
 
-  const [useTemplateStyle, setUseTemplateStyle] = useState(false);
-  const [templateStyle, setTemplateStyle] = useState('');
-  const [pendingStylePresetJson, setPendingStylePresetJson] = useState<string>('');
-  const [stylePreviewProjectId, setStylePreviewProjectId] = useState<string | null>(null);
-  const [stylePreviewTaskId, setStylePreviewTaskId] = useState<string | null>(null);
-  const [stylePreviewTemplateJson, setStylePreviewTemplateJson] = useState<string>('');
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [isAspectRatioOpen, setIsAspectRatioOpen] = useState(false);
   const [renovationFile, setRenovationFile] = useState<File | null>(null);
@@ -296,15 +367,40 @@ export const Home: React.FC = () => {
   const draftSaveHandleRef = useRef<{ type: 'timeout' | 'idle'; id: number } | null>(null);
   const [, startTransition] = useTransition();
 
+  const activeTab: CreationType = mainTab === 'ppt_renovation' ? 'ppt_renovation' : activeTextMode;
+  const content = textDrafts[activeTextMode];
+
+  const setTextDraft = useCallback((mode: TextCreationType, value: React.SetStateAction<string>) => {
+    setTextDrafts((prev) => {
+      const prevValue = prev[mode] || '';
+      const nextValue = typeof value === 'function'
+        ? (value as (prevState: string) => string)(prevValue)
+        : value;
+
+      if (nextValue === prevValue) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [mode]: nextValue,
+      };
+    });
+  }, []);
+
+  const setCurrentTextDraft = useCallback((value: React.SetStateAction<string>) => {
+    setTextDraft(activeTextMode, value);
+  }, [activeTextMode, setTextDraft]);
+
   const setContentOptimized = useCallback((next: string) => {
     // Large text updates can make the whole Home page re-render and block the UI.
     // Defer big updates so paste stays responsive.
     if ((next?.length || 0) >= 8000) {
-      startTransition(() => setContent(next));
+      startTransition(() => setCurrentTextDraft(next));
       return;
     }
-    setContent(next);
-  }, [startTransition]);
+    setCurrentTextDraft(next);
+  }, [setCurrentTextDraft, startTransition]);
 
   const setSourceTextOptimized = useCallback((next: string) => {
     if ((next?.length || 0) >= 8000) {
@@ -331,8 +427,15 @@ export const Home: React.FC = () => {
 
     const doSave = () => {
       try {
-        if (content) sessionStorage.setItem('home-draft-content', content);
-        else sessionStorage.removeItem('home-draft-content');
+        if (Object.values(textDrafts).some((value) => value.trim())) {
+          sessionStorage.setItem(HOME_DRAFTS_STORAGE_KEY, JSON.stringify(textDrafts));
+        } else {
+          sessionStorage.removeItem(HOME_DRAFTS_STORAGE_KEY);
+        }
+        sessionStorage.setItem(HOME_TEXT_MODE_STORAGE_KEY, activeTextMode);
+        sessionStorage.setItem(HOME_MAIN_TAB_STORAGE_KEY, mainTab);
+        sessionStorage.removeItem(LEGACY_HOME_DRAFT_CONTENT_KEY);
+        sessionStorage.removeItem(LEGACY_HOME_DRAFT_TAB_KEY);
       } catch {
         // Ignore storage failures (quota/disabled). Draft persistence is best-effort.
       }
@@ -348,35 +451,14 @@ export const Home: React.FC = () => {
     }
 
     return cancelScheduledSave;
-  }, [content]);
+  }, [activeTextMode, mainTab, textDrafts]);
+
 
   useEffect(() => {
-    sessionStorage.setItem('home-draft-tab', activeTab);
-  }, [activeTab]);
-
-
-  // 检查是否有当前项目 & 加载用户模板
-  useEffect(() => {
-    const projectId = localStorage.getItem('currentProjectId');
-    setCurrentProjectId(projectId);
-
     const savedDbSourceId = localStorage.getItem(DB_ANALYSIS_SELECTED_SOURCE_STORAGE_KEY) || '';
     if (savedDbSourceId) {
       setSelectedDbSourceId(savedDbSourceId);
     }
-
-    // 加载用户模板列表（用于按需获取File）
-    const loadTemplates = async () => {
-      try {
-        const response = await listUserTemplates();
-        if (response.data?.templates) {
-          setUserTemplates(response.data.templates);
-        }
-      } catch (error) {
-        console.error('加载用户模板失败:', error);
-      }
-    };
-    loadTemplates();
   }, []);
 
   // 首次访问自动弹出帮助模态框
@@ -416,7 +498,7 @@ export const Home: React.FC = () => {
   // 图片粘贴使用统一 hook（批量支持，不对非图片文件发出警告，由下方 handlePaste 处理文档）
   const { handlePaste: handleImagePaste, handleFiles: handleImageFiles, isUploading: isUploadingImage } = useImagePaste({
     projectId: null,
-    setContent,
+    setContent: setCurrentTextDraft,
     showToast: show,
     warnUnsupportedTypes: false,
     insertAtCursor,
@@ -679,15 +761,19 @@ export const Home: React.FC = () => {
         throw new Error(`HTTP_${response.status}`);
       }
 
-      setContent('');
+      setCurrentTextDraft('');
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
       let accumulated = '';
 
-      while (true) {
+      let isReading = true;
+      while (isReading) {
         const { value, done } = await reader.read();
-        if (done) break;
+        if (done) {
+          isReading = false;
+          continue;
+        }
         buffer += decoder.decode(value, { stream: true });
 
         let idx = buffer.indexOf('\n\n');
@@ -720,7 +806,7 @@ export const Home: React.FC = () => {
           }
           if (data) {
             accumulated += data;
-            setContent(accumulated);
+            setCurrentTextDraft(accumulated);
           }
           idx = buffer.indexOf('\n\n');
         }
@@ -734,7 +820,7 @@ export const Home: React.FC = () => {
         .replace(/^```(?:json)?\s*/i, '')
         .replace(/```$/i, '')
         .trim();
-      setContent(cleaned);
+      setCurrentTextDraft(cleaned);
       show({ message: t('home.messages.parseSourceSuccess'), type: 'success' });
     } catch (error: any) {
       const message = error?.response?.data?.error?.message
@@ -747,6 +833,7 @@ export const Home: React.FC = () => {
   }, [
     activeTab,
     isParsingSource,
+    setCurrentTextDraft,
     sourceText,
     sourceFile,
     readSourceFileText,
@@ -754,6 +841,7 @@ export const Home: React.FC = () => {
     t,
     show
   ]);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -856,144 +944,69 @@ export const Home: React.FC = () => {
     }
   }, [dbAnalysisGoal, dbBusinessContext, navigate, selectedDbSourceId, show, t]);
 
-  const tabConfig = {
+  const textModeConfig = {
     idea: {
       icon: <Sparkles size={20} />,
-      label: t('home.tabs.idea'),
+      label: t('home.textModes.idea'),
       placeholder: t('home.placeholders.idea'),
       description: t('home.tabDescriptions.idea'),
       example: null as string | null,
     },
     outline: {
       icon: <FileText size={20} />,
-      label: t('home.tabs.outline'),
+      label: t('home.textModes.outline'),
       placeholder: t('home.placeholders.outline'),
       description: t('home.tabDescriptions.outline'),
       example: t('home.examples.outline'),
     },
     description: {
       icon: <FileEdit size={20} />,
-      label: t('home.tabs.description'),
+      label: t('home.textModes.description'),
       placeholder: t('home.placeholders.description'),
       description: t('home.tabDescriptions.description'),
       example: t('home.examples.description'),
     },
+  } satisfies Record<TextCreationType, {
+    icon: React.ReactNode;
+    label: string;
+    placeholder: string;
+    description: string;
+    example: string | null;
+  }>;
+
+  const mainTabConfig = {
+    text_generation: {
+      icon: <Sparkles size={20} />,
+      label: t('home.tabs.text_generation'),
+      description: t('home.tabDescriptions.text_generation'),
+    },
     ppt_renovation: {
       icon: <RefreshCw size={20} />,
       label: t('home.tabs.ppt_renovation'),
-      placeholder: '',
       description: t('home.tabDescriptions.ppt_renovation'),
-      example: null as string | null,
     },
-  };
+  } satisfies Record<MainCreationType, {
+    icon: React.ReactNode;
+    label: string;
+    description: string;
+  }>;
 
-  const handleTemplateSelect = async (templateFile: File | null, templateId?: string, source?: TemplateSource) => {
-    // 同步文件选择状态，避免保留过期的本地 File
-    setSelectedTemplate(templateFile || null);
-    setPendingStylePresetJson('');
-    setSelectedStylePresetId(null);
-    
-    // 处理模板 ID
-    if (templateId) {
-      if (source === 'preset') {
-        setSelectedPresetTemplateId(templateId);
-        setSelectedTemplateId(null);
-      } else {
-        setSelectedTemplateId(templateId);
-        setSelectedPresetTemplateId(null);
-      }
-    } else {
-      // 如果没有 templateId，可能是直接上传的文件
-      // 清空所有选择状态
-      setSelectedTemplateId(null);
-      setSelectedPresetTemplateId(null);
-    }
-  };
-
-  const handleSelectStylePreset = async (preset: StylePreset | null) => {
-    if (!preset) {
-      setPendingStylePresetJson('');
-      setSelectedStylePresetId(null);
-      return;
-    }
-    setPendingStylePresetJson((preset.style_json || '').trim());
-    setSelectedStylePresetId(preset.id);
-    setSelectedTemplate(null);
-    setSelectedTemplateId(null);
-    setSelectedPresetTemplateId(null);
-  };
+  const currentTextConfig = textModeConfig[activeTextMode];
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleGenerateStylePreviews = async (args: { templateJson: string; styleRequirements: string; generatePreviews?: boolean }) => {
-    if (!content.trim()) {
-      const label = activeTab === 'idea' ? '想法/主题' : activeTab === 'outline' ? '大纲' : '原文';
-      show({ message: `请先填写${label}内容，再生成风格推荐`, type: 'error' });
-      return;
-    }
-    // 检查是否有正在解析的文件
-    const parsingFiles = referenceFiles.filter(f =>
-      f.parse_status === 'pending' || f.parse_status === 'parsing'
-    );
-    if (parsingFiles.length > 0) {
-      show({
-        message: t('home.messages.filesParsing', { count: parsingFiles.length }),
-        type: 'info'
-      });
-      return;
-    }
-
-    if (activeTab === 'ppt_renovation') {
-      show({ message: 'PPT 翻新模式暂不支持风格预览工作流', type: 'error' });
-      return;
-    }
-
-    setIsSubmitting(true);
+  const clearPersistedTextDrafts = useCallback(() => {
+    setTextDrafts({ ...DEFAULT_TEXT_DRAFTS });
     try {
-      const request: any = {};
-      if (activeTab === 'idea') request.idea_prompt = content;
-      else if (activeTab === 'outline') request.outline_text = content;
-      else if (activeTab === 'description') request.description_text = content;
-
-      const styleDesc = (args.styleRequirements || '').trim();
-      if (styleDesc) request.template_style = styleDesc;
-      if (aspectRatio) request.image_aspect_ratio = aspectRatio;
-
-      const resp = await createProject(request);
-      const projectId = (resp.data as any)?.project_id;
-      if (!projectId) throw new Error('项目创建失败：未返回项目ID');
-      localStorage.setItem('currentProjectId', projectId);
-
-      // 关联已完成解析的参考文件到项目（确保后端能读取内容用于推荐）
-      const refFileIds = referenceFiles
-        .filter(f => f.parse_status === 'completed')
-        .map(f => f.id);
-      if (refFileIds.length > 0) {
-        try {
-          await Promise.all(refFileIds.map(fileId => associateFileToProject(fileId, projectId)));
-        } catch (e) {
-          console.warn('Failed to associate reference files for style recommendations:', e);
-        }
-      }
-
-      const taskResp = await startStyleRecommendations(projectId, {
-        template_json: args.templateJson,
-        style_requirements: styleDesc,
-        generate_previews: typeof args.generatePreviews === 'boolean' ? args.generatePreviews : false,
-      });
-      const taskId = (taskResp.data as any)?.task_id;
-      if (!taskId) throw new Error('风格预览任务创建失败：未返回 task_id');
-
-      setStylePreviewProjectId(projectId);
-      setStylePreviewTaskId(taskId);
-      setStylePreviewTemplateJson(args.templateJson);
-    } catch (error: any) {
-      const msg = error?.response?.data?.error?.message || error?.message || '生成风格预览失败';
-      show({ message: msg, type: 'error' });
-    } finally {
-      setIsSubmitting(false);
+      sessionStorage.removeItem(HOME_DRAFTS_STORAGE_KEY);
+      sessionStorage.removeItem(HOME_TEXT_MODE_STORAGE_KEY);
+      sessionStorage.removeItem(HOME_MAIN_TAB_STORAGE_KEY);
+      sessionStorage.removeItem(LEGACY_HOME_DRAFT_CONTENT_KEY);
+      sessionStorage.removeItem(LEGACY_HOME_DRAFT_TAB_KEY);
+    } catch {
+      // Ignore storage failures.
     }
-  };
+  }, []);
 
   const handleSubmit = async () => {
     // For ppt_renovation, validate file instead of content
@@ -1023,10 +1036,8 @@ export const Home: React.FC = () => {
     try {
       // PPT 翻新模式：走独立的上传+异步解析流程
       if (activeTab === 'ppt_renovation' && renovationFile) {
-        const styleDesc = templateStyle.trim() ? templateStyle.trim() : undefined;
         const result = await createPptRenovationProject(renovationFile, {
           keepLayout,
-          templateStyle: styleDesc,
         });
 
         const projectId = result.data?.project_id;
@@ -1043,48 +1054,25 @@ export const Home: React.FC = () => {
         }
 
         // Clear draft
-        sessionStorage.removeItem('home-draft-content');
-        sessionStorage.removeItem('home-draft-tab');
+        clearPersistedTextDrafts();
 
         // Navigate to detail editor (will poll for task completion with skeleton UI)
         navigate(`/project/${projectId}/detail`);
         return;
       }
 
-      // 如果有模板ID但没有File，按需加载
-      let templateFile = selectedTemplate;
-      if (!templateFile && selectedTemplateId) {
-        templateFile = await getTemplateFile(selectedTemplateId, userTemplates, 'user');
-      }
-      if (!templateFile && selectedPresetTemplateId) {
-        templateFile = await getTemplateFile(selectedPresetTemplateId, userTemplates, 'preset');
-      }
-      
-      // 传递风格描述（只要有内容就传递，不管开关状态）
-      const styleDesc = templateStyle.trim() ? templateStyle.trim() : undefined;
-
       // 传递参考文件ID列表，确保 AI 生成时能读取参考文件内容
       const refFileIds = referenceFiles
         .filter(f => f.parse_status === 'completed')
         .map(f => f.id);
 
-      await initializeProject(activeTab as 'idea' | 'outline' | 'description', content, templateFile || undefined, styleDesc, refFileIds.length > 0 ? refFileIds : undefined, aspectRatio);
+      await initializeProject(activeTextMode, content, undefined, undefined, refFileIds.length > 0 ? refFileIds : undefined, aspectRatio);
       
       // 根据类型跳转到不同页面
       const projectId = localStorage.getItem('currentProjectId');
       if (!projectId) {
         show({ message: t('home.messages.projectCreateFailed'), type: 'error' });
         return;
-      }
-
-      // 如选择了风格预设（style_json），在项目创建后直接写入（不影响既有生成流程）
-      if (pendingStylePresetJson && pendingStylePresetJson.trim()) {
-        try {
-          await updateProject(projectId, { template_style_json: pendingStylePresetJson.trim() } as any);
-          show({ message: '已应用风格预设', type: 'success' });
-        } catch (e: any) {
-          console.warn('Failed to apply style preset json:', e);
-        }
       }
       
       // 关联未完成解析的参考文件（已完成的在 initializeProject 中关联）
@@ -1126,9 +1114,9 @@ export const Home: React.FC = () => {
         devLog('No materials to associate');
       }
       
-      if (activeTab === 'idea' || activeTab === 'outline') {
+      if (activeTextMode === 'idea' || activeTextMode === 'outline') {
         navigate(`/project/${projectId}/outline`);
-      } else if (activeTab === 'description') {
+      } else if (activeTextMode === 'description') {
         // 从描述生成：直接跳到描述生成页（因为已经自动生成了大纲和描述）
         navigate(`/project/${projectId}/detail`);
       }
@@ -1282,16 +1270,16 @@ export const Home: React.FC = () => {
       <main className="relative max-w-5xl mx-auto px-3 md:px-4 py-8 md:py-12">
         {/* 创建卡片 */}
         <Card className="p-4 md:p-10 bg-white/90 dark:bg-background-secondary backdrop-blur-xl dark:backdrop-blur-none shadow-2xl dark:shadow-none border-0 dark:border dark:border-border-primary hover:shadow-3xl dark:hover:shadow-none transition-all duration-300 dark:rounded-2xl">
-          {/* 选项卡 */}
+          {/* 顶层模式 */}
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-6 md:mb-8">
-            {(Object.keys(tabConfig) as CreationType[]).map((type) => {
-              const config = tabConfig[type];
+            {(Object.keys(mainTabConfig) as MainCreationType[]).map((type) => {
+              const config = mainTabConfig[type];
               return (
                 <button
                   key={type}
-                  onClick={() => setActiveTab(type)}
+                  onClick={() => setMainTab(type)}
                   className={`flex-1 flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-6 py-2.5 md:py-3 rounded-lg dark:rounded-xl font-medium transition-all text-sm md:text-base touch-manipulation ${
-                    activeTab === type
+                    mainTab === type
                       ? 'bg-gradient-to-r from-banana-500 to-banana-600 dark:from-banana dark:to-banana text-black shadow-yellow dark:shadow-lg dark:shadow-banana/20'
                       : 'bg-white dark:bg-background-elevated border border-gray-200 dark:border-border-primary text-gray-700 dark:text-foreground-secondary hover:bg-banana-50 dark:hover:bg-background-hover active:bg-banana-100'
                   }`}
@@ -1309,13 +1297,13 @@ export const Home: React.FC = () => {
               <span className="inline-flex items-center gap-2 text-gray-600 dark:text-foreground-tertiary">
                 <Lightbulb size={16} className="text-banana-600 dark:text-banana flex-shrink-0" />
                 <span className="font-semibold">
-                  {tabConfig[activeTab].description}
+                  {activeTab === 'ppt_renovation' ? mainTabConfig.ppt_renovation.description : currentTextConfig.description}
                 </span>
-                {tabConfig[activeTab].example && (
+                {activeTab !== 'ppt_renovation' && currentTextConfig.example && (
                   <span className="relative group/tip inline-flex">
                     <HelpCircle size={15} className="text-gray-400 dark:text-foreground-tertiary hover:text-banana-600 dark:hover:text-banana cursor-help transition-colors" />
                     <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover/tip:block z-50 w-72 md:w-80 p-3 bg-white dark:bg-background-elevated border border-gray-200 dark:border-border-primary rounded-lg shadow-xl dark:shadow-none text-xs text-gray-700 dark:text-foreground-secondary whitespace-pre-line leading-relaxed">
-                      {tabConfig[activeTab].example}
+                      {currentTextConfig.example}
                       <span className="absolute left-1/2 -translate-x-1/2 top-full -mt-px w-2 h-2 bg-white dark:bg-background-elevated border-r border-b border-gray-200 dark:border-border-primary rotate-45" />
                     </span>
                   </span>
@@ -1418,7 +1406,7 @@ export const Home: React.FC = () => {
               </div>
             ) : (
             <>
-              {activeTab === 'description' && (
+              {activeTextMode === 'description' && (
                 <div className="mb-3 bg-white dark:bg-background-tertiary border-2 border-gray-200 dark:border-border-primary rounded-xl shadow-sm overflow-hidden">
                   <div className="px-4 py-2.5 flex items-center gap-2 border-b border-gray-100 dark:border-border-secondary">
                     <FileText size={14} className="text-banana-500 flex-shrink-0" />
@@ -1474,14 +1462,14 @@ export const Home: React.FC = () => {
               )}
               <MarkdownTextarea
                 ref={textareaRef}
-                placeholder={tabConfig[activeTab].placeholder}
+                placeholder={currentTextConfig.placeholder}
                 value={content}
                 onChange={setContentOptimized}
                 onPaste={handlePaste}
                 onFiles={handleImageFiles}
-                rows={activeTab === 'idea' ? 4 : 8}
+                rows={activeTextMode === 'idea' ? 4 : 8}
                 maxHeight={360}
-                collapsed={activeTab === 'description' && isContentCollapsed}
+                collapsed={activeTextMode === 'description' && isContentCollapsed}
                 className="text-sm md:text-base border-2 border-gray-200 dark:border-border-primary dark:bg-background-tertiary dark:text-white focus-within:border-banana-400 dark:focus-within:border-banana transition-colors duration-200"
                 toolbarLeft={
                   <div className="flex items-center gap-1">
@@ -1521,7 +1509,7 @@ export const Home: React.FC = () => {
                       </>
                     )}
                   </div>
-                  {activeTab === 'description' && (
+                  {activeTextMode === 'description' && (
                     <button
                       type="button"
                       onClick={() => setIsContentCollapsed((prev) => !prev)}
@@ -1532,6 +1520,32 @@ export const Home: React.FC = () => {
                   )}
                 </div>
               }
+                toolbarCenter={
+                  mainTab === 'text_generation' ? (
+                    <div className="flex items-center gap-1 rounded-xl border border-gray-200 dark:border-border-primary bg-white/90 dark:bg-background-elevated p-1 max-w-full overflow-x-auto">
+                      {TEXT_CREATION_TYPES.map((type) => {
+                        const config = textModeConfig[type];
+                        const selected = activeTextMode === type;
+                        return (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => setActiveTextMode(type)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium whitespace-nowrap transition-all ${
+                              selected
+                                ? 'bg-banana-500 text-black shadow-sm'
+                                : 'text-gray-500 dark:text-foreground-tertiary hover:text-gray-700 dark:hover:text-foreground-secondary hover:bg-banana-50 dark:hover:bg-background-hover'
+                            }`}
+                            title={config.description}
+                          >
+                            <span className="scale-90">{config.icon}</span>
+                            <span>{config.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null
+                }
                 toolbarRight={
                   <Button
                     size="sm"
@@ -1580,84 +1594,6 @@ export const Home: React.FC = () => {
             className="mb-4"
             showToast={show}
           />
-
-          {/* 模板选择 */}
-          <div className="mb-6 md:mb-8 pt-4 border-t border-gray-100 dark:border-border-primary">
-            <div className="flex items-center justify-between mb-3 md:mb-4">
-              <div className="flex items-center gap-2">
-                <Palette size={18} className="text-orange-600 dark:text-banana flex-shrink-0" />
-                <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white">
-                  {t('home.template.title')}
-                </h3>
-              </div>
-              {/* 无模板图模式开关 */}
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <span className="text-sm text-gray-600 dark:text-foreground-tertiary group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
-                  {t('home.template.useTextStyle')}
-                </span>
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={useTemplateStyle}
-                    onChange={(e) => {
-                      setUseTemplateStyle(e.target.checked);
-                      // 切换到无模板图模式时，清空模板选择
-                      if (e.target.checked) {
-                        setSelectedTemplate(null);
-                        setSelectedTemplateId(null);
-                        setSelectedPresetTemplateId(null);
-                        setPendingStylePresetJson('');
-                        setSelectedStylePresetId(null);
-                      } else {
-                        setStylePreviewProjectId(null);
-                        setStylePreviewTaskId(null);
-                        setStylePreviewTemplateJson('');
-                      }
-                      // 不再清空风格描述，允许用户保留已输入的内容
-                    }}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 dark:bg-background-hover peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-banana-300 dark:peer-focus:ring-banana/30 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white dark:after:bg-foreground-secondary after:border-gray-300 dark:after:border-border-hover after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-banana"></div>
-                </div>
-              </label>
-            </div>
-            
-            {/* 根据模式显示不同的内容 */}
-            {useTemplateStyle ? (
-              <>
-                <TextStyleSelector
-                  value={templateStyle}
-                  onChange={setTemplateStyle}
-                  onToast={show}
-                  onGenerateStylePreviews={handleGenerateStylePreviews}
-                />
-                {stylePreviewProjectId && stylePreviewTaskId ? (
-                  <StyleWorkflowPanel
-                    projectId={stylePreviewProjectId}
-                    taskId={stylePreviewTaskId}
-                    templateJson={stylePreviewTemplateJson}
-                    onTaskIdChange={(newTaskId) => setStylePreviewTaskId(newTaskId)}
-                    onBackToProject={() => {
-                      setStylePreviewProjectId(null);
-                      setStylePreviewTaskId(null);
-                      setStylePreviewTemplateJson('');
-                    }}
-                    backButtonText="关闭预览"
-                  />
-                ) : null}
-              </>
-            ) : (
-              <TemplateSelector
-                onSelect={handleTemplateSelect}
-                onSelectStylePreset={handleSelectStylePreset}
-                selectedTemplateId={selectedTemplateId}
-                selectedPresetTemplateId={selectedPresetTemplateId}
-                selectedStylePresetId={selectedStylePresetId}
-                showUpload={true} // 在主页上传的模板保存到用户模板库
-                projectId={currentProjectId}
-              />
-            )}
-          </div>
 
         </Card>
 

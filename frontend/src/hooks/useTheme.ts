@@ -4,6 +4,17 @@ export type Theme = 'light' | 'dark' | 'system';
 
 const THEME_KEY = 'banana-slides-theme';
 
+function getThemeStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
+  if (typeof window === 'undefined') return null;
+
+  const storage = window.localStorage as Partial<Storage> | undefined;
+  if (!storage || typeof storage.getItem !== 'function' || typeof storage.setItem !== 'function') {
+    return null;
+  }
+
+  return storage as Pick<Storage, 'getItem' | 'setItem'>;
+}
+
 function getSystemTheme(): 'light' | 'dark' {
   if (typeof window !== 'undefined' && window.matchMedia) {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -24,16 +35,13 @@ function applyTheme(theme: Theme) {
 
 export function useTheme() {
   const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(THEME_KEY) as Theme | null;
-      return stored || 'system';
-    }
-    return 'system';
+    const stored = getThemeStorage()?.getItem(THEME_KEY) as Theme | null | undefined;
+    return stored || 'system';
   });
 
   const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme);
-    localStorage.setItem(THEME_KEY, newTheme);
+    getThemeStorage()?.setItem(THEME_KEY, newTheme);
     applyTheme(newTheme);
   }, []);
 

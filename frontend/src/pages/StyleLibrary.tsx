@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Code2, Copy, Eye, Globe, Home, RefreshCw, Trash2, Upload, X } from 'lucide-react';
-import { Button, Card, ImageLightbox, useConfirm, useToast } from '@/components/shared';
+import { Code2, Copy, Eye, RefreshCw, Trash2, Upload, X } from 'lucide-react';
+import { Button, Card, ImageLightbox, PageHeader, PAGE_CONTAINER_CLASS, useConfirm, useToast } from '@/components/shared';
 import { useT } from '@/hooks/useT';
 import { getImageUrl } from '@/api/client';
 import {
@@ -32,7 +31,6 @@ const styleLibraryI18n = {
       home: '主页',
       refresh: '刷新',
       loading: '加载中...',
-      language: '界面语言',
     },
     tabs: {
       templates: '风格模板骨架',
@@ -107,7 +105,6 @@ const styleLibraryI18n = {
       home: 'Home',
       refresh: 'Refresh',
       loading: 'Loading...',
-      language: 'Language',
     },
     tabs: {
       templates: 'Style Template Skeletons',
@@ -188,7 +185,6 @@ const TAB_STORAGE_KEY = 'style-library-tab';
 
 export const StyleLibrary: React.FC = () => {
   const navigate = useNavigate();
-  const { i18n } = useTranslation();
   const t = useT(styleLibraryI18n);
   const { show, ToastContainer } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
@@ -519,58 +515,29 @@ export const StyleLibrary: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50/30 to-pink-50/50 dark:from-background-primary dark:via-background-primary dark:to-background-primary">
-      <nav className="h-16 bg-white/70 dark:bg-background-secondary border-b border-gray-100 dark:border-border-primary backdrop-blur">
-        <div className="max-w-7xl mx-auto px-4 h-full flex items-center justify-between">
-          <div className="flex items-center gap-2 md:gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<ArrowLeft size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={handleBack}
-              className="text-xs md:text-sm"
-              data-testid="style-library-nav-back"
-            >
-              {t('nav.back')}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Home size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={() => navigate('/')}
-              className="text-xs md:text-sm"
-              data-testid="style-library-nav-home"
-            >
-              {t('nav.home')}
-            </Button>
-            <div className="h-5 w-px bg-gray-300 dark:bg-border-primary mx-1 hidden sm:block" />
-            <div className="flex items-center gap-2">
-              <Code2 size={18} className="text-orange-600 dark:text-banana" />
-              <span className="text-base md:text-lg font-semibold text-gray-900 dark:text-white">{t('nav.title')}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => i18n.changeLanguage(i18n.language?.startsWith('zh') ? 'en' : 'zh')}
-              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-foreground-tertiary hover:text-gray-900 dark:hover:text-gray-100 hover:bg-banana-100/60 dark:hover:bg-background-hover rounded-md transition-all"
-              title={t('nav.language')}
-            >
-              <Globe size={14} />
-              <span>{i18n.language?.startsWith('zh') ? 'EN' : '中'}</span>
-            </button>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />}
-              onClick={() => void loadAll()}
-              disabled={isLoading}
-            >
-              {isLoading ? t('nav.loading') : t('nav.refresh')}
-            </Button>
-          </div>
-        </div>
-      </nav>
+      <PageHeader
+        title={t('nav.title')}
+        icon={<Code2 size={18} />}
+        onBack={handleBack}
+        onHome={() => navigate('/')}
+        backLabel={t('nav.back')}
+        homeLabel={t('nav.home')}
+        actions={(
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />}
+            onClick={() => void loadAll()}
+            disabled={isLoading}
+          >
+            {isLoading ? t('nav.loading') : t('nav.refresh')}
+          </Button>
+        )}
+        backTestId="style-library-nav-back"
+        homeTestId="style-library-nav-home"
+      />
 
-      <main className="max-w-7xl mx-auto px-4 py-6 space-y-4">
+      <main className={`${PAGE_CONTAINER_CLASS} py-6 md:py-8 space-y-4`}>
         <Card className="p-2">
           <div className="flex items-center gap-2 flex-wrap">
             <button
