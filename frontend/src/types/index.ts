@@ -244,6 +244,33 @@ export interface DataSourceTable {
   columns?: DataSourceColumn[];
 }
 
+export interface DataSourceErLayoutPoint {
+  x: number;
+  y: number;
+}
+
+export interface DataSourceErLayoutSize {
+  width: number;
+  height: number;
+}
+
+export interface DataSourceErLayoutViewport {
+  x: number;
+  y: number;
+  scale: number;
+}
+
+export interface DataSourceErLayout {
+  positions?: Record<string, DataSourceErLayoutPoint>;
+  sizes?: Record<string, DataSourceErLayoutSize>;
+  scrollTop?: Record<string, number>;
+  viewport?: DataSourceErLayoutViewport;
+  panels?: {
+    overviewOpen?: boolean;
+    relationsOpen?: boolean;
+  };
+}
+
 export interface DataSource {
   id: string;
   name: string;
@@ -255,6 +282,7 @@ export interface DataSource {
   whitelist_tables: string[];
   is_active: boolean;
   password_set?: boolean;
+  er_layout?: DataSourceErLayout | null;
   schema_tables?: DataSourceTable[];
   relations?: DataSourceRelation[];
   created_at?: string;
@@ -296,6 +324,45 @@ export interface DbQueryResult {
   truncated_cols?: boolean;
 }
 
+export interface DbAnalysisLlmDatasourceContext {
+  datasource?: Record<string, any>;
+  limits?: Record<string, any>;
+  tables?: Record<string, any>[];
+  relations?: Record<string, any>[];
+  [key: string]: any;
+}
+
+export interface DbAnalysisLlmPlanPromptDebug {
+  round_number: number;
+  project_context: {
+    business_context: string;
+    analysis_goal: string;
+  };
+  datasource_context: DbAnalysisLlmDatasourceContext;
+  schema_summary: string;
+  previous_context?: {
+    page_title: string;
+    sql: string;
+    key_findings: string;
+    user_answers: Record<string, any>;
+  } | null;
+  constraints: string[];
+  prompt_text: string;
+}
+
+export interface DbAnalysisLlmRewritePromptDebug {
+  source_sql: string;
+  error_message: string;
+  schema_summary: string;
+  datasource_context: DbAnalysisLlmDatasourceContext;
+  prompt_text: string;
+}
+
+export interface DbAnalysisRoundLlmDebug {
+  plan_prompt: DbAnalysisLlmPlanPromptDebug;
+  rewrite_prompt?: DbAnalysisLlmRewritePromptDebug | null;
+}
+
 export interface DbAnalysisRound {
   id: string;
   session_id: string;
@@ -311,6 +378,7 @@ export interface DbAnalysisRound {
   interaction_schema: DbInteractionQuestion[];
   interaction_answers: Record<string, any>;
   status: string;
+  llm_debug?: DbAnalysisRoundLlmDebug;
   created_at?: string;
   updated_at?: string;
 }

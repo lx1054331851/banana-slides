@@ -55,6 +55,87 @@ def _parse_bool(value, default: bool = True) -> bool:
     return bool(value)
 
 
+def _parse_er_layout(value):
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        return None
+
+    parsed = {}
+
+    positions = value.get('positions')
+    if isinstance(positions, dict):
+        cleaned_positions = {}
+        for table_name, point in positions.items():
+            if not isinstance(point, dict):
+                continue
+            table_key = str(table_name).strip()
+            if not table_key:
+                continue
+            try:
+                cleaned_positions[table_key] = {
+                    'x': float(point.get('x', 0)),
+                    'y': float(point.get('y', 0)),
+                }
+            except (TypeError, ValueError):
+                continue
+        if cleaned_positions:
+            parsed['positions'] = cleaned_positions
+
+    sizes = value.get('sizes')
+    if isinstance(sizes, dict):
+        cleaned_sizes = {}
+        for table_name, size in sizes.items():
+            if not isinstance(size, dict):
+                continue
+            table_key = str(table_name).strip()
+            if not table_key:
+                continue
+            try:
+                cleaned_sizes[table_key] = {
+                    'width': float(size.get('width', 0)),
+                    'height': float(size.get('height', 0)),
+                }
+            except (TypeError, ValueError):
+                continue
+        if cleaned_sizes:
+            parsed['sizes'] = cleaned_sizes
+
+    scroll_top = value.get('scrollTop')
+    if isinstance(scroll_top, dict):
+        cleaned_scroll_top = {}
+        for table_name, scroll_value in scroll_top.items():
+            table_key = str(table_name).strip()
+            if not table_key:
+                continue
+            try:
+                cleaned_scroll_top[table_key] = max(0.0, float(scroll_value or 0))
+            except (TypeError, ValueError):
+                continue
+        if cleaned_scroll_top:
+            parsed['scrollTop'] = cleaned_scroll_top
+
+    viewport = value.get('viewport')
+    if isinstance(viewport, dict):
+        try:
+            parsed['viewport'] = {
+                'x': float(viewport.get('x', 0)),
+                'y': float(viewport.get('y', 0)),
+                'scale': float(viewport.get('scale', 1)),
+            }
+        except (TypeError, ValueError):
+            pass
+
+    panels = value.get('panels')
+    if isinstance(panels, dict):
+        parsed['panels'] = {
+            'overviewOpen': bool(panels.get('overviewOpen')),
+            'relationsOpen': bool(panels.get('relationsOpen')),
+        }
+
+    return parsed
+
+
 @datasource_bp.route('', methods=['GET'])
 def list_data_sources():
     try:
@@ -110,7 +191,7 @@ def get_data_source(datasource_id):
         source = DataSource.query.get(datasource_id)
         if not source:
             return not_found('DataSource')
-        return success_response({'data_source': source.to_dict(include_schema=True)})
+        return success_response({'data_source': source.to_dict(include_schema=True, include_layout=True)})
     except Exception as exc:
         logger.error('get_data_source failed: %s', exc, exc_info=True)
         return error_response('SERVER_ERROR', str(exc), 500)
@@ -152,7 +233,7 @@ def update_data_source(datasource_id):
             source.set_whitelist_tables(_parse_whitelist(data.get('whitelist_tables')))
 
         db.session.commit()
-        return success_response({'data_source': source.to_dict(include_schema=True)})
+        return success_response({'data_source': source.to_dict(include_schema=True, include_layout=True)})
     except Exception as exc:
         db.session.rollback()
         logger.error('update_data_source failed: %s', exc, exc_info=True)
@@ -172,6 +253,33 @@ def delete_data_source(datasource_id):
     except Exception as exc:
         db.session.rollback()
         logger.error('delete_data_source failed: %s', exc, exc_info=True)
+        return error_response('SERVER_ERROR', str(exc), 500)
+
+
+@datasource_bp.route('/<datasource_id>/er-layout', methods=['PUT'])
+def update_data_source_er_layout(datasource_id):
+    try:
+        source = DataSource.query.get(datasource_id)
+        if not source:
+            return not_found('DataSource')
+
+        data = request.get_json() or {}
+        if 'er_layout' not in data:
+            return bad_request('er_layout is required')
+
+        if data.get('er_layout') is None:
+            source.set_er_layout(None)
+        else:
+            parsed_layout = _parse_er_layout(data.get('er_layout'))
+            if parsed_layout is None:
+                return bad_request('er_layout must be an object or null')
+            source.set_er_layout(parsed_layout)
+
+        db.session.commit()
+        return success_response({'er_layout': source.get_er_layout()})
+    except Exception as exc:
+        db.session.rollback()
+        logger.error('update_data_source_er_layout failed: %s', exc, exc_info=True)
         return error_response('SERVER_ERROR', str(exc), 500)
 
 

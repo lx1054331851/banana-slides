@@ -69,6 +69,85 @@ class DbAnalysisService:
         return {}
 
     @staticmethod
+    def _relation_cardinality(relation_type: str) -> tuple[str, str]:
+        mapping = {
+            'one_to_one': ('one', 'one'),
+            'one_to_many': ('one', 'many'),
+            'many_to_one': ('many', 'one'),
+            'many_to_many': ('many', 'many'),
+        }
+        return mapping.get(relation_type, ('unknown', 'unknown'))
+
+    @classmethod
+    def _datasource_context(cls, datasource: DataSource, max_tables: int = 30, max_cols: int = 20, max_relations: int = 80) -> dict[str, Any]:
+        sorted_tables = sorted(datasource.tables, key=lambda table: table.table_name)
+        active_relations = [relation for relation in datasource.relations if relation.is_active]
+
+        table_items = []
+        for table in sorted_tables[:max_tables]:
+            all_columns = list(table.columns)
+            columns = all_columns[:max_cols]
+            table_items.append(
+                {
+                    'name': table.table_name,
+                    'comment': table.table_comment or '',
+                    'column_count': len(all_columns),
+                    'primary_keys': [column.column_name for column in all_columns if column.is_primary],
+                    'truncated_columns': len(all_columns) > max_cols,
+                    'columns': [
+                        {
+                            'name': column.column_name,
+                            'type': column.data_type,
+                            'ordinal_position': column.ordinal_position,
+                            'nullable': bool(column.is_nullable),
+                            'is_primary': bool(column.is_primary),
+                            'comment': column.column_comment or '',
+                        }
+                        for column in columns
+                    ],
+                }
+            )
+
+        relation_items = []
+        for relation in active_relations[:max_relations]:
+            source_cardinality, target_cardinality = cls._relation_cardinality(relation.relation_type)
+            relation_items.append(
+                {
+                    'source_table': relation.source_table,
+                    'source_column': relation.source_column,
+                    'target_table': relation.target_table,
+                    'target_column': relation.target_column,
+                    'relation_type': relation.relation_type,
+                    'source_cardinality': source_cardinality,
+                    'target_cardinality': target_cardinality,
+                    'join_sql': f"{relation.source_table}.{relation.source_column} = {relation.target_table}.{relation.target_column}",
+                    'origin': relation.origin,
+                    'confidence': relation.confidence,
+                    'note': relation.note or '',
+                }
+            )
+
+        return {
+            'datasource': {
+                'id': datasource.id,
+                'name': datasource.name,
+                'db_type': datasource.db_type,
+                'database_name': datasource.database_name,
+                'table_count': len(sorted_tables),
+                'relation_count': len(active_relations),
+            },
+            'limits': {
+                'max_tables': max_tables,
+                'max_columns_per_table': max_cols,
+                'max_relations': max_relations,
+                'truncated_tables': len(sorted_tables) > max_tables,
+                'truncated_relations': len(active_relations) > max_relations,
+            },
+            'tables': table_items,
+            'relations': relation_items,
+        }
+
+    @staticmethod
     def _schema_summary(datasource: DataSource, max_tables: int = 30, max_cols: int = 20) -> str:
         lines = []
         tables = sorted(datasource.tables, key=lambda t: t.table_name)[:max_tables]
@@ -231,17 +310,27 @@ class DbAnalysisService:
 
         return questions
 
-    @staticmethod
-    def _build_prompt(
+    @classmethod
+    def _build_plan_prompt_payload(
+        cls,
         session_obj: DbAnalysisSession,
         datasource: DataSource,
         round_number: int,
         previous_round: DbAnalysisRound | None,
         previous_answers: dict | None,
-    ) -> str:
-        schema_summary = DbAnalysisService._schema_summary(datasource)
+    ) -> dict[str, Any]:
+        datasource_context = cls._datasource_context(datasource)
+        schema_summary = cls._schema_summary(datasource) or '- 当前绑定数据源还没有已导入的表结构。'
+        datasource_meta = datasource_context.get('datasource') or {}
+        previous_context = None
         previous_section = ''
         if previous_round is not None:
+            previous_context = {
+                'page_title': previous_round.page_title,
+                'sql': previous_round.sql_final,
+                'key_findings': previous_round.key_findings or '',
+                'user_answers': previous_answers or {},
+            }
             previous_section = (
                 '\n上一次分析结果：\n'
                 f"- 页面标题：{previous_round.page_title}\n"
@@ -250,23 +339,45 @@ class DbAnalysisService:
                 f"- 用户补充：{json.dumps(previous_answers or {}, ensure_ascii=False)}\n"
             )
 
-        return f"""
+        constraints = [
+            '只允许使用当前绑定数据源上下文中出现的表、字段、关系。',
+            '如需 JOIN，优先使用 relations 里的 join_sql 和 source/target 关系，不要臆造连接条件。',
+            '只允许输出单条 SELECT 查询（可含 JOIN/GROUP BY/ORDER BY）。',
+            '不允许输出写操作或多语句。',
+            '结果页必须包含：页面标题、SQL、关键结论、下一步维度建议。',
+            '下一步维度建议请给 3 个。',
+            '如果信息不足，请给出结构化提问（支持 date_range/single_select/multi_select/text_input）。',
+        ]
+
+        prompt_text = f"""
 你是资深数据分析顾问，需要为一个PPT分析项目生成下一页的查询与结论草案。
 
 项目背景：{session_obj.business_context}
 分析目标：{session_obj.analysis_goal}
 当前轮次：第{round_number}轮
 
-可用数据表结构：
+当前绑定数据源概况：
+- 数据源名称：{datasource_meta.get('name') or datasource.name}
+- 数据库类型：{datasource_meta.get('db_type') or datasource.db_type}
+- 数据库名：{datasource_meta.get('database_name') or datasource.database_name}
+- 已导入表数量：{datasource_meta.get('table_count', len(datasource.tables))}
+- 已建模关系数量：{datasource_meta.get('relation_count', len([relation for relation in datasource.relations if relation.is_active]))}
+
+可用数据表结构（摘要）：
 {schema_summary}
+
+结构化数据源上下文（必须优先依据这里的表/字段/关系编写 SQL）：
+{json.dumps(datasource_context, ensure_ascii=False, indent=2)}
 {previous_section}
 
 约束：
-1) 只允许输出单条 SELECT 查询（可含 JOIN/GROUP BY/ORDER BY）。
-2) 不允许输出写操作或多语句。
-3) 结果页必须包含：页面标题、SQL、关键结论、下一步维度建议。
-4) 下一步维度建议请给3个。
-5) 如果信息不足，请给出结构化提问（支持 date_range/single_select/multi_select/text_input）。
+1) 只允许使用上述数据源上下文里出现的表、字段、关系。
+2) 如果需要 JOIN，优先使用 relations 中给出的 join_sql、source_table/source_column -> target_table/target_column 关系。
+3) 只允许输出单条 SELECT 查询（可含 JOIN/GROUP BY/ORDER BY）。
+4) 不允许输出写操作或多语句。
+5) 结果页必须包含：页面标题、SQL、关键结论、下一步维度建议。
+6) 下一步维度建议请给3个。
+7) 如果信息不足，请给出结构化提问（支持 date_range/single_select/multi_select/text_input）。
 
 请严格输出JSON对象，字段结构如下：
 {{
@@ -289,19 +400,101 @@ class DbAnalysisService:
 }}
 """.strip()
 
-    @staticmethod
-    def _build_rewrite_prompt(sql: str, error_message: str, schema_summary: str) -> str:
-        return f"""
+        return {
+            'round_number': round_number,
+            'project_context': {
+                'business_context': session_obj.business_context,
+                'analysis_goal': session_obj.analysis_goal,
+            },
+            'datasource_context': datasource_context,
+            'schema_summary': schema_summary,
+            'previous_context': previous_context,
+            'constraints': constraints,
+            'prompt_text': prompt_text,
+        }
+
+    @classmethod
+    def _build_rewrite_prompt_payload(cls, datasource: DataSource, sql: str, error_message: str) -> dict[str, Any]:
+        datasource_context = cls._datasource_context(datasource)
+        schema_summary = cls._schema_summary(datasource) or '- 当前绑定数据源还没有已导入的表结构。'
+        prompt_text = f"""
 你需要修复一条数据库查询语句，要求仍为单条只读 SELECT 查询。
 
 原SQL：{sql}
 执行错误：{error_message}
-可用表结构：
+可用表结构摘要：
 {schema_summary}
+
+结构化数据源上下文（修复 SQL 时只能使用这里出现的表/字段/关系）：
+{json.dumps(datasource_context, ensure_ascii=False, indent=2)}
 
 请只输出JSON：
 {{"sql": "...", "rewrite_reason": "..."}}
 """.strip()
+        return {
+            'source_sql': sql,
+            'error_message': error_message,
+            'schema_summary': schema_summary,
+            'datasource_context': datasource_context,
+            'prompt_text': prompt_text,
+        }
+
+    @classmethod
+    def _build_prompt(
+        cls,
+        session_obj: DbAnalysisSession,
+        datasource: DataSource,
+        round_number: int,
+        previous_round: DbAnalysisRound | None,
+        previous_answers: dict | None,
+    ) -> str:
+        return cls._build_plan_prompt_payload(
+            session_obj=session_obj,
+            datasource=datasource,
+            round_number=round_number,
+            previous_round=previous_round,
+            previous_answers=previous_answers,
+        )['prompt_text']
+
+    @classmethod
+    def _build_rewrite_prompt(cls, datasource: DataSource, sql: str, error_message: str) -> str:
+        return cls._build_rewrite_prompt_payload(datasource, sql, error_message)['prompt_text']
+
+    @classmethod
+    def build_round_llm_debug(cls, session_obj: DbAnalysisSession, round_obj: DbAnalysisRound) -> dict[str, Any]:
+        datasource = session_obj.datasource
+        if datasource is None:
+            return {}
+
+        previous_round = None
+        previous_answers = None
+        if round_obj.round_number and round_obj.round_number > 1:
+            previous_round = DbAnalysisRound.query.filter_by(
+                session_id=session_obj.id,
+                round_number=round_obj.round_number - 1,
+            ).first()
+            previous_answers = previous_round.get_interaction_answers() if previous_round else None
+
+        plan_prompt = cls._build_plan_prompt_payload(
+            session_obj=session_obj,
+            datasource=datasource,
+            round_number=round_obj.round_number,
+            previous_round=previous_round,
+            previous_answers=previous_answers,
+        )
+
+        rewrite_prompt = None
+        if round_obj.query_error:
+            rewrite_prompt = cls._build_rewrite_prompt_payload(
+                datasource=datasource,
+                sql=round_obj.sql_draft or round_obj.sql_final or '',
+                error_message=round_obj.query_error,
+            )
+
+        return {
+            'plan_prompt': plan_prompt,
+            'rewrite_prompt': rewrite_prompt,
+        }
 
     @staticmethod
     def _build_default_findings(result_data: dict) -> str:
@@ -323,7 +516,14 @@ class DbAnalysisService:
         previous_round: DbAnalysisRound | None,
         previous_answers: dict | None,
     ) -> dict:
-        prompt = cls._build_prompt(session_obj, datasource, round_number, previous_round, previous_answers)
+        prompt_payload = cls._build_plan_prompt_payload(
+            session_obj=session_obj,
+            datasource=datasource,
+            round_number=round_number,
+            previous_round=previous_round,
+            previous_answers=previous_answers,
+        )
+        prompt = prompt_payload['prompt_text']
 
         try:
             ai_service = get_ai_service()
@@ -338,8 +538,8 @@ class DbAnalysisService:
 
     @classmethod
     def _rewrite_sql_once(cls, datasource: DataSource, sql: str, error_message: str) -> tuple[str, str]:
-        schema_summary = cls._schema_summary(datasource)
-        prompt = cls._build_rewrite_prompt(sql, error_message, schema_summary)
+        prompt_payload = cls._build_rewrite_prompt_payload(datasource, sql, error_message)
+        prompt = prompt_payload['prompt_text']
 
         try:
             ai_service = get_ai_service()

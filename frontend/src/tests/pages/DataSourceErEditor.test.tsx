@@ -1,10 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 class ResizeObserverMock {
   observe = vi.fn()
   unobserve = vi.fn()
   disconnect = vi.fn()
+}
+
+const createStorageMock = (): Storage => {
+  let store: Record<string, string> = {}
+
+  return {
+    getItem: vi.fn((key: string) => (key in store ? store[key] : null)),
+    setItem: vi.fn((key: string, value: string) => {
+      store[key] = String(value)
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete store[key]
+    }),
+    clear: vi.fn(() => {
+      store = {}
+    }),
+    key: vi.fn((index: number) => Object.keys(store)[index] ?? null),
+    get length() {
+      return Object.keys(store).length
+    },
+  } as Storage
 }
 
 const layoutStorageKey = 'datasource-er-layout:ds-1'
@@ -142,6 +163,11 @@ const renderPage = async ({
         relation: relationsOverride[0],
       },
     })),
+    updateDataSourceErLayout: vi.fn(async (_datasourceId, erLayout) => ({
+      data: {
+        er_layout: erLayout,
+      },
+    })),
     deleteDataSourceRelation: vi.fn(async () => ({ data: {} })),
   }))
 
@@ -154,8 +180,25 @@ describe('DataSourceErEditor', () => {
     vi.clearAllMocks()
     vi.restoreAllMocks()
     vi.resetModules()
+
+    const localStorageMock = createStorageMock()
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: localStorageMock,
+    })
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: localStorageMock,
+    })
+
     sessionStorage.clear()
+    localStorage.clear()
     global.ResizeObserver = ResizeObserverMock as any
+    global.PointerEvent = MouseEvent as any
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: vi.fn(() => null),
+    })
   })
 
   it('keeps overview and relations panels collapsed by default', async () => {
@@ -210,6 +253,202 @@ describe('DataSourceErEditor', () => {
     })
   })
 
+  it('pans the canvas when dragging on blank space', async () => {
+    await renderPage()
+
+    const canvasLayer = await screen.findByTestId('er-canvas-layer')
+    const transformLayer = screen.getByTestId('er-canvas-transform')
+
+    fireEvent.pointerDown(canvasLayer, {
+      button: 0,
+      clientX: 160,
+      clientY: 140,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: 220,
+      clientY: 180,
+    })
+    fireEvent.pointerUp(window, {
+      button: 0,
+      clientX: 220,
+      clientY: 180,
+    })
+
+    await waitFor(() => {
+      expect(transformLayer).toHaveStyle({ transform: 'translate(132px, 112px) scale(1)' })
+    })
+  })
+
+  it('supports marquee multi-select and dragging selected tables together', async () => {
+    await renderPage()
+
+    const canvasLayer = await screen.findByTestId('er-canvas-layer')
+    const canvasContainer = canvasLayer.parentElement as HTMLDivElement
+    canvasContainer.getBoundingClientRect = makeCanvasRect
+
+    fireEvent.pointerDown(canvasLayer, {
+      button: 0,
+      shiftKey: true,
+      clientX: 60,
+      clientY: 60,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: 760,
+      clientY: 280,
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('er-selection-marquee')).toBeInTheDocument()
+    })
+
+    fireEvent.pointerUp(window, {
+      button: 0,
+      clientX: 760,
+      clientY: 280,
+    })
+
+    const usersCard = screen.getByTestId('er-card-users')
+    const ordersCard = screen.getByTestId('er-card-orders')
+
+    await waitFor(() => {
+      expect(usersCard).toHaveAttribute('data-selected', 'true')
+      expect(ordersCard).toHaveAttribute('data-selected', 'true')
+    })
+
+    const initialLeftGap = Number.parseFloat(ordersCard.style.left) - Number.parseFloat(usersCard.style.left)
+    const initialTopGap = Number.parseFloat(ordersCard.style.top) - Number.parseFloat(usersCard.style.top)
+
+    fireEvent.pointerDown(screen.getByTestId('er-card-header-users'), {
+      button: 0,
+      clientX: 120,
+      clientY: 120,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: 180,
+      clientY: 168,
+    })
+    fireEvent.pointerUp(window, {
+      button: 0,
+      clientX: 180,
+      clientY: 168,
+    })
+
+    await waitFor(() => {
+      expect(Number.parseFloat(usersCard.style.left)).toBeGreaterThan(0)
+      expect(Number.parseFloat(usersCard.style.top)).toBeGreaterThan(0)
+      expect(Number.parseFloat(ordersCard.style.left) - Number.parseFloat(usersCard.style.left)).toBeCloseTo(initialLeftGap, 4)
+      expect(Number.parseFloat(ordersCard.style.top) - Number.parseFloat(usersCard.style.top)).toBeCloseTo(initialTopGap, 4)
+    })
+  })
+
+  it('persists the canvas layout to backend and keeps local restore fallback after remounting', async () => {
+    const firstRender = await renderPage()
+
+    const api = await import('@/api/endpoints')
+    const canvasLayer = await screen.findByTestId('er-canvas-layer')
+    const transformLayer = screen.getByTestId('er-canvas-transform')
+    const usersCard = screen.getByTestId('er-card-users')
+
+    fireEvent.pointerDown(canvasLayer, {
+      button: 0,
+      clientX: 160,
+      clientY: 140,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: 220,
+      clientY: 180,
+    })
+    fireEvent.pointerUp(window, {
+      button: 0,
+      clientX: 220,
+      clientY: 180,
+    })
+
+    fireEvent.pointerDown(screen.getByTestId('er-card-header-users'), {
+      button: 0,
+      clientX: 120,
+      clientY: 120,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: 200,
+      clientY: 180,
+    })
+    fireEvent.pointerUp(window, {
+      button: 0,
+      clientX: 200,
+      clientY: 180,
+    })
+
+    let savedLayout: any = null
+
+    await waitFor(() => {
+      expect(transformLayer).toHaveStyle({ transform: 'translate(132px, 112px) scale(1)' })
+      const rawLayout = localStorage.getItem(layoutStorageKey)
+      expect(rawLayout).toBeTruthy()
+      savedLayout = JSON.parse(rawLayout as string)
+      expect(savedLayout.viewport).toEqual({ x: 132, y: 112, scale: 1 })
+      expect(savedLayout.positions.users.x).toBeGreaterThan(0)
+      expect(savedLayout.positions.users.y).toBeGreaterThan(0)
+      expect(api.updateDataSourceErLayout).toHaveBeenLastCalledWith(
+        'ds-1',
+        expect.objectContaining({
+          viewport: { x: 132, y: 112, scale: 1 },
+          positions: expect.objectContaining({
+            users: expect.objectContaining({
+              x: savedLayout.positions.users.x,
+              y: savedLayout.positions.users.y,
+            }),
+          }),
+        }),
+      )
+    })
+
+    const savedUsersPosition = savedLayout.positions.users
+    firstRender.unmount()
+
+    await renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('er-canvas-transform')).toHaveStyle({ transform: 'translate(132px, 112px) scale(1)' })
+      const restoredUsersCard = screen.getByTestId('er-card-users')
+      expect(Number.parseFloat(restoredUsersCard.style.left)).toBeCloseTo(savedUsersPosition.x, 4)
+      expect(Number.parseFloat(restoredUsersCard.style.top)).toBeCloseTo(savedUsersPosition.y, 4)
+    })
+
+    expect(usersCard).not.toBeInTheDocument()
+  })
+
+  it('restores the canvas layout from datasource er_layout returned by backend', async () => {
+    await renderPage({
+      datasourceOverride: {
+        ...datasource,
+        er_layout: {
+          positions: {
+            users: { x: 88, y: 40 },
+            orders: { x: 420, y: 160 },
+          },
+          sizes: {
+            users: { width: 320, height: 180 },
+          },
+          scrollTop: {
+            users: 72,
+          },
+          viewport: { x: 144, y: 118, scale: 1.12 },
+          panels: { overviewOpen: true, relationsOpen: true },
+        },
+      } as any,
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('er-canvas-transform')).toHaveStyle({ transform: 'translate(144px, 118px) scale(1.12)' })
+      expect(Number.parseFloat(screen.getByTestId('er-card-users').style.left)).toBeCloseTo(88, 4)
+      expect(Number.parseFloat(screen.getByTestId('er-card-users').style.top)).toBeCloseTo(40, 4)
+      expect(screen.getByTestId('er-overview-panel')).toBeInTheDocument()
+      expect(screen.getByTestId('er-relations-panel')).toBeInTheDocument()
+      expect(screen.getByTestId('er-card-body-users').scrollTop).toBe(72)
+    })
+  })
+
   it('renders compact cards with orthogonal relation lines and power-bi style markers', async () => {
     await renderPage()
 
@@ -219,8 +458,8 @@ describe('DataSourceErEditor', () => {
     const relationToggle = screen.getByTestId('er-relations-toggle')
     const relationLine = screen.getByTestId('er-relation-line-rel-1')
 
-    expect(card).toHaveStyle({ width: '300px', height: '306px' })
-    expect(cardBody).toHaveStyle({ height: '252px' })
+    expect(card).toHaveStyle({ width: '300px', height: '162px' })
+    expect(cardBody).toHaveStyle({ height: '108px' })
     expect(cardBody.className).toContain('overflow-auto')
     expect(resizeHandle).toBeInTheDocument()
     expect(relationToggle).toHaveTextContent('关系 1')
@@ -260,6 +499,58 @@ describe('DataSourceErEditor', () => {
     expect(targetField).toHaveAttribute('data-active-relation-role', 'target')
   })
 
+  it('highlights the whole target row while dragging a connector to another field', async () => {
+    await renderPage({ relationsOverride: [] })
+
+    const api = await import('@/api/endpoints')
+    const sourceHandle = await screen.findByRole('button', { name: '从 orders.user_id 建立关系' })
+    const targetField = document.querySelector('[data-er-field-key="users.users_field_1"]') as HTMLElement | null
+
+    expect(targetField).not.toBeNull()
+
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: vi.fn(() => targetField),
+    })
+
+    await act(async () => {
+      fireEvent.pointerDown(sourceHandle, {
+        button: 0,
+        clientX: 420,
+        clientY: 260,
+      })
+
+      fireEvent.pointerMove(window, {
+        clientX: 220,
+        clientY: 150,
+      })
+    })
+
+    await waitFor(() => {
+      expect(targetField).toHaveAttribute('data-link-drop-target', 'true')
+      expect(targetField?.className).toContain('border-dashed')
+      expect(targetField?.className).toContain('bg-amber-50/90')
+    })
+
+    await act(async () => {
+      fireEvent.pointerUp(window, {
+        button: 0,
+        clientX: 220,
+        clientY: 150,
+      })
+    })
+
+    await waitFor(() => {
+      expect(api.createDataSourceRelation).toHaveBeenCalledWith('ds-1', {
+        source_table: 'orders',
+        source_column: 'user_id',
+        target_table: 'users',
+        target_column: 'users_field_1',
+        relation_type: 'many_to_one',
+      })
+    })
+  })
+
   it('scrolls both linked fields into view when a relation line is selected', async () => {
     const deepFieldRelations = [
       {
@@ -282,6 +573,24 @@ describe('DataSourceErEditor', () => {
     await waitFor(() => {
       expect(sourceBody.scrollTop).toBeGreaterThan(0)
       expect(targetBody.scrollTop).toBeGreaterThan(0)
+    })
+  })
+
+  it.each(['Delete', 'Backspace'])('deletes the selected relation with %s', async (key) => {
+    await renderPage()
+
+    const api = await import('@/api/endpoints')
+
+    fireEvent.click(await screen.findByTestId('er-relation-hit-rel-1'))
+    fireEvent.keyDown(document, { key })
+    fireEvent.click(await screen.findByRole('button', { name: '确认删除' }))
+
+    await waitFor(() => {
+      expect(api.deleteDataSourceRelation).toHaveBeenCalledWith('ds-1', 'rel-1')
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('er-relation-line-rel-1')).not.toBeInTheDocument()
     })
   })
 

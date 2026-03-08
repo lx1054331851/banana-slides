@@ -20,6 +20,7 @@ class DataSource(db.Model):
     password = db.Column(db.String(500), nullable=False)
     database_name = db.Column(db.String(255), nullable=False)
     whitelist_tables = db.Column(db.Text, nullable=True)  # JSON array of table names
+    er_layout = db.Column(db.Text, nullable=True)  # Persisted ER editor layout JSON
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -58,7 +59,27 @@ class DataSource(db.Model):
         cleaned = [str(item).strip() for item in tables if str(item).strip()]
         self.whitelist_tables = json.dumps(cleaned, ensure_ascii=False)
 
-    def to_dict(self, include_schema: bool = False, include_relations: bool = False) -> dict:
+    def get_er_layout(self) -> dict | None:
+        if not self.er_layout:
+            return None
+        try:
+            parsed = json.loads(self.er_layout)
+        except Exception:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+
+    def set_er_layout(self, layout: dict | None) -> None:
+        if not layout:
+            self.er_layout = None
+            return
+        self.er_layout = json.dumps(layout, ensure_ascii=False)
+
+    def to_dict(
+        self,
+        include_schema: bool = False,
+        include_relations: bool = False,
+        include_layout: bool = False,
+    ) -> dict:
         data = {
             'id': self.id,
             'name': self.name,
@@ -73,6 +94,8 @@ class DataSource(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
+        if include_layout:
+            data['er_layout'] = self.get_er_layout()
         if include_schema:
             data['schema_tables'] = [table.to_dict(include_columns=True) for table in self.tables]
         if include_schema or include_relations:

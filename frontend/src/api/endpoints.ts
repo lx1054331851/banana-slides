@@ -8,6 +8,7 @@ import type {
   CoverEndingFieldDetect,
   GenerationOverride,
   DataSource,
+  DataSourceErLayout,
   DataSourceRelation,
   DbAnalysisSession,
   DbAnalysisRound,
@@ -1676,6 +1677,17 @@ export const deleteDataSource = async (datasourceId: string): Promise<ApiRespons
 
 export const getDataSource = async (datasourceId: string): Promise<ApiResponse<{ data_source: DataSource }>> => {
   const response = await apiClient.get<ApiResponse<{ data_source: DataSource }>>(`/api/data-sources/${datasourceId}`);
+  return response.data;
+};
+
+export const updateDataSourceErLayout = async (
+  datasourceId: string,
+  erLayout: DataSourceErLayout | null,
+): Promise<ApiResponse<{ er_layout: DataSourceErLayout | null }>> => {
+  const response = await apiClient.put<ApiResponse<{ er_layout: DataSourceErLayout | null }>>(
+    `/api/data-sources/${datasourceId}/er-layout`,
+    { er_layout: erLayout },
+  );
   return response.data;
 };
 

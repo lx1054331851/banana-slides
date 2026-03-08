@@ -20,6 +20,18 @@ logger = logging.getLogger(__name__)
 db_analysis_bp = Blueprint('db_analysis', __name__, url_prefix='/api/projects')
 
 
+def _serialize_db_analysis_round(session_obj: DbAnalysisSession, round_obj: DbAnalysisRound) -> dict:
+    payload = round_obj.to_dict(include_interactions=True)
+    payload['llm_debug'] = DbAnalysisService.build_round_llm_debug(session_obj, round_obj)
+    return payload
+
+
+def _serialize_db_analysis_session(session_obj: DbAnalysisSession) -> dict:
+    payload = session_obj.to_dict(include_rounds=False)
+    payload['rounds'] = [_serialize_db_analysis_round(session_obj, round_obj) for round_obj in session_obj.rounds]
+    return payload
+
+
 def _get_session_by_project_id(project_id: str) -> DbAnalysisSession | None:
     return (
         DbAnalysisSession.query.filter_by(project_id=project_id)
@@ -77,7 +89,7 @@ def start_db_analysis():
         return success_response(
             {
                 'project_id': project.id,
-                'session': session_obj.to_dict(include_rounds=True),
+                'session': _serialize_db_analysis_session(session_obj),
                 'project': project.to_dict(include_pages=False),
             },
             status_code=201,
@@ -102,7 +114,7 @@ def get_db_analysis_state(project_id):
         return success_response(
             {
                 'project': project.to_dict(include_pages=False),
-                'session': session_obj.to_dict(include_rounds=True),
+                'session': _serialize_db_analysis_session(session_obj),
                 'datasource': session_obj.datasource.to_dict(include_schema=True) if session_obj.datasource else None,
             }
         )
@@ -139,7 +151,7 @@ def submit_db_analysis_answers(project_id, round_id):
         db.session.add(interaction)
         db.session.commit()
 
-        return success_response({'round': round_obj.to_dict(include_interactions=True)})
+        return success_response({'round': _serialize_db_analysis_round(session_obj, round_obj)})
     except ValueError as exc:
         db.session.rollback()
         return bad_request(str(exc))
@@ -178,7 +190,7 @@ def generate_next_db_analysis_round(project_id):
         db.session.add(next_round)
         db.session.commit()
 
-        return success_response({'round': next_round.to_dict(include_interactions=True)})
+        return success_response({'round': _serialize_db_analysis_round(session_obj, next_round)})
     except Exception as exc:
         db.session.rollback()
         logger.error('generate_next_db_analysis_round failed: %s', exc, exc_info=True)
@@ -201,7 +213,7 @@ def stop_db_analysis(project_id):
         project.status = 'COMPLETED'
         db.session.commit()
 
-        return success_response({'session': session_obj.to_dict(include_rounds=True), 'project': project.to_dict(include_pages=False)})
+        return success_response({'session': _serialize_db_analysis_session(session_obj), 'project': project.to_dict(include_pages=False)})
     except Exception as exc:
         db.session.rollback()
         logger.error('stop_db_analysis failed: %s', exc, exc_info=True)

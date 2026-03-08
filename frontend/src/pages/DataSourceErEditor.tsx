@@ -27,19 +27,22 @@ import {
   getDataSource,
   listDataSourceRelations,
   suggestDataSourceRelations,
+  updateDataSourceErLayout,
 } from '@/api/endpoints';
 import { Button, Card, useConfirm, useToast } from '@/components/shared';
-import type { DataSource, DataSourceRelation, DataSourceTable } from '@/types';
+import type { DataSource, DataSourceErLayout, DataSourceRelation, DataSourceTable } from '@/types';
 import { cn } from '@/utils';
 
 const CARD_HEADER_HEIGHT = 54;
+const FIELD_HEIGHT = 36;
+const DEFAULT_VISIBLE_FIELD_ROWS = 3;
+const SELECTION_DRAG_THRESHOLD = 6;
 const DEFAULT_CARD_WIDTH = 300;
-const DEFAULT_CARD_HEIGHT = 306;
+const DEFAULT_CARD_HEIGHT = CARD_HEADER_HEIGHT + FIELD_HEIGHT * DEFAULT_VISIBLE_FIELD_ROWS;
 const MIN_CARD_WIDTH = 260;
 const MAX_CARD_WIDTH = 520;
-const MIN_CARD_HEIGHT = CARD_HEADER_HEIGHT + 36 * 3;
+const MIN_CARD_HEIGHT = DEFAULT_CARD_HEIGHT;
 const MAX_CARD_HEIGHT = 560;
-const FIELD_HEIGHT = 36;
 const TABLE_EDGE_PADDING = 28;
 const RELATION_LANE_GAP = 18;
 const RELATION_TRUNK_OFFSET = 36;
@@ -58,6 +61,7 @@ const GRID_X = DEFAULT_CARD_WIDTH + 44;
 const GRID_Y = DEFAULT_CARD_HEIGHT + 36;
 const DEFAULT_VIEWPORT = { x: 72, y: 72, scale: 1 };
 const STORAGE_KEY_PREFIX = 'datasource-er-layout:';
+const REMOTE_LAYOUT_SAVE_DEBOUNCE_MS = 450;
 const DEFAULT_PANEL_STATE = { overviewOpen: false, relationsOpen: false };
 const EMPTY_TABLES: DataSourceTable[] = [];
 
@@ -118,6 +122,13 @@ interface Point {
   y: number;
 }
 
+interface Rect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 interface CardSize {
   width: number;
   height: number;
@@ -143,13 +154,21 @@ type CanvasInteraction =
       startClientX: number;
       startClientY: number;
       startViewport: ViewportState;
+      didMove?: boolean;
+    }
+  | {
+      type: 'select';
+      startClientX: number;
+      startClientY: number;
+      additive: boolean;
+      initialSelection: string[];
     }
   | {
       type: 'card';
-      tableName: string;
+      tableNames: string[];
       startClientX: number;
       startClientY: number;
-      startPosition: Point;
+      startPositions: Record<string, Point>;
     }
   | {
       type: 'resize';
@@ -164,14 +183,20 @@ type CanvasInteraction =
       sourceColumn: string;
     };
 
-interface StoredLayout {
+type LinkInteraction = Extract<Exclude<CanvasInteraction, null>, { type: 'link' }>;
+
+interface LinkDropTarget {
+  tableName: string;
+  columnName: string;
+  fieldKey: string;
+}
+
+
+interface StoredLayout extends DataSourceErLayout {
   positions?: Record<string, Point>;
   sizes?: Record<string, CardSize>;
+  scrollTop?: Record<string, number>;
   viewport?: ViewportState;
-  panels?: {
-    overviewOpen?: boolean;
-    relationsOpen?: boolean;
-  };
 }
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
@@ -183,6 +208,24 @@ const normalizeCardSize = (size?: Partial<CardSize> | null): CardSize => ({
   width: clampCardWidth(Number(size?.width || DEFAULT_CARD_WIDTH)),
   height: clampCardHeight(Number(size?.height || DEFAULT_CARD_HEIGHT)),
 });
+
+const buildRectFromPoints = (start: Point, end: Point): Rect => ({
+  left: Math.min(start.x, end.x),
+  top: Math.min(start.y, end.y),
+  width: Math.abs(end.x - start.x),
+  height: Math.abs(end.y - start.y),
+});
+
+const rectsIntersect = (leftRect: Rect, rightRect: Rect) => (
+  leftRect.left <= rightRect.left + rightRect.width
+  && leftRect.left + leftRect.width >= rightRect.left
+  && leftRect.top <= rightRect.top + rightRect.height
+  && leftRect.top + leftRect.height >= rightRect.top
+);
+
+const isDragSelectionRect = (rect: Rect, threshold = SELECTION_DRAG_THRESHOLD) => (
+  rect.width >= threshold || rect.height >= threshold
+);
 
 const buildDefaultPositions = (tables: DataSourceTable[]): Record<string, Point> => {
   return tables.reduce<Record<string, Point>>((acc, table, index) => {
@@ -196,41 +239,122 @@ const buildDefaultPositions = (tables: DataSourceTable[]): Record<string, Point>
   }, {});
 };
 
+const readStorageItemSafely = (storage: Storage | undefined, key: string) => {
+  if (!storage) {
+    return null;
+  }
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const writeStorageItemSafely = (storage: Storage | undefined, key: string, value: string) => {
+  if (!storage) {
+    return;
+  }
+  try {
+    storage.setItem(key, value);
+  } catch {
+    return;
+  }
+};
+
+const normalizeStoredLayout = (layout?: DataSourceErLayout | StoredLayout | null): StoredLayout => {
+  if (!layout || typeof layout !== 'object') {
+    return {};
+  }
+
+  const positions = layout.positions && typeof layout.positions === 'object'
+    ? Object.entries(layout.positions).reduce<Record<string, Point>>((acc, [tableName, point]) => {
+      if (point && typeof point === 'object') {
+        acc[tableName] = {
+          x: Number((point as Point).x || 0),
+          y: Number((point as Point).y || 0),
+        };
+      }
+      return acc;
+    }, {})
+    : {};
+
+  const sizes = layout.sizes && typeof layout.sizes === 'object'
+    ? Object.entries(layout.sizes).reduce<Record<string, CardSize>>((acc, [tableName, size]) => {
+      if (size && typeof size === 'object') {
+        acc[tableName] = normalizeCardSize(size);
+      }
+      return acc;
+    }, {})
+    : {};
+
+  const scrollTop = layout.scrollTop && typeof layout.scrollTop === 'object'
+    ? Object.entries(layout.scrollTop).reduce<Record<string, number>>((acc, [tableName, value]) => {
+      acc[tableName] = Math.max(0, Number(value) || 0);
+      return acc;
+    }, {})
+    : {};
+
+  return {
+    positions,
+    sizes,
+    scrollTop,
+    viewport: layout.viewport && typeof layout.viewport === 'object'
+      ? {
+          x: Number(layout.viewport.x || DEFAULT_VIEWPORT.x),
+          y: Number(layout.viewport.y || DEFAULT_VIEWPORT.y),
+          scale: clampScale(Number(layout.viewport.scale || DEFAULT_VIEWPORT.scale)),
+        }
+      : undefined,
+    panels: layout.panels && typeof layout.panels === 'object'
+      ? {
+          overviewOpen: Boolean(layout.panels.overviewOpen),
+          relationsOpen: Boolean(layout.panels.relationsOpen),
+        }
+      : undefined,
+  };
+};
+
+const hasStoredLayout = (layout?: StoredLayout | null) => Boolean(
+  layout
+  && (
+    Object.keys(layout.positions || {}).length
+    || Object.keys(layout.sizes || {}).length
+    || Object.keys(layout.scrollTop || {}).length
+    || layout.viewport
+    || layout.panels
+  )
+);
+
+const serializeStoredLayout = (layout: StoredLayout) => JSON.stringify({
+  positions: layout.positions || {},
+  sizes: layout.sizes || {},
+  scrollTop: layout.scrollTop || {},
+  viewport: layout.viewport || DEFAULT_VIEWPORT,
+  panels: layout.panels || DEFAULT_PANEL_STATE,
+});
+
+const writeCachedLayout = (datasourceId: string, layout: StoredLayout) => {
+  if (typeof window === 'undefined' || !datasourceId) {
+    return;
+  }
+  const storageKey = `${STORAGE_KEY_PREFIX}${datasourceId}`;
+  const payload = serializeStoredLayout(layout);
+  writeStorageItemSafely(window.localStorage, storageKey, payload);
+  writeStorageItemSafely(window.sessionStorage, storageKey, payload);
+};
+
 const safeReadLayout = (datasourceId: string): StoredLayout => {
   if (typeof window === 'undefined') {
     return {};
   }
   try {
-    const raw = window.sessionStorage.getItem(`${STORAGE_KEY_PREFIX}${datasourceId}`);
+    const storageKey = `${STORAGE_KEY_PREFIX}${datasourceId}`;
+    const raw = readStorageItemSafely(window.localStorage, storageKey)
+      || readStorageItemSafely(window.sessionStorage, storageKey);
     if (!raw) {
       return {};
     }
-    const parsed = JSON.parse(raw) as StoredLayout;
-    const sizes = parsed.sizes && typeof parsed.sizes === 'object'
-      ? Object.entries(parsed.sizes).reduce<Record<string, CardSize>>((acc, [tableName, size]) => {
-        if (size && typeof size === 'object') {
-          acc[tableName] = normalizeCardSize(size);
-        }
-        return acc;
-      }, {})
-      : {};
-    return {
-      positions: parsed.positions && typeof parsed.positions === 'object' ? parsed.positions : {},
-      sizes,
-      viewport: parsed.viewport && typeof parsed.viewport === 'object'
-        ? {
-            x: Number(parsed.viewport.x || DEFAULT_VIEWPORT.x),
-            y: Number(parsed.viewport.y || DEFAULT_VIEWPORT.y),
-            scale: clampScale(Number(parsed.viewport.scale || DEFAULT_VIEWPORT.scale)),
-          }
-        : undefined,
-      panels: parsed.panels && typeof parsed.panels === 'object'
-        ? {
-            overviewOpen: Boolean(parsed.panels.overviewOpen),
-            relationsOpen: Boolean(parsed.panels.relationsOpen),
-          }
-        : undefined,
-    };
+    return normalizeStoredLayout(JSON.parse(raw) as StoredLayout);
   } catch {
     return {};
   }
@@ -815,6 +939,12 @@ export const DataSourceErEditor: React.FC = () => {
   const cardBodyRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const interactionRef = useRef<CanvasInteraction>(null);
   const viewportRef = useRef<ViewportState>(DEFAULT_VIEWPORT);
+  const remoteLayoutSaveTimerRef = useRef<number | null>(null);
+  const lastPersistedLayoutRef = useRef('');
+  const layoutSaveVersionRef = useRef(0);
+  const layoutSaveErrorShownRef = useRef(false);
+  const initialLayoutSourceRef = useRef<'default' | 'local' | 'remote'>('default');
+  const initialLayoutSerializedRef = useRef('');
 
   const [datasource, setDatasource] = useState<DataSource | null>(null);
   const [relations, setRelations] = useState<DataSourceRelation[]>([]);
@@ -822,7 +952,9 @@ export const DataSourceErEditor: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [activeRelationId, setActiveRelationId] = useState('');
+  const [selectedTableNames, setSelectedTableNames] = useState<string[]>([]);
   const [deletingRelationId, setDeletingRelationId] = useState<string | null>(null);
+  const [selectionMarquee, setSelectionMarquee] = useState<Rect | null>(null);
   const [creatingRelation, setCreatingRelation] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [viewport, setViewport] = useState<ViewportState>(DEFAULT_VIEWPORT);
@@ -833,6 +965,8 @@ export const DataSourceErEditor: React.FC = () => {
   const [panelState, setPanelState] = useState(DEFAULT_PANEL_STATE);
   const [interaction, setInteraction] = useState<CanvasInteraction>(null);
   const [linkPointer, setLinkPointer] = useState<Point | null>(null);
+  const [linkDropTarget, setLinkDropTarget] = useState<LinkDropTarget | null>(null);
+  const [layoutPersistenceReady, setLayoutPersistenceReady] = useState(false);
 
   interactionRef.current = interaction;
   viewportRef.current = viewport;
@@ -840,6 +974,8 @@ export const DataSourceErEditor: React.FC = () => {
   const schemaTables = datasource?.schema_tables || EMPTY_TABLES;
 
   const schemaTableMap = useMemo(() => new Map(schemaTables.map((table) => [table.table_name, table])), [schemaTables]);
+
+  const selectedTableNameSet = useMemo(() => new Set(selectedTableNames), [selectedTableNames]);
 
   const columnIndexMap = useMemo(() => {
     const next = new Map<string, Map<string, number>>();
@@ -878,6 +1014,55 @@ export const DataSourceErEditor: React.FC = () => {
     [schemaTables],
   );
 
+  const applyStoredLayout = useCallback((layout?: StoredLayout | DataSourceErLayout | null) => {
+    const normalized = normalizeStoredLayout(layout);
+    setCardPositions(normalized.positions || {});
+    setCardSizes(normalized.sizes || {});
+    setCardScrollTop(normalized.scrollTop || {});
+    setPanelState({
+      ...DEFAULT_PANEL_STATE,
+      ...(normalized.panels || {}),
+    });
+    setViewport(normalized.viewport || DEFAULT_VIEWPORT);
+    setSelectedTableNames([]);
+    setSelectionMarquee(null);
+    return normalized;
+  }, []);
+
+  const layoutSnapshot = useMemo<StoredLayout>(() => {
+    const positions = schemaTables.reduce<Record<string, Point>>((acc, table) => {
+      if (cardPositions[table.table_name]) {
+        acc[table.table_name] = cardPositions[table.table_name];
+      }
+      return acc;
+    }, {});
+
+    const sizes = schemaTables.reduce<Record<string, CardSize>>((acc, table) => {
+      if (cardSizes[table.table_name]) {
+        acc[table.table_name] = cardSizes[table.table_name];
+      }
+      return acc;
+    }, {});
+
+    const scrollTop = schemaTables.reduce<Record<string, number>>((acc, table) => {
+      acc[table.table_name] = Math.max(0, Number(cardScrollTop[table.table_name] || 0));
+      return acc;
+    }, {});
+
+    return {
+      positions,
+      sizes,
+      scrollTop,
+      viewport,
+      panels: panelState,
+    };
+  }, [cardPositions, cardSizes, cardScrollTop, panelState, schemaTables, viewport]);
+
+  const serializedLayoutSnapshot = useMemo(
+    () => serializeStoredLayout(layoutSnapshot),
+    [layoutSnapshot],
+  );
+
   const loadWorkspace = useCallback(async (silent = false) => {
     if (!datasourceId) {
       return;
@@ -894,9 +1079,24 @@ export const DataSourceErEditor: React.FC = () => {
         getDataSource(datasourceId),
         listDataSourceRelations(datasourceId),
       ]);
-      setDatasource(datasourceResponse.data?.data_source || null);
-      setRelations(relationResponse.data?.relations || []);
+      const nextDatasource = datasourceResponse.data?.data_source || null;
+      const nextRelations = relationResponse.data?.relations || [];
+      setDatasource(nextDatasource);
+      setRelations(nextRelations);
+
+      const normalizedRemoteLayout = normalizeStoredLayout(nextDatasource?.er_layout);
+      if (hasStoredLayout(normalizedRemoteLayout) && nextDatasource?.id) {
+        const serializedRemoteLayout = serializeStoredLayout(normalizedRemoteLayout);
+        initialLayoutSourceRef.current = 'remote';
+        initialLayoutSerializedRef.current = serializedRemoteLayout;
+        lastPersistedLayoutRef.current = serializedRemoteLayout;
+        applyStoredLayout(normalizedRemoteLayout);
+        writeCachedLayout(nextDatasource.id, normalizedRemoteLayout);
+      }
+
+      setLayoutPersistenceReady(true);
     } catch (error: any) {
+      setLayoutPersistenceReady(false);
       show({
         message: error?.response?.data?.error?.message || error?.message || '加载 ER 建模数据失败',
         type: 'error',
@@ -908,7 +1108,7 @@ export const DataSourceErEditor: React.FC = () => {
         setLoading(false);
       }
     }
-  }, [datasourceId, show]);
+  }, [applyStoredLayout, datasourceId, show]);
 
   const reloadRelations = useCallback(async () => {
     if (!datasourceId) {
@@ -925,18 +1125,27 @@ export const DataSourceErEditor: React.FC = () => {
   }, [loadWorkspace]);
 
   useEffect(() => {
+    if (remoteLayoutSaveTimerRef.current) {
+      window.clearTimeout(remoteLayoutSaveTimerRef.current);
+      remoteLayoutSaveTimerRef.current = null;
+    }
+
+    setLayoutPersistenceReady(false);
+    lastPersistedLayoutRef.current = '';
+    layoutSaveVersionRef.current = 0;
+    layoutSaveErrorShownRef.current = false;
+    initialLayoutSerializedRef.current = '';
+
     const stored = datasourceId ? safeReadLayout(datasourceId) : {};
-    setCardPositions(stored.positions || {});
-    setCardSizes(stored.sizes || {});
-    setCardScrollTop({});
-    setPanelState({
-      ...DEFAULT_PANEL_STATE,
-      ...(stored.panels || {}),
-    });
-    setViewport(stored.viewport || DEFAULT_VIEWPORT);
-  }, [datasourceId]);
+    initialLayoutSourceRef.current = hasStoredLayout(stored) ? 'local' : 'default';
+    applyStoredLayout(stored);
+  }, [applyStoredLayout, datasourceId]);
 
   useEffect(() => {
+    if (!datasource) {
+      return;
+    }
+
     if (!schemaTables.length) {
       setCardPositions((current) => (Object.keys(current).length ? {} : current));
       setCardSizes((current) => (Object.keys(current).length ? {} : current));
@@ -968,40 +1177,87 @@ export const DataSourceErEditor: React.FC = () => {
       });
       return next;
     });
-  }, [schemaTables]);
+  }, [datasource, schemaTables]);
 
   useEffect(() => {
-    if (!datasourceId || !schemaTables.length || typeof window === 'undefined') {
+    if (!datasourceId || datasource?.id !== datasourceId) {
       return;
     }
-    const positionsToSave = schemaTables.reduce<Record<string, Point>>((acc, table) => {
-      if (cardPositions[table.table_name]) {
-        acc[table.table_name] = cardPositions[table.table_name];
+    writeCachedLayout(datasourceId, layoutSnapshot);
+  }, [datasource?.id, datasourceId, layoutSnapshot]);
+
+  useEffect(() => {
+    if (!datasourceId || datasource?.id !== datasourceId || !schemaTables.length || !layoutPersistenceReady) {
+      return;
+    }
+
+    if (initialLayoutSourceRef.current === 'default' && !initialLayoutSerializedRef.current) {
+      initialLayoutSerializedRef.current = serializedLayoutSnapshot;
+      lastPersistedLayoutRef.current = serializedLayoutSnapshot;
+      return;
+    }
+
+    if (serializedLayoutSnapshot === lastPersistedLayoutRef.current) {
+      return;
+    }
+
+    const currentSaveVersion = layoutSaveVersionRef.current + 1;
+    layoutSaveVersionRef.current = currentSaveVersion;
+    remoteLayoutSaveTimerRef.current = window.setTimeout(() => {
+      void updateDataSourceErLayout(datasourceId, layoutSnapshot)
+        .then(() => {
+          if (layoutSaveVersionRef.current !== currentSaveVersion) {
+            return;
+          }
+          lastPersistedLayoutRef.current = serializedLayoutSnapshot;
+          initialLayoutSerializedRef.current = serializedLayoutSnapshot;
+          layoutSaveErrorShownRef.current = false;
+          setDatasource((current) => (
+            current && current.id === datasourceId
+              ? { ...current, er_layout: layoutSnapshot }
+              : current
+          ));
+        })
+        .catch((error: any) => {
+          if (layoutSaveVersionRef.current !== currentSaveVersion || layoutSaveErrorShownRef.current) {
+            return;
+          }
+          layoutSaveErrorShownRef.current = true;
+          show({
+            message: error?.response?.data?.error?.message || error?.message || '服务端保存 ER 布局失败，已保留本地布局',
+            type: 'warning',
+          });
+        });
+    }, REMOTE_LAYOUT_SAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (remoteLayoutSaveTimerRef.current) {
+        window.clearTimeout(remoteLayoutSaveTimerRef.current);
+        remoteLayoutSaveTimerRef.current = null;
       }
-      return acc;
-    }, {});
-    const sizesToSave = schemaTables.reduce<Record<string, CardSize>>((acc, table) => {
-      if (cardSizes[table.table_name]) {
-        acc[table.table_name] = cardSizes[table.table_name];
-      }
-      return acc;
-    }, {});
-    window.sessionStorage.setItem(
-      `${STORAGE_KEY_PREFIX}${datasourceId}`,
-      JSON.stringify({
-        positions: positionsToSave,
-        sizes: sizesToSave,
-        viewport,
-        panels: panelState,
-      }),
-    );
-  }, [cardPositions, cardSizes, datasourceId, panelState, schemaTables, viewport]);
+    };
+  }, [datasourceId, layoutPersistenceReady, layoutSnapshot, schemaTables.length, serializedLayoutSnapshot, show]);
 
   useEffect(() => {
     if (!visibleRelations.some((relation) => relation.id === activeRelationId)) {
       setActiveRelationId('');
     }
   }, [activeRelationId, visibleRelations]);
+
+  useEffect(() => {
+    const validTableNames = new Set(schemaTables.map((table) => table.table_name));
+    setSelectedTableNames((current) => current.filter((tableName) => validTableNames.has(tableName)));
+  }, [schemaTables]);
+
+  useEffect(() => {
+    schemaTables.forEach((table) => {
+      const cardBody = cardBodyRefs.current[table.table_name];
+      const nextScrollTop = Math.max(0, Number(cardScrollTop[table.table_name] || 0));
+      if (cardBody && Math.abs(cardBody.scrollTop - nextScrollTop) > 1) {
+        cardBody.scrollTop = nextScrollTop;
+      }
+    });
+  }, [cardScrollTop, schemaTables]);
 
   useEffect(() => {
     const element = canvasRef.current;
@@ -1066,6 +1322,68 @@ export const DataSourceErEditor: React.FC = () => {
     x: (point.x - viewport.x) / viewport.scale,
     y: (point.y - viewport.y) / viewport.scale,
   }), [viewport]);
+
+  const getCanvasPointFromClient = useCallback((clientX: number, clientY: number): Point | null => {
+    const canvasRect = canvasRef.current?.getBoundingClientRect();
+    if (!canvasRect) {
+      return null;
+    }
+
+    return {
+      x: clamp(clientX - canvasRect.left, 0, canvasRect.width),
+      y: clamp(clientY - canvasRect.top, 0, canvasRect.height),
+    };
+  }, []);
+
+  const getIntersectedTableNames = useCallback((selectionWorldRect: Rect) => (
+    schemaTables.reduce<string[]>((acc, table) => {
+      const position = cardPositions[table.table_name];
+      if (!position) {
+        return acc;
+      }
+
+      const cardSize = cardSizes[table.table_name] || normalizeCardSize();
+      const tableRect = {
+        left: position.x,
+        top: position.y,
+        width: cardSize.width,
+        height: cardSize.height,
+      };
+
+      if (rectsIntersect(selectionWorldRect, tableRect)) {
+        acc.push(table.table_name);
+      }
+      return acc;
+    }, [])
+  ), [cardPositions, cardSizes, schemaTables]);
+
+  const updateTableSelection = useCallback((
+    currentInteraction: Extract<Exclude<CanvasInteraction, null>, { type: 'select' }>,
+    clientX: number,
+    clientY: number,
+  ) => {
+    const startCanvasPoint = getCanvasPointFromClient(currentInteraction.startClientX, currentInteraction.startClientY);
+    const currentCanvasPoint = getCanvasPointFromClient(clientX, clientY);
+    if (!startCanvasPoint || !currentCanvasPoint) {
+      return;
+    }
+
+    const canvasRect = buildRectFromPoints(startCanvasPoint, currentCanvasPoint);
+    setSelectionMarquee(canvasRect);
+
+    if (!isDragSelectionRect(canvasRect)) {
+      setSelectedTableNames(currentInteraction.additive ? currentInteraction.initialSelection : []);
+      return;
+    }
+
+    const selectionWorldRect = buildRectFromPoints(canvasToWorld(startCanvasPoint), canvasToWorld(currentCanvasPoint));
+    const nextSelectedTableNames = getIntersectedTableNames(selectionWorldRect);
+    setSelectedTableNames(
+      currentInteraction.additive
+        ? Array.from(new Set([...currentInteraction.initialSelection, ...nextSelectedTableNames]))
+        : nextSelectedTableNames,
+    );
+  }, [canvasToWorld, getCanvasPointFromClient, getIntersectedTableNames]);
 
   const relationRouteMeta = useMemo(() => {
     return visibleRelations.reduce<Map<string, {
@@ -1364,26 +1682,61 @@ export const DataSourceErEditor: React.FC = () => {
     }
   }, [activateRelation, datasourceId, relations, reloadRelations, show]);
 
-  const finalizeLinkCreation = useCallback(async (
+  const resolveLinkDropTarget = useCallback((
     clientX: number,
     clientY: number,
-    draft: Extract<Exclude<CanvasInteraction, null>, { type: 'link' }>,
-  ) => {
-    const rawTarget = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    draft: LinkInteraction,
+  ): LinkDropTarget | null => {
+    const rawTarget = typeof document.elementFromPoint === 'function'
+      ? document.elementFromPoint(clientX, clientY) as HTMLElement | null
+      : null;
     const targetNode = rawTarget?.closest<HTMLElement>('[data-er-field-key]');
     const targetTable = targetNode?.dataset.tableName;
     const targetColumn = targetNode?.dataset.columnName;
     if (!targetTable || !targetColumn) {
+      return null;
+    }
+
+    if (draft.sourceTable === targetTable && draft.sourceColumn === targetColumn) {
+      return null;
+    }
+
+    return {
+      tableName: targetTable,
+      columnName: targetColumn,
+      fieldKey: `${targetTable}.${targetColumn}`,
+    };
+  }, []);
+
+  const syncLinkDropTarget = useCallback((
+    clientX: number,
+    clientY: number,
+    draft: LinkInteraction,
+  ) => {
+    const nextTarget = resolveLinkDropTarget(clientX, clientY, draft);
+    setLinkDropTarget((current) => (
+      current?.fieldKey === nextTarget?.fieldKey ? current : nextTarget
+    ));
+    return nextTarget;
+  }, [resolveLinkDropTarget]);
+
+  const finalizeLinkCreation = useCallback(async (
+    clientX: number,
+    clientY: number,
+    draft: LinkInteraction,
+  ) => {
+    const target = resolveLinkDropTarget(clientX, clientY, draft);
+    if (!target) {
       return;
     }
 
     await createManualRelation(
       draft.sourceTable,
       draft.sourceColumn,
-      targetTable,
-      targetColumn,
+      target.tableName,
+      target.columnName,
     );
-  }, [createManualRelation]);
+  }, [createManualRelation, resolveLinkDropTarget]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -1393,6 +1746,12 @@ export const DataSourceErEditor: React.FC = () => {
       }
 
       if (current.type === 'pan') {
+        if (!current.didMove && (
+          Math.abs(event.clientX - current.startClientX) >= 1
+          || Math.abs(event.clientY - current.startClientY) >= 1
+        )) {
+          current.didMove = true;
+        }
         setViewport({
           ...current.startViewport,
           x: current.startViewport.x + event.clientX - current.startClientX,
@@ -1401,17 +1760,26 @@ export const DataSourceErEditor: React.FC = () => {
         return;
       }
 
+      if (current.type === 'select') {
+        updateTableSelection(current, event.clientX, event.clientY);
+        return;
+      }
+
       if (current.type === 'card') {
         const scale = viewportRef.current.scale || 1;
         const deltaX = (event.clientX - current.startClientX) / scale;
         const deltaY = (event.clientY - current.startClientY) / scale;
-        setCardPositions((prev) => ({
-          ...prev,
-          [current.tableName]: {
-            x: current.startPosition.x + deltaX,
-            y: current.startPosition.y + deltaY,
-          },
-        }));
+        setCardPositions((prev) => {
+          const nextPositions = { ...prev };
+          current.tableNames.forEach((tableName) => {
+            const startPosition = current.startPositions[tableName] || prev[tableName] || { x: 0, y: 0 };
+            nextPositions[tableName] = {
+              x: startPosition.x + deltaX,
+              y: startPosition.y + deltaY,
+            };
+          });
+          return nextPositions;
+        });
         return;
       }
 
@@ -1431,6 +1799,7 @@ export const DataSourceErEditor: React.FC = () => {
 
       if (current.type === 'link') {
         setLinkPointer({ x: event.clientX, y: event.clientY });
+        syncLinkDropTarget(event.clientX, event.clientY, current);
       }
     };
 
@@ -1444,9 +1813,16 @@ export const DataSourceErEditor: React.FC = () => {
         void finalizeLinkCreation(event.clientX, event.clientY, current);
       }
 
+      if (current.type === 'pan' && !current.didMove) {
+        setActiveRelationId('');
+        setSelectedTableNames([]);
+      }
+
       interactionRef.current = null;
       setInteraction(null);
       setLinkPointer(null);
+      setLinkDropTarget(null);
+      setSelectionMarquee(null);
     };
 
     window.addEventListener('pointermove', handlePointerMove);
@@ -1458,10 +1834,12 @@ export const DataSourceErEditor: React.FC = () => {
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerUp);
     };
-  }, [finalizeLinkCreation]);
+  }, [finalizeLinkCreation, syncLinkDropTarget, updateTableSelection]);
 
   const handleCanvasPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) {
+    const isSelectionGesture = event.button === 0 && (event.metaKey || event.ctrlKey || event.shiftKey) && !event.altKey;
+    const isPanGesture = event.button === 1 || (event.button === 0 && !isSelectionGesture);
+    if (!isPanGesture && !isSelectionGesture) {
       return;
     }
 
@@ -1471,12 +1849,34 @@ export const DataSourceErEditor: React.FC = () => {
     }
 
     event.preventDefault();
-    setInteraction({
-      type: 'pan',
+
+    if (isPanGesture) {
+      const nextInteraction: Extract<Exclude<CanvasInteraction, null>, { type: 'pan' }> = {
+        type: 'pan',
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        startViewport: viewportRef.current,
+        didMove: false,
+      };
+      interactionRef.current = nextInteraction;
+      setInteraction(nextInteraction);
+      return;
+    }
+
+    const additiveSelection = event.metaKey || event.ctrlKey || event.shiftKey;
+    const initialSelection = additiveSelection ? selectedTableNames : [];
+    setActiveRelationId('');
+    setSelectedTableNames(initialSelection);
+    setSelectionMarquee(null);
+    const nextInteraction: Extract<Exclude<CanvasInteraction, null>, { type: 'select' }> = {
+      type: 'select',
       startClientX: event.clientX,
       startClientY: event.clientY,
-      startViewport: viewportRef.current,
-    });
+      additive: additiveSelection,
+      initialSelection,
+    };
+    interactionRef.current = nextInteraction;
+    setInteraction(nextInteraction);
   };
 
   const handleCardPointerDown = (event: React.PointerEvent<HTMLDivElement>, tableName: string) => {
@@ -1485,13 +1885,27 @@ export const DataSourceErEditor: React.FC = () => {
     }
     event.preventDefault();
     event.stopPropagation();
-    setInteraction({
+
+    const dragTableNames = selectedTableNameSet.has(tableName)
+      ? selectedTableNames
+      : [tableName];
+    const startPositions = dragTableNames.reduce<Record<string, Point>>((acc, currentTableName) => {
+      acc[currentTableName] = cardPositions[currentTableName] || { x: 0, y: 0 };
+      return acc;
+    }, {});
+
+    setActiveRelationId('');
+    setSelectedTableNames(dragTableNames);
+    setSelectionMarquee(null);
+    const nextInteraction: Extract<Exclude<CanvasInteraction, null>, { type: 'card' }> = {
       type: 'card',
-      tableName,
+      tableNames: dragTableNames,
       startClientX: event.clientX,
       startClientY: event.clientY,
-      startPosition: cardPositions[tableName] || { x: 0, y: 0 },
-    });
+      startPositions,
+    };
+    interactionRef.current = nextInteraction;
+    setInteraction(nextInteraction);
   };
 
   const handleCardResizePointerDown = (
@@ -1503,13 +1917,15 @@ export const DataSourceErEditor: React.FC = () => {
     }
     event.preventDefault();
     event.stopPropagation();
-    setInteraction({
+    const nextInteraction: Extract<Exclude<CanvasInteraction, null>, { type: 'resize' }> = {
       type: 'resize',
       tableName,
       startClientX: event.clientX,
       startClientY: event.clientY,
       startSize: cardSizes[tableName] || normalizeCardSize(),
-    });
+    };
+    interactionRef.current = nextInteraction;
+    setInteraction(nextInteraction);
   };
 
   const handleCardBodyScroll = (
@@ -1537,8 +1953,15 @@ export const DataSourceErEditor: React.FC = () => {
     }
     event.preventDefault();
     event.stopPropagation();
-    setInteraction({ type: 'link', sourceTable: tableName, sourceColumn: columnName });
+    const nextInteraction: LinkInteraction = {
+      type: 'link',
+      sourceTable: tableName,
+      sourceColumn: columnName,
+    };
+    interactionRef.current = nextInteraction;
+    setInteraction(nextInteraction);
     setLinkPointer({ x: event.clientX, y: event.clientY });
+    setLinkDropTarget(null);
   };
 
   const adjustZoom = (targetScale: number, focusPoint?: Point) => {
@@ -1655,6 +2078,37 @@ export const DataSourceErEditor: React.FC = () => {
     );
   }, [activeRelationId, confirm, datasourceId, show]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!['Delete', 'Backspace'].includes(event.key) || !activeRelation || deletingRelationId) {
+        return;
+      }
+
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) {
+        return;
+      }
+
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const tagName = target.tagName;
+        if (
+          target.isContentEditable
+          || tagName === 'INPUT'
+          || tagName === 'TEXTAREA'
+          || tagName === 'SELECT'
+        ) {
+          return;
+        }
+      }
+
+      event.preventDefault();
+      handleDeleteRelation(activeRelation);
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [activeRelation, deletingRelationId, handleDeleteRelation]);
+
   return (
     <div ref={shellRef} className="min-h-screen bg-slate-100 dark:bg-background-primary">
       <div className="flex min-h-screen flex-col">
@@ -1748,7 +2202,11 @@ export const DataSourceErEditor: React.FC = () => {
             <div
               className={cn(
                 'absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(148,163,184,0.22)_1px,transparent_0)] bg-[length:24px_24px] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(148,163,184,0.14)_1px,transparent_0)]',
-                interaction?.type === 'pan' ? 'cursor-grabbing' : 'cursor-grab',
+                interaction?.type === 'pan'
+                  ? 'cursor-grabbing'
+                  : interaction?.type === 'select'
+                    ? 'cursor-crosshair'
+                    : 'cursor-grab',
               )}
             />
 
@@ -1853,6 +2311,19 @@ export const DataSourceErEditor: React.FC = () => {
               )}
             </svg>
 
+            {selectionMarquee && isDragSelectionRect(selectionMarquee, 1) && (
+              <div
+                className="pointer-events-none absolute z-[15] rounded-2xl border border-banana-400/80 bg-banana-300/10 shadow-[inset_0_0_0_1px_rgba(250,204,21,0.24)]"
+                style={{
+                  left: selectionMarquee.left,
+                  top: selectionMarquee.top,
+                  width: selectionMarquee.width,
+                  height: selectionMarquee.height,
+                }}
+                data-testid="er-selection-marquee"
+              />
+            )}
+
             <div
               className="absolute inset-0 z-20 origin-top-left pointer-events-none"
               style={{
@@ -1865,11 +2336,18 @@ export const DataSourceErEditor: React.FC = () => {
                 const position = cardPositions[table.table_name] || { x: 0, y: 0 };
                 const cardSize = cardSizes[table.table_name] || normalizeCardSize();
                 const bodyHeight = Math.max(MIN_CARD_HEIGHT - CARD_HEADER_HEIGHT, cardSize.height - CARD_HEADER_HEIGHT);
+                const isTableSelected = selectedTableNameSet.has(table.table_name);
                 return (
                   <div
                     key={table.id || table.table_name}
-                    className="pointer-events-auto absolute overflow-hidden rounded-2xl border border-slate-200 bg-white/96 shadow-xl shadow-slate-200/60 backdrop-blur dark:border-border-primary dark:bg-background-secondary/96"
+                    className={cn(
+                      'pointer-events-auto absolute overflow-hidden rounded-2xl border bg-white/96 backdrop-blur transition-[border-color,box-shadow,background-color] dark:bg-background-secondary/96',
+                      isTableSelected
+                        ? 'border-banana-300 shadow-[0_0_0_1px_rgba(250,204,21,0.28),0_16px_36px_rgba(234,179,8,0.22)] dark:border-banana-400/40 dark:shadow-[0_0_0_1px_rgba(250,204,21,0.24),0_16px_36px_rgba(0,0,0,0.34)]'
+                        : 'border-slate-200 shadow-xl shadow-slate-200/60 dark:border-border-primary dark:shadow-black/20',
+                    )}
                     data-er-interactive="true"
+                    data-selected={isTableSelected ? 'true' : 'false'}
                     data-testid={`er-card-${table.table_name}`}
                     style={{
                       left: position.x,
@@ -1879,8 +2357,14 @@ export const DataSourceErEditor: React.FC = () => {
                     }}
                   >
                     <div
-                      className="flex h-[54px] cursor-grab select-none items-center justify-between gap-3 rounded-t-2xl border-b border-slate-200 bg-slate-50 px-4 active:cursor-grabbing dark:border-border-primary dark:bg-background-primary"
+                      className={cn(
+                        'flex h-[54px] cursor-grab select-none items-center justify-between gap-3 rounded-t-2xl border-b px-4 active:cursor-grabbing',
+                        isTableSelected
+                          ? 'border-banana-200 bg-banana-50 dark:border-banana-400/30 dark:bg-banana-500/10'
+                          : 'border-slate-200 bg-slate-50 dark:border-border-primary dark:bg-background-primary',
+                      )}
                       onPointerDown={(event) => handleCardPointerDown(event, table.table_name)}
+                      data-testid={`er-card-header-${table.table_name}`}
                     >
                       <div className="min-w-0">
                         <div className="truncate font-semibold text-slate-900 dark:text-foreground-primary">{table.table_name}</div>
@@ -1888,7 +2372,12 @@ export const DataSourceErEditor: React.FC = () => {
                           {table.table_comment || `${(table.columns || []).length} 个字段`}
                         </div>
                       </div>
-                      <div className="rounded-full bg-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:bg-background-hover dark:text-foreground-secondary">
+                      <div className={cn(
+                        'rounded-full px-2 py-1 text-[11px] font-semibold',
+                        isTableSelected
+                          ? 'bg-banana-100 text-banana-800 ring-1 ring-banana-200 dark:bg-banana-500/20 dark:text-banana-200 dark:ring-banana-400/30'
+                          : 'bg-slate-200 text-slate-700 dark:bg-background-hover dark:text-foreground-secondary',
+                      )}>
                         {(table.columns || []).length} 字段
                       </div>
                     </div>
@@ -1904,6 +2393,8 @@ export const DataSourceErEditor: React.FC = () => {
                     >
                       {(table.columns || []).map((column) => {
                         const fieldKey = `${table.table_name}.${column.column_name}`;
+                        const isLinkDropTarget = interaction?.type === 'link'
+                          && linkDropTarget?.fieldKey === fieldKey;
                         const isPendingSourceField = interaction?.type === 'link'
                           && interaction.sourceTable === table.table_name
                           && interaction.sourceColumn === column.column_name;
@@ -1927,22 +2418,29 @@ export const DataSourceErEditor: React.FC = () => {
                           <div
                             key={fieldKey}
                             data-er-field-key={fieldKey}
+                            data-link-drop-target={isLinkDropTarget ? 'true' : undefined}
                             data-table-name={table.table_name}
                             data-column-name={column.column_name}
                             data-active-relation-role={activeRelationRole}
                             title={fieldSummary}
                             className={cn(
-                              'flex h-[36px] items-center gap-2 border-b border-slate-100 px-3 last:border-b-0 dark:border-border-primary',
+                              'flex h-[36px] items-center gap-2 border-b border-slate-100 px-3 transition-[background-color,box-shadow,border-color] duration-150 last:border-b-0 dark:border-border-primary',
+                              isLinkDropTarget && 'border-dashed border-amber-300 bg-amber-50/90 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.18)] dark:border-amber-400/50 dark:bg-amber-500/10',
                               isPendingSourceField && 'bg-amber-50 dark:bg-amber-500/10',
                               activeRelationRole === 'both' && 'bg-violet-50 ring-1 ring-inset ring-violet-200 dark:bg-violet-500/10 dark:ring-violet-400/30',
                               activeRelationRole === 'source' && 'bg-amber-50 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:ring-amber-400/30',
                               activeRelationRole === 'target' && 'bg-blue-50 ring-1 ring-inset ring-blue-200 dark:bg-blue-500/10 dark:ring-blue-400/30',
                             )}
+                            style={isLinkDropTarget ? {
+                              outline: '1px dashed rgba(245, 158, 11, 0.9)',
+                              outlineOffset: '-2px',
+                            } : undefined}
                           >
                             <button
                               type="button"
                               className={cn(
                                 'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-500 transition hover:border-amber-300 hover:text-amber-600 dark:border-border-primary dark:bg-background-primary dark:text-foreground-tertiary',
+                                isLinkDropTarget && 'border-amber-300 bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
                                 isPendingSourceField && 'border-amber-300 bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
                                 activeRelationRole === 'both' && 'border-violet-300 bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300',
                                 activeRelationRole === 'source' && 'border-amber-300 bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
@@ -2040,7 +2538,7 @@ export const DataSourceErEditor: React.FC = () => {
               </div>
               <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-600 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
                 <div className="font-semibold">操作说明</div>
-                <div className="mt-1">空白处拖动画布平移，按住 Ctrl/⌘ 再滚轮缩放；可一键自动布局已连线表卡，点击关系线会自动滚动到对应字段。关系线颜色规则：自动识别为蓝色，手动创建为橙色，当前选中为紫色。</div>
+                <div className="mt-1">空白处左键拖拽可框选多个表；按住 Alt 再左键拖动，或使用鼠标中键拖动画布平移；按住 Ctrl/⌘ 再滚轮缩放。多选后拖动任一已选表头，可一起移动整组表卡；点击关系线会自动滚动到对应字段。关系线颜色规则：自动识别为蓝色，手动创建为橙色，当前选中为紫色。</div>
               </div>
             </Card>
           )}
@@ -2159,7 +2657,7 @@ export const DataSourceErEditor: React.FC = () => {
           <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 hidden -translate-x-1/2 rounded-full bg-white/86 px-4 py-2 text-xs text-slate-600 shadow-lg backdrop-blur md:block dark:bg-background-secondary/86 dark:text-foreground-secondary">
             <div className="flex items-center gap-2">
               <Bot size={14} />
-              <span>ER 图仅负责关系建模，结构增删请回到数据源管理页处理。</span>
+              <span>空白处可直接拖动画布，按住 Shift / Ctrl / ⌘ 再拖拽可框选表卡。</span>
             </div>
           </div>
         </div>

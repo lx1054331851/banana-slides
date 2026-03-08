@@ -101,6 +101,63 @@ def test_start_db_analysis_project_success(client):
     assert data['session']['rounds'][0]['round_number'] == 1
 
 
+def test_start_db_analysis_response_includes_llm_debug_context(client):
+    datasource = _create_datasource(client, name='db-analysis-start-debug')
+    _seed_cached_schema(datasource['id'])
+
+    with patch('controllers.db_analysis_controller.DbAnalysisService.generate_round', side_effect=_mock_round):
+        response = client.post(
+            '/api/projects/db-analysis/start',
+            json={
+                'datasource_id': datasource['id'],
+                'business_context': '测试业务背景',
+                'analysis_goal': '测试分析目标',
+            },
+        )
+
+    assert response.status_code == 201
+    payload = response.get_json()
+    round_payload = payload['data']['session']['rounds'][0]
+    llm_debug = round_payload['llm_debug']
+    plan_prompt = llm_debug['plan_prompt']
+
+    assert plan_prompt['datasource_context']['datasource']['id'] == datasource['id']
+    assert plan_prompt['datasource_context']['datasource']['table_count'] == 2
+    assert sorted(table['name'] for table in plan_prompt['datasource_context']['tables']) == ['order_items', 'orders']
+    assert plan_prompt['datasource_context']['relations'][0]['join_sql'] == 'order_items.order_id = orders.id'
+    assert '结构化数据源上下文' in plan_prompt['prompt_text']
+    assert 'order_items.order_id = orders.id' in plan_prompt['prompt_text']
+    assert llm_debug['rewrite_prompt'] is None
+
+
+def test_db_analysis_state_returns_llm_debug_context(client):
+    datasource = _create_datasource(client, name='db-analysis-state-debug')
+    _seed_cached_schema(datasource['id'])
+
+    with patch('controllers.db_analysis_controller.DbAnalysisService.generate_round', side_effect=_mock_round):
+        start_resp = client.post(
+            '/api/projects/db-analysis/start',
+            json={
+                'datasource_id': datasource['id'],
+                'business_context': '测试业务背景',
+                'analysis_goal': '测试分析目标',
+            },
+        )
+
+    project_id = start_resp.get_json()['data']['project_id']
+    response = client.get(f'/api/projects/{project_id}/db-analysis/state')
+
+    assert response.status_code == 200
+    payload = response.get_json()['data']
+    round_payload = payload['session']['rounds'][0]
+    plan_prompt = round_payload['llm_debug']['plan_prompt']
+
+    assert payload['datasource']['id'] == datasource['id']
+    assert plan_prompt['schema_summary']
+    assert plan_prompt['datasource_context']['datasource']['database_name'] == 'analytics_db'
+    assert '可用数据表结构（摘要）' in plan_prompt['prompt_text']
+
+
 def test_db_analysis_requires_answer_before_next_round(client):
     datasource = _create_datasource(client, name='db-analysis-next')
 
@@ -426,3 +483,35 @@ def test_manual_relation_create_and_delete(client):
     list_resp_2 = client.get(f"/api/data-sources/{datasource['id']}/relations")
     list_payload_2 = list_resp_2.get_json()
     assert len(list_payload_2['data']['relations']) == 0
+
+def test_datasource_er_layout_can_be_saved_and_loaded(client):
+    datasource = _create_datasource(client, name='db-analysis-er-layout')
+
+    layout = {
+        'positions': {
+            'orders': {'x': 128, 'y': 64},
+        },
+        'sizes': {
+            'orders': {'width': 320, 'height': 180},
+        },
+        'scrollTop': {
+            'orders': 42,
+        },
+        'viewport': {'x': 144, 'y': 96, 'scale': 1.15},
+        'panels': {'overviewOpen': True, 'relationsOpen': False},
+    }
+
+    update_resp = client.put(
+        f"/api/data-sources/{datasource['id']}/er-layout",
+        json={'er_layout': layout},
+    )
+
+    assert update_resp.status_code == 200
+    update_payload = update_resp.get_json()
+    assert update_payload['success'] is True
+    assert update_payload['data']['er_layout'] == layout
+
+    get_resp = client.get(f"/api/data-sources/{datasource['id']}")
+    assert get_resp.status_code == 200
+    get_payload = get_resp.get_json()
+    assert get_payload['data']['data_source']['er_layout'] == layout

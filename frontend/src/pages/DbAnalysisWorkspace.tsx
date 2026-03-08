@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Download, Play, StopCircle } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Download, Play, StopCircle } from 'lucide-react';
 
 import { Button, Card, Input, Markdown, Textarea, useToast } from '@/components/shared';
 import {
@@ -18,6 +18,19 @@ interface StatePayload {
   datasource: DataSource | null;
 }
 
+const debugPreClassName = 'max-h-96 overflow-auto rounded-lg bg-gray-950 p-3 text-[11px] leading-5 text-gray-100 whitespace-pre-wrap break-words';
+
+const formatDebugJson = (value: unknown): string => {
+  if (value === null || value === undefined) return '-';
+  if (typeof value === 'string') return value;
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+};
+
 export const DbAnalysisWorkspace: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
@@ -27,6 +40,7 @@ export const DbAnalysisWorkspace: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [answersDraft, setAnswersDraft] = useState<Record<string, any>>({});
+  const [expandedDebugRounds, setExpandedDebugRounds] = useState<Record<string, boolean>>({});
 
   const rounds = stateData?.session?.rounds || [];
   const latestRound = useMemo(() => {
@@ -55,6 +69,20 @@ export const DbAnalysisWorkspace: React.FC = () => {
   useEffect(() => {
     setAnswersDraft({});
   }, [latestRound?.id]);
+
+  useEffect(() => {
+    if (!latestRound?.id) return;
+    setExpandedDebugRounds((prev) => {
+      if (Object.prototype.hasOwnProperty.call(prev, latestRound.id)) {
+        return prev;
+      }
+      return { ...prev, [latestRound.id]: true };
+    });
+  }, [latestRound?.id]);
+
+  const toggleDebugPanel = (roundId: string) => {
+    setExpandedDebugRounds((prev) => ({ ...prev, [roundId]: !prev[roundId] }));
+  };
 
   const handleAnswerChange = (questionId: string, value: any) => {
     setAnswersDraft((prev) => ({ ...prev, [questionId]: value }));
@@ -267,6 +295,16 @@ export const DbAnalysisWorkspace: React.FC = () => {
           const rows = queryResult.rows || [];
           const isLatest = latestRound?.id === round.id;
           const needInteraction = isLatest && round.status === 'WAITING_INPUT';
+          const planDebug = round.llm_debug?.plan_prompt;
+          const rewriteDebug = round.llm_debug?.rewrite_prompt;
+          const datasourceMeta = planDebug?.datasource_context?.datasource || {};
+          const debugLimits = planDebug?.datasource_context?.limits || {};
+          const constraints = planDebug?.constraints || [];
+          const debugExpanded = !!expandedDebugRounds[round.id];
+          const debugTruncationHints = [
+            debugLimits.truncated_tables ? '表已按上限截断' : '',
+            debugLimits.truncated_relations ? '关系已按上限截断' : '',
+          ].filter(Boolean).join('，');
 
           return (
             <Card key={round.id} className="p-5 space-y-4">
@@ -326,6 +364,113 @@ export const DbAnalysisWorkspace: React.FC = () => {
                   ))}
                 </div>
               </div>
+
+              {planDebug && (
+                <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 dark:border-amber-500/20 dark:bg-amber-500/5">
+                  <button
+                    type="button"
+                    onClick={() => toggleDebugPanel(round.id)}
+                    className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left focus:outline-none focus:ring-2 focus:ring-banana-400/60 rounded-xl"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-gray-900 dark:text-foreground-primary">LLM 调试信息</span>
+                        <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-background-hover dark:text-amber-300">
+                          显示实际发送内容
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-foreground-secondary">
+                        {(datasourceMeta.name || '未绑定数据源')} · {(datasourceMeta.db_type || '-')} · {(datasourceMeta.database_name || '-')} · {datasourceMeta.table_count ?? 0} 表 / {datasourceMeta.relation_count ?? 0} 关系
+                      </div>
+                    </div>
+                    <ChevronDown size={16} className={`mt-1 shrink-0 text-gray-500 transition-transform ${debugExpanded ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {debugExpanded && (
+                    <div className="space-y-4 border-t border-amber-200/80 px-4 py-4 dark:border-amber-500/20">
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-lg bg-white/80 p-3 dark:bg-background-secondary">
+                          <div className="text-xs text-gray-500 mb-1">项目目标</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-foreground-primary">{planDebug.project_context.analysis_goal || '-'}</div>
+                          <div className="mt-1 text-xs text-gray-500 line-clamp-3">{planDebug.project_context.business_context || '-'}</div>
+                        </div>
+                        <div className="rounded-lg bg-white/80 p-3 dark:bg-background-secondary">
+                          <div className="text-xs text-gray-500 mb-1">当前轮次</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-foreground-primary">第 {planDebug.round_number} 轮</div>
+                          <div className="mt-1 text-xs text-gray-500">页面标题：{round.page_title || '-'}</div>
+                        </div>
+                        <div className="rounded-lg bg-white/80 p-3 dark:bg-background-secondary">
+                          <div className="text-xs text-gray-500 mb-1">数据源范围</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-foreground-primary">{datasourceMeta.table_count ?? 0} 表 / {datasourceMeta.relation_count ?? 0} 关系</div>
+                          <div className="mt-1 text-xs text-gray-500">{debugTruncationHints || '当前上下文未截断'}</div>
+                        </div>
+                        <div className="rounded-lg bg-white/80 p-3 dark:bg-background-secondary">
+                          <div className="text-xs text-gray-500 mb-1">数据库信息</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-foreground-primary">{datasourceMeta.db_type || '-'}</div>
+                          <div className="mt-1 text-xs text-gray-500">{datasourceMeta.database_name || '-'}</div>
+                        </div>
+                      </div>
+
+                      {planDebug.previous_context && (
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1">上一轮上下文 JSON</div>
+                          <pre className={debugPreClassName}>{formatDebugJson(planDebug.previous_context)}</pre>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                        <div className="space-y-4">
+                          <div>
+                            <div className="text-xs text-gray-500 mb-1">Schema 摘要</div>
+                            <pre className={debugPreClassName}>{planDebug.schema_summary || '-'}</pre>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 mb-2">执行约束</div>
+                            {constraints.length > 0 ? (
+                              <ul className="space-y-1 text-sm text-gray-700 dark:text-foreground-secondary">
+                                {constraints.map((item, index) => (
+                                  <li key={`${round.id}-constraint-${index}`} className="leading-6">- {item}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <div className="text-sm text-gray-500">无</div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-xs text-gray-500 mb-1">结构化数据源上下文 JSON</div>
+                          <pre className={debugPreClassName}>{formatDebugJson(planDebug.datasource_context)}</pre>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">Plan Prompt（实际发送给 LLM）</div>
+                        <pre className={debugPreClassName}>{planDebug.prompt_text}</pre>
+                      </div>
+
+                      {rewriteDebug && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">SQL 改写输入</div>
+                              <pre className={debugPreClassName}>{formatDebugJson({ source_sql: rewriteDebug.source_sql, error_message: rewriteDebug.error_message })}</pre>
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">Rewrite 上下文 JSON</div>
+                              <pre className={debugPreClassName}>{formatDebugJson(rewriteDebug.datasource_context)}</pre>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 mb-1">Rewrite Prompt（实际发送给 LLM）</div>
+                            <pre className={debugPreClassName}>{rewriteDebug.prompt_text}</pre>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {needInteraction && (
                 <div className="pt-2 border-t border-gray-200 dark:border-border-primary space-y-3">
