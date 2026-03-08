@@ -5,6 +5,7 @@ import {
   Bot,
   Database,
   Grip,
+  LayoutGrid,
   Link2,
   Maximize2,
   Minimize2,
@@ -39,6 +40,20 @@ const MAX_CARD_WIDTH = 520;
 const MIN_CARD_HEIGHT = CARD_HEADER_HEIGHT + 36 * 3;
 const MAX_CARD_HEIGHT = 560;
 const FIELD_HEIGHT = 36;
+const TABLE_EDGE_PADDING = 28;
+const RELATION_LANE_GAP = 18;
+const RELATION_TRUNK_OFFSET = 36;
+const RELATION_MARKER_OFFSET = 16;
+const AUTO_LAYOUT_PADDING_X = 48;
+const AUTO_LAYOUT_PADDING_Y = 40;
+const AUTO_LAYOUT_LAYER_GAP_X = 180;
+const AUTO_LAYOUT_LAYER_GAP_Y = 72;
+const AUTO_LAYOUT_COMPONENT_GAP_X = 200;
+const AUTO_LAYOUT_COMPONENT_GAP_Y = 140;
+const AUTO_LAYOUT_MIN_WIDTH = 1280;
+const AUTO_LAYOUT_ROOT_GAP = AUTO_LAYOUT_LAYER_GAP_X - 48;
+const AUTO_LAYOUT_BRANCH_GAP = AUTO_LAYOUT_LAYER_GAP_X - 72;
+const AUTO_LAYOUT_SIBLING_GAP = AUTO_LAYOUT_LAYER_GAP_Y - 16;
 const GRID_X = DEFAULT_CARD_WIDTH + 44;
 const GRID_Y = DEFAULT_CARD_HEIGHT + 36;
 const DEFAULT_VIEWPORT = { x: 72, y: 72, scale: 1 };
@@ -54,9 +69,49 @@ const relationTypeLabels: Record<string, string> = {
 };
 
 const originStyles: Record<string, string> = {
-  AUTO: 'bg-blue-100 text-blue-700 ring-1 ring-blue-200',
-  MANUAL: 'bg-amber-100 text-amber-800 ring-1 ring-amber-200',
+  AUTO: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-400/30',
+  MANUAL: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/30',
 };
+
+const RELATION_AUTO_STROKE = '#2563EB';
+const RELATION_MANUAL_STROKE = '#D97706';
+const RELATION_ACTIVE_STROKE = '#7C3AED';
+
+const getRelationVisualStyle = (relation: Pick<DataSourceRelation, 'origin'>, isActive: boolean) => {
+  if (isActive) {
+    return {
+      strokeColor: RELATION_ACTIVE_STROKE,
+      markerFill: '#F5F3FF',
+      lineOpacity: 1,
+      lineWidth: 2.8,
+    };
+  }
+
+  if (relation.origin === 'MANUAL') {
+    return {
+      strokeColor: RELATION_MANUAL_STROKE,
+      markerFill: '#FFFBEB',
+      lineOpacity: 0.9,
+      lineWidth: 1.6,
+    };
+  }
+
+  return {
+    strokeColor: RELATION_AUTO_STROKE,
+    markerFill: '#EFF6FF',
+    lineOpacity: 0.9,
+    lineWidth: 1.6,
+  };
+};
+
+const getRelationListItemClassName = (relation: Pick<DataSourceRelation, 'origin'>, isActive: boolean) => cn(
+  'w-full rounded-2xl border px-3 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-banana-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900',
+  isActive
+    ? 'border-violet-300 bg-violet-50 shadow-sm dark:border-violet-400/40 dark:bg-violet-500/10'
+    : relation.origin === 'MANUAL'
+      ? 'border-slate-200 bg-white hover:border-amber-200 hover:bg-amber-50/60 dark:border-border-primary dark:bg-background-primary dark:hover:border-amber-400/30 dark:hover:bg-amber-500/5'
+      : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/60 dark:border-border-primary dark:bg-background-primary dark:hover:border-blue-400/30 dark:hover:bg-blue-500/5',
+);
 
 interface Point {
   x: number;
@@ -73,6 +128,13 @@ interface ViewportState {
   y: number;
   scale: number;
 }
+
+interface RelationSlot {
+  index: number;
+  total: number;
+}
+
+type TableEdge = 'left' | 'right' | 'top' | 'bottom';
 
 type CanvasInteraction =
   | null
@@ -112,9 +174,10 @@ interface StoredLayout {
   };
 }
 
-const clampScale = (value: number) => Math.max(0.45, Math.min(1.9, value));
-const clampCardWidth = (value: number) => Math.max(MIN_CARD_WIDTH, Math.min(MAX_CARD_WIDTH, value));
-const clampCardHeight = (value: number) => Math.max(MIN_CARD_HEIGHT, Math.min(MAX_CARD_HEIGHT, value));
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+const clampScale = (value: number) => clamp(value, 0.45, 1.9);
+const clampCardWidth = (value: number) => clamp(value, MIN_CARD_WIDTH, MAX_CARD_WIDTH);
+const clampCardHeight = (value: number) => clamp(value, MIN_CARD_HEIGHT, MAX_CARD_HEIGHT);
 
 const normalizeCardSize = (size?: Partial<CardSize> | null): CardSize => ({
   width: clampCardWidth(Number(size?.width || DEFAULT_CARD_WIDTH)),
@@ -173,11 +236,201 @@ const safeReadLayout = (datasourceId: string): StoredLayout => {
   }
 };
 
-const buildRelationPath = (start: Point, end: Point) => {
-  const bend = Math.max(72, Math.abs(end.x - start.x) * 0.42);
-  const direction = start.x <= end.x ? 1 : -1;
-  const controlOffset = bend * direction;
-  return `M ${start.x} ${start.y} C ${start.x + controlOffset} ${start.y}, ${end.x - controlOffset} ${end.y}, ${end.x} ${end.y}`;
+const getTableCenter = (position: Point, size: CardSize): Point => ({
+  x: position.x + size.width / 2,
+  y: position.y + size.height / 2,
+});
+
+const getRelationRoute = (sourceCenter: Point, targetCenter: Point): {
+  orientation: 'horizontal' | 'vertical';
+  sourceSide: TableEdge;
+  targetSide: TableEdge;
+} => {
+  const deltaX = targetCenter.x - sourceCenter.x;
+  const deltaY = targetCenter.y - sourceCenter.y;
+
+  if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+    return deltaX >= 0
+      ? { orientation: 'horizontal', sourceSide: 'right', targetSide: 'left' }
+      : { orientation: 'horizontal', sourceSide: 'left', targetSide: 'right' };
+  }
+
+  return deltaY >= 0
+    ? { orientation: 'vertical', sourceSide: 'bottom', targetSide: 'top' }
+    : { orientation: 'vertical', sourceSide: 'top', targetSide: 'bottom' };
+};
+
+const getRelationSlotAxisValue = (side: TableEdge, oppositePoint: Point) => (
+  side === 'left' || side === 'right' ? oppositePoint.y : oppositePoint.x
+);
+
+const getRelationSlotBias = (slot: RelationSlot | undefined) => {
+  if (!slot || slot.total <= 1) {
+    return 0;
+  }
+  return (slot.index - (slot.total - 1) / 2) * RELATION_LANE_GAP;
+};
+
+const getDistributedTableEdgeAnchor = (
+  position: Point,
+  size: CardSize,
+  side: TableEdge,
+  slot?: RelationSlot,
+): Point => {
+  const verticalCount = Math.max(slot?.total || 1, 1);
+  const verticalStep = (size.height - TABLE_EDGE_PADDING * 2) / (verticalCount + 1);
+  const horizontalCount = Math.max(slot?.total || 1, 1);
+  const horizontalStep = (size.width - TABLE_EDGE_PADDING * 2) / (horizontalCount + 1);
+
+  switch (side) {
+    case 'left':
+      return {
+        x: position.x,
+        y: position.y + TABLE_EDGE_PADDING + verticalStep * ((slot?.index || 0) + 1),
+      };
+    case 'right':
+      return {
+        x: position.x + size.width,
+        y: position.y + TABLE_EDGE_PADDING + verticalStep * ((slot?.index || 0) + 1),
+      };
+    case 'top':
+      return {
+        x: position.x + TABLE_EDGE_PADDING + horizontalStep * ((slot?.index || 0) + 1),
+        y: position.y,
+      };
+    case 'bottom':
+      return {
+        x: position.x + TABLE_EDGE_PADDING + horizontalStep * ((slot?.index || 0) + 1),
+        y: position.y + size.height,
+      };
+  }
+};
+
+const compactPolylinePoints = (points: Point[]) => points.reduce<Point[]>((acc, point) => {
+  const previous = acc[acc.length - 1];
+  if (!previous || previous.x !== point.x || previous.y !== point.y) {
+    acc.push(point);
+  }
+  return acc;
+}, []);
+
+const buildOrthogonalPolyline = (
+  start: Point,
+  end: Point,
+  orientation: 'horizontal' | 'vertical',
+  trunkBias = 0,
+): Point[] => {
+  if (orientation === 'horizontal') {
+    const minX = Math.min(start.x, end.x);
+    const maxX = Math.max(start.x, end.x);
+    const baseMidX = (start.x + end.x) / 2;
+    const midX = maxX - minX > RELATION_TRUNK_OFFSET * 2
+      ? clamp(baseMidX + trunkBias, minX + RELATION_TRUNK_OFFSET, maxX - RELATION_TRUNK_OFFSET)
+      : baseMidX;
+    return compactPolylinePoints([
+      start,
+      { x: midX, y: start.y },
+      { x: midX, y: end.y },
+      end,
+    ]);
+  }
+
+  const minY = Math.min(start.y, end.y);
+  const maxY = Math.max(start.y, end.y);
+  const baseMidY = (start.y + end.y) / 2;
+  const midY = maxY - minY > RELATION_TRUNK_OFFSET * 2
+    ? clamp(baseMidY + trunkBias, minY + RELATION_TRUNK_OFFSET, maxY - RELATION_TRUNK_OFFSET)
+    : baseMidY;
+  return compactPolylinePoints([
+    start,
+    { x: start.x, y: midY },
+    { x: end.x, y: midY },
+    end,
+  ]);
+};
+
+const buildPolylinePath = (points: Point[]) => {
+  const [firstPoint, ...restPoints] = compactPolylinePoints(points);
+  if (!firstPoint) {
+    return '';
+  }
+  return [`M ${firstPoint.x} ${firstPoint.y}`, ...restPoints.map((point) => `L ${point.x} ${point.y}`)].join(' ');
+};
+
+const getPolylineMidpoint = (points: Point[]) => {
+  const segments = compactPolylinePoints(points).slice(1).map((point, index) => {
+    const start = compactPolylinePoints(points)[index];
+    const length = Math.hypot(point.x - start.x, point.y - start.y);
+    return {
+      start,
+      end: point,
+      length,
+    };
+  }).filter((segment) => segment.length > 0);
+
+  if (!segments.length) {
+    return {
+      point: points[0] || { x: 0, y: 0 },
+      angle: 0,
+    };
+  }
+
+  let remaining = segments.reduce((total, segment) => total + segment.length, 0) / 2;
+  for (const segment of segments) {
+    if (remaining <= segment.length) {
+      const ratio = remaining / segment.length;
+      return {
+        point: {
+          x: segment.start.x + (segment.end.x - segment.start.x) * ratio,
+          y: segment.start.y + (segment.end.y - segment.start.y) * ratio,
+        },
+        angle: Math.atan2(segment.end.y - segment.start.y, segment.end.x - segment.start.x) * (180 / Math.PI),
+      };
+    }
+    remaining -= segment.length;
+  }
+
+  const lastSegment = segments[segments.length - 1];
+  return {
+    point: lastSegment.end,
+    angle: Math.atan2(lastSegment.end.y - lastSegment.start.y, lastSegment.end.x - lastSegment.start.x) * (180 / Math.PI),
+  };
+};
+
+const getCardinalitySymbols = (relationType: string) => {
+  switch (relationType) {
+    case 'one_to_one':
+      return { source: '1', target: '1' };
+    case 'one_to_many':
+      return { source: '1', target: '*' };
+    case 'many_to_one':
+      return { source: '*', target: '1' };
+    case 'many_to_many':
+      return { source: '*', target: '*' };
+    default:
+      return { source: '?', target: '?' };
+  }
+};
+
+const getEdgeVector = (side: TableEdge): Point => {
+  switch (side) {
+    case 'left':
+      return { x: -1, y: 0 };
+    case 'right':
+      return { x: 1, y: 0 };
+    case 'top':
+      return { x: 0, y: -1 };
+    case 'bottom':
+      return { x: 0, y: 1 };
+  }
+};
+
+const getMarkerPosition = (point: Point, side: TableEdge): Point => {
+  const vector = getEdgeVector(side);
+  return {
+    x: point.x + vector.x * RELATION_MARKER_OFFSET,
+    y: point.y + vector.y * RELATION_MARKER_OFFSET,
+  };
 };
 
 const relationExists = (
@@ -200,6 +453,357 @@ const relationExists = (
   ));
 };
 
+const getAutoLayoutAxis = (side: TableEdge): 'horizontal' | 'vertical' => (
+  side === 'left' || side === 'right' ? 'horizontal' : 'vertical'
+);
+
+const getAutoLayoutCrossSpan = (size: CardSize, axis: 'horizontal' | 'vertical') => (
+  axis === 'horizontal' ? size.height : size.width
+);
+
+const getAutoLayoutSideBias = (side: TableEdge) => (
+  side === 'left' || side === 'right' ? 0 : 24
+);
+
+const buildAutoLayoutPositions = (
+  tables: DataSourceTable[],
+  relations: DataSourceRelation[],
+  sizes: Record<string, CardSize>,
+  availableWidth: number,
+): Record<string, Point> => {
+  const sortedTables = [...tables].sort((left, right) => left.table_name.localeCompare(right.table_name));
+  const sizeByTable = sortedTables.reduce<Record<string, CardSize>>((acc, table) => {
+    acc[table.table_name] = sizes[table.table_name] || normalizeCardSize();
+    return acc;
+  }, {});
+  const adjacency = sortedTables.reduce<Map<string, Set<string>>>((acc, table) => {
+    acc.set(table.table_name, new Set());
+    return acc;
+  }, new Map());
+  const relationWeight = new Map<string, number>(sortedTables.map((table) => [table.table_name, 0]));
+
+  relations.forEach((relation) => {
+    if (!adjacency.has(relation.source_table) || !adjacency.has(relation.target_table)) {
+      return;
+    }
+
+    adjacency.get(relation.source_table)?.add(relation.target_table);
+    adjacency.get(relation.target_table)?.add(relation.source_table);
+
+    const weight = (relation.origin === 'MANUAL' ? 8 : 4) + (typeof relation.confidence === 'number' ? relation.confidence * 2 : 0);
+    relationWeight.set(relation.source_table, (relationWeight.get(relation.source_table) || 0) + weight);
+    relationWeight.set(relation.target_table, (relationWeight.get(relation.target_table) || 0) + weight);
+  });
+
+  const degreeOf = (tableName: string) => adjacency.get(tableName)?.size || 0;
+  const importanceOf = (tableName: string) => degreeOf(tableName) * 100 + (relationWeight.get(tableName) || 0);
+  const orderedTableNames = sortedTables.map((table) => table.table_name);
+  const seen = new Set<string>();
+  const components: string[][] = [];
+
+  orderedTableNames.forEach((tableName) => {
+    if (seen.has(tableName)) {
+      return;
+    }
+
+    const queue = [tableName];
+    const component: string[] = [];
+    seen.add(tableName);
+
+    while (queue.length) {
+      const current = queue.shift();
+      if (!current) {
+        continue;
+      }
+
+      component.push(current);
+      [...(adjacency.get(current) || [])]
+        .sort((left, right) => (
+          importanceOf(right) - importanceOf(left)
+          || degreeOf(right) - degreeOf(left)
+          || left.localeCompare(right)
+        ))
+        .forEach((neighbor) => {
+          if (!seen.has(neighbor)) {
+            seen.add(neighbor);
+            queue.push(neighbor);
+          }
+        });
+    }
+
+    components.push(component);
+  });
+
+  const componentLayouts = components
+    .map((component) => {
+      const componentSet = new Set(component);
+      const orderedComponent = [...component].sort((left, right) => (
+        importanceOf(right) - importanceOf(left)
+        || degreeOf(right) - degreeOf(left)
+        || left.localeCompare(right)
+      ));
+      const root = orderedComponent[0];
+      const parentByTable = new Map<string, string | null>([[root, null]]);
+      const depthByTable = new Map<string, number>([[root, 0]]);
+      const bfsQueue = [root];
+
+      while (bfsQueue.length) {
+        const current = bfsQueue.shift();
+        if (!current) {
+          continue;
+        }
+
+        const currentDepth = depthByTable.get(current) || 0;
+        [...(adjacency.get(current) || [])]
+          .filter((neighbor) => componentSet.has(neighbor) && !parentByTable.has(neighbor))
+          .sort((left, right) => (
+            importanceOf(right) - importanceOf(left)
+            || degreeOf(right) - degreeOf(left)
+            || left.localeCompare(right)
+          ))
+          .forEach((neighbor) => {
+            parentByTable.set(neighbor, current);
+            depthByTable.set(neighbor, currentDepth + 1);
+            bfsQueue.push(neighbor);
+          });
+      }
+
+      orderedComponent.forEach((tableName) => {
+        if (!parentByTable.has(tableName)) {
+          parentByTable.set(tableName, root);
+        }
+      });
+
+      const childrenByTable = new Map<string, string[]>(component.map((tableName) => [tableName, []]));
+      parentByTable.forEach((parentTable, tableName) => {
+        if (parentTable) {
+          childrenByTable.get(parentTable)?.push(tableName);
+        }
+      });
+
+      const subtreeSizeCache = new Map<string, number>();
+      const getSubtreeSize = (tableName: string): number => {
+        const cachedSize = subtreeSizeCache.get(tableName);
+        if (typeof cachedSize === 'number') {
+          return cachedSize;
+        }
+
+        const childTables = childrenByTable.get(tableName) || [];
+        const size = childTables.reduce((sum, childTable) => sum + getSubtreeSize(childTable), 1);
+        subtreeSizeCache.set(tableName, size);
+        return size;
+      };
+
+      const sortBranchTables = (left: string, right: string) => (
+        getSubtreeSize(right) - getSubtreeSize(left)
+        || importanceOf(right) - importanceOf(left)
+        || left.localeCompare(right)
+      );
+
+      childrenByTable.forEach((childTables) => {
+        childTables.sort(sortBranchTables);
+      });
+
+      const branchSpanCache = new Map<string, number>();
+      const measureBranchSpan = (tableName: string, axis: 'horizontal' | 'vertical'): number => {
+        const cacheKey = `${axis}:${tableName}`;
+        const cachedSpan = branchSpanCache.get(cacheKey);
+        if (typeof cachedSpan === 'number') {
+          return cachedSpan;
+        }
+
+        const ownSpan = getAutoLayoutCrossSpan(sizeByTable[tableName], axis);
+        const childTables = childrenByTable.get(tableName) || [];
+        if (!childTables.length) {
+          branchSpanCache.set(cacheKey, ownSpan);
+          return ownSpan;
+        }
+
+        const childSpan = childTables.reduce((sum, childTable, index) => (
+          sum + measureBranchSpan(childTable, axis) + (index > 0 ? AUTO_LAYOUT_SIBLING_GAP : 0)
+        ), 0);
+        const totalSpan = Math.max(ownSpan, childSpan);
+        branchSpanCache.set(cacheKey, totalSpan);
+        return totalSpan;
+      };
+
+      const rootChildren = [...(childrenByTable.get(root) || [])];
+      const sidePriority: TableEdge[] = ['right', 'left', 'bottom', 'top'];
+      const sideLoad: Record<TableEdge, number> = { right: 0, left: 0, top: 0, bottom: 0 };
+      const sideByTable = new Map<string, TableEdge>();
+
+      rootChildren.forEach((childTable) => {
+        const bestSide = [...sidePriority].sort((leftSide, rightSide) => {
+          const leftScore = sideLoad[leftSide]
+            + measureBranchSpan(childTable, getAutoLayoutAxis(leftSide))
+            + getAutoLayoutSideBias(leftSide);
+          const rightScore = sideLoad[rightSide]
+            + measureBranchSpan(childTable, getAutoLayoutAxis(rightSide))
+            + getAutoLayoutSideBias(rightSide);
+          return leftScore - rightScore || sidePriority.indexOf(leftSide) - sidePriority.indexOf(rightSide);
+        })[0];
+
+        sideByTable.set(childTable, bestSide);
+        sideLoad[bestSide] += measureBranchSpan(childTable, getAutoLayoutAxis(bestSide)) + AUTO_LAYOUT_SIBLING_GAP;
+      });
+
+      const assignInheritedSide = (tableName: string) => {
+        const side = sideByTable.get(tableName);
+        (childrenByTable.get(tableName) || []).forEach((childTable) => {
+          if (side) {
+            sideByTable.set(childTable, side);
+          }
+          assignInheritedSide(childTable);
+        });
+      };
+
+      rootChildren.forEach((childTable) => assignInheritedSide(childTable));
+
+      const centerByTable = new Map<string, Point>([[root, { x: 0, y: 0 }]]);
+
+      const placeBranch = (tableName: string, center: Point) => {
+        centerByTable.set(tableName, center);
+
+        const side = sideByTable.get(tableName);
+        const childTables = childrenByTable.get(tableName) || [];
+        if (!side || !childTables.length) {
+          return;
+        }
+
+        const axis = getAutoLayoutAxis(side);
+        const totalSpan = childTables.reduce((sum, childTable, index) => (
+          sum + measureBranchSpan(childTable, axis) + (index > 0 ? AUTO_LAYOUT_SIBLING_GAP : 0)
+        ), 0);
+        let cursor = (axis === 'horizontal' ? center.y : center.x) - totalSpan / 2;
+
+        childTables.forEach((childTable) => {
+          const childSpan = measureBranchSpan(childTable, axis);
+          const childSize = sizeByTable[childTable];
+          const parentSize = sizeByTable[tableName];
+          const crossCenter = cursor + childSpan / 2;
+          const childCenter = axis === 'horizontal'
+            ? {
+                x: center.x + (side === 'right' ? 1 : -1) * (parentSize.width / 2 + AUTO_LAYOUT_BRANCH_GAP + childSize.width / 2),
+                y: crossCenter,
+              }
+            : {
+                x: crossCenter,
+                y: center.y + (side === 'bottom' ? 1 : -1) * (parentSize.height / 2 + AUTO_LAYOUT_BRANCH_GAP + childSize.height / 2),
+              };
+
+          placeBranch(childTable, childCenter);
+          cursor += childSpan + AUTO_LAYOUT_SIBLING_GAP;
+        });
+      };
+
+      const rootCenter = { x: 0, y: 0 };
+      const rootSize = sizeByTable[root];
+      const placeRootSideBranches = (side: TableEdge) => {
+        const sideChildren = rootChildren.filter((childTable) => sideByTable.get(childTable) === side);
+        if (!sideChildren.length) {
+          return;
+        }
+
+        const axis = getAutoLayoutAxis(side);
+        const totalSpan = sideChildren.reduce((sum, childTable, index) => (
+          sum + measureBranchSpan(childTable, axis) + (index > 0 ? AUTO_LAYOUT_SIBLING_GAP : 0)
+        ), 0);
+        let cursor = (axis === 'horizontal' ? rootCenter.y : rootCenter.x) - totalSpan / 2;
+
+        sideChildren.forEach((childTable) => {
+          const childSpan = measureBranchSpan(childTable, axis);
+          const childSize = sizeByTable[childTable];
+          const crossCenter = cursor + childSpan / 2;
+          const childCenter = axis === 'horizontal'
+            ? {
+                x: rootCenter.x + (side === 'right' ? 1 : -1) * (rootSize.width / 2 + AUTO_LAYOUT_ROOT_GAP + childSize.width / 2),
+                y: crossCenter,
+              }
+            : {
+                x: crossCenter,
+                y: rootCenter.y + (side === 'bottom' ? 1 : -1) * (rootSize.height / 2 + AUTO_LAYOUT_ROOT_GAP + childSize.height / 2),
+              };
+
+          placeBranch(childTable, childCenter);
+          cursor += childSpan + AUTO_LAYOUT_SIBLING_GAP;
+        });
+      };
+
+      sidePriority.forEach((side) => placeRootSideBranches(side));
+
+      const positions = component.reduce<Record<string, Point>>((acc, tableName) => {
+        const center = centerByTable.get(tableName) || rootCenter;
+        const size = sizeByTable[tableName];
+        acc[tableName] = {
+          x: center.x - size.width / 2,
+          y: center.y - size.height / 2,
+        };
+        return acc;
+      }, {});
+
+      const bounds = component.reduce((acc, tableName) => {
+        const position = positions[tableName];
+        const size = sizeByTable[tableName];
+        return {
+          minX: Math.min(acc.minX, position.x),
+          minY: Math.min(acc.minY, position.y),
+          maxX: Math.max(acc.maxX, position.x + size.width),
+          maxY: Math.max(acc.maxY, position.y + size.height),
+        };
+      }, {
+        minX: Number.POSITIVE_INFINITY,
+        minY: Number.POSITIVE_INFINITY,
+        maxX: Number.NEGATIVE_INFINITY,
+        maxY: Number.NEGATIVE_INFINITY,
+      });
+
+      component.forEach((tableName) => {
+        positions[tableName] = {
+          x: positions[tableName].x - bounds.minX,
+          y: positions[tableName].y - bounds.minY,
+        };
+      });
+
+      return {
+        tableNames: component,
+        positions,
+        width: bounds.maxX - bounds.minX,
+        height: bounds.maxY - bounds.minY,
+      };
+    })
+    .sort((left, right) => (
+      right.tableNames.length - left.tableNames.length
+      || right.width - left.width
+    ));
+
+  const maxRowWidth = Math.max(AUTO_LAYOUT_MIN_WIDTH, availableWidth - AUTO_LAYOUT_PADDING_X * 2);
+  const finalPositions: Record<string, Point> = {};
+  let cursorX = AUTO_LAYOUT_PADDING_X;
+  let cursorY = AUTO_LAYOUT_PADDING_Y;
+  let rowHeight = 0;
+
+  componentLayouts.forEach((componentLayout) => {
+    if (cursorX > AUTO_LAYOUT_PADDING_X && cursorX + componentLayout.width > AUTO_LAYOUT_PADDING_X + maxRowWidth) {
+      cursorX = AUTO_LAYOUT_PADDING_X;
+      cursorY += rowHeight + AUTO_LAYOUT_COMPONENT_GAP_Y;
+      rowHeight = 0;
+    }
+
+    componentLayout.tableNames.forEach((tableName) => {
+      const position = componentLayout.positions[tableName];
+      finalPositions[tableName] = {
+        x: cursorX + position.x,
+        y: cursorY + position.y,
+      };
+    });
+
+    cursorX += componentLayout.width + AUTO_LAYOUT_COMPONENT_GAP_X;
+    rowHeight = Math.max(rowHeight, componentLayout.height);
+  });
+
+  return finalPositions;
+};
+
 export const DataSourceErEditor: React.FC = () => {
   const navigate = useNavigate();
   const { datasourceId = '' } = useParams<{ datasourceId: string }>();
@@ -208,6 +812,7 @@ export const DataSourceErEditor: React.FC = () => {
 
   const shellRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const cardBodyRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const interactionRef = useRef<CanvasInteraction>(null);
   const viewportRef = useRef<ViewportState>(DEFAULT_VIEWPORT);
 
@@ -233,6 +838,8 @@ export const DataSourceErEditor: React.FC = () => {
   viewportRef.current = viewport;
 
   const schemaTables = datasource?.schema_tables || EMPTY_TABLES;
+
+  const schemaTableMap = useMemo(() => new Map(schemaTables.map((table) => [table.table_name, table])), [schemaTables]);
 
   const columnIndexMap = useMemo(() => {
     const next = new Map<string, Map<string, number>>();
@@ -436,9 +1043,17 @@ export const DataSourceErEditor: React.FC = () => {
       return null;
     }
 
+    const rawY = tablePosition.y
+      + CARD_HEADER_HEIGHT
+      + FIELD_HEIGHT * columnIndex
+      - (cardScrollTop[tableName] || 0)
+      + FIELD_HEIGHT / 2;
+    const minVisibleY = tablePosition.y + CARD_HEADER_HEIGHT + FIELD_HEIGHT / 2;
+    const maxVisibleY = tablePosition.y + tableSize.height - FIELD_HEIGHT / 2;
+
     return {
       x: tablePosition.x + (side === 'right' ? tableSize.width : 0),
-      y: tablePosition.y + CARD_HEADER_HEIGHT + FIELD_HEIGHT * columnIndex - (cardScrollTop[tableName] || 0) + FIELD_HEIGHT / 2,
+      y: Math.min(maxVisibleY, Math.max(minVisibleY, rawY)),
     };
   }, [cardPositions, cardScrollTop, cardSizes, columnIndexMap]);
 
@@ -452,6 +1067,84 @@ export const DataSourceErEditor: React.FC = () => {
     y: (point.y - viewport.y) / viewport.scale,
   }), [viewport]);
 
+  const relationRouteMeta = useMemo(() => {
+    return visibleRelations.reduce<Map<string, {
+      orientation: 'horizontal' | 'vertical';
+      sourceCenter: Point;
+      targetCenter: Point;
+      sourceSide: TableEdge;
+      targetSide: TableEdge;
+    }>>((acc, relation) => {
+      const sourcePosition = cardPositions[relation.source_table];
+      const targetPosition = cardPositions[relation.target_table];
+      const sourceSize = cardSizes[relation.source_table] || normalizeCardSize();
+      const targetSize = cardSizes[relation.target_table] || normalizeCardSize();
+      if (!sourcePosition || !targetPosition) {
+        return acc;
+      }
+
+      const sourceCenter = getTableCenter(sourcePosition, sourceSize);
+      const targetCenter = getTableCenter(targetPosition, targetSize);
+      const route = getRelationRoute(sourceCenter, targetCenter);
+
+      acc.set(relation.id, {
+        ...route,
+        sourceCenter,
+        targetCenter,
+      });
+      return acc;
+    }, new Map());
+  }, [cardPositions, cardSizes, visibleRelations]);
+
+  const relationEndpointSlots = useMemo(() => {
+    const groupedEndpoints = new Map<string, Array<{
+      relationId: string;
+      role: 'source' | 'target';
+      axisValue: number;
+    }>>();
+
+    visibleRelations.forEach((relation) => {
+      const routeMeta = relationRouteMeta.get(relation.id);
+      if (!routeMeta) {
+        return;
+      }
+
+      const sourceKey = `${relation.source_table}:${routeMeta.sourceSide}`;
+      const targetKey = `${relation.target_table}:${routeMeta.targetSide}`;
+      const sourceEndpoints = groupedEndpoints.get(sourceKey) || [];
+      sourceEndpoints.push({
+        relationId: relation.id,
+        role: 'source',
+        axisValue: getRelationSlotAxisValue(routeMeta.sourceSide, routeMeta.targetCenter),
+      });
+      groupedEndpoints.set(sourceKey, sourceEndpoints);
+
+      const targetEndpoints = groupedEndpoints.get(targetKey) || [];
+      targetEndpoints.push({
+        relationId: relation.id,
+        role: 'target',
+        axisValue: getRelationSlotAxisValue(routeMeta.targetSide, routeMeta.sourceCenter),
+      });
+      groupedEndpoints.set(targetKey, targetEndpoints);
+    });
+
+    return Array.from(groupedEndpoints.values()).reduce<Map<string, RelationSlot>>((acc, endpoints) => {
+      [...endpoints]
+        .sort((left, right) => (
+          left.axisValue - right.axisValue
+          || left.relationId.localeCompare(right.relationId)
+          || left.role.localeCompare(right.role)
+        ))
+        .forEach((endpoint, index, orderedEndpoints) => {
+          acc.set(`${endpoint.relationId}:${endpoint.role}`, {
+            index,
+            total: orderedEndpoints.length,
+          });
+        });
+      return acc;
+    }, new Map());
+  }, [relationRouteMeta, visibleRelations]);
+
   const relationGeometry = useMemo(() => {
     return visibleRelations
       .map((relation) => {
@@ -459,41 +1152,50 @@ export const DataSourceErEditor: React.FC = () => {
         const targetPosition = cardPositions[relation.target_table];
         const sourceSize = cardSizes[relation.source_table] || normalizeCardSize();
         const targetSize = cardSizes[relation.target_table] || normalizeCardSize();
-        if (!sourcePosition || !targetPosition) {
+        const routeMeta = relationRouteMeta.get(relation.id);
+        if (!sourcePosition || !targetPosition || !routeMeta) {
           return null;
         }
 
-        const sourceCenterX = sourcePosition.x + sourceSize.width / 2;
-        const targetCenterX = targetPosition.x + targetSize.width / 2;
-        const sourceSide = sourceCenterX <= targetCenterX ? 'right' : 'left';
-        const targetSide = sourceCenterX <= targetCenterX ? 'left' : 'right';
-        const sourceAnchor = getFieldWorldAnchor(relation.source_table, relation.source_column, sourceSide);
-        const targetAnchor = getFieldWorldAnchor(relation.target_table, relation.target_column, targetSide);
-        if (!sourceAnchor || !targetAnchor) {
-          return null;
-        }
+        const sourceSlot = relationEndpointSlots.get(`${relation.id}:source`);
+        const targetSlot = relationEndpointSlots.get(`${relation.id}:target`);
+        const start = worldToCanvas(getDistributedTableEdgeAnchor(sourcePosition, sourceSize, routeMeta.sourceSide, sourceSlot));
+        const end = worldToCanvas(getDistributedTableEdgeAnchor(targetPosition, targetSize, routeMeta.targetSide, targetSlot));
+        const trunkBias = getRelationSlotBias(sourceSlot) + getRelationSlotBias(targetSlot);
+        const points = buildOrthogonalPolyline(start, end, routeMeta.orientation, trunkBias);
+        const midpoint = getPolylineMidpoint(points);
+        const cardinality = getCardinalitySymbols(relation.relation_type);
 
-        const start = worldToCanvas(sourceAnchor);
-        const end = worldToCanvas(targetAnchor);
         return {
           relation,
           start,
           end,
-          path: buildRelationPath(start, end),
-          midpoint: {
-            x: (start.x + end.x) / 2,
-            y: (start.y + end.y) / 2,
-          },
+          sourceSide: routeMeta.sourceSide,
+          targetSide: routeMeta.targetSide,
+          sourceMarker: getMarkerPosition(start, routeMeta.sourceSide),
+          targetMarker: getMarkerPosition(end, routeMeta.targetSide),
+          sourceCardinality: cardinality.source,
+          targetCardinality: cardinality.target,
+          path: buildPolylinePath(points),
+          midpoint: midpoint.point,
+          midpointAngle: midpoint.angle,
         };
       })
       .filter(Boolean) as Array<{
         relation: DataSourceRelation;
         start: Point;
         end: Point;
+        sourceSide: TableEdge;
+        targetSide: TableEdge;
+        sourceMarker: Point;
+        targetMarker: Point;
+        sourceCardinality: string;
+        targetCardinality: string;
         path: string;
         midpoint: Point;
+        midpointAngle: number;
       }>;
-  }, [cardPositions, cardSizes, getFieldWorldAnchor, visibleRelations, worldToCanvas]);
+  }, [cardPositions, cardSizes, relationEndpointSlots, relationRouteMeta, visibleRelations, worldToCanvas]);
 
   const linkPreview = useMemo(() => {
     if (interaction?.type !== 'link' || !linkPointer || !canvasRef.current) {
@@ -521,46 +1223,101 @@ export const DataSourceErEditor: React.FC = () => {
     }
 
     const start = worldToCanvas(sourceAnchor);
+    const previewOrientation = Math.abs(pointerOnCanvas.x - start.x) >= Math.abs(pointerOnCanvas.y - start.y)
+      ? 'horizontal'
+      : 'vertical';
+
     return {
       start,
       end: pointerOnCanvas,
-      path: buildRelationPath(start, pointerOnCanvas),
+      path: buildPolylinePath(buildOrthogonalPolyline(start, pointerOnCanvas, previewOrientation)),
     };
   }, [cardPositions, cardSizes, getFieldWorldAnchor, interaction, linkPointer, viewport.scale, viewport.x, viewport.y, worldToCanvas]);
 
-  const focusRelation = useCallback((relation: DataSourceRelation) => {
-    const sourcePosition = cardPositions[relation.source_table];
-    const targetPosition = cardPositions[relation.target_table];
-    if (!sourcePosition || !targetPosition || !canvasSize.width || !canvasSize.height) {
-      setActiveRelationId(relation.id);
+  const scrollFieldIntoView = useCallback((tableName: string, columnName: string) => {
+    const columnIndex = columnIndexMap.get(tableName)?.get(columnName);
+    const cardBody = cardBodyRefs.current[tableName];
+    const table = schemaTableMap.get(tableName);
+    if (columnIndex === undefined || !cardBody || !table) {
       return;
     }
 
-    const sourceSize = cardSizes[relation.source_table] || normalizeCardSize();
-    const targetSize = cardSizes[relation.target_table] || normalizeCardSize();
-    const sourceCenterX = sourcePosition.x + sourceSize.width / 2;
-    const targetCenterX = targetPosition.x + targetSize.width / 2;
-    const sourceSide = sourceCenterX <= targetCenterX ? 'right' : 'left';
-    const targetSide = sourceCenterX <= targetCenterX ? 'left' : 'right';
-    const sourceAnchor = getFieldWorldAnchor(relation.source_table, relation.source_column, sourceSide);
-    const targetAnchor = getFieldWorldAnchor(relation.target_table, relation.target_column, targetSide);
-    if (!sourceAnchor || !targetAnchor) {
-      setActiveRelationId(relation.id);
+    const cardSize = cardSizes[tableName] || normalizeCardSize();
+    const viewportHeight = cardBody.clientHeight || Math.max(MIN_CARD_HEIGHT - CARD_HEADER_HEIGHT, cardSize.height - CARD_HEADER_HEIGHT);
+    const currentScrollTop = cardBody.scrollTop || cardScrollTop[tableName] || 0;
+    const rowTop = columnIndex * FIELD_HEIGHT;
+    const rowBottom = rowTop + FIELD_HEIGHT;
+    const visibleBottom = currentScrollTop + viewportHeight;
+    if (rowTop >= currentScrollTop && rowBottom <= visibleBottom) {
       return;
     }
 
-    const midpoint = {
-      x: (sourceAnchor.x + targetAnchor.x) / 2,
-      y: (sourceAnchor.y + targetAnchor.y) / 2,
-    };
+    const maxScrollTop = Math.max(0, (table.columns || []).length * FIELD_HEIGHT - viewportHeight);
+    const nextScrollTop = clamp(rowTop - viewportHeight / 2 + FIELD_HEIGHT / 2, 0, maxScrollTop);
+    cardBody.scrollTop = nextScrollTop;
+    setCardScrollTop((current) => (
+      current[tableName] === nextScrollTop
+        ? current
+        : {
+            ...current,
+            [tableName]: nextScrollTop,
+          }
+    ));
+  }, [cardScrollTop, cardSizes, columnIndexMap, schemaTableMap]);
 
-    setViewport((current) => ({
-      ...current,
-      x: canvasSize.width / 2 - midpoint.x * current.scale,
-      y: canvasSize.height / 2 - midpoint.y * current.scale,
-    }));
+  const revealRelationFields = useCallback((relation: DataSourceRelation) => {
+    scrollFieldIntoView(relation.source_table, relation.source_column);
+    scrollFieldIntoView(relation.target_table, relation.target_column);
+  }, [scrollFieldIntoView]);
+
+  const activateRelation = useCallback((relation: DataSourceRelation, options?: { centerCanvas?: boolean }) => {
+    revealRelationFields(relation);
+
+    if (options?.centerCanvas) {
+      const sourcePosition = cardPositions[relation.source_table];
+      const targetPosition = cardPositions[relation.target_table];
+      if (sourcePosition && targetPosition && canvasSize.width && canvasSize.height) {
+        const sourceSize = cardSizes[relation.source_table] || normalizeCardSize();
+        const targetSize = cardSizes[relation.target_table] || normalizeCardSize();
+        const sourceCenter = getTableCenter(sourcePosition, sourceSize);
+        const targetCenter = getTableCenter(targetPosition, targetSize);
+        const midpoint = {
+          x: (sourceCenter.x + targetCenter.x) / 2,
+          y: (sourceCenter.y + targetCenter.y) / 2,
+        };
+
+        setViewport((current) => ({
+          ...current,
+          x: canvasSize.width / 2 - midpoint.x * current.scale,
+          y: canvasSize.height / 2 - midpoint.y * current.scale,
+        }));
+      }
+    }
+
     setActiveRelationId(relation.id);
-  }, [canvasSize.height, canvasSize.width, cardPositions, cardSizes, getFieldWorldAnchor]);
+  }, [canvasSize.height, canvasSize.width, cardPositions, cardSizes, revealRelationFields]);
+
+  const focusRelation = useCallback((relation: DataSourceRelation) => {
+    activateRelation(relation, { centerCanvas: true });
+  }, [activateRelation]);
+
+  const handleAutoLayout = useCallback(() => {
+    if (!schemaTables.length) {
+      return;
+    }
+
+    setCardPositions(buildAutoLayoutPositions(
+      schemaTables,
+      visibleRelations,
+      cardSizes,
+      canvasSize.width || AUTO_LAYOUT_MIN_WIDTH,
+    ));
+    setViewport(DEFAULT_VIEWPORT);
+    show({
+      message: visibleRelations.length ? '已按关系自动布局表卡' : '已按表清单重新整理布局',
+      type: 'success',
+    });
+  }, [canvasSize.width, cardSizes, schemaTables, show, visibleRelations]);
 
   const createManualRelation = useCallback(async (
     sourceTable: string,
@@ -591,7 +1348,7 @@ export const DataSourceErEditor: React.FC = () => {
       const relation = response.data?.relation;
       await reloadRelations();
       if (relation?.id) {
-        setActiveRelationId(relation.id);
+        activateRelation(relation);
       }
       show({
         message: `已建立关系 ${sourceTable}.${sourceColumn} -> ${targetTable}.${targetColumn}`,
@@ -605,7 +1362,7 @@ export const DataSourceErEditor: React.FC = () => {
     } finally {
       setCreatingRelation(false);
     }
-  }, [datasourceId, relations, reloadRelations, show]);
+  }, [activateRelation, datasourceId, relations, reloadRelations, show]);
 
   const finalizeLinkCreation = useCallback(async (
     clientX: number,
@@ -799,6 +1556,10 @@ export const DataSourceErEditor: React.FC = () => {
   };
 
   const handleCanvasWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!event.ctrlKey && !event.metaKey) {
+      return;
+    }
+
     event.preventDefault();
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) {
@@ -939,6 +1700,16 @@ export const DataSourceErEditor: React.FC = () => {
               </Button>
               <Button
                 size="sm"
+                variant="secondary"
+                icon={<LayoutGrid size={14} />}
+                onClick={handleAutoLayout}
+                disabled={!schemaTables.length}
+                data-testid="er-auto-layout-button"
+              >
+                自动布局
+              </Button>
+              <Button
+                size="sm"
                 variant="ghost"
                 icon={<Trash2 size={14} />}
                 onClick={() => activeRelation && handleDeleteRelation(activeRelation)}
@@ -982,13 +1753,23 @@ export const DataSourceErEditor: React.FC = () => {
             />
 
             <svg className="absolute inset-0 z-10 h-full w-full overflow-visible">
-              {relationGeometry.map(({ relation, path, start, end, midpoint }) => {
+              {relationGeometry.map(({
+                relation,
+                path,
+                sourceMarker,
+                targetMarker,
+                sourceCardinality,
+                targetCardinality,
+                midpoint,
+                midpointAngle,
+              }) => {
                 const isActive = relation.id === activeRelationId;
-                const strokeColor = isActive
-                  ? '#F59E0B'
-                  : relation.origin === 'MANUAL'
-                    ? '#F59E0B'
-                    : '#3B82F6';
+                const {
+                  strokeColor,
+                  markerFill,
+                  lineOpacity,
+                  lineWidth,
+                } = getRelationVisualStyle(relation, isActive);
                 return (
                   <g key={relation.id}>
                     <path
@@ -996,45 +1777,62 @@ export const DataSourceErEditor: React.FC = () => {
                       fill="none"
                       stroke="transparent"
                       strokeLinecap="round"
-                      strokeWidth={10}
+                      strokeLinejoin="round"
+                      strokeWidth={12}
                       style={{ pointerEvents: 'stroke' }}
                       className="cursor-pointer"
                       data-er-interactive="true"
-                      onClick={() => setActiveRelationId(relation.id)}
+                      data-testid={`er-relation-hit-${relation.id}`}
+                      onClick={() => activateRelation(relation)}
                     />
                     <path
                       d={path}
                       fill="none"
                       stroke={strokeColor}
                       strokeLinecap="round"
-                      strokeWidth={isActive ? 2.8 : 1.6}
-                      opacity={isActive ? 1 : 0.8}
+                      strokeLinejoin="round"
+                      strokeWidth={lineWidth}
+                      opacity={lineOpacity}
                       pointerEvents="none"
+                      data-testid={`er-relation-line-${relation.id}`}
                     />
-                    <circle cx={start.x} cy={start.y} r={2.75} fill={strokeColor} pointerEvents="none" />
-                    <circle cx={end.x} cy={end.y} r={2.75} fill={strokeColor} pointerEvents="none" />
                     <g
-                      transform={`translate(${midpoint.x}, ${midpoint.y - 13})`}
-                      className="cursor-pointer"
-                      data-er-interactive="true"
-                      onClick={() => setActiveRelationId(relation.id)}
+                      transform={`translate(${sourceMarker.x}, ${sourceMarker.y})`}
+                      pointerEvents="none"
+                      data-testid={`er-relation-cardinality-start-${relation.id}`}
                     >
-                      <rect
-                        x={-30}
-                        y={-9}
-                        width={60}
-                        height={18}
-                        rx={9}
-                        fill={isActive ? '#FEF3C7' : '#FFFFFF'}
-                        stroke={isActive ? '#F59E0B' : '#CBD5E1'}
-                      />
+                      <rect x={-9} y={-9} width={18} height={18} rx={4} fill={markerFill} stroke={strokeColor} />
                       <text
                         textAnchor="middle"
                         dominantBaseline="middle"
-                        className="fill-slate-700 text-[9px] font-semibold"
+                        className="fill-slate-700 text-[11px] font-semibold"
+                        style={{ fill: strokeColor }}
                       >
-                        {relationTypeLabels[relation.relation_type] || relation.relation_type}
+                        {sourceCardinality}
                       </text>
+                    </g>
+                    <g
+                      transform={`translate(${targetMarker.x}, ${targetMarker.y})`}
+                      pointerEvents="none"
+                      data-testid={`er-relation-cardinality-end-${relation.id}`}
+                    >
+                      <rect x={-9} y={-9} width={18} height={18} rx={4} fill={markerFill} stroke={strokeColor} />
+                      <text
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        className="fill-slate-700 text-[11px] font-semibold"
+                        style={{ fill: strokeColor }}
+                      >
+                        {targetCardinality}
+                      </text>
+                    </g>
+                    <g
+                      transform={`translate(${midpoint.x}, ${midpoint.y}) rotate(${midpointAngle})`}
+                      pointerEvents="none"
+                      data-testid={`er-relation-arrow-${relation.id}`}
+                    >
+                      <rect x={-10} y={-10} width={20} height={20} rx={5} fill={markerFill} stroke={strokeColor} />
+                      <path d="M -2.5 -4.5 L 4.5 0 L -2.5 4.5 Z" fill={strokeColor} />
                     </g>
                   </g>
                 );
@@ -1047,6 +1845,7 @@ export const DataSourceErEditor: React.FC = () => {
                   stroke="#F59E0B"
                   strokeDasharray="6 6"
                   strokeLinecap="round"
+                  strokeLinejoin="round"
                   strokeWidth={1.75}
                   opacity={0.95}
                   pointerEvents="none"
@@ -1095,6 +1894,9 @@ export const DataSourceErEditor: React.FC = () => {
                     </div>
 
                     <div
+                      ref={(element) => {
+                        cardBodyRefs.current[table.table_name] = element;
+                      }}
                       className="overflow-auto overscroll-contain pb-7"
                       style={{ height: bodyHeight }}
                       onScroll={(event) => handleCardBodyScroll(table.table_name, event)}
@@ -1102,9 +1904,20 @@ export const DataSourceErEditor: React.FC = () => {
                     >
                       {(table.columns || []).map((column) => {
                         const fieldKey = `${table.table_name}.${column.column_name}`;
-                        const isSourceField = interaction?.type === 'link'
+                        const isPendingSourceField = interaction?.type === 'link'
                           && interaction.sourceTable === table.table_name
                           && interaction.sourceColumn === column.column_name;
+                        const isActiveSourceField = activeRelation?.source_table === table.table_name
+                          && activeRelation.source_column === column.column_name;
+                        const isActiveTargetField = activeRelation?.target_table === table.table_name
+                          && activeRelation.target_column === column.column_name;
+                        const activeRelationRole = isActiveSourceField && isActiveTargetField
+                          ? 'both'
+                          : isActiveSourceField
+                            ? 'source'
+                            : isActiveTargetField
+                              ? 'target'
+                              : undefined;
                         const fieldSummary = [
                           column.data_type,
                           column.is_nullable ? '可空' : '非空',
@@ -1116,17 +1929,24 @@ export const DataSourceErEditor: React.FC = () => {
                             data-er-field-key={fieldKey}
                             data-table-name={table.table_name}
                             data-column-name={column.column_name}
+                            data-active-relation-role={activeRelationRole}
                             title={fieldSummary}
                             className={cn(
                               'flex h-[36px] items-center gap-2 border-b border-slate-100 px-3 last:border-b-0 dark:border-border-primary',
-                              isSourceField && 'bg-amber-50 dark:bg-amber-500/10',
+                              isPendingSourceField && 'bg-amber-50 dark:bg-amber-500/10',
+                              activeRelationRole === 'both' && 'bg-violet-50 ring-1 ring-inset ring-violet-200 dark:bg-violet-500/10 dark:ring-violet-400/30',
+                              activeRelationRole === 'source' && 'bg-amber-50 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:ring-amber-400/30',
+                              activeRelationRole === 'target' && 'bg-blue-50 ring-1 ring-inset ring-blue-200 dark:bg-blue-500/10 dark:ring-blue-400/30',
                             )}
                           >
                             <button
                               type="button"
                               className={cn(
                                 'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-500 transition hover:border-amber-300 hover:text-amber-600 dark:border-border-primary dark:bg-background-primary dark:text-foreground-tertiary',
-                                isSourceField && 'border-amber-300 bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
+                                isPendingSourceField && 'border-amber-300 bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
+                                activeRelationRole === 'both' && 'border-violet-300 bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300',
+                                activeRelationRole === 'source' && 'border-amber-300 bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
+                                activeRelationRole === 'target' && 'border-blue-300 bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
                               )}
                               onPointerDown={(event) => handleLinkPointerDown(event, table.table_name, column.column_name)}
                               aria-label={`从 ${fieldKey} 建立关系`}
@@ -1220,7 +2040,7 @@ export const DataSourceErEditor: React.FC = () => {
               </div>
               <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-600 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
                 <div className="font-semibold">操作说明</div>
-                <div className="mt-1">空白处拖动画布平移，滚轮缩放；表卡默认限高可滚动，右下角可拖动调整宽高。</div>
+                <div className="mt-1">空白处拖动画布平移，按住 Ctrl/⌘ 再滚轮缩放；可一键自动布局已连线表卡，点击关系线会自动滚动到对应字段。关系线颜色规则：自动识别为蓝色，手动创建为橙色，当前选中为紫色。</div>
               </div>
             </Card>
           )}
@@ -1251,6 +2071,7 @@ export const DataSourceErEditor: React.FC = () => {
 
                 {visibleRelations.map((relation) => {
                   const isActive = relation.id === activeRelationId;
+                  const relationListCardClassName = getRelationListItemClassName(relation, isActive);
                   return (
                     <div
                       key={relation.id}
@@ -1263,12 +2084,7 @@ export const DataSourceErEditor: React.FC = () => {
                           focusRelation(relation);
                         }
                       }}
-                      className={cn(
-                        'w-full rounded-2xl border px-3 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-banana-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900',
-                        isActive
-                          ? 'border-amber-300 bg-amber-50 shadow-sm'
-                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-border-primary dark:bg-background-primary dark:hover:bg-background-hover',
-                      )}
+                      className={relationListCardClassName}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
