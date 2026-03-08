@@ -685,7 +685,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
   },
 
   // 流式生成大纲（SSE，逐页渲染）
-  generateOutlineStream: async () => {
+  generateOutlineStream: async (lockPageCount?: boolean) => {
     const { currentProject } = get();
     if (!currentProject) return;
 
@@ -740,7 +740,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
           set({ error: normalizeErrorMessage(message), isOutlineStreaming: false });
           streamDone = true;
         },
-      });
+      }, undefined /* language */, lockPageCount);
 
       streamDone = true;
       await renderPromise;
