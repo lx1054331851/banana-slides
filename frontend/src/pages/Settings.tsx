@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, Key, Image, Zap, Save, RotateCcw, Globe, FileText, Brain, ArrowUp, HelpCircle } from 'lucide-react';
+import { Key, Image, Zap, Save, RotateCcw, Globe, FileText, Brain, ArrowUp, HelpCircle, RefreshCw } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 
 // 组件内翻译
 const settingsI18n = {
   zh: {
-    nav: { backToHome: '返回首页' },
+    nav: { back: '返回', home: '主页', refresh: '刷新', loading: '刷新中...' },
     settings: {
       title: "系统设置",
       subtitle: "配置应用的各项参数",
@@ -116,7 +116,7 @@ const settingsI18n = {
     }
   },
   en: {
-    nav: { backToHome: 'Back to Home' },
+    nav: { back: 'Back', home: 'Home', refresh: 'Refresh', loading: 'Refreshing...' },
     settings: {
       title: "Settings",
       subtitle: "Configure application parameters",
@@ -226,7 +226,7 @@ const settingsI18n = {
     }
   }
 };
-import { Button, Input, Card, Loading, useToast, useConfirm } from '@/components/shared';
+import { Button, Input, Card, Loading, PageHeader, PAGE_CONTAINER_CLASS, useToast, useConfirm } from '@/components/shared';
 import * as api from '@/api/endpoints';
 import type { OutputLanguage, ProviderProfileSummary } from '@/api/endpoints';
 import { OUTPUT_LANGUAGE_OPTIONS } from '@/api/endpoints';
@@ -396,7 +396,12 @@ const formDataFromSettings = (data: SettingsType): typeof initialFormData => ({
 });
 
 // Settings 组件 - 纯嵌入模式（可复用）
-export const Settings: React.FC = () => {
+interface SettingsProps {
+  refreshToken?: number;
+  onLoadingChange?: (loading: boolean) => void;
+}
+
+export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingChange }) => {
   const t = useT(settingsI18n);
   const { show, ToastContainer } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
@@ -560,11 +565,7 @@ export const Settings: React.FC = () => {
     },
   ];
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     setIsLoading(true);
     try {
       const [settingsResp, profilesResp] = await Promise.all([
@@ -586,7 +587,15 @@ export const Settings: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [show, t]);
+
+  useEffect(() => {
+    onLoadingChange?.(isLoading);
+  }, [isLoading, onLoadingChange]);
+
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings, refreshToken]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -1388,6 +1397,8 @@ export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const t = useT(settingsI18n);
   const [showTop, setShowTop] = useState(false);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [isSettingsLoading, setIsSettingsLoading] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setShowTop(window.scrollY > SCROLL_SHOW_THRESHOLD);
@@ -1395,35 +1406,53 @@ export const SettingsPage: React.FC = () => {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  const handleBack = useCallback(() => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate('/');
+  }, [navigate]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshToken((prev) => prev + 1);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-banana-50 dark:from-background-primary to-yellow-50 dark:to-background-primary">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <PageHeader
+        title={t('settings.title')}
+        icon={<Key size={18} />}
+        onBack={handleBack}
+        onHome={() => navigate('/')}
+        backLabel={t('nav.back')}
+        homeLabel={t('nav.home')}
+        actions={(
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<RefreshCw size={16} className={isSettingsLoading ? 'animate-spin' : ''} />}
+            onClick={handleRefresh}
+            disabled={isSettingsLoading}
+          >
+            {isSettingsLoading ? t('nav.loading') : t('nav.refresh')}
+          </Button>
+        )}
+      />
+
+      <main className={`${PAGE_CONTAINER_CLASS} py-6 md:py-8`}>
         <Card className="p-6 md:p-8">
           <div className="space-y-8">
-            {/* 顶部标题 */}
-            <div className="flex items-center justify-between pb-6 border-b border-gray-200 dark:border-border-primary">
-              <div className="flex items-center">
-                <Button
-                  variant="secondary"
-                  icon={<Home size={18} />}
-                  onClick={() => navigate('/')}
-                  className="mr-4"
-                >
-                  {t('nav.backToHome')}
-                </Button>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900 dark:text-foreground-primary">{t('settings.title')}</h1>
-                  <p className="text-sm text-gray-500 dark:text-foreground-tertiary mt-1">
-                    {t('settings.subtitle')}
-                  </p>
-                </div>
-              </div>
+            <div className="pb-6 border-b border-gray-200 dark:border-border-primary">
+              <p className="text-sm text-gray-500 dark:text-foreground-tertiary mt-1">
+                {t('settings.subtitle')}
+              </p>
             </div>
 
-            <Settings />
+            <Settings refreshToken={refreshToken} onLoadingChange={setIsSettingsLoading} />
           </div>
         </Card>
-      </div>
+      </main>
 
       {showTop && (
         <button

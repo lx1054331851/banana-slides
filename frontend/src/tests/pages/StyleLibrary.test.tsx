@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { StyleLibrary } from '@/pages/StyleLibrary';
 
-const { mockNavigate, mockListStyleTemplates, mockListStylePresets, mockDeleteStylePreset } = vi.hoisted(() => ({
+const { mockNavigate, mockListStyleTemplates, mockListStylePresets, mockListPresetTemplates, mockDeleteStylePreset } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockListStyleTemplates: vi.fn(async () => ({
     data: {
@@ -29,6 +29,9 @@ const { mockNavigate, mockListStyleTemplates, mockListStylePresets, mockDeleteSt
       ],
     },
   })),
+  mockListPresetTemplates: vi.fn(async () => ({
+    data: { templates: [] },
+  })),
   mockDeleteStylePreset: vi.fn(async () => ({ data: {} })),
 }));
 
@@ -43,9 +46,12 @@ vi.mock('react-router-dom', async () => {
 vi.mock('@/api/endpoints', () => ({
   listStyleTemplates: mockListStyleTemplates,
   listStylePresets: mockListStylePresets,
+  listPresetTemplates: mockListPresetTemplates,
   createStyleTemplate: vi.fn(async () => ({ data: null })),
+  uploadPresetTemplate: vi.fn(async () => ({ data: null })),
   deleteStyleTemplate: vi.fn(async () => ({ data: {} })),
   deleteStylePreset: mockDeleteStylePreset,
+  deletePresetTemplate: vi.fn(async () => ({ data: {} })),
 }));
 
 describe('StyleLibrary page', () => {
