@@ -22,7 +22,7 @@ load_dotenv(dotenv_path=_env_file, override=True)
 from flask import Flask
 from flask_cors import CORS
 from models import db
-from config import Config
+from config import Config, get_default_sqlalchemy_database_uri
 from controllers.material_controller import material_bp, material_global_bp
 from controllers.reference_file_controller import reference_file_bp
 from controllers.settings_controller import settings_bp
@@ -72,7 +72,7 @@ def create_app(load_settings_from_db=None):
     # Database URL resolution priority:
     # 1) DATABASE_URL (explicit, e.g. tests or external DB)
     # 2) Testing env (avoid touching local dev/prod DB during pytest runs)
-    # 3) Default local sqlite under backend/instance/database.db
+    # 3) Default branch-scoped sqlite under backend/instance/
     database_url = os.getenv('DATABASE_URL', '').strip()
     is_testing = (
         os.getenv('FLASK_ENV', '').strip().lower() == 'testing'
@@ -86,8 +86,7 @@ def create_app(load_settings_from_db=None):
         test_db_path = os.path.join(tempfile.gettempdir(), f'banana-slides-test-{os.getpid()}.db')
         app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{test_db_path}'
     else:
-        db_path = os.path.join(instance_dir, 'database.db')
-        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+        app.config['SQLALCHEMY_DATABASE_URI'] = get_default_sqlalchemy_database_uri()
     
     # Ensure upload folder exists
     project_root = os.path.dirname(backend_dir)
