@@ -9,7 +9,6 @@ const settingsI18n = {
     nav: { back: '返回', home: '主页', refresh: '刷新', loading: '刷新中...' },
     settings: {
       title: "系统设置",
-      subtitle: "配置应用的各项参数",
       sections: {
         appearance: "外观设置", language: "界面语言", apiConfig: "默认 API 配置",
         apiConfigDesc: "下方模型未单独指定提供商时，将使用此处的配置",
@@ -68,14 +67,6 @@ const settingsI18n = {
         perModelApiKeyDesc: "留空则保持当前设置不变",
         perModelApiKeySet: "已设置（长度: {{length}}）",
       },
-      apiKeyHelp: {
-        title: "如何获取 API 密钥",
-        step1: "前往 {{link}} 注册账号",
-        step2: "点击顶栏「充值」，根据需要充值一定的额度",
-        step3: "点击顶栏「密钥」",
-        step4: "点击「创建 key」生成新的 API Key",
-      },
-      apiKeyTip: { before: "若需快速配置或稳定高并发生图，可选择 ", after: "" },
       serviceTest: {
         title: "服务测试", description: "提前验证关键服务配置是否可用，避免使用期间异常。",
         tip: "提示：图像生成和 MinerU 测试可能需要 30-60 秒，请耐心等待。",
@@ -119,7 +110,6 @@ const settingsI18n = {
     nav: { back: 'Back', home: 'Home', refresh: 'Refresh', loading: 'Refreshing...' },
     settings: {
       title: "Settings",
-      subtitle: "Configure application parameters",
       sections: {
         appearance: "Appearance", language: "Interface Language", apiConfig: "Default API Configuration",
         apiConfigDesc: "Used as fallback when a model below has no provider specified",
@@ -178,14 +168,6 @@ const settingsI18n = {
         perModelApiKeyDesc: "Leave empty to keep current setting",
         perModelApiKeySet: "Set (length: {{length}})",
       },
-      apiKeyHelp: {
-        title: "How to get an API key",
-        step1: "Register at {{link}}",
-        step2: "Click \"Recharge\" in the top navigation bar and add credits as needed",
-        step3: "Click \"Keys\" in the top navigation bar",
-        step4: "Click \"Create Key\" to generate a new API Key",
-      },
-      apiKeyTip: { before: "For quick setup or stable high-concurrency image generation, get an API key from ", after: "" },
       serviceTest: {
         title: "Service Test", description: "Verify key service configurations before use to avoid issues.",
         tip: "Tip: Image generation and MinerU tests may take 30-60 seconds, please be patient.",
@@ -1290,44 +1272,6 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
                   )}
                 </div>
 
-                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
-                  <p className="text-sm text-gray-700 dark:text-foreground-secondary">
-                    {t('settings.apiKeyTip.before')}
-                    <a href={['https://', 'aihubmix', '.com/?', 'aff=17EC'].join('')} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline font-medium">AIHubmix 申请 API key</a>
-                  </p>
-                </div>
-
-                <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
-                  <p className="text-sm font-medium text-gray-800 dark:text-foreground-primary flex items-center gap-1.5 mb-2">
-                    <HelpCircle size={15} className="text-blue-500" />
-                    {t('settings.apiKeyHelp.title')}
-                  </p>
-                  <ol className="text-sm text-gray-700 dark:text-foreground-secondary space-y-1 list-decimal list-inside ml-1">
-                    <li>
-                      {t('settings.apiKeyHelp.step1', { link: '{{link}}' }).split('{{link}}')[0]}
-                      <span className="inline-flex items-center gap-2">
-                        <a
-                          href={['https://', 'aihubmix', '.com/?', 'aff=17EC'].join('')}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 underline font-medium"
-                        >
-                          点击此处访问 AIHubmix →
-                        </a>
-                        <button
-                          onClick={() => copyToClipboard('https://aihubmix.com/?aff=17EC')}
-                          className="text-xs px-2 py-0.5 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded transition-colors"
-                        >
-                          复制链接
-                        </button>
-                      </span>
-                      {t('settings.apiKeyHelp.step1', { link: '{{link}}' }).split('{{link}}')[1]}
-                    </li>
-                    <li>{t('settings.apiKeyHelp.step2')}</li>
-                    <li>{t('settings.apiKeyHelp.step3')}</li>
-                    <li>{t('settings.apiKeyHelp.step4')}</li>
-                  </ol>
-                </div>
               </>
             ),
           })}
@@ -1582,11 +1526,6 @@ export const SettingsPage: React.FC = () => {
       />
 
       <main className={`${PAGE_CONTAINER_CLASS} py-6 md:py-8`}>
-        <div className="mb-6 md:mb-8">
-          <p className="text-sm md:text-base text-gray-600 dark:text-foreground-tertiary">
-            {t('settings.subtitle')}
-          </p>
-        </div>
 
         <Settings refreshToken={refreshToken} onLoadingChange={setIsSettingsLoading} />
       </main>

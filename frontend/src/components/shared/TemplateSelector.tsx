@@ -15,7 +15,7 @@ import {
   type StylePresetPreviewImages,
 } from '@/api/endpoints';
 import { materialUrlToFile } from '@/components/shared/MaterialSelector';
-import { ImagePlus, X } from 'lucide-react';
+import { ImagePlus, Trash2 } from 'lucide-react';
 
 export type TemplateSource = 'user' | 'preset' | 'upload';
 
@@ -323,12 +323,12 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                     type="button"
                     onClick={(e) => void handleDeleteUserTemplate(template, e)}
                     disabled={deletingTemplateId === template.template_id}
-                    className={`absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow z-20 opacity-0 group-hover:opacity-100 transition-opacity ${
+                    className={`absolute top-2 right-2 w-8 h-8 bg-black/55 backdrop-blur-sm text-white rounded-full flex items-center justify-center shadow-md z-20 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100 transition-all duration-200 hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${
                       deletingTemplateId === template.template_id ? 'opacity-60 cursor-not-allowed' : ''
                     }`}
                     aria-label={t('template.deleteTemplate')}
                   >
-                    <X size={12} />
+                    <Trash2 size={15} />
                   </button>
                 )}
                 {selectedTemplateId === template.template_id && (
