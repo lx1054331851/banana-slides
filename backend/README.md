@@ -315,7 +315,7 @@ curl -X POST http://localhost:5000/api/projects/{project_id}/generate/outline \
 ## 常见问题
 
 ### Q: 数据库文件在哪里？
-A: 在 `backend/instance/database.db`，会自动创建。
+A: 默认在 `backend/instance/database-<当前分支>.db`，每个 Git 分支各用一份本地 SQLite；如需共享旧行为，可设置 `BRANCH_SCOPED_SQLITE_DB=false`。
 
 ### Q: 上传的文件存在哪里？
 A: 在 `uploads/{project_id}/` 目录下，按项目隔离。

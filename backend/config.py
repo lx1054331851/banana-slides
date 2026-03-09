@@ -1,7 +1,10 @@
 """
 Backend configuration file
 """
+import functools
 import os
+import re
+import subprocess
 import sys
 from datetime import timedelta
 
@@ -10,6 +13,53 @@ from datetime import timedelta
 _current_file = os.path.realpath(__file__)  # 使用realpath解析所有符号链接
 BASE_DIR = os.path.dirname(_current_file)
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
+_TRUE_VALUES = ('1', 'true', 'yes', 'y', 'on')
+
+
+@functools.lru_cache(maxsize=1)
+def _detect_git_branch(project_root: str) -> str:
+    namespace = os.getenv('BANANA_DB_NAMESPACE', '').strip()
+    if namespace:
+        return namespace
+
+    try:
+        completed = subprocess.run(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            cwd=project_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        branch = completed.stdout.strip()
+        if branch and branch != 'HEAD':
+            return branch
+    except Exception:
+        pass
+
+    return os.path.basename(project_root)
+
+
+def _slugify_db_namespace(raw: str) -> str:
+    slug = re.sub(r'[^A-Za-z0-9._-]+', '-', raw).strip('-.')
+    return slug or 'default'
+
+
+def get_default_sqlite_db_path() -> str:
+    instance_dir = os.path.join(BASE_DIR, 'instance')
+    os.makedirs(instance_dir, exist_ok=True)
+
+    use_branch_scoped_db = os.getenv('BRANCH_SCOPED_SQLITE_DB', 'true').strip().lower() in _TRUE_VALUES
+    filename = 'database.db'
+    if use_branch_scoped_db:
+        namespace = _slugify_db_namespace(_detect_git_branch(PROJECT_ROOT))
+        filename = f'database-{namespace}.db'
+
+    return os.path.join(instance_dir, filename)
+
+
+def get_default_sqlalchemy_database_uri() -> str:
+    return f'sqlite:///{get_default_sqlite_db_path()}'
+
 
 # Flask配置
 class Config:
@@ -18,10 +68,10 @@ class Config:
     
     # 数据库配置
     # Use absolute path to avoid WSL path issues
-    db_path = os.path.join(BASE_DIR, 'instance', 'database.db')
+    db_path = get_default_sqlite_db_path()
     SQLALCHEMY_DATABASE_URI = os.getenv(
-        'DATABASE_URL', 
-        f'sqlite:///{db_path}'
+        'DATABASE_URL',
+        get_default_sqlalchemy_database_uri()
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
