@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { StyleLibrary } from '@/pages/StyleLibrary';
 
-const { mockNavigate, mockListStyleTemplates, mockListStylePresets, mockListPresetTemplates, mockDeleteStylePreset } = vi.hoisted(() => ({
+const {
+  mockNavigate,
+  mockListStyleTemplates,
+  mockListStylePresets,
+  mockListPresetTemplates,
+  mockDeleteStyleTemplate,
+  mockDeleteStylePreset,
+} = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockListStyleTemplates: vi.fn(async () => ({
     data: {
@@ -32,6 +39,7 @@ const { mockNavigate, mockListStyleTemplates, mockListStylePresets, mockListPres
   mockListPresetTemplates: vi.fn(async () => ({
     data: { templates: [] },
   })),
+  mockDeleteStyleTemplate: vi.fn(async () => ({ data: {} })),
   mockDeleteStylePreset: vi.fn(async () => ({ data: {} })),
 }));
 
@@ -49,7 +57,7 @@ vi.mock('@/api/endpoints', () => ({
   listPresetTemplates: mockListPresetTemplates,
   createStyleTemplate: vi.fn(async () => ({ data: null })),
   uploadPresetTemplate: vi.fn(async () => ({ data: null })),
-  deleteStyleTemplate: vi.fn(async () => ({ data: {} })),
+  deleteStyleTemplate: mockDeleteStyleTemplate,
   deleteStylePreset: mockDeleteStylePreset,
   deletePresetTemplate: vi.fn(async () => ({ data: {} })),
 }));
@@ -112,21 +120,53 @@ describe('StyleLibrary page', () => {
     expect(screen.queryByTestId('style-library-preset-json-drawer')).not.toBeInTheDocument();
   });
 
-  it('keeps template right-panel JSON viewer behavior unchanged', async () => {
+  it('opens template JSON drawer only when clicking "View"', async () => {
     render(<StyleLibrary />);
 
-    expect(screen.queryByTestId('style-library-json-viewer')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('style-library-tab-templates'));
+    expect(screen.queryByTestId('style-library-template-json-drawer')).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByTestId('template-t1-view-json'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('style-library-template-json-drawer')).toBeInTheDocument();
+      expect(screen.getByTestId('style-library-template-json-drawer')).toHaveTextContent('{"template":1}');
+    });
+  });
+
+  it('clicking template row selects item but does not open JSON drawer', async () => {
+    render(<StyleLibrary />);
 
     fireEvent.click(screen.getByTestId('style-library-tab-templates'));
+    const row = await screen.findByTestId('template-row-t2');
+    fireEvent.click(within(row).getByRole('button', { name: /Template 2/i }));
+
+    expect(screen.queryByTestId('style-library-template-json-drawer')).not.toBeInTheDocument();
+  });
+
+  it('closes template JSON drawer with close button and Escape', async () => {
+    render(<StyleLibrary />);
+
+    fireEvent.click(screen.getByTestId('style-library-tab-templates'));
+    fireEvent.click(await screen.findByTestId('template-t1-view-json'));
     await waitFor(() => {
-      expect(screen.getByTestId('style-library-json-viewer')).toBeInTheDocument();
-      expect(screen.getByTestId('style-library-json-viewer')).toHaveTextContent('{"template":1}');
+      expect(screen.getByTestId('style-library-template-json-drawer')).toBeInTheDocument();
     });
 
-    const tplRow = screen.getByTestId('template-row-t2');
-    fireEvent.click(within(tplRow).getByRole('button', { name: /Template 2/i }));
+    fireEvent.click(screen.getByTestId('style-library-template-json-close'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('style-library-template-json-drawer')).not.toBeInTheDocument();
+    });
 
-    expect(screen.getByTestId('style-library-json-viewer')).toHaveTextContent('{"template":2}');
+    fireEvent.click(screen.getByTestId('template-t1-view-json'));
+    await waitFor(() => {
+      expect(screen.getByTestId('style-library-template-json-drawer')).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByTestId('style-library-template-json-drawer')).not.toBeInTheDocument();
+    });
   });
 
   it('closes preset JSON drawer with close button and Escape', async () => {
@@ -150,6 +190,34 @@ describe('StyleLibrary page', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => {
       expect(screen.queryByTestId('style-library-preset-json-drawer')).not.toBeInTheDocument();
+    });
+  });
+
+  it('closes template JSON drawer after deleting the selected template', async () => {
+    render(<StyleLibrary />);
+
+    fireEvent.click(screen.getByTestId('style-library-tab-templates'));
+    fireEvent.click(await screen.findByTestId('template-t1-view-json'));
+    await waitFor(() => {
+      expect(screen.getByTestId('style-library-template-json-drawer')).toBeInTheDocument();
+    });
+
+    const row = screen.getByTestId('template-row-t1');
+    fireEvent.click(within(row).getByRole('button', { name: /Delete|删除/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('dialog').length).toBeGreaterThan(1);
+    });
+    const confirmDialog = screen.getAllByRole('dialog').find((dialog) => (
+      within(dialog).queryByRole('button', { name: /Cancel|取消/i }) &&
+      within(dialog).queryByRole('button', { name: /Delete|删除/i })
+    ));
+    expect(confirmDialog).toBeTruthy();
+    fireEvent.click(within(confirmDialog as HTMLElement).getByRole('button', { name: /Delete|删除/i }));
+
+    await waitFor(() => {
+      expect(mockDeleteStyleTemplate).toHaveBeenCalledWith('t1');
+      expect(screen.queryByTestId('style-library-template-json-drawer')).not.toBeInTheDocument();
     });
   });
 

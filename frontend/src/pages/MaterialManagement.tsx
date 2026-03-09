@@ -1,14 +1,13 @@
 import React, { useCallback, useEffect, useReducer, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FolderOpen, ImageIcon, RefreshCw, Upload, Download, X, Eye, Sparkles } from 'lucide-react';
-import { Button, Card, PageHeader, PAGE_CONTAINER_CLASS, useToast } from '@/components/shared';
+import { FolderOpen, ImageIcon, RefreshCw, Upload, X, Eye, Sparkles, Clock3 } from 'lucide-react';
+import { Button, Card, ImageLightbox, PageHeader, PAGE_CONTAINER_CLASS, useToast } from '@/components/shared';
 import { useT } from '@/hooks/useT';
 import {
   listMaterials,
   uploadMaterial,
   listProjects,
   deleteMaterial,
-  downloadMaterialsZip,
   type Material,
 } from '@/api/endpoints';
 import type { Project } from '@/types';
@@ -26,7 +25,6 @@ const i18nDict = {
       generate: '生成素材',
       count: '共 {{count}} 个素材',
       empty: '暂无素材',
-      selected: '已选 {{count}} 个',
       filterAll: '全部素材',
       filterNone: '未关联项目',
       moreProjects: '+ 更多项目…',
@@ -35,6 +33,8 @@ const i18nDict = {
       closePreview: '关闭预览',
       emptyHint: '上传图片或通过素材生成功能创建素材',
       closeGenerator: '关闭生成面板',
+      pending: '待生成',
+      pendingHint: '任务已创建，生成完成后会自动出现在这里',
       msg: {
         loadErr: '加载素材失败',
         badFormat: '不支持的图片格式',
@@ -61,7 +61,6 @@ const i18nDict = {
       generate: 'Generate Material',
       count: '{{count}} materials',
       empty: 'No materials',
-      selected: '{{count}} selected',
       filterAll: 'All Materials',
       filterNone: 'Unassociated',
       moreProjects: '+ More projects…',
@@ -70,6 +69,8 @@ const i18nDict = {
       closePreview: 'Close Preview',
       emptyHint: 'Upload images or create materials via the generator',
       closeGenerator: 'Close generator panel',
+      pending: 'Pending',
+      pendingHint: 'Task created. The generated material will appear here automatically.',
       msg: {
         loadErr: 'Failed to load materials',
         badFormat: 'Unsupported image format',
@@ -90,7 +91,6 @@ const i18nDict = {
 
 interface State {
   items: Material[];
-  selected: Set<string>;
   deleting: Set<string>;
   loading: boolean;
   uploading: boolean;
@@ -99,14 +99,11 @@ interface State {
   projects: Project[];
   projectsReady: boolean;
   showAllProjects: boolean;
-  preview: { url: string; label: string } | null;
+  preview: { items: Array<{ src: string; title: string }>; initialIndex: number; label: string } | null;
 }
 
 type Action =
   | { type: 'SET_ITEMS'; items: Material[] }
-  | { type: 'TOGGLE_SELECT'; key: string }
-  | { type: 'SELECT_ALL'; keys: string[] }
-  | { type: 'CLEAR_SELECTION' }
   | { type: 'SET_LOADING'; on: boolean }
   | { type: 'SET_UPLOADING'; on: boolean }
   | { type: 'SET_DOWNLOADING'; on: boolean }
@@ -121,7 +118,6 @@ type Action =
 
 const initial: State = {
   items: [],
-  selected: new Set(),
   deleting: new Set(),
   loading: false,
   uploading: false,
@@ -137,19 +133,6 @@ function reducer(s: State, a: Action): State {
   switch (a.type) {
     case 'SET_ITEMS':
       return { ...s, items: a.items, loading: false };
-    case 'TOGGLE_SELECT': {
-      const next = new Set(s.selected);
-      if (next.has(a.key)) {
-        next.delete(a.key);
-      } else {
-        next.add(a.key);
-      }
-      return { ...s, selected: next };
-    }
-    case 'SELECT_ALL':
-      return { ...s, selected: new Set(a.keys) };
-    case 'CLEAR_SELECTION':
-      return { ...s, selected: new Set() };
     case 'SET_LOADING':
       return { ...s, loading: a.on };
     case 'SET_UPLOADING':
@@ -164,9 +147,7 @@ function reducer(s: State, a: Action): State {
       return { ...s, showAllProjects: true };
     case 'REMOVE_ITEM': {
       const items = s.items.filter((m) => m.id !== a.key);
-      const selected = new Set(s.selected);
-      selected.delete(a.key);
-      return { ...s, items, selected };
+      return { ...s, items };
     }
     case 'ADD_DELETING': {
       const d = new Set(s.deleting);
@@ -181,7 +162,7 @@ function reducer(s: State, a: Action): State {
     case 'SET_PREVIEW':
       return { ...s, preview: a.preview };
     case 'RESET_EPHEMERAL':
-      return { ...s, selected: new Set(), showAllProjects: false, preview: null };
+      return { ...s, showAllProjects: false, preview: null };
     default:
       return s;
   }
@@ -194,6 +175,19 @@ const displayName = (m: Material) =>
   m.source_filename?.trim() ||
   m.filename ||
   m.url;
+
+interface PendingMaterialItem {
+  id: string;
+  taskId: string;
+  prompt: string;
+  aspectRatio: string;
+  status: 'pending';
+}
+
+const isPendingMaterial = (item: Material | PendingMaterialItem): item is PendingMaterialItem =>
+  'status' in item && item.status === 'pending';
+
+const pendingItemLabel = (item: PendingMaterialItem) => item.prompt?.trim() || item.taskId;
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml'];
 
@@ -208,17 +202,13 @@ const ToolbarSection: React.FC<{
   dispatch: React.Dispatch<Action>;
   onRefresh: () => void;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onDownload: () => void;
   onGenerate: () => void;
-}> = ({ t, state, dispatch, onRefresh, onUpload, onDownload, onGenerate }) => (
+}> = ({ t, state, dispatch, onRefresh, onUpload, onGenerate }) => (
   <div className="space-y-2">
     <div className="flex items-center justify-between flex-wrap gap-2">
       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-foreground-tertiary">
         <FolderOpen size={16} className="text-banana-500" />
         <span>{state.items.length > 0 ? t('mg.count', { count: state.items.length }) : t('mg.empty')}</span>
-        {state.selected.size > 0 && (
-          <span className="ml-2 text-banana-600 font-medium">{t('mg.selected', { count: state.selected.size })}</span>
-        )}
         {state.loading && state.items.length > 0 && <RefreshCw size={14} className="animate-spin text-gray-400" />}
       </div>
 
@@ -268,55 +258,42 @@ const ToolbarSection: React.FC<{
       </div>
     </div>
 
-    {state.items.length > 0 && (
-      <div className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-background-primary rounded-lg">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() =>
-            state.selected.size === state.items.length
-              ? dispatch({ type: 'CLEAR_SELECTION' })
-              : dispatch({ type: 'SELECT_ALL', keys: state.items.map((m) => m.id) })
-          }
-        >
-          {state.selected.size === state.items.length ? t('common.deselectAll') : t('common.selectAll')}
-        </Button>
-        {state.selected.size > 0 && (
-          <>
-            <Button variant="ghost" size="sm" onClick={() => dispatch({ type: 'CLEAR_SELECTION' })}>
-              {t('common.clearSelection')}
-            </Button>
-            <div className="flex-1" />
-            <Button variant="primary" size="sm" icon={<Download size={16} />} onClick={onDownload} disabled={state.downloading}>
-              {state.downloading ? t('common.downloading') : `${t('common.download')} (${state.selected.size})`}
-            </Button>
-          </>
-        )}
-      </div>
-    )}
   </div>
 );
 
 const MaterialGrid: React.FC<{
-  items: Material[];
-  selected: Set<string>;
+  items: Array<Material | PendingMaterialItem>;
   deleting: Set<string>;
   t: ReturnType<typeof useT>;
-  onToggle: (id: string) => void;
   onPreview: (e: React.MouseEvent, m: Material) => void;
   onDelete: (e: React.MouseEvent<HTMLButtonElement>, m: Material) => void;
-}> = ({ items, selected, deleting, t, onToggle, onPreview, onDelete }) => (
+}> = ({ items, deleting, t, onPreview, onDelete }) => (
   <div className="grid grid-cols-4 gap-4 max-h-[70vh] overflow-y-auto p-4">
     {items.map((m) => {
-      const sel = selected.has(m.id);
+      if (isPendingMaterial(m)) {
+        return (
+          <div
+            key={m.id}
+            className="aspect-video rounded-lg border-2 border-dashed border-banana-300 bg-gradient-to-br from-banana-50 to-amber-50 dark:from-banana-900/20 dark:to-amber-900/10 relative overflow-hidden"
+          >
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+              <div className="w-12 h-12 rounded-full bg-white/80 dark:bg-white/10 flex items-center justify-center shadow-sm mb-3">
+                <Clock3 size={22} className="text-banana-600 animate-pulse" />
+              </div>
+              <div className="text-sm font-medium text-gray-800 dark:text-gray-100">{t('mg.pending')}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{pendingItemLabel(m)}</div>
+              <div className="text-[11px] text-banana-700 dark:text-banana-300 mt-2">{t('mg.pendingHint')}</div>
+            </div>
+          </div>
+        );
+      }
+
       const busy = deleting.has(m.id);
       return (
         <div
           key={m.id}
-          onClick={() => onToggle(m.id)}
-          className={`aspect-video rounded-lg border-2 cursor-pointer transition-all relative group ${
-            sel ? 'border-banana-500 ring-2 ring-banana-200' : 'border-gray-200 dark:border-border-primary hover:border-banana-300'
-          }`}
+          onClick={(e) => onPreview(e, m)}
+          className="aspect-video rounded-lg border-2 cursor-zoom-in transition-all relative group border-gray-200 dark:border-border-primary hover:border-banana-300 overflow-hidden"
         >
           <img src={getImageUrl(m.url)} alt={displayName(m)} className="absolute inset-0 w-full h-full object-cover rounded-md" />
 
@@ -339,12 +316,6 @@ const MaterialGrid: React.FC<{
             {busy ? <RefreshCw size={12} className="animate-spin" /> : <X size={12} />}
           </button>
 
-          {sel && (
-            <div className="absolute inset-0 bg-banana-500 bg-opacity-20 flex items-center justify-center rounded-md">
-              <div className="bg-banana-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">✓</div>
-            </div>
-          )}
-
           <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-1 truncate opacity-0 group-hover:opacity-100 transition-opacity rounded-b-md">
             {displayName(m)}
           </div>
@@ -354,33 +325,12 @@ const MaterialGrid: React.FC<{
   </div>
 );
 
-const PreviewOverlay: React.FC<{ url: string; label: string; t: ReturnType<typeof useT>; onClose: () => void }> = ({
-  url,
-  label,
-  t,
-  onClose,
-}) => (
-  <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60]" onClick={onClose}>
-    <div className="relative max-w-[90vw] max-h-[90vh]">
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute -top-10 right-0 text-white hover:text-gray-300 transition-colors"
-        aria-label={t('mg.closePreview')}
-      >
-        <X size={24} />
-      </button>
-      <img src={url} alt={label} className="max-w-full max-h-[85vh] object-contain rounded-lg" onClick={(e) => e.stopPropagation()} />
-      <div className="text-center text-white text-sm mt-2 truncate max-w-[90vw]">{label}</div>
-    </div>
-  </div>
-);
-
 export const MaterialManagement: React.FC = () => {
   const navigate = useNavigate();
   const t = useT(i18nDict);
   const { show, ToastContainer } = useToast();
   const [s, dispatch] = useReducer(reducer, initial);
+  const [pendingItems, setPendingItems] = useState<PendingMaterialItem[]>([]);
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
   const [isMobileView, setIsMobileView] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
 
@@ -472,47 +422,26 @@ export const MaterialManagement: React.FC = () => {
     }
   };
 
-  const handleDownload = async () => {
-    if (s.selected.size === 0) {
-      show({ message: t('mg.msg.pickFirst'), type: 'info' });
-      return;
-    }
-    const chosen = s.items.filter((m) => s.selected.has(m.id));
 
-    if (chosen.length === 1) {
-      try {
-        const blob = await fetch(getImageUrl(chosen[0].url)).then((r) => r.blob());
-        const href = URL.createObjectURL(blob);
-        const link = Object.assign(document.createElement('a'), {
-          href,
-          download: chosen[0].filename || 'material.png',
-        });
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(href);
-        show({ message: t('mg.msg.downloaded'), type: 'success' });
-      } catch {
-        show({ message: t('mg.msg.downloadErr'), type: 'error' });
-      }
-      return;
-    }
-
-    dispatch({ type: 'SET_DOWNLOADING', on: true });
-    try {
-      await downloadMaterialsZip(chosen.map((m) => m.id));
-      show({ message: t('mg.msg.zipped', { count: chosen.length }), type: 'success' });
-    } catch (err: any) {
-      show({ message: err?.response?.data?.error?.message || err.message || t('mg.msg.zipErr'), type: 'error' });
-    } finally {
-      dispatch({ type: 'SET_DOWNLOADING', on: false });
-    }
-  };
 
   const handlePreview = (e: React.MouseEvent, m: Material) => {
     e.stopPropagation();
-    dispatch({ type: 'SET_PREVIEW', preview: { url: getImageUrl(m.url), label: displayName(m) } });
+    const lightboxItems = displayItems
+      .filter((item): item is Material => !isPendingMaterial(item))
+      .map((item) => ({ src: getImageUrl(item.url), title: displayName(item) }));
+    const initialIndex = lightboxItems.findIndex((item) => item.src === getImageUrl(m.url));
+    dispatch({
+      type: 'SET_PREVIEW',
+      preview: {
+        items: lightboxItems,
+        initialIndex: initialIndex >= 0 ? initialIndex : 0,
+        label: displayName(m),
+      },
+    });
   };
+
+  const shouldShowPending = s.filter === 'all' || s.filter === 'none';
+  const displayItems = shouldShowPending ? [...pendingItems, ...s.items] : s.items;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-banana-50 dark:from-background-primary via-white dark:via-background-primary to-gray-50 dark:to-background-primary">
@@ -542,13 +471,13 @@ export const MaterialManagement: React.FC = () => {
         </div>
 
         <Card className="p-4 md:p-5 space-y-4">
-          <ToolbarSection t={t} state={s} dispatch={dispatch} onRefresh={fetchItems} onUpload={handleUpload} onDownload={handleDownload} onGenerate={() => setIsGeneratorOpen(true)} />
+          <ToolbarSection t={t} state={s} dispatch={dispatch} onRefresh={fetchItems} onUpload={handleUpload} onGenerate={() => setIsGeneratorOpen(true)} />
 
-          {s.loading && s.items.length === 0 ? (
+          {s.loading && displayItems.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-gray-400">{t('common.loading')}</div>
             </div>
-          ) : s.items.length === 0 ? (
+          ) : displayItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-gray-400 p-4">
               <ImageIcon size={48} className="mb-4 opacity-50" />
               <div className="text-sm">{t('mg.empty')}</div>
@@ -556,11 +485,9 @@ export const MaterialManagement: React.FC = () => {
             </div>
           ) : (
             <MaterialGrid
-              items={s.items}
-              selected={s.selected}
+              items={displayItems}
               deleting={s.deleting}
               t={t}
-              onToggle={(id) => dispatch({ type: 'TOGGLE_SELECT', key: id })}
               onPreview={handlePreview}
               onDelete={handleDelete}
             />
@@ -568,14 +495,13 @@ export const MaterialManagement: React.FC = () => {
         </Card>
       </main>
 
-      {s.preview && (
-        <PreviewOverlay
-          url={s.preview.url}
-          label={s.preview.label}
-          t={t}
-          onClose={() => dispatch({ type: 'SET_PREVIEW', preview: null })}
-        />
-      )}
+      <ImageLightbox
+        isOpen={Boolean(s.preview)}
+        title={s.preview?.label || t('mg.preview')}
+        items={s.preview?.items || []}
+        initialIndex={s.preview?.initialIndex || 0}
+        onClose={() => dispatch({ type: 'SET_PREVIEW', preview: null })}
+      />
 
       {isMobileView && isGeneratorOpen && (
         <div className="fixed inset-0 z-[70] bg-white dark:bg-background-secondary" role="dialog" aria-modal="true" aria-label={t('mg.generate')}>
@@ -591,7 +517,20 @@ export const MaterialManagement: React.FC = () => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
-              <MaterialGeneratorForm projectId={null} onGenerated={fetchItems} onClose={() => setIsGeneratorOpen(false)} />
+              <MaterialGeneratorForm
+                projectId={null}
+                onGenerated={(taskId) => {
+                  if (taskId) setPendingItems((items) => items.filter((item) => item.taskId !== taskId));
+                  void fetchItems();
+                }}
+                onTaskCreated={({ taskId, prompt, aspectRatio }) => {
+                  setPendingItems((items) => [
+                    { id: `pending-${taskId}`, taskId, prompt, aspectRatio, status: 'pending' },
+                    ...items.filter((item) => item.taskId !== taskId),
+                  ]);
+                }}
+                onClose={() => setIsGeneratorOpen(false)}
+              />
             </div>
           </div>
         </div>
@@ -623,7 +562,22 @@ export const MaterialManagement: React.FC = () => {
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 md:p-5">
-                {isGeneratorOpen && <MaterialGeneratorForm projectId={null} onGenerated={fetchItems} showCloseButton={false} />}
+                {isGeneratorOpen && (
+                  <MaterialGeneratorForm
+                    projectId={null}
+                    onGenerated={(taskId) => {
+                      if (taskId) setPendingItems((items) => items.filter((item) => item.taskId !== taskId));
+                      void fetchItems();
+                    }}
+                    onTaskCreated={({ taskId, prompt, aspectRatio }) => {
+                      setPendingItems((items) => [
+                        { id: `pending-${taskId}`, taskId, prompt, aspectRatio, status: 'pending' },
+                        ...items.filter((item) => item.taskId !== taskId),
+                      ]);
+                    }}
+                    showCloseButton={false}
+                  />
+                )}
               </div>
             </div>
           </div>

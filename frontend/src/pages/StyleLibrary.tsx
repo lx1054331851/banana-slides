@@ -22,6 +22,7 @@ import {
 
 type PreviewKey = 'cover_url' | 'toc_url' | 'detail_url' | 'ending_url';
 type StyleTab = 'templates' | 'presets' | 'presetTemplates';
+type JsonDrawerSource = 'templates' | 'presets';
 
 const styleLibraryI18n = {
   zh: {
@@ -33,49 +34,49 @@ const styleLibraryI18n = {
       loading: '加载中...',
     },
     tabs: {
-      templates: '风格模板骨架',
-      presets: '风格预设',
-      presetTemplates: '预设模板',
+      templates: 'JSON文本模版骨架',
+      presets: 'JSON文本模版',
+      presetTemplates: '图片模版',
     },
     templates: {
-      title: '风格模板骨架',
-      subtitle: '用于约束 AI 生成 style_json 的字段结构',
-      name: '模板名称（可选）',
-      json: '模板 JSON 骨架',
+      title: 'JSON文本模版骨架',
+      subtitle: '用于约束 AI 生成 JSON文本模版的字段结构',
+      name: '模版名称（可选）',
+      json: 'JSON文本模版骨架',
       jsonHint: '必须是合法 JSON',
-      save: '保存模板',
+      save: '保存模版',
       list: '已保存骨架',
-      empty: '暂无模板骨架',
+      empty: '暂无JSON文本模版骨架',
       view: '查看',
       delete: '删除',
-      deleteConfirm: '将删除该风格模板骨架，此操作不可撤销。确定继续？',
-      saved: '模板骨架已保存',
-      deleted: '模板骨架已删除',
+      deleteConfirm: '将删除该JSON文本模版骨架，此操作不可撤销。确定继续？',
+      saved: 'JSON文本模版骨架已保存',
+      deleted: 'JSON文本模版骨架已删除',
       invalidJson: 'JSON 解析失败',
-      jsonRequired: '请先输入模板 JSON 骨架',
-      noSelection: '请选择一个模板查看 JSON',
+      jsonRequired: '请先输入JSON文本模版骨架',
+      noSelection: '请选择一个JSON文本模版骨架查看 JSON',
     },
     presetTemplates: {
-      title: '预设模板',
-      subtitle: '用于首页模板选择的图像预设库',
-      name: '模板名称（可选）',
-      upload: '上传预设模板',
-      empty: '暂无预设模板',
+      title: '图片模版',
+      subtitle: '用于首页模板选择的图片模版库',
+      name: '模版名称（可选）',
+      upload: '上传图片模版',
+      empty: '暂无图片模版',
       delete: '删除',
-      uploaded: '预设模板已上传',
-      deleted: '预设模板已删除',
-      deleteConfirm: '将删除该预设模板，此操作不可撤销。确定继续？',
+      uploaded: '图片模版已上传',
+      deleted: '图片模版已删除',
+      deleteConfirm: '将删除该图片模版，此操作不可撤销。确定继续？',
     },
     presets: {
-      title: '风格预设',
+      title: 'JSON文本模版',
       subtitle: '可直接应用到项目的 style_json + 4 张预览图',
-      empty: '暂无风格预设',
+      empty: '暂无JSON文本模版',
       viewJson: '查看 JSON',
       preview: '预览',
       delete: '删除',
-      deleteConfirm: '将删除该风格预设，此操作不可撤销。确定继续？',
-      deleted: '风格预设已删除',
-      noSelection: '请选择一个风格预设查看 JSON',
+      deleteConfirm: '将删除该JSON文本模版，此操作不可撤销。确定继续？',
+      deleted: 'JSON文本模版已删除',
+      noSelection: '请选择一个JSON文本模版查看 JSON',
       noPreview: '无预览',
       labels: {
         cover: '封面',
@@ -85,8 +86,8 @@ const styleLibraryI18n = {
       },
     },
     jsonViewer: {
-      titleTemplate: '模板 JSON 预览',
-      titlePreset: '预设 style_json',
+      titleTemplate: 'JSON文本模版骨架预览',
+      titlePreset: 'JSON文本模版预览',
       copy: '复制',
       copySuccess: 'JSON 已复制',
       copyFailed: '复制失败',
@@ -107,49 +108,49 @@ const styleLibraryI18n = {
       loading: 'Loading...',
     },
     tabs: {
-      templates: 'Style Template Skeletons',
-      presets: 'Style Presets',
-      presetTemplates: 'Preset Templates',
+      templates: 'JSON Text Template Skeletons',
+      presets: 'JSON Text Templates',
+      presetTemplates: 'Image Templates',
     },
     templates: {
-      title: 'Style Template Skeletons',
-      subtitle: 'JSON skeletons used to constrain AI style_json structure',
+      title: 'JSON Text Template Skeletons',
+      subtitle: 'JSON skeletons used to constrain AI-generated JSON text template structure',
       name: 'Template name (optional)',
-      json: 'Template JSON skeleton',
+      json: 'JSON text template skeleton',
       jsonHint: 'Must be valid JSON',
       save: 'Save Template',
       list: 'Saved Skeletons',
-      empty: 'No style template skeletons',
+      empty: 'No JSON text template skeletons',
       view: 'View',
       delete: 'Delete',
-      deleteConfirm: 'This will permanently delete this style template skeleton. Continue?',
-      saved: 'Style template skeleton saved',
-      deleted: 'Style template skeleton deleted',
+      deleteConfirm: 'This will permanently delete this JSON text template skeleton. Continue?',
+      saved: 'JSON text template skeleton saved',
+      deleted: 'JSON text template skeleton deleted',
       invalidJson: 'Invalid JSON',
-      jsonRequired: 'Please enter template JSON skeleton first',
-      noSelection: 'Select a template to view JSON',
+      jsonRequired: 'Please enter a JSON text template skeleton first',
+      noSelection: 'Select a JSON text template skeleton to view JSON',
     },
     presetTemplates: {
-      title: 'Preset Templates',
-      subtitle: 'Image template presets used by the home template selector',
+      title: 'Image Templates',
+      subtitle: 'Image template library used by the home template selector',
       name: 'Template name (optional)',
-      upload: 'Upload Preset Template',
-      empty: 'No preset templates',
+      upload: 'Upload Image Template',
+      empty: 'No image templates',
       delete: 'Delete',
-      uploaded: 'Preset template uploaded',
-      deleted: 'Preset template deleted',
-      deleteConfirm: 'This will permanently delete this preset template. Continue?',
+      uploaded: 'Image template uploaded',
+      deleted: 'Image template deleted',
+      deleteConfirm: 'This will permanently delete this image template. Continue?',
     },
     presets: {
-      title: 'Style Presets',
+      title: 'JSON Text Templates',
       subtitle: 'Directly applicable style_json with 4 preview images',
-      empty: 'No style presets',
+      empty: 'No JSON text templates',
       viewJson: 'View JSON',
       preview: 'Preview',
       delete: 'Delete',
-      deleteConfirm: 'This will permanently delete this style preset. Continue?',
-      deleted: 'Style preset deleted',
-      noSelection: 'Select a style preset to view JSON',
+      deleteConfirm: 'This will permanently delete this JSON text template. Continue?',
+      deleted: 'JSON text template deleted',
+      noSelection: 'Select a JSON text template to view JSON',
       noPreview: 'No preview',
       labels: {
         cover: 'Cover',
@@ -159,8 +160,8 @@ const styleLibraryI18n = {
       },
     },
     jsonViewer: {
-      titleTemplate: 'Template JSON',
-      titlePreset: 'Preset style_json',
+      titleTemplate: 'JSON Text Template Skeleton',
+      titlePreset: 'JSON Text Template',
       copy: 'Copy',
       copySuccess: 'JSON copied',
       copyFailed: 'Copy failed',
@@ -211,9 +212,10 @@ export const StyleLibrary: React.FC = () => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [selectedPresetId, setSelectedPresetId] = useState<string>('');
   const [selectedPresetTemplateId, setSelectedPresetTemplateId] = useState<string>('');
-  const [isPresetJsonDrawerOpen, setIsPresetJsonDrawerOpen] = useState(false);
-  const [isPresetJsonDrawerVisible, setIsPresetJsonDrawerVisible] = useState(false);
-  const [isPresetJsonDrawerAnimating, setIsPresetJsonDrawerAnimating] = useState(false);
+  const [jsonDrawerSource, setJsonDrawerSource] = useState<JsonDrawerSource | null>(null);
+  const [isJsonDrawerOpen, setIsJsonDrawerOpen] = useState(false);
+  const [isJsonDrawerVisible, setIsJsonDrawerVisible] = useState(false);
+  const [isJsonDrawerAnimating, setIsJsonDrawerAnimating] = useState(false);
 
   const [previewModal, setPreviewModal] = useState<{
     title: string;
@@ -230,9 +232,24 @@ export const StyleLibrary: React.FC = () => {
     [presets, selectedPresetId]
   );
 
-  const viewerJsonText = activeTab === 'templates'
+  const viewerJsonText = jsonDrawerSource === 'templates'
     ? (selectedTemplate?.template_json || '')
-    : (activeTab === 'presets' ? (selectedPreset?.style_json || '') : '');
+    : (jsonDrawerSource === 'presets' ? (selectedPreset?.style_json || '') : '');
+  const jsonDrawerTitle = jsonDrawerSource === 'templates'
+    ? t('jsonViewer.titleTemplate')
+    : t('jsonViewer.titlePreset');
+  const jsonDrawerSubtitle = jsonDrawerSource === 'templates'
+    ? (selectedTemplate?.name || selectedTemplate?.id || '')
+    : (selectedPreset?.name || selectedPreset?.id || '');
+  const jsonDrawerEmptyText = jsonDrawerSource === 'templates'
+    ? t('templates.noSelection')
+    : t('presets.noSelection');
+  const jsonDrawerTestId = jsonDrawerSource === 'templates'
+    ? 'style-library-template-json-drawer'
+    : 'style-library-preset-json-drawer';
+  const jsonDrawerCloseTestId = jsonDrawerSource === 'templates'
+    ? 'style-library-template-json-close'
+    : 'style-library-preset-json-close';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -240,17 +257,18 @@ export const StyleLibrary: React.FC = () => {
   }, [activeTab]);
 
   useEffect(() => {
-    if (activeTab !== 'presets') {
-      setIsPresetJsonDrawerOpen(false);
+    if (!isJsonDrawerOpen || !jsonDrawerSource) return;
+    if (activeTab !== jsonDrawerSource) {
+      setIsJsonDrawerOpen(false);
     }
-  }, [activeTab]);
+  }, [activeTab, isJsonDrawerOpen, jsonDrawerSource]);
 
   useEffect(() => {
-    if (isPresetJsonDrawerOpen) {
-      setIsPresetJsonDrawerVisible(true);
+    if (isJsonDrawerOpen) {
+      setIsJsonDrawerVisible(true);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          setIsPresetJsonDrawerAnimating(true);
+          setIsJsonDrawerAnimating(true);
         });
       });
 
@@ -261,32 +279,39 @@ export const StyleLibrary: React.FC = () => {
       };
     }
 
-    setIsPresetJsonDrawerAnimating(false);
+    setIsJsonDrawerAnimating(false);
     const timer = window.setTimeout(() => {
-      setIsPresetJsonDrawerVisible(false);
+      setIsJsonDrawerVisible(false);
     }, 220);
     document.body.style.overflow = '';
     return () => window.clearTimeout(timer);
-  }, [isPresetJsonDrawerOpen]);
+  }, [isJsonDrawerOpen]);
 
   useEffect(() => {
-    if (!isPresetJsonDrawerOpen) return;
+    if (!isJsonDrawerOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setIsPresetJsonDrawerOpen(false);
+        setIsJsonDrawerOpen(false);
       }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [isPresetJsonDrawerOpen]);
+  }, [isJsonDrawerOpen]);
+
+  const openTemplateJsonDrawer = useCallback((templateId: string) => {
+    setSelectedTemplateId(templateId);
+    setJsonDrawerSource('templates');
+    setIsJsonDrawerOpen(true);
+  }, []);
 
   const openPresetJsonDrawer = useCallback((presetId: string) => {
     setSelectedPresetId(presetId);
-    setIsPresetJsonDrawerOpen(true);
+    setJsonDrawerSource('presets');
+    setIsJsonDrawerOpen(true);
   }, []);
 
-  const closePresetJsonDrawer = useCallback(() => {
-    setIsPresetJsonDrawerOpen(false);
+  const closeJsonDrawer = useCallback(() => {
+    setIsJsonDrawerOpen(false);
   }, []);
 
   const loadAll = async () => {
@@ -411,6 +436,7 @@ export const StyleLibrary: React.FC = () => {
         setDeletingTemplateId(template.id);
         try {
           await deleteStyleTemplate(template.id);
+          const shouldCloseDrawer = isJsonDrawerOpen && jsonDrawerSource === 'templates' && selectedTemplateId === template.id;
           setTemplates((prev) => {
             const next = prev.filter((item) => item.id !== template.id);
             setSelectedTemplateId((selected) => {
@@ -419,6 +445,9 @@ export const StyleLibrary: React.FC = () => {
             });
             return next;
           });
+          if (shouldCloseDrawer) {
+            setIsJsonDrawerOpen(false);
+          }
           show({ message: t('templates.deleted'), type: 'success' });
         } catch (error: any) {
           show({
@@ -469,7 +498,7 @@ export const StyleLibrary: React.FC = () => {
         setDeletingPresetId(preset.id);
         try {
           await deleteStylePreset(preset.id);
-          const shouldCloseDrawer = isPresetJsonDrawerOpen && selectedPresetId === preset.id;
+          const shouldCloseDrawer = isJsonDrawerOpen && jsonDrawerSource === 'presets' && selectedPresetId === preset.id;
           setPresets((prev) => {
             const next = prev.filter((item) => item.id !== preset.id);
             setSelectedPresetId((selected) => {
@@ -479,7 +508,7 @@ export const StyleLibrary: React.FC = () => {
             return next;
           });
           if (shouldCloseDrawer) {
-            setIsPresetJsonDrawerOpen(false);
+            setIsJsonDrawerOpen(false);
           }
           show({ message: t('presets.deleted'), type: 'success' });
         } catch (error: any) {
@@ -542,12 +571,24 @@ export const StyleLibrary: React.FC = () => {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
+              onClick={() => setActiveTab('presetTemplates')}
+              data-testid="style-library-tab-preset-templates"
+              className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                activeTab === 'presetTemplates'
+                  ? 'bg-banana-500 text-black'
+                  : 'text-black hover:bg-gray-100 dark:hover:bg-background-hover'
+              }`}
+            >
+              {t('tabs.presetTemplates')}
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('presets')}
               data-testid="style-library-tab-presets"
               className={`px-4 py-2 text-sm rounded-lg transition-colors ${
                 activeTab === 'presets'
-                  ? 'bg-banana-500 text-white'
-                  : 'text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'
+                  ? 'bg-banana-500 text-black'
+                  : 'text-black hover:bg-gray-100 dark:hover:bg-background-hover'
               }`}
             >
               {t('tabs.presets')}
@@ -558,28 +599,16 @@ export const StyleLibrary: React.FC = () => {
               data-testid="style-library-tab-templates"
               className={`px-4 py-2 text-sm rounded-lg transition-colors ${
                 activeTab === 'templates'
-                  ? 'bg-banana-500 text-white'
-                  : 'text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'
+                  ? 'bg-banana-500 text-black'
+                  : 'text-black hover:bg-gray-100 dark:hover:bg-background-hover'
               }`}
             >
               {t('tabs.templates')}
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('presetTemplates')}
-              data-testid="style-library-tab-preset-templates"
-              className={`px-4 py-2 text-sm rounded-lg transition-colors ${
-                activeTab === 'presetTemplates'
-                  ? 'bg-banana-500 text-white'
-                  : 'text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'
-              }`}
-            >
-              {t('tabs.presetTemplates')}
-            </button>
           </div>
         </Card>
 
-        <div className={activeTab === 'templates' ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4 items-start' : ''}>
+        <div>
           <div className="space-y-4">
             {activeTab === 'templates' ? (
               <Card className="p-4 md:p-5 space-y-4" data-testid="style-library-templates-panel">
@@ -634,7 +663,12 @@ export const StyleLibrary: React.FC = () => {
                               {tpl.name || tpl.id}
                             </button>
                             <div className="flex items-center gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => setSelectedTemplateId(tpl.id)}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openTemplateJsonDrawer(tpl.id)}
+                                data-testid={`template-${tpl.id}-view-json`}
+                              >
                                 {t('templates.view')}
                               </Button>
                               <Button
@@ -830,67 +864,37 @@ export const StyleLibrary: React.FC = () => {
               </Card>
             )}
           </div>
-
-          {activeTab === 'templates' ? (
-            <Card className="p-4 md:p-5 h-fit sticky top-20" data-testid="style-library-json-viewer">
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <div className="text-sm font-medium text-gray-800 dark:text-white">
-                  {t('jsonViewer.titleTemplate')}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={<Copy size={14} />}
-                  onClick={() => void handleCopyJson()}
-                  disabled={!viewerJsonText}
-                >
-                  {t('jsonViewer.copy')}
-                </Button>
-              </div>
-              {viewerJsonText ? (
-                <div className="rounded-lg border border-gray-200 dark:border-border-primary bg-gray-50 dark:bg-background-tertiary max-h-[70vh] overflow-auto">
-                  <pre className="p-3 text-xs font-mono whitespace-pre text-gray-800 dark:text-white">
-                    {viewerJsonText}
-                  </pre>
-                </div>
-              ) : (
-                <div className="text-xs text-gray-500 dark:text-foreground-tertiary">
-                  {t('templates.noSelection')}
-                </div>
-              )}
-            </Card>
-          ) : null}
         </div>
       </main>
 
-      {activeTab === 'presets' && isPresetJsonDrawerVisible && typeof document !== 'undefined'
+      {isJsonDrawerVisible && typeof document !== 'undefined'
         ? createPortal(
-            <div className="fixed inset-0 z-50" aria-hidden={!isPresetJsonDrawerOpen}>
+            <div className="fixed inset-0 z-50" aria-hidden={!isJsonDrawerOpen}>
               <button
                 type="button"
                 className={`absolute inset-0 bg-black/45 backdrop-blur-sm transition-opacity duration-200 ${
-                  isPresetJsonDrawerAnimating ? 'opacity-100' : 'opacity-0'
+                  isJsonDrawerAnimating ? 'opacity-100' : 'opacity-0'
                 }`}
-                onClick={closePresetJsonDrawer}
-                aria-label="close preset json drawer backdrop"
+                onClick={closeJsonDrawer}
+                aria-label="close json drawer backdrop"
               />
 
               <div
                 role="dialog"
                 aria-modal="true"
-                data-testid="style-library-preset-json-drawer"
+                data-testid={jsonDrawerTestId}
                 className={`absolute flex flex-col bg-white dark:bg-background-secondary border border-gray-200 dark:border-border-primary shadow-2xl transition-transform duration-200 ease-out
                   left-0 right-0 bottom-0 max-h-[80vh] rounded-t-2xl
                   md:left-auto md:right-0 md:top-0 md:bottom-0 md:w-[min(720px,90vw)] md:max-h-none md:rounded-none md:rounded-l-2xl
-                  ${isPresetJsonDrawerAnimating ? 'translate-y-0 md:translate-y-0 md:translate-x-0' : 'translate-y-full md:translate-y-0 md:translate-x-full'}`}
+                  ${isJsonDrawerAnimating ? 'translate-y-0 md:translate-y-0 md:translate-x-0' : 'translate-y-full md:translate-y-0 md:translate-x-full'}`}
               >
                 <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 dark:border-border-primary">
                   <div className="min-w-0">
                     <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {t('jsonViewer.titlePreset')}
+                      {jsonDrawerTitle}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-foreground-tertiary truncate">
-                      {selectedPreset?.name || selectedPreset?.id || ''}
+                      {jsonDrawerSubtitle}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
@@ -905,10 +909,10 @@ export const StyleLibrary: React.FC = () => {
                     </Button>
                     <button
                       type="button"
-                      onClick={closePresetJsonDrawer}
-                      data-testid="style-library-preset-json-close"
+                      onClick={closeJsonDrawer}
+                      data-testid={jsonDrawerCloseTestId}
                       className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-gray-200 dark:border-border-primary text-gray-500 dark:text-foreground-tertiary hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-background-hover transition-colors"
-                      aria-label="close preset json drawer"
+                      aria-label="close json drawer"
                     >
                       <X size={16} />
                     </button>
@@ -925,7 +929,7 @@ export const StyleLibrary: React.FC = () => {
                   </div>
                 ) : (
                   <div className="p-4 text-xs text-gray-500 dark:text-foreground-tertiary">
-                    {t('presets.noSelection')}
+                    {jsonDrawerEmptyText}
                   </div>
                 )}
               </div>

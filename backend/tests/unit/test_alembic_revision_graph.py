@@ -51,4 +51,3 @@ def test_migration_graph_has_single_head():
 
     heads = sorted(revisions - referenced_down_revisions)
     assert len(heads) == 1, f'expected exactly one Alembic head, found: {heads}'
-

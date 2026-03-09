@@ -47,7 +47,7 @@ interface MaterialGeneratorModalProps {
   projectId?: string | null;
   isOpen: boolean;
   onClose: () => void;
-  onGenerated?: () => void;
+  onGenerated?: (taskId?: string) => void;
 }
 
 export const MaterialGeneratorModal: React.FC<MaterialGeneratorModalProps> = ({

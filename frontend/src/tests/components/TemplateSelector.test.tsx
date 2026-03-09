@@ -3,8 +3,9 @@ import { useState } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { TemplateSelector } from '@/components/shared/TemplateSelector';
 
-const { mockListUserTemplates, mockListStylePresets } = vi.hoisted(() => ({
+const { mockListUserTemplates, mockListPresetTemplates, mockListStylePresets } = vi.hoisted(() => ({
   mockListUserTemplates: vi.fn(async () => ({ data: { templates: [] } })),
+  mockListPresetTemplates: vi.fn(async () => ({ data: { templates: [] } })),
   mockListStylePresets: vi.fn(async () => ({
     data: {
       presets: [
@@ -20,6 +21,7 @@ const { mockListUserTemplates, mockListStylePresets } = vi.hoisted(() => ({
 
 vi.mock('@/api/endpoints', () => ({
   listUserTemplates: mockListUserTemplates,
+  listPresetTemplates: mockListPresetTemplates,
   listStylePresets: mockListStylePresets,
   uploadUserTemplate: vi.fn(async () => ({ data: null })),
   deleteUserTemplate: vi.fn(async () => ({ data: {} })),
