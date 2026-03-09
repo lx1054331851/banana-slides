@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ImageIcon, RefreshCw, Upload, Sparkles, X } from 'lucide-react';
+import { ImageIcon, RefreshCw, Upload, Sparkles, Trash2 } from 'lucide-react';
 import { Button, useToast, Modal } from '@/components/shared';
 import { useT } from '@/hooks/useT';
 import { listMaterials, uploadMaterial, listProjects, deleteMaterial, type Material } from '@/api/endpoints';
@@ -387,10 +387,10 @@ export const MaterialSelector: React.FC<MaterialSelectorProps> = ({
                     type="button"
                     onClick={(e) => handleDeleteMaterial(e, material)}
                     disabled={isDeleting}
-                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow z-10 disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="absolute top-2 right-2 w-8 h-8 bg-black/55 backdrop-blur-sm text-white rounded-full flex items-center justify-center opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100 transition-all duration-200 shadow-md z-10 hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:opacity-60 disabled:cursor-not-allowed"
                     aria-label={t('material.deleteMaterial')}
                   >
-                    {isDeleting ? <RefreshCw size={12} className="animate-spin" /> : <X size={12} />}
+                    {isDeleting ? <RefreshCw size={15} className="animate-spin" /> : <Trash2 size={15} />}
                   </button>
                   {isSelected && (
                     <div className="absolute inset-0 bg-banana-500 bg-opacity-20 flex items-center justify-center">

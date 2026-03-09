@@ -1,5 +1,5 @@
 import React, { useReducer, useEffect, useCallback } from 'react';
-import { ImageIcon, RefreshCw, Upload, Download, X, FolderOpen, Eye, ArrowUpDown } from 'lucide-react';
+import { ImageIcon, RefreshCw, Upload, Download, X, FolderOpen, Eye, ArrowUpDown, Trash2 } from 'lucide-react';
 import { Button } from './Button';
 import { useT } from '@/hooks/useT';
 import { useToast } from './Toast';
@@ -126,7 +126,8 @@ function reducer(s: State, a: Action): State {
       return { ...s, items: a.items, loading: false };
     case 'TOGGLE_SELECT': {
       const next = new Set(s.selected);
-      next.has(a.key) ? next.delete(a.key) : next.add(a.key);
+      if (next.has(a.key)) next.delete(a.key);
+      else next.add(a.key);
       return { ...s, selected: next };
     }
     case 'SELECT_ALL':
@@ -164,7 +165,7 @@ function reducer(s: State, a: Action): State {
     case 'SET_PREVIEW':
       return { ...s, preview: a.preview };
     case 'RESET_EPHEMERAL':
-      return { ...s, selected: new Set(), showAllProjects: false, preview: null };
+      return { ...s, selected: new Set(), preview: null };
     default:
       return s;
   }
@@ -328,20 +329,20 @@ const MaterialGrid: React.FC<{
           <button
             type="button"
             onClick={(e) => onPreview(e, m)}
-            className="absolute top-1 left-1 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow z-10 hover:bg-black/80"
+            className="absolute top-2 left-2 w-8 h-8 bg-black/55 backdrop-blur-sm text-white rounded-full flex items-center justify-center opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100 transition-all duration-200 shadow-md z-10 hover:bg-black/75"
             aria-label={t('mc.preview')}
           >
-            <Eye size={12} />
+            <Eye size={15} />
           </button>
 
           <button
             type="button"
             onClick={(e) => onDelete(e, m)}
             disabled={busy}
-            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow z-10 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="absolute top-2 right-2 w-8 h-8 bg-black/55 backdrop-blur-sm text-white rounded-full flex items-center justify-center opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100 transition-all duration-200 shadow-md z-10 hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:opacity-60 disabled:cursor-not-allowed"
             aria-label={t('mc.remove')}
           >
-            {busy ? <RefreshCw size={12} className="animate-spin" /> : <X size={12} />}
+            {busy ? <RefreshCw size={15} className="animate-spin" /> : <Trash2 size={15} />}
           </button>
 
           {sel && (
@@ -350,7 +351,7 @@ const MaterialGrid: React.FC<{
             </div>
           )}
 
-          <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-1 truncate opacity-0 group-hover:opacity-100 transition-opacity rounded-b-md">
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent text-white text-xs px-2 py-2 truncate opacity-0 group-hover:opacity-100 transition-opacity rounded-b-md">
             {displayName(m)}
           </div>
         </div>
