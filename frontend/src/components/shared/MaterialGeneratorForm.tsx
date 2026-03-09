@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Image as ImageIcon, ImagePlus, Upload, X, FolderOpen, Info } from 'lucide-react';
+import { Image as ImageIcon, ImagePlus, Upload, X, FolderOpen } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 import { Textarea } from './Textarea';
 import { Button } from './Button';
@@ -7,9 +7,7 @@ import { useToast } from './Toast';
 import { MaterialSelector, materialUrlToFile } from './MaterialSelector';
 import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
 import { useProjectStore } from '@/store/useProjectStore';
-import { Skeleton } from './Loading';
 import { generateMaterialImage, getTaskStatus } from '@/api/endpoints';
-import { getImageUrl } from '@/api/client';
 import type { Material } from '@/api/endpoints';
 import type { Task } from '@/types';
 
@@ -79,7 +77,8 @@ const materialGeneratorI18n = {
 interface MaterialGeneratorFormProps {
   projectId?: string | null;
   onClose?: () => void;
-  onGenerated?: () => void;
+  onGenerated?: (taskId?: string) => void;
+  onTaskCreated?: (task: { taskId: string; projectId: string | null; prompt: string; aspectRatio: string }) => void;
   showCloseButton?: boolean;
 }
 
@@ -87,6 +86,7 @@ export const MaterialGeneratorForm: React.FC<MaterialGeneratorFormProps> = ({
   projectId,
   onClose,
   onGenerated,
+  onTaskCreated,
   showCloseButton = true,
 }) => {
   const t = useT(materialGeneratorI18n);
@@ -96,7 +96,6 @@ export const MaterialGeneratorForm: React.FC<MaterialGeneratorFormProps> = ({
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [refImage, setRefImage] = useState<File | null>(null);
   const [extraImages, setExtraImages] = useState<File[]>([]);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isMaterialSelectorOpen, setIsMaterialSelectorOpen] = useState(false);
@@ -172,10 +171,10 @@ export const MaterialGeneratorForm: React.FC<MaterialGeneratorFormProps> = ({
     }
   };
 
-  const notifyGenerated = () => {
+  const notifyGenerated = (taskId?: string) => {
     if (!onGenerated) return;
     try {
-      onGenerated();
+      onGenerated(taskId);
     } catch {
       // keep generation flow unaffected
     }
@@ -198,7 +197,6 @@ export const MaterialGeneratorForm: React.FC<MaterialGeneratorFormProps> = ({
           const imageUrl = progress.image_url;
 
           if (imageUrl) {
-            setPreviewUrl(getImageUrl(imageUrl));
             show({
               message: projectId ? t('material.messages.generateSuccess') : t('material.messages.generateSuccessGlobal'),
               type: 'success',
@@ -208,7 +206,7 @@ export const MaterialGeneratorForm: React.FC<MaterialGeneratorFormProps> = ({
             show({ message: t('material.messages.generateComplete'), type: 'error' });
           }
 
-          notifyGenerated();
+          notifyGenerated(taskId);
           setIsGenerating(false);
           if (pollingIntervalRef.current) {
             clearInterval(pollingIntervalRef.current);
@@ -219,6 +217,7 @@ export const MaterialGeneratorForm: React.FC<MaterialGeneratorFormProps> = ({
 
         if (task.status === 'FAILED') {
           show({ message: task.error_message || t('material.messages.generateFailed'), type: 'error' });
+          notifyGenerated(taskId);
           setIsGenerating(false);
           if (pollingIntervalRef.current) {
             clearInterval(pollingIntervalRef.current);
@@ -229,6 +228,7 @@ export const MaterialGeneratorForm: React.FC<MaterialGeneratorFormProps> = ({
 
         if ((task.status === 'PENDING' || task.status === 'PROCESSING') && attempts >= maxAttempts) {
           show({ message: t('material.messages.generateTimeout'), type: 'warning' });
+          notifyGenerated(taskId);
           setIsGenerating(false);
           if (pollingIntervalRef.current) {
             clearInterval(pollingIntervalRef.current);
@@ -238,6 +238,7 @@ export const MaterialGeneratorForm: React.FC<MaterialGeneratorFormProps> = ({
       } catch {
         if (attempts >= maxAttempts) {
           show({ message: t('material.messages.pollingFailed'), type: 'error' });
+          notifyGenerated(taskId);
           setIsGenerating(false);
           if (pollingIntervalRef.current) {
             clearInterval(pollingIntervalRef.current);
@@ -264,6 +265,12 @@ export const MaterialGeneratorForm: React.FC<MaterialGeneratorFormProps> = ({
       const taskId = resp.data?.task_id;
 
       if (taskId) {
+        onTaskCreated?.({
+          taskId,
+          projectId,
+          prompt: prompt.trim(),
+          aspectRatio,
+        });
         await pollMaterialTask(taskId);
         return;
       }
@@ -281,41 +288,6 @@ export const MaterialGeneratorForm: React.FC<MaterialGeneratorFormProps> = ({
 
   return (
     <div className="space-y-5">
-      <div className="px-4 py-3 rounded-xl bg-gradient-to-r from-banana-50/80 to-amber-50/80 dark:from-banana-900/20 dark:to-amber-900/20 border border-banana-200/50 dark:border-banana-700/30 backdrop-blur-sm">
-        <p className="text-sm text-banana-800 dark:text-banana-200 flex items-center gap-2">
-          <Info size={16} className="flex-shrink-0" />
-          {t('material.saveToLibraryNote')}
-        </p>
-      </div>
-
-      <div className="relative rounded-2xl overflow-hidden border border-gray-200/50 dark:border-white/10 p-5 bg-gradient-to-br from-gray-50/80 via-white/80 to-gray-50/80 dark:from-gray-900/40 dark:via-gray-800/40 dark:to-gray-900/40 backdrop-blur-xl shadow-lg">
-        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
-          <div className="absolute -top-20 -left-20 w-40 h-40 bg-banana-400/10 dark:bg-banana-400/5 rounded-full blur-3xl" />
-          <div className="absolute -bottom-20 -right-20 w-40 h-40 bg-purple-400/10 dark:bg-purple-400/5 rounded-full blur-3xl" />
-        </div>
-
-        <div className="relative">
-          <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
-            <span className="w-1 h-4 bg-gradient-to-b from-banana-400 to-banana-500 rounded-full" />
-            {t('material.generatedResult')}
-          </h4>
-          {isGenerating ? (
-            <div className="rounded-xl overflow-hidden border border-gray-200/50 dark:border-white/10 shadow-inner" style={{ aspectRatio: aspectRatio.replace(':', '/') }}>
-              <Skeleton className="w-full h-full" />
-            </div>
-          ) : previewUrl ? (
-            <div className="bg-white/50 dark:bg-gray-900/50 rounded-xl overflow-hidden border border-gray-200/50 dark:border-white/10 flex items-center justify-center shadow-inner backdrop-blur-sm" style={{ aspectRatio: aspectRatio.replace(':', '/') }}>
-              <img src={previewUrl} alt={t('material.generatedMaterial')} className="w-full h-full object-contain" />
-            </div>
-          ) : (
-            <div className="bg-gradient-to-br from-gray-100/50 via-gray-50/50 to-gray-100/50 dark:from-gray-800/30 dark:via-gray-900/30 dark:to-gray-800/30 rounded-xl flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 text-sm border border-dashed border-gray-300/50 dark:border-gray-600/50 backdrop-blur-sm" style={{ aspectRatio: aspectRatio.replace(':', '/') }}>
-              <ImageIcon size={48} className="mb-3 animate-pulse opacity-50" />
-              <div className="font-medium">{t('material.generatedPreview')}</div>
-            </div>
-          )}
-        </div>
-      </div>
-
       <Textarea
         label={t('material.promptLabel')}
         placeholder={t('material.promptPlaceholder')}
