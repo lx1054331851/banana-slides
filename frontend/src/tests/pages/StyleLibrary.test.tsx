@@ -4,6 +4,7 @@ import { StyleLibrary } from '@/pages/StyleLibrary';
 
 const {
   mockNavigate,
+  mockCreateStyleTemplate,
   mockListStyleTemplates,
   mockListStylePresets,
   mockListPresetTemplates,
@@ -14,6 +15,7 @@ const {
   mockRegenerateStylePresetPreviewImage,
 } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
+  mockCreateStyleTemplate: vi.fn(async () => ({ data: null })),
   mockListStyleTemplates: vi.fn(async () => ({
     data: {
       templates: [
@@ -61,7 +63,7 @@ vi.mock('@/api/endpoints', () => ({
   listStyleTemplates: mockListStyleTemplates,
   listStylePresets: mockListStylePresets,
   listPresetTemplates: mockListPresetTemplates,
-  createStyleTemplate: vi.fn(async () => ({ data: null })),
+  createStyleTemplate: mockCreateStyleTemplate,
   uploadPresetTemplate: vi.fn(async () => ({ data: null })),
   deleteStyleTemplate: mockDeleteStyleTemplate,
   deleteStylePreset: mockDeleteStylePreset,
@@ -117,7 +119,7 @@ describe('StyleLibrary page', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('style-library-preset-json-drawer')).toBeInTheDocument();
-      expect(screen.getByTestId('style-library-preset-json-drawer')).toHaveTextContent('\"preset\": 1');
+      expect(screen.getByTestId('style-library-preset-json-drawer')).toHaveTextContent('"preset": 1');
     });
   });
 
@@ -152,6 +154,54 @@ describe('StyleLibrary page', () => {
     fireEvent.click(within(row).getByRole('button', { name: /Template 2/i }));
 
     expect(screen.queryByTestId('style-library-template-json-drawer')).not.toBeInTheDocument();
+  });
+
+  it('opens template create drawer only from the new button', async () => {
+    render(<StyleLibrary />);
+
+    fireEvent.click(screen.getByTestId('style-library-tab-templates'));
+    expect(screen.queryByTestId('style-library-create-template-drawer')).not.toBeInTheDocument();
+
+    const row = await screen.findByTestId('template-row-t1');
+    fireEvent.click(within(row).getByRole('button', { name: /Template 1/i }));
+    expect(screen.queryByTestId('style-library-create-template-drawer')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('style-library-open-template-create'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('style-library-create-template-drawer')).toBeInTheDocument();
+    });
+  });
+
+  it('saves template from create drawer and closes it', async () => {
+    render(<StyleLibrary />);
+
+    fireEvent.click(screen.getByTestId('style-library-tab-templates'));
+    fireEvent.click(await screen.findByTestId('style-library-open-template-create'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('style-library-create-template-drawer')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByTestId('style-library-create-template-name'), {
+      target: { value: 'New Template' },
+    });
+    fireEvent.change(screen.getByTestId('style-library-create-template-json'), {
+      target: { value: '{"hero":{"title":"Demo"}}' },
+    });
+    fireEvent.click(screen.getByTestId('style-library-create-template-submit'));
+
+    await waitFor(() => {
+      expect(mockCreateStyleTemplate).toHaveBeenCalledTimes(1);
+    });
+    expect(mockCreateStyleTemplate).toHaveBeenCalledWith({
+      name: 'New Template',
+      template_json: '{\n  "hero": {\n    "title": "Demo"\n  }\n}',
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('style-library-create-template-drawer')).not.toBeInTheDocument();
+    });
   });
 
   it('closes template JSON drawer with close button and Escape', async () => {
@@ -268,7 +318,6 @@ describe('StyleLibrary page', () => {
     expect(within(row).getByTestId('preset-s1-preview-ending_url')).toBeInTheDocument();
   });
 
-
   it('formats preset JSON viewer into multi-line pretty JSON', async () => {
     render(<StyleLibrary />);
     fireEvent.click(await screen.findByTestId('preset-s1-view-json'));
@@ -282,7 +331,7 @@ describe('StyleLibrary page', () => {
   });
 
   it('allows dismissing failed preset task cards', async () => {
-    mockListStylePresetTasks.mockResolvedValueOnce({
+    mockListStylePresetTasks.mockResolvedValueOnce(({
       data: {
         tasks: [
           {
@@ -304,7 +353,7 @@ describe('StyleLibrary page', () => {
           },
         ],
       },
-    });
+    }) as any);
 
     render(<StyleLibrary />);
 

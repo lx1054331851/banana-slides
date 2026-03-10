@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Code2, Eye, RefreshCw, Trash2, Upload, X } from 'lucide-react';
+import { Code2, Eye, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
 import { Button, Card, ImageLightbox, PageHeader, PAGE_CONTAINER_CLASS, useConfirm, useToast } from '@/components/shared';
 import { useT } from '@/hooks/useT';
 import { getImageUrl } from '@/api/client';
@@ -16,6 +16,7 @@ import {
   type StyleTemplate,
 } from '@/api/endpoints';
 import { JsonPresetWorkspace } from '@/components/style-library/JsonPresetWorkspace';
+import { JsonTemplateCreateDrawer } from '@/components/style-library/JsonTemplateCreateDrawer';
 
 type StyleTab = 'templates' | 'presets' | 'presetTemplates';
 
@@ -34,16 +35,24 @@ const styleLibraryI18n = {
       json: 'JSON文本模版骨架',
       jsonHint: '必须是合法 JSON',
       save: '保存模版',
+      create: '新建骨架',
+      createTitle: '新建 JSON 文本模版骨架',
+      createSubtitle: '新建时在右侧抽屉中填写名称与 JSON 骨架，保存后回到列表统一管理。',
+      cancel: '取消',
       list: '已保存骨架',
       empty: '暂无 JSON 文本模版骨架',
+      count: '共 {{count}} 个骨架',
       view: '查看',
       delete: '删除',
       deleteConfirm: '将删除该 JSON 文本模版骨架，此操作不可撤销。确定继续？',
       saved: 'JSON 文本模版骨架已保存',
       deleted: 'JSON 文本模版骨架已删除',
       invalidJson: 'JSON 解析失败',
+      invalidJsonDetail: 'JSON 解析失败：{{message}}',
       jsonRequired: '请先输入 JSON 文本模版骨架',
       noSelection: '请选择一个 JSON 文本模版骨架查看 JSON',
+      copySuccess: 'JSON 已复制',
+      copyFailed: '复制失败',
     },
     presetTemplates: {
       title: '图片模版',
@@ -74,16 +83,24 @@ const styleLibraryI18n = {
       json: 'JSON template skeleton',
       jsonHint: 'Must be valid JSON',
       save: 'Save',
+      create: 'New Skeleton',
+      createTitle: 'Create JSON template skeleton',
+      createSubtitle: 'Create new skeletons in the right drawer and manage all saved items from the list.',
+      cancel: 'Cancel',
       list: 'Saved skeletons',
       empty: 'No JSON template skeletons',
+      count: '{{count}} skeletons',
       view: 'View',
       delete: 'Delete',
       deleteConfirm: 'This will permanently delete the skeleton. Continue?',
       saved: 'Skeleton saved',
       deleted: 'Skeleton deleted',
       invalidJson: 'Invalid JSON',
+      invalidJsonDetail: 'Invalid JSON: {{message}}',
       jsonRequired: 'Please enter JSON first',
       noSelection: 'Select a skeleton to view JSON',
+      copySuccess: 'JSON copied',
+      copyFailed: 'Copy failed',
     },
     presetTemplates: {
       title: 'Image Templates',
@@ -126,6 +143,7 @@ export const StyleLibrary: React.FC = () => {
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [isTemplateViewerOpen, setIsTemplateViewerOpen] = useState(false);
+  const [isTemplateCreateDrawerOpen, setIsTemplateCreateDrawerOpen] = useState(false);
 
   const [presetTemplateName, setPresetTemplateName] = useState('');
   const [selectedPresetTemplateId, setSelectedPresetTemplateId] = useState('');
@@ -176,23 +194,36 @@ export const StyleLibrary: React.FC = () => {
     setIsTemplateViewerOpen(true);
   }, []);
 
+  const handleOpenTemplateCreateDrawer = useCallback(() => {
+    setTemplateName('');
+    setTemplateJsonText('');
+    setIsTemplateCreateDrawerOpen(true);
+  }, []);
+
   const handleSaveTemplate = useCallback(async () => {
-    if (!templateJsonText.trim()) {
+    const rawJsonText = templateJsonText.trim();
+    if (!rawJsonText) {
       show({ message: t('templates.jsonRequired'), type: 'error' });
       return;
     }
+
+    let normalizedJsonText = rawJsonText;
     try {
-      JSON.parse(templateJsonText);
-    } catch {
-      show({ message: t('templates.invalidJson'), type: 'error' });
+      normalizedJsonText = JSON.stringify(JSON.parse(rawJsonText), null, 2);
+    } catch (error: any) {
+      show({
+        message: t('templates.invalidJsonDetail', { message: error?.message || t('templates.invalidJson') }),
+        type: 'error',
+      });
       return;
     }
 
     setIsSavingTemplate(true);
     try {
-      await createStyleTemplate({ name: templateName || undefined, template_json: templateJsonText });
+      await createStyleTemplate({ name: templateName.trim() || undefined, template_json: normalizedJsonText });
       setTemplateName('');
       setTemplateJsonText('');
+      setIsTemplateCreateDrawerOpen(false);
       show({ message: t('templates.saved'), type: 'success' });
       await loadPageData();
     } catch (error: any) {
@@ -330,70 +361,61 @@ export const StyleLibrary: React.FC = () => {
 
         {activeTab === 'templates' ? (
           <Card className="p-4 md:p-5 space-y-4" data-testid="style-library-templates-panel">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('templates.title')}</h2>
-              <p className="text-xs text-gray-600 dark:text-foreground-tertiary">{t('templates.subtitle')}</p>
+            <div className="flex items-start justify-between gap-4 flex-col md:flex-row md:items-center">
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('templates.title')}</h2>
+                <p className="text-xs text-gray-600 dark:text-foreground-tertiary">{t('templates.subtitle')}</p>
+              </div>
+              <Button size="sm" icon={<Plus size={14} />} onClick={handleOpenTemplateCreateDrawer} data-testid="style-library-open-template-create">
+                {t('templates.create')}
+              </Button>
             </div>
 
-            <div className="space-y-2">
-              <input
-                value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
-                placeholder={t('templates.name')}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-tertiary dark:text-white"
-              />
-              <div className="text-xs text-gray-500 dark:text-foreground-tertiary">{t('templates.jsonHint')}</div>
-              <textarea
-                value={templateJsonText}
-                onChange={(e) => setTemplateJsonText(e.target.value)}
-                rows={10}
-                placeholder={t('templates.json')}
-                className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-tertiary dark:text-white"
-              />
-              <Button size="sm" loading={isSavingTemplate} onClick={handleSaveTemplate}>{t('templates.save')}</Button>
+            <div className="text-xs text-gray-500 dark:text-foreground-tertiary">
+              {templates.length > 0 ? t('templates.count', { count: templates.length }) : t('templates.empty')}
             </div>
 
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-gray-800 dark:text-white">{t('templates.list')}</div>
-              {templates.length === 0 ? (
-                <div className="text-xs text-gray-500 dark:text-foreground-tertiary">{t('templates.empty')}</div>
-              ) : (
-                <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-                  {templates.map((tpl) => (
-                    <div
-                      key={tpl.id}
-                      data-testid={`template-row-${tpl.id}`}
-                      className={`p-2 rounded-lg border transition-colors ${selectedTemplateId === tpl.id ? 'border-banana-500 bg-banana-50/60 dark:bg-background-hover' : 'border-gray-200 dark:border-border-primary'}`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedTemplateId(tpl.id)}
-                          className="flex-1 text-left text-sm text-gray-800 dark:text-white truncate"
-                          title={tpl.name || tpl.id}
+            {templates.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-200 dark:border-border-primary p-5 text-sm text-gray-500 dark:text-foreground-tertiary">
+                {t('templates.empty')}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {templates.map((tpl) => (
+                  <div
+                    key={tpl.id}
+                    data-testid={`template-row-${tpl.id}`}
+                    className={`rounded-xl border p-4 bg-white dark:bg-background-secondary transition-colors ${selectedTemplateId === tpl.id ? 'border-banana-500 bg-banana-50/60 dark:bg-background-hover' : 'border-gray-200 dark:border-border-primary'}`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTemplateId(tpl.id)}
+                        className="min-w-0 flex-1 text-left cursor-pointer"
+                        title={tpl.name || tpl.id}
+                      >
+                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{tpl.name || tpl.id}</div>
+                        <div className="mt-1 text-xs text-gray-500 dark:text-foreground-tertiary truncate">{tpl.id}</div>
+                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="sm" onClick={() => openTemplateJsonDrawer(tpl.id)} data-testid={`template-${tpl.id}-view-json`}>
+                          {t('templates.view')}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={<Trash2 size={14} />}
+                          loading={deletingTemplateId === tpl.id}
+                          onClick={() => void handleDeleteTemplate(tpl)}
                         >
-                          {tpl.name || tpl.id}
-                        </button>
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => openTemplateJsonDrawer(tpl.id)} data-testid={`template-${tpl.id}-view-json`}>
-                            {t('templates.view')}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            icon={<Trash2 size={14} />}
-                            loading={deletingTemplateId === tpl.id}
-                            onClick={() => void handleDeleteTemplate(tpl)}
-                          >
-                            {t('templates.delete')}
-                          </Button>
-                        </div>
+                          {t('templates.delete')}
+                        </Button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         ) : null}
 
@@ -435,7 +457,7 @@ export const StyleLibrary: React.FC = () => {
                       key={presetTemplate.template_id}
                       className={`rounded-xl border p-3 bg-white dark:bg-background-secondary ${selectedPresetTemplateId === presetTemplate.template_id ? 'border-banana-500' : 'border-gray-200 dark:border-border-primary'}`}
                     >
-                      <button type="button" className="w-full text-left" onClick={() => setSelectedPresetTemplateId(presetTemplate.template_id)}>
+                      <button type="button" className="w-full text-left cursor-pointer" onClick={() => setSelectedPresetTemplateId(presetTemplate.template_id)}>
                         <div className="aspect-video rounded-lg overflow-hidden border border-gray-200 dark:border-border-primary bg-gray-100 dark:bg-background-tertiary">
                           <img src={thumbSrc} alt={presetTemplate.name || presetTemplate.template_id} className="w-full h-full object-cover" />
                         </div>
@@ -466,6 +488,24 @@ export const StyleLibrary: React.FC = () => {
         {activeTab === 'presets' ? <JsonPresetWorkspace templates={templates} refreshKey={workspaceRefreshKey} /> : null}
       </main>
 
+      <JsonTemplateCreateDrawer
+        isOpen={isTemplateCreateDrawerOpen}
+        name={templateName}
+        jsonText={templateJsonText}
+        loading={isSavingTemplate}
+        title={t('templates.createTitle')}
+        subtitle={t('templates.createSubtitle')}
+        namePlaceholder={t('templates.name')}
+        jsonPlaceholder={t('templates.json')}
+        jsonHint={t('templates.jsonHint')}
+        submitText={t('templates.save')}
+        cancelText={t('templates.cancel')}
+        onClose={() => setIsTemplateCreateDrawerOpen(false)}
+        onNameChange={setTemplateName}
+        onJsonChange={setTemplateJsonText}
+        onSubmit={() => void handleSaveTemplate()}
+      />
+
       <TemplateJsonDrawer
         isOpen={isTemplateViewerOpen}
         title="JSON文本模版骨架预览"
@@ -475,8 +515,8 @@ export const StyleLibrary: React.FC = () => {
         onClose={() => setIsTemplateViewerOpen(false)}
         onCopy={() => {
           navigator.clipboard.writeText(selectedTemplate?.template_json || '').then(
-            () => show({ message: 'JSON 已复制', type: 'success' }),
-            () => show({ message: '复制失败', type: 'error' }),
+            () => show({ message: t('templates.copySuccess'), type: 'success' }),
+            () => show({ message: t('templates.copyFailed'), type: 'error' }),
           );
         }}
       />
