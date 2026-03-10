@@ -24,7 +24,7 @@ const i18n = {
     templateName: '模版名称（可选）',
     saveTemplate: '保存模版骨架',
     templates: '已保存JSON文本模版骨架',
-    generatePreviews: '生成 3 组风格推荐',
+    generatePreviews: '生成 3 组风格推荐与预览',
     templateJsonRequired: '请先粘贴JSON文本模版骨架',
     invalidJson: 'JSON 解析失败',
     needCallback: '当前页面未配置预览工作流',
@@ -47,7 +47,7 @@ const i18n = {
     templateName: 'Template name (optional)',
     saveTemplate: 'Save template skeleton',
     templates: 'Saved JSON text template skeletons',
-    generatePreviews: 'Generate 3 style recommendations',
+    generatePreviews: 'Generate 3 style recommendations with previews',
     templateJsonRequired: 'Please paste a JSON text template skeleton first',
     invalidJson: 'Invalid JSON',
     needCallback: 'Preview workflow is not available here',
@@ -326,10 +326,10 @@ export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onC
                     onToast?.({ message: `${t('invalidJson')}: ${e?.message || ''}`, type: 'error' });
                     return;
                   }
-                  // Default workflow: recommend JSON first, user can generate previews per group later.
+                  // Default workflow: recommend JSON and automatically generate previews.
                   setIsStartingRecommendations(true);
                   try {
-                    await onGenerateStylePreviews({ templateJson: text, styleRequirements: value, generatePreviews: false });
+                    await onGenerateStylePreviews({ templateJson: text, styleRequirements: value, generatePreviews: true });
                   } finally {
                     setIsStartingRecommendations(false);
                   }

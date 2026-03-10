@@ -1023,8 +1023,8 @@ def detect_cover_ending_fields(project_id):
     }
     """
     try:
-        project = Project.query.get(project_id)
-        if not project:
+        project = None if project_id == 'global' else Project.query.get(project_id)
+        if project_id != 'global' and not project:
             return not_found('Project')
 
         data = request.get_json() or {}
@@ -1492,8 +1492,8 @@ def generate_style_recommendations(project_id):
     }
     """
     try:
-        project = Project.query.get(project_id)
-        if not project:
+        project = None if project_id == 'global' else Project.query.get(project_id)
+        if project_id != 'global' and not project:
             return not_found('Project')
 
         data = request.get_json() or {}
@@ -1578,8 +1578,8 @@ def regenerate_style_previews(project_id, rec_id):
     }
     """
     try:
-        project = Project.query.get(project_id)
-        if not project:
+        project = None if project_id == 'global' else Project.query.get(project_id)
+        if project_id != 'global' and not project:
             return not_found('Project')
 
         data = request.get_json() or {}

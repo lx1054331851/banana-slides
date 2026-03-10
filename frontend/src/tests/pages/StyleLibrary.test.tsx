@@ -9,6 +9,9 @@ const {
   mockListPresetTemplates,
   mockDeleteStyleTemplate,
   mockDeleteStylePreset,
+  mockListStylePresetTasks,
+  mockStartStylePresetGeneration,
+  mockRegenerateStylePresetPreviewImage,
 } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockListStyleTemplates: vi.fn(async () => ({
@@ -41,6 +44,9 @@ const {
   })),
   mockDeleteStyleTemplate: vi.fn(async () => ({ data: {} })),
   mockDeleteStylePreset: vi.fn(async () => ({ data: {} })),
+  mockListStylePresetTasks: vi.fn(async () => ({ data: { tasks: [] } })),
+  mockStartStylePresetGeneration: vi.fn(async () => ({ data: { task_id: 'task-1', status: 'PENDING', progress: { stage: 'json_generating', total: 5, completed: 0, failed: 0 } } })),
+  mockRegenerateStylePresetPreviewImage: vi.fn(async () => ({ data: { task_id: 'task-2', status: 'PENDING', progress: { stage: 'single_preview_generating', total: 1, completed: 0, failed: 0 } } })),
 }));
 
 vi.mock('react-router-dom', async () => {
@@ -60,6 +66,10 @@ vi.mock('@/api/endpoints', () => ({
   deleteStyleTemplate: mockDeleteStyleTemplate,
   deleteStylePreset: mockDeleteStylePreset,
   deletePresetTemplate: vi.fn(async () => ({ data: {} })),
+  listStylePresetTasks: mockListStylePresetTasks,
+  startStylePresetGeneration: mockStartStylePresetGeneration,
+  regenerateStylePresetPreviewImage: mockRegenerateStylePresetPreviewImage,
+  getStoredOutputLanguage: vi.fn(async () => 'zh'),
 }));
 
 describe('StyleLibrary page', () => {
@@ -107,7 +117,7 @@ describe('StyleLibrary page', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('style-library-preset-json-drawer')).toBeInTheDocument();
-      expect(screen.getByTestId('style-library-preset-json-drawer')).toHaveTextContent('{"preset":1}');
+      expect(screen.getByTestId('style-library-preset-json-drawer')).toHaveTextContent('\"preset\": 1');
     });
   });
 
@@ -256,6 +266,54 @@ describe('StyleLibrary page', () => {
     expect(within(row).getByTestId('preset-s1-preview-toc_url')).toBeInTheDocument();
     expect(within(row).getByTestId('preset-s1-preview-detail_url')).toBeInTheDocument();
     expect(within(row).getByTestId('preset-s1-preview-ending_url')).toBeInTheDocument();
+  });
+
+
+  it('formats preset JSON viewer into multi-line pretty JSON', async () => {
+    render(<StyleLibrary />);
+    fireEvent.click(await screen.findByTestId('preset-s1-view-json'));
+
+    await waitFor(() => {
+      const viewer = screen.getByTestId('style-library-preset-json-drawer');
+      expect(viewer).toHaveTextContent('{');
+      expect(viewer).toHaveTextContent('"preset": 1');
+      expect(viewer.textContent).toContain(String.fromCharCode(10));
+    });
+  });
+
+  it('allows dismissing failed preset task cards', async () => {
+    mockListStylePresetTasks.mockResolvedValueOnce({
+      data: {
+        tasks: [
+          {
+            task_id: 'failed-task-1',
+            task_type: 'STYLE_PRESET_GENERATE',
+            status: 'FAILED',
+            error_message: '1 preview image(s) failed to generate',
+            progress: {
+              stage: 'failed',
+              preset_name: 'Preset 1',
+              template_json: '{"template":1}',
+              preview_images: {
+                cover_url: '',
+                toc_url: '',
+                detail_url: '',
+                ending_url: '',
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    render(<StyleLibrary />);
+
+    const dismiss = await screen.findByTestId('style-preset-task-failed-task-1-dismiss');
+    fireEvent.click(dismiss);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('style-preset-task-failed-task-1')).not.toBeInTheDocument();
+    });
   });
 
   it('opens lightbox with correct initial index when preview clicked', async () => {

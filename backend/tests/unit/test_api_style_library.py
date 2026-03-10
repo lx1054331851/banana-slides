@@ -85,3 +85,86 @@ def test_delete_style_preset_cleans_preview_files(client, app):
     payload = delete_resp.get_json()
     assert payload['success'] is True
     assert not preset_dir.exists()
+from unittest.mock import patch
+
+
+def test_list_style_preset_tasks_returns_active_and_failed(client, app):
+    from models import db, Task
+
+    with app.app_context():
+        active = Task(project_id='global', task_type='STYLE_PRESET_GENERATE', status='PROCESSING')
+        active.set_progress({'stage': 'preview_generating', 'total': 5, 'completed': 2, 'failed': 0, 'preset_name': 'Active preset'})
+        failed = Task(project_id='global', task_type='STYLE_PRESET_IMAGE_REGENERATE', status='FAILED')
+        failed.set_progress({'stage': 'failed', 'total': 1, 'completed': 0, 'failed': 1, 'preset_id': 'preset-a', 'preview_key': 'cover_url'})
+        failed.error_message = 'boom'
+        ignored = Task(project_id='global', task_type='STYLE_RECOMMENDATIONS', status='PROCESSING')
+        db.session.add_all([active, failed, ignored])
+        db.session.commit()
+
+    with patch('controllers.style_library_controller.task_manager.is_task_active', return_value=True):
+        response = client.get('/api/style-presets/tasks')
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['success'] is True
+    tasks = payload['data']['tasks']
+    task_types = {item['task_type'] for item in tasks}
+    assert 'STYLE_PRESET_GENERATE' in task_types
+    assert 'STYLE_PRESET_IMAGE_REGENERATE' in task_types
+    assert 'STYLE_RECOMMENDATIONS' not in task_types
+
+
+@patch('controllers.style_library_controller.task_manager.submit_task')
+@patch('controllers.style_library_controller.resolve_routing_bundle')
+def test_generate_style_preset_starts_async_task(mock_resolve_routing_bundle, mock_submit_task, client):
+    mock_resolve_routing_bundle.return_value = object()
+
+    response = client.post('/api/style-presets/generate', json={
+        'name': 'Auto preset',
+        'template_json': '{"layout":"minimal"}',
+        'style_requirements': '科技发布会',
+    })
+
+    assert response.status_code == 202
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert payload['data']['task_type'] == 'STYLE_PRESET_GENERATE'
+    assert payload['data']['progress']['stage'] == 'json_generating'
+    mock_resolve_routing_bundle.assert_called_once()
+    mock_submit_task.assert_called_once()
+
+
+@patch('controllers.style_library_controller.task_manager.submit_task')
+@patch('controllers.style_library_controller.resolve_routing_bundle')
+def test_regenerate_single_preset_preview_starts_async_task(mock_resolve_routing_bundle, mock_submit_task, client):
+    mock_resolve_routing_bundle.return_value = object()
+    create_resp = client.post('/api/style-presets', json={
+        'name': 'Preset for regen',
+        'style_json': '{"a":1}',
+    })
+    assert create_resp.status_code == 201
+    preset_id = create_resp.get_json()['data']['id']
+
+    response = client.post(f'/api/style-presets/{preset_id}/preview-images/cover_url/regenerate', json={})
+
+    assert response.status_code == 202
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert payload['data']['task_type'] == 'STYLE_PRESET_IMAGE_REGENERATE'
+    assert payload['data']['progress']['preview_key'] == 'cover_url'
+    mock_resolve_routing_bundle.assert_called_once()
+    mock_submit_task.assert_called_once()
+
+
+def test_regenerate_single_preset_preview_rejects_invalid_preview_key(client):
+    create_resp = client.post('/api/style-presets', json={
+        'name': 'Preset for invalid key',
+        'style_json': '{"a":1}',
+    })
+    preset_id = create_resp.get_json()['data']['id']
+
+    response = client.post(f'/api/style-presets/{preset_id}/preview-images/not-valid/regenerate', json={})
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload['success'] is False

@@ -745,8 +745,9 @@ export const addPage = async (projectId: string, data: Partial<Page>): Promise<A
 /**
  * 查询任务状态
  */
-export const getTaskStatus = async (projectId: string, taskId: string): Promise<ApiResponse<Task>> => {
-  const response = await apiClient.get<ApiResponse<Task>>(`/api/projects/${projectId}/tasks/${taskId}`);
+export const getTaskStatus = async (projectId: string | null | undefined, taskId: string): Promise<ApiResponse<Task>> => {
+  const targetProjectId = projectId || 'global';
+  const response = await apiClient.get<ApiResponse<Task>>(`/api/projects/${targetProjectId}/tasks/${taskId}`);
   return response.data;
 };
 
@@ -974,7 +975,7 @@ export const listMaterials = async (
  */
 export const uploadMaterial = async (
   file: File,
-  projectId?: string | null,
+  projectId: string | null | undefined,
   generateCaption?: boolean
 ): Promise<ApiResponse<Material & { caption?: string }>> => {
   const formData = new FormData();
@@ -1005,7 +1006,7 @@ export const uploadMaterial = async (
  */
 export const uploadMaterials = async (
   files: File[],
-  projectId?: string | null,
+  projectId: string | null | undefined,
   generateCaption?: boolean
 ): Promise<ApiResponse<{ materials: Array<Material & { caption?: string }>; count: number }>> => {
   const formData = new FormData();
@@ -1608,10 +1609,49 @@ export const deleteStylePreset = async (presetId: string): Promise<ApiResponse> 
   return response.data;
 };
 
+export const listStylePresetTasks = async (): Promise<ApiResponse<{ tasks: Task[] }>> => {
+  const response = await apiClient.get<ApiResponse<{ tasks: Task[] }>>('/api/style-presets/tasks');
+  return response.data;
+};
+
+export const startStylePresetGeneration = async (data: {
+  name?: string;
+  template_json: string;
+  style_requirements?: string;
+  language?: OutputLanguage;
+  generation_override?: GenerationOverride;
+}): Promise<ApiResponse<Task>> => {
+  const lang = data.language || await getStoredOutputLanguage();
+  const response = await apiClient.post<ApiResponse<Task>>('/api/style-presets/generate', {
+    name: data.name,
+    template_json: data.template_json,
+    style_requirements: data.style_requirements,
+    language: lang,
+    ...(data.generation_override ? { generation_override: data.generation_override } : {}),
+  });
+  return response.data;
+};
+
+export const regenerateStylePresetPreviewImage = async (
+  presetId: string,
+  previewKey: keyof StylePresetPreviewImages,
+  data?: {
+    language?: OutputLanguage;
+    generation_override?: GenerationOverride;
+  }
+): Promise<ApiResponse<Task>> => {
+  const lang = data?.language || await getStoredOutputLanguage();
+  const response = await apiClient.post<ApiResponse<Task>>(`/api/style-presets/${presetId}/preview-images/${previewKey}/regenerate`, {
+    language: lang,
+    ...(data?.generation_override ? { generation_override: data.generation_override } : {}),
+  });
+  return response.data;
+};
+
 // ===== 风格推荐 + 预览（项目级异步任务）=====
 
 export const startStyleRecommendations = async (
-  projectId: string,
+  projectId: string | null | undefined,
   data: {
     template_json: string;
     style_requirements?: string;
@@ -1621,8 +1661,9 @@ export const startStyleRecommendations = async (
   }
 ): Promise<ApiResponse<{ task_id: string; status?: string }>> => {
   const lang = data.language || await getStoredOutputLanguage();
+  const targetProjectId = projectId || 'global';
   const response = await apiClient.post<ApiResponse<{ task_id: string; status?: string }>>(
-    `/api/projects/${projectId}/style/recommendations`,
+    `/api/projects/${targetProjectId}/style/recommendations`,
     {
       template_json: data.template_json,
       style_requirements: data.style_requirements,
@@ -1635,7 +1676,7 @@ export const startStyleRecommendations = async (
 };
 
 export const regenerateStyleRecommendationPreviews = async (
-  projectId: string,
+  projectId: string | null | undefined,
   recId: string,
   data: {
     style_json: any;
@@ -1645,8 +1686,9 @@ export const regenerateStyleRecommendationPreviews = async (
   }
 ): Promise<ApiResponse<{ task_id: string; status?: string }>> => {
   const lang = data.language || await getStoredOutputLanguage();
+  const targetProjectId = projectId || 'global';
   const response = await apiClient.post<ApiResponse<{ task_id: string; status?: string }>>(
-    `/api/projects/${projectId}/style/recommendations/${recId}/previews`,
+    `/api/projects/${targetProjectId}/style/recommendations/${recId}/previews`,
     {
       style_json: data.style_json,
       sample_pages: data.sample_pages,

@@ -405,6 +405,44 @@ class FileService:
         image.save(str(filepath), format=image_format)
         return filepath.relative_to(self.upload_folder).as_posix()
 
+    def save_style_preset_preview_image(self, image: Image.Image, preset_id: str,
+                                        slide_type: str) -> str:
+        """
+        Compress and save a generated style preview image directly into preset library directory.
+
+        Args:
+            image: PIL Image object
+            preset_id: Style preset ID
+            slide_type: cover/toc/detail/ending
+
+        Returns:
+            Relative destination path from upload folder
+        """
+        safe_slide_type = secure_filename(slide_type or "").strip()
+        if not safe_slide_type:
+            raise ValueError("Invalid slide_type")
+
+        run_id = uuid.uuid4().hex[:10]
+        preset_dir = self._get_style_preset_dir(preset_id)
+
+        try:
+            normalized_image = resize_image_for_thumbnail(image, max_width=1600)
+            normalized_image = convert_image_to_rgb(normalized_image)
+
+            webp_filename = f"{safe_slide_type}_{run_id}.webp"
+            webp_path = preset_dir / webp_filename
+
+            try:
+                normalized_image.save(str(webp_path), 'WEBP', quality=80, method=6)
+                return webp_path.relative_to(self.upload_folder).as_posix()
+            except Exception:
+                jpg_filename = f"{safe_slide_type}_{run_id}.jpg"
+                jpg_path = preset_dir / jpg_filename
+                normalized_image.save(str(jpg_path), 'JPEG', quality=82, optimize=True)
+                return jpg_path.relative_to(self.upload_folder).as_posix()
+        except Exception as e:
+            raise ValueError(f"Preview image encode/compress failed: {e}")
+
     def save_style_preset_preview_image_from_relative(self, source_relative_path: str,
                                                       preset_id: str, slide_type: str) -> str:
         """

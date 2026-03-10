@@ -10,10 +10,11 @@ export const StyleWorkflow: React.FC = () => {
   const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const taskId = query.get('taskId') || '';
 
+  const state: any = location.state;
   const templateJsonText = useMemo(() => {
-    const state: any = location.state;
     return (state?.templateJson || '').toString();
-  }, [location.state]);
+  }, [state]);
+  const isGlobalWorkflow = projectId === 'global' || Boolean(state?.isGlobalStyleWorkflow);
 
   if (!projectId) {
     return (
@@ -33,13 +34,13 @@ export const StyleWorkflow: React.FC = () => {
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">风格预览确认</h1>
+            <h1 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">{isGlobalWorkflow ? '全局风格模版生成' : '风格预览确认'}</h1>
             <p className="text-xs md:text-sm text-gray-600 dark:text-foreground-tertiary">
-              项目：{projectId}{taskId ? ` | 任务：${taskId}` : ''}
+              {isGlobalWorkflow ? '全局风格工作流' : `项目：${projectId}`}{taskId ? ` | 任务：${taskId}` : ''}
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => navigate(`/project/${projectId}/outline`)}>{'返回项目'}</Button>
+            <Button variant="ghost" onClick={() => navigate(isGlobalWorkflow ? '/style-library' : `/project/${projectId}/outline`)}>{isGlobalWorkflow ? '返回模板管理' : '返回项目'}</Button>
           </div>
         </div>
 
@@ -49,7 +50,8 @@ export const StyleWorkflow: React.FC = () => {
             taskId={taskId}
             templateJson={templateJsonText}
             showTemplateControls
-            onBackToProject={() => navigate(`/project/${projectId}/outline`)}
+            showApplyAction={!isGlobalWorkflow}
+            onBackToProject={() => navigate(isGlobalWorkflow ? '/style-library' : `/project/${projectId}/outline`)}
           />
         ) : (
           <div className="text-sm text-gray-600 dark:text-foreground-tertiary">缺少 taskId 参数</div>

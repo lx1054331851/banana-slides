@@ -319,7 +319,7 @@ const MaterialGrid: React.FC<{
         <div
           key={m.id}
           onClick={(e) => onPreview(e, m)}
-          className="aspect-video rounded-lg border-2 cursor-zoom-in transition-all relative group border-gray-200 dark:border-border-primary hover:border-banana-300 overflow-hidden"
+          className="aspect-video rounded-lg border-2 cursor-pointer transition-all relative group border-gray-200 dark:border-border-primary hover:border-banana-300 overflow-hidden"
         >
           <img src={getImageUrl(m.url)} alt={displayName(m)} className="absolute inset-0 w-full h-full object-cover rounded-md" />
 
