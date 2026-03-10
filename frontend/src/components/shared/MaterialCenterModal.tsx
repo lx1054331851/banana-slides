@@ -1,16 +1,13 @@
-import React, { useReducer, useEffect, useCallback } from 'react';
+import React, { useReducer, useEffect, useCallback, useRef } from 'react';
 import { ImageIcon, RefreshCw, Upload, Download, X, FolderOpen, Eye, ArrowUpDown, Trash2 } from 'lucide-react';
 import { Button } from './Button';
 import { useT } from '@/hooks/useT';
 import { useToast } from './Toast';
 import { Modal } from './Modal';
-import { listMaterials, uploadMaterial, listProjects, deleteMaterial, downloadMaterialsZip, type Material } from '@/api/endpoints';
+import { listMaterials, uploadMaterials, listProjects, deleteMaterial, downloadMaterialsZip, type Material } from '@/api/endpoints';
 import type { Project } from '@/types';
 import { getImageUrl } from '@/api/client';
 
-// ---------------------------------------------------------------------------
-// i18n
-// ---------------------------------------------------------------------------
 const i18nDict = {
   zh: {
     mc: {
@@ -25,6 +22,10 @@ const i18nDict = {
       remove: '删除',
       closePreview: '关闭预览',
       emptyHint: '上传图片或通过素材生成功能创建素材',
+      dropHint: '可拖动图片到列表区域上传，支持多素材同时添加',
+      dropSubHint: '也可点击右上角上传按钮进行多选',
+      dropActive: '松开鼠标即可上传 {{count}} 张图片',
+      uploadSummary: '已上传 {{count}} 个素材',
       msg: {
         loadErr: '加载素材失败',
         badFormat: '不支持的图片格式',
@@ -54,6 +55,10 @@ const i18nDict = {
       remove: 'Delete',
       closePreview: 'Close Preview',
       emptyHint: 'Upload images or create materials via the generator',
+      dropHint: 'Drag images into the list area to upload multiple files',
+      dropSubHint: 'You can also click Upload to select multiple files',
+      dropActive: 'Release to upload {{count}} image(s)',
+      uploadSummary: 'Uploaded {{count}} material(s)',
       msg: {
         loadErr: 'Failed to load materials',
         badFormat: 'Unsupported image format',
@@ -72,9 +77,6 @@ const i18nDict = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
 interface State {
   items: Material[];
   selected: Set<string>;
@@ -82,6 +84,8 @@ interface State {
   loading: boolean;
   uploading: boolean;
   downloading: boolean;
+  dragActive: boolean;
+  dragCount: number;
   filter: string;
   sortBy: 'newest' | 'oldest' | 'name-asc' | 'name-desc';
   projects: Project[];
@@ -97,6 +101,7 @@ type Action =
   | { type: 'SET_LOADING'; on: boolean }
   | { type: 'SET_UPLOADING'; on: boolean }
   | { type: 'SET_DOWNLOADING'; on: boolean }
+  | { type: 'SET_DRAG_ACTIVE'; on: boolean; count?: number }
   | { type: 'SET_FILTER'; value: string }
   | { type: 'SET_SORT'; value: State['sortBy'] }
   | { type: 'SET_PROJECTS'; list: Project[] }
@@ -113,6 +118,8 @@ const initial: State = {
   loading: false,
   uploading: false,
   downloading: false,
+  dragActive: false,
+  dragCount: 0,
   filter: 'all',
   sortBy: 'newest',
   projects: [],
@@ -140,6 +147,8 @@ function reducer(s: State, a: Action): State {
       return { ...s, uploading: a.on };
     case 'SET_DOWNLOADING':
       return { ...s, downloading: a.on };
+    case 'SET_DRAG_ACTIVE':
+      return { ...s, dragActive: a.on, dragCount: a.on ? (a.count ?? s.dragCount) : 0 };
     case 'SET_FILTER':
       return { ...s, filter: a.value };
     case 'SET_SORT':
@@ -153,27 +162,24 @@ function reducer(s: State, a: Action): State {
       return { ...s, items, selected };
     }
     case 'ADD_DELETING': {
-      const d = new Set(s.deleting);
-      d.add(a.id);
-      return { ...s, deleting: d };
+      const deleting = new Set(s.deleting);
+      deleting.add(a.id);
+      return { ...s, deleting };
     }
     case 'REMOVE_DELETING': {
-      const d = new Set(s.deleting);
-      d.delete(a.id);
-      return { ...s, deleting: d };
+      const deleting = new Set(s.deleting);
+      deleting.delete(a.id);
+      return { ...s, deleting };
     }
     case 'SET_PREVIEW':
       return { ...s, preview: a.preview };
     case 'RESET_EPHEMERAL':
-      return { ...s, selected: new Set(), preview: null };
+      return { ...s, selected: new Set(), preview: null, dragActive: false, dragCount: 0 };
     default:
       return s;
   }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 const displayName = (m: Material) =>
   m.prompt?.trim() ||
   m.name?.trim() ||
@@ -189,38 +195,25 @@ const projectLabel = (p: Project) => {
   return raw.length > 20 ? `${raw.slice(0, 20)}…` : raw;
 };
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 const ToolbarSection: React.FC<{
   t: ReturnType<typeof useT>;
   state: State;
   dispatch: React.Dispatch<Action>;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
   onRefresh: () => void;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onDownload: () => void;
-}> = ({ t, state, dispatch, onRefresh, onUpload, onDownload }) => (
+}> = ({ t, state, dispatch, fileInputRef, onRefresh, onUpload, onDownload }) => (
   <div className="space-y-2">
     <div className="flex items-center justify-between flex-wrap gap-2">
       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-foreground-tertiary">
         <FolderOpen size={16} className="text-banana-500" />
-        <span>
-          {state.items.length > 0
-            ? t('mc.count', { count: state.items.length })
-            : t('mc.empty')}
-        </span>
-        {state.selected.size > 0 && (
-          <span className="ml-2 text-banana-600 font-medium">
-            {t('mc.selected', { count: state.selected.size })}
-          </span>
-        )}
-        {state.loading && state.items.length > 0 && (
-          <RefreshCw size={14} className="animate-spin text-gray-400" />
-        )}
+        <span>{state.items.length > 0 ? t('mc.count', { count: state.items.length }) : t('mc.empty')}</span>
+        {state.selected.size > 0 && <span className="ml-2 text-banana-600 font-medium">{t('mc.selected', { count: state.selected.size })}</span>}
+        {state.loading && state.items.length > 0 && <RefreshCw size={14} className="animate-spin text-gray-400" />}
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        {/* 项目筛选下拉框 */}
         <select
           value={state.filter}
           onChange={(e) => dispatch({ type: 'SET_FILTER', value: e.target.value })}
@@ -235,7 +228,6 @@ const ToolbarSection: React.FC<{
           ))}
         </select>
 
-        {/* 排序循环按钮 */}
         <button
           onClick={() => {
             const order: Array<State['sortBy']> = ['newest', 'oldest', 'name-asc', 'name-desc'];
@@ -259,11 +251,11 @@ const ToolbarSection: React.FC<{
         </Button>
 
         <label className="inline-block cursor-pointer">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-foreground-secondary bg-white dark:bg-background-secondary border border-gray-300 dark:border-border-primary rounded-md hover:bg-gray-50 dark:hover:bg-background-hover disabled:opacity-50 disabled:cursor-not-allowed">
+          <div className="inline-flex min-h-10 items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-foreground-secondary bg-white dark:bg-background-secondary border border-gray-300 dark:border-border-primary rounded-md hover:bg-gray-50 dark:hover:bg-background-hover disabled:opacity-50 disabled:cursor-not-allowed">
             <Upload size={16} />
             <span>{state.uploading ? t('common.uploading') : t('common.upload')}</span>
           </div>
-          <input type="file" accept="image/*" onChange={onUpload} className="hidden" disabled={state.uploading} />
+          <input ref={fileInputRef as React.RefObject<HTMLInputElement>} type="file" accept="image/*" multiple onChange={onUpload} className="hidden" disabled={state.uploading} />
         </label>
       </div>
     </div>
@@ -287,13 +279,7 @@ const ToolbarSection: React.FC<{
               {t('common.clearSelection')}
             </Button>
             <div className="flex-1" />
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Download size={16} />}
-              onClick={onDownload}
-              disabled={state.downloading}
-            >
+            <Button variant="primary" size="sm" icon={<Download size={16} />} onClick={onDownload} disabled={state.downloading}>
               {state.downloading ? t('common.downloading') : `${t('common.download')} (${state.selected.size})`}
             </Button>
           </>
@@ -307,56 +293,83 @@ const MaterialGrid: React.FC<{
   items: Material[];
   selected: Set<string>;
   deleting: Set<string>;
+  dragActive: boolean;
+  dragCount: number;
   t: ReturnType<typeof useT>;
   onToggle: (id: string) => void;
   onPreview: (e: React.MouseEvent, m: Material) => void;
   onDelete: (e: React.MouseEvent<HTMLButtonElement>, m: Material) => void;
-}> = ({ items, selected, deleting, t, onToggle, onPreview, onDelete }) => (
-  <div className="grid grid-cols-4 gap-4 max-h-96 overflow-y-auto p-4">
-    {items.map((m) => {
-      const sel = selected.has(m.id);
-      const busy = deleting.has(m.id);
-      return (
-        <div
-          key={m.id}
-          onClick={() => onToggle(m.id)}
-          className={`aspect-video rounded-lg border-2 cursor-pointer transition-all relative group ${
-            sel ? 'border-banana-500 ring-2 ring-banana-200' : 'border-gray-200 dark:border-border-primary hover:border-banana-300'
-          }`}
-        >
-          <img src={getImageUrl(m.url)} alt={displayName(m)} className="absolute inset-0 w-full h-full object-cover rounded-md" />
+  onDragEnter: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragLeave: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDrop: (e: React.DragEvent<HTMLDivElement>) => void;
+}> = ({ items, selected, deleting, dragActive, dragCount, t, onToggle, onPreview, onDelete, onDragEnter, onDragOver, onDragLeave, onDrop }) => (
+  <div
+    onDragEnter={onDragEnter}
+    onDragOver={onDragOver}
+    onDragLeave={onDragLeave}
+    onDrop={onDrop}
+    className={`relative rounded-xl border border-dashed p-4 transition-colors ${dragActive ? 'border-banana-400 bg-banana-50/70 dark:bg-banana-500/10' : 'border-gray-200 dark:border-border-primary'}`}
+  >
+    <div className="mb-3 flex items-center justify-between gap-3 text-xs text-gray-500 dark:text-foreground-tertiary">
+      <span>{t('mc.dropHint')}</span>
+      <span className="text-[11px]">{dragActive ? t('mc.dropActive', { count: dragCount || 1 }) : t('mc.dropSubHint')}</span>
+    </div>
 
-          <button
-            type="button"
-            onClick={(e) => onPreview(e, m)}
-            className="absolute top-2 left-2 w-8 h-8 bg-black/55 backdrop-blur-sm text-white rounded-full flex items-center justify-center opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100 transition-all duration-200 shadow-md z-10 hover:bg-black/75"
-            aria-label={t('mc.preview')}
+    <div className="grid grid-cols-4 gap-4 max-h-96 overflow-y-auto">
+      {items.map((m) => {
+        const sel = selected.has(m.id);
+        const busy = deleting.has(m.id);
+        return (
+          <div
+            key={m.id}
+            onClick={() => onToggle(m.id)}
+            className={`aspect-video rounded-lg border-2 cursor-pointer transition-all relative group ${
+              sel ? 'border-banana-500 ring-2 ring-banana-200' : 'border-gray-200 dark:border-border-primary hover:border-banana-300'
+            }`}
           >
-            <Eye size={15} />
-          </button>
+            <img src={getImageUrl(m.url)} alt={displayName(m)} className="absolute inset-0 w-full h-full object-cover rounded-md" />
 
-          <button
-            type="button"
-            onClick={(e) => onDelete(e, m)}
-            disabled={busy}
-            className="absolute top-2 right-2 w-8 h-8 bg-black/55 backdrop-blur-sm text-white rounded-full flex items-center justify-center opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100 transition-all duration-200 shadow-md z-10 hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:opacity-60 disabled:cursor-not-allowed"
-            aria-label={t('mc.remove')}
-          >
-            {busy ? <RefreshCw size={15} className="animate-spin" /> : <Trash2 size={15} />}
-          </button>
+            <button
+              type="button"
+              onClick={(e) => onPreview(e, m)}
+              className="absolute top-2 left-2 w-8 h-8 bg-black/55 backdrop-blur-sm text-white rounded-full flex items-center justify-center opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100 transition-all duration-200 shadow-md z-10 hover:bg-black/75"
+              aria-label={t('mc.preview')}
+            >
+              <Eye size={15} />
+            </button>
 
-          {sel && (
-            <div className="absolute inset-0 bg-banana-500 bg-opacity-20 flex items-center justify-center rounded-md">
-              <div className="bg-banana-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">✓</div>
+            <button
+              type="button"
+              onClick={(e) => onDelete(e, m)}
+              disabled={busy}
+              className="absolute top-2 right-2 w-8 h-8 bg-black/55 backdrop-blur-sm text-white rounded-full flex items-center justify-center opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100 transition-all duration-200 shadow-md z-10 hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:opacity-60 disabled:cursor-not-allowed"
+              aria-label={t('mc.remove')}
+            >
+              {busy ? <RefreshCw size={15} className="animate-spin" /> : <Trash2 size={15} />}
+            </button>
+
+            {sel && (
+              <div className="absolute inset-0 bg-banana-500 bg-opacity-20 flex items-center justify-center rounded-md">
+                <div className="bg-banana-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">✓</div>
+              </div>
+            )}
+
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent text-white text-xs px-2 py-2 truncate opacity-0 group-hover:opacity-100 transition-opacity rounded-b-md">
+              {displayName(m)}
             </div>
-          )}
-
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/85 via-black/55 to-transparent text-white text-xs px-2 py-2 truncate opacity-0 group-hover:opacity-100 transition-opacity rounded-b-md">
-            {displayName(m)}
           </div>
+        );
+      })}
+    </div>
+
+    {dragActive && (
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-banana-500/10">
+        <div className="rounded-full bg-white/95 px-4 py-2 text-sm font-medium text-banana-700 shadow">
+          {t('mc.dropActive', { count: dragCount || 1 })}
         </div>
-      );
-    })}
+      </div>
+    )}
   </div>
 );
 
@@ -382,9 +395,6 @@ const PreviewOverlay: React.FC<{ url: string; label: string; t: ReturnType<typeo
   </div>
 );
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
 interface MaterialCenterModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -394,6 +404,8 @@ export const MaterialCenterModal: React.FC<MaterialCenterModalProps> = ({ isOpen
   const t = useT(i18nDict);
   const { show } = useToast();
   const [s, dispatch] = useReducer(reducer, initial);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounterRef = useRef(0);
 
   const fetchItems = useCallback(async () => {
     dispatch({ type: 'SET_LOADING', on: true });
@@ -412,7 +424,7 @@ export const MaterialCenterModal: React.FC<MaterialCenterModalProps> = ({ isOpen
       const res = await listProjects(100, 0);
       if (res.data?.projects) dispatch({ type: 'SET_PROJECTS', list: res.data.projects });
     } catch {
-      /* non-critical */
+      // non-critical
     }
   }, []);
 
@@ -421,27 +433,70 @@ export const MaterialCenterModal: React.FC<MaterialCenterModalProps> = ({ isOpen
     if (!s.projectsReady) fetchProjects();
     fetchItems();
     dispatch({ type: 'RESET_EPHEMERAL' });
-  }, [isOpen, s.filter]);
+  }, [isOpen, s.filter, s.projectsReady, fetchProjects, fetchItems]);
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!ACCEPTED_TYPES.includes(file.type)) {
+  const uploadSelectedFiles = useCallback(async (files: File[]) => {
+    if (!files.length) return;
+
+    const invalidFile = files.find((file) => !ACCEPTED_TYPES.includes(file.type));
+    if (invalidFile) {
       show({ message: t('mc.msg.badFormat'), type: 'error' });
       return;
     }
+
     dispatch({ type: 'SET_UPLOADING', on: true });
     try {
       const pid = s.filter === 'all' || s.filter === 'none' ? null : s.filter;
-      await uploadMaterial(file, pid);
-      show({ message: t('mc.msg.uploaded'), type: 'success' });
-      fetchItems();
+      await uploadMaterials(files, pid);
+      show({ message: files.length === 1 ? t('mc.msg.uploaded') : t('mc.uploadSummary', { count: files.length }), type: 'success' });
+      await fetchItems();
     } catch (err: any) {
       show({ message: err?.response?.data?.error?.message || err.message || t('mc.msg.uploadErr'), type: 'error' });
     } finally {
       dispatch({ type: 'SET_UPLOADING', on: false });
-      e.target.value = '';
+      dispatch({ type: 'SET_DRAG_ACTIVE', on: false, count: 0 });
+      dragCounterRef.current = 0;
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  }, [fetchItems, s.filter, show, t]);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    await uploadSelectedFiles(files);
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.dataTransfer.types.includes('Files')) return;
+    dragCounterRef.current += 1;
+    const count = e.dataTransfer.items?.length || e.dataTransfer.files?.length || 1;
+    dispatch({ type: 'SET_DRAG_ACTIVE', on: true, count });
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+    if (dragCounterRef.current === 0) {
+      dispatch({ type: 'SET_DRAG_ACTIVE', on: false, count: 0 });
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    const files = Array.from(e.dataTransfer.files || []);
+    await uploadSelectedFiles(files);
   };
 
   const handleDelete = async (e: React.MouseEvent<HTMLButtonElement>, m: Material) => {
@@ -524,27 +579,41 @@ export const MaterialCenterModal: React.FC<MaterialCenterModalProps> = ({ isOpen
     <>
       <Modal isOpen={isOpen} onClose={onClose} title={t('mc.title')} size="lg">
         <div className="space-y-4">
-          <ToolbarSection t={t} state={s} dispatch={dispatch} onRefresh={fetchItems} onUpload={handleUpload} onDownload={handleDownload} />
+          <ToolbarSection t={t} state={s} dispatch={dispatch} fileInputRef={fileInputRef} onRefresh={fetchItems} onUpload={handleUpload} onDownload={handleDownload} />
 
           {s.loading && s.items.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-gray-400">{t('common.loading')}</div>
             </div>
           ) : s.items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-400 p-4">
+            <div
+              className={`flex flex-col items-center justify-center py-12 text-gray-400 p-4 rounded-xl border border-dashed transition-colors ${s.dragActive ? 'border-banana-400 bg-banana-50/70 dark:bg-banana-500/10' : 'border-gray-200 dark:border-border-primary'}`}
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               <ImageIcon size={48} className="mb-4 opacity-50" />
               <div className="text-sm">{t('mc.empty')}</div>
               <div className="text-xs mt-1">{t('mc.emptyHint')}</div>
+              <div className="text-xs mt-2 text-banana-500">{s.dragActive ? t('mc.dropActive', { count: s.dragCount || 1 }) : t('mc.dropHint')}</div>
+              <div className="text-[11px] mt-1 text-gray-400">{s.dragActive ? t('mc.dropSubHint') : t('mc.dropSubHint')}</div>
             </div>
           ) : (
             <MaterialGrid
               items={sortedItems}
               selected={s.selected}
               deleting={s.deleting}
+              dragActive={s.dragActive}
+              dragCount={s.dragCount}
               t={t}
               onToggle={(id) => dispatch({ type: 'TOGGLE_SELECT', key: id })}
               onPreview={handlePreview}
               onDelete={handleDelete}
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
             />
           )}
 
@@ -556,14 +625,7 @@ export const MaterialCenterModal: React.FC<MaterialCenterModalProps> = ({ isOpen
         </div>
       </Modal>
 
-      {s.preview && (
-        <PreviewOverlay
-          url={s.preview.url}
-          label={s.preview.label}
-          t={t}
-          onClose={() => dispatch({ type: 'SET_PREVIEW', preview: null })}
-        />
-      )}
+      {s.preview && <PreviewOverlay url={s.preview.url} label={s.preview.label} t={t} onClose={() => dispatch({ type: 'SET_PREVIEW', preview: null })} />}
     </>
   );
 };

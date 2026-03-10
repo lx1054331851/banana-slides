@@ -998,6 +998,37 @@ export const uploadMaterial = async (
 };
 
 /**
+ * 批量上传素材图片
+ * @param files 图片文件列表
+ * @param projectId 可选的项目ID
+ * @param generateCaption 是否生成描述
+ */
+export const uploadMaterials = async (
+  files: File[],
+  projectId?: string | null,
+  generateCaption?: boolean
+): Promise<ApiResponse<{ materials: Array<Material & { caption?: string }>; count: number }>> => {
+  const formData = new FormData();
+  files.forEach((file) => {
+    formData.append('files', file);
+  });
+
+  let url: string;
+  if (!projectId || projectId === 'none') {
+    url = '/api/materials/upload';
+  } else {
+    url = `/api/projects/${projectId}/materials/upload`;
+  }
+
+  if (generateCaption) {
+    url += (url.includes('?') ? '&' : '?') + 'generate_caption=true';
+  }
+
+  const response = await apiClient.post<ApiResponse<{ materials: Array<Material & { caption?: string }>; count: number }>>(url, formData);
+  return response.data;
+};
+
+/**
  * 删除素材
  */
 export const deleteMaterial = async (materialId: string): Promise<ApiResponse<{ id: string }>> => {

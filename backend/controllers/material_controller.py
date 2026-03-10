@@ -104,22 +104,37 @@ def _handle_material_upload(default_project_id: Optional[str] = None):
         if error:
             return error
 
-        file = request.files.get('file')
-        material, error = _save_material_file(file, target_project_id)
-        if error:
-            return error
+        files = request.files.getlist('files') or []
+        if not files:
+            single_file = request.files.get('file')
+            if single_file:
+                files = [single_file]
 
-        result = material.to_dict()
+        if not files:
+            return bad_request("file is required")
 
-        # Generate AI caption if requested
         generate_caption = request.args.get('generate_caption', '').lower() in ('true', '1', 'yes')
-        if generate_caption:
-            file_service = FileService(current_app.config['UPLOAD_FOLDER'])
-            filepath = file_service.get_absolute_path(material.relative_path)
-            caption = _generate_image_caption(filepath)
-            result['caption'] = caption
+        saved_materials = []
+        file_service = FileService(current_app.config['UPLOAD_FOLDER']) if generate_caption else None
 
-        return success_response(result, status_code=201)
+        for file in files:
+            material, save_error = _save_material_file(file, target_project_id)
+            if save_error:
+                return save_error
+
+            result = material.to_dict()
+            if generate_caption and file_service:
+                filepath = file_service.get_absolute_path(material.relative_path)
+                result['caption'] = _generate_image_caption(filepath)
+            saved_materials.append(result)
+
+        if len(saved_materials) == 1:
+            return success_response(saved_materials[0], status_code=201)
+
+        return success_response({
+            'materials': saved_materials,
+            'count': len(saved_materials)
+        }, status_code=201)
 
     except Exception as e:
         db.session.rollback()

@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useReducer, useState } from 'react';
+import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FolderOpen, ImageIcon, RefreshCw, Upload, X, Eye, Sparkles, Clock3, Trash2 } from 'lucide-react';
 import { Button, Card, ImageLightbox, PageHeader, PAGE_CONTAINER_CLASS, useToast } from '@/components/shared';
 import { useT } from '@/hooks/useT';
 import {
   listMaterials,
-  uploadMaterial,
+  uploadMaterials,
   listProjects,
   deleteMaterial,
   type Material,
@@ -31,6 +31,10 @@ const i18nDict = {
       remove: '删除',
       closePreview: '关闭预览',
       emptyHint: '上传图片或通过素材生成功能创建素材',
+      dropHint: '可拖动图片到列表区域上传，支持多素材同时添加',
+      dropSubHint: '也可点击右上角上传按钮进行多选',
+      dropActive: '松开鼠标即可上传 {{count}} 张图片',
+      uploadSummary: '已上传 {{count}} 个素材',
       closeGenerator: '关闭生成面板',
       pending: '待生成',
       pendingHint: '任务已创建，生成完成后会自动出现在这里',
@@ -66,6 +70,10 @@ const i18nDict = {
       remove: 'Delete',
       closePreview: 'Close Preview',
       emptyHint: 'Upload images or create materials via the generator',
+      dropHint: 'Drag images into the list area to upload multiple files',
+      dropSubHint: 'You can also click Upload to select multiple files',
+      dropActive: 'Release to upload {{count}} image(s)',
+      uploadSummary: 'Uploaded {{count}} material(s)',
       closeGenerator: 'Close generator panel',
       pending: 'Pending',
       pendingHint: 'Task created. The generated material will appear here automatically.',
@@ -93,6 +101,8 @@ interface State {
   loading: boolean;
   uploading: boolean;
   downloading: boolean;
+  dragActive: boolean;
+  dragCount: number;
   filter: string;
   projects: Project[];
   projectsReady: boolean;
@@ -105,6 +115,7 @@ type Action =
   | { type: 'SET_LOADING'; on: boolean }
   | { type: 'SET_UPLOADING'; on: boolean }
   | { type: 'SET_DOWNLOADING'; on: boolean }
+  | { type: 'SET_DRAG_ACTIVE'; on: boolean; count?: number }
   | { type: 'SET_FILTER'; value: string }
   | { type: 'SET_PROJECTS'; list: Project[] }
   | { type: 'EXPAND_PROJECTS' }
@@ -120,6 +131,8 @@ const initial: State = {
   loading: false,
   uploading: false,
   downloading: false,
+  dragActive: false,
+  dragCount: 0,
   filter: 'all',
   projects: [],
   projectsReady: false,
@@ -137,6 +150,8 @@ function reducer(s: State, a: Action): State {
       return { ...s, uploading: a.on };
     case 'SET_DOWNLOADING':
       return { ...s, downloading: a.on };
+    case 'SET_DRAG_ACTIVE':
+      return { ...s, dragActive: a.on, dragCount: a.on ? (a.count ?? s.dragCount) : 0 };
     case 'SET_FILTER':
       return { ...s, filter: a.value };
     case 'SET_PROJECTS':
@@ -160,7 +175,7 @@ function reducer(s: State, a: Action): State {
     case 'SET_PREVIEW':
       return { ...s, preview: a.preview };
     case 'RESET_EPHEMERAL':
-      return { ...s, showAllProjects: false, preview: null };
+      return { ...s, showAllProjects: false, preview: null, dragActive: false, dragCount: 0 };
     default:
       return s;
   }
@@ -198,10 +213,10 @@ const ToolbarSection: React.FC<{
   t: ReturnType<typeof useT>;
   state: State;
   dispatch: React.Dispatch<Action>;
-  onRefresh: () => void;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onGenerate: () => void;
-}> = ({ t, state, dispatch, onRefresh, onUpload, onGenerate }) => (
+}> = ({ t, state, dispatch, fileInputRef, onUpload, onGenerate }) => (
   <div className="space-y-2">
     <div className="flex items-center justify-between flex-wrap gap-2">
       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-foreground-tertiary">
@@ -243,7 +258,7 @@ const ToolbarSection: React.FC<{
             <Upload size={16} />
             <span>{state.uploading ? t('common.uploading') : t('common.upload')}</span>
           </div>
-          <input type="file" accept="image/*" onChange={onUpload} className="hidden" disabled={state.uploading} />
+          <input ref={fileInputRef as React.RefObject<HTMLInputElement>} type="file" accept="image/*" multiple onChange={onUpload} className="hidden" disabled={state.uploading} />
         </label>
 
         <Button variant="primary" size="sm" icon={<Sparkles size={16} />} onClick={onGenerate}>
@@ -258,11 +273,28 @@ const ToolbarSection: React.FC<{
 const MaterialGrid: React.FC<{
   items: Array<Material | PendingMaterialItem>;
   deleting: Set<string>;
+  dragActive: boolean;
+  dragCount: number;
   t: ReturnType<typeof useT>;
   onPreview: (e: React.MouseEvent, m: Material) => void;
   onDelete: (e: React.MouseEvent<HTMLButtonElement>, m: Material) => void;
-}> = ({ items, deleting, t, onPreview, onDelete }) => (
-  <div className="grid grid-cols-4 gap-4 max-h-[70vh] overflow-y-auto p-4">
+  onDragEnter: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragLeave: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDrop: (e: React.DragEvent<HTMLDivElement>) => void;
+}> = ({ items, deleting, dragActive, dragCount, t, onPreview, onDelete, onDragEnter, onDragOver, onDragLeave, onDrop }) => (
+  <div
+    onDragEnter={onDragEnter}
+    onDragOver={onDragOver}
+    onDragLeave={onDragLeave}
+    onDrop={onDrop}
+    className={`relative rounded-xl border border-dashed p-4 transition-all ${dragActive ? 'border-banana-400 bg-banana-50/70 dark:bg-banana-500/10 scale-[0.995]' : 'border-gray-200 dark:border-border-primary'}`}
+  >
+    <div className="mb-3 flex items-center justify-between gap-3 text-xs text-gray-500 dark:text-foreground-tertiary">
+      <span>{t('mg.dropHint')}</span>
+      <span className="text-[11px]">{dragActive ? t('mg.dropActive', { count: dragCount || 1 }) : t('mg.dropSubHint')}</span>
+    </div>
+    <div className="grid grid-cols-4 gap-4 max-h-[70vh] overflow-y-auto">
     {items.map((m) => {
       if (isPendingMaterial(m)) {
         return (
@@ -316,6 +348,15 @@ const MaterialGrid: React.FC<{
         </div>
       );
     })}
+    </div>
+
+    {dragActive && (
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-banana-500/10">
+        <div className="rounded-full bg-white/95 px-4 py-2 text-sm font-medium text-banana-700 shadow">
+          {t('mg.dropActive', { count: dragCount || 1 })}
+        </div>
+      </div>
+    )}
   </div>
 );
 
@@ -377,25 +418,64 @@ export const MaterialManagement: React.FC = () => {
     fetchItems();
   }, [s.filter, s.projectsReady]);
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!ACCEPTED_TYPES.includes(file.type)) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounterRef = useRef(0);
+
+  const uploadSelectedFiles = useCallback(async (files: File[]) => {
+    if (!files.length) return;
+    const invalidFile = files.find((file) => !ACCEPTED_TYPES.includes(file.type));
+    if (invalidFile) {
       show({ message: t('mg.msg.badFormat'), type: 'error' });
       return;
     }
+
     dispatch({ type: 'SET_UPLOADING', on: true });
     try {
       const pid = s.filter === 'all' || s.filter === 'none' ? null : s.filter;
-      await uploadMaterial(file, pid);
-      show({ message: t('mg.msg.uploaded'), type: 'success' });
-      fetchItems();
+      await uploadMaterials(files, pid);
+      show({ message: files.length === 1 ? t('mg.msg.uploaded') : t('mg.uploadSummary', { count: files.length }), type: 'success' });
+      await fetchItems();
     } catch (err: any) {
       show({ message: err?.response?.data?.error?.message || err.message || t('mg.msg.uploadErr'), type: 'error' });
     } finally {
       dispatch({ type: 'SET_UPLOADING', on: false });
-      e.target.value = '';
+      dispatch({ type: 'SET_DRAG_ACTIVE', on: false, count: 0 });
+      dragCounterRef.current = 0;
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  }, [fetchItems, s.filter, show, t]);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    await uploadSelectedFiles(Array.from(e.target.files || []));
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.dataTransfer.types.includes('Files')) return;
+    dragCounterRef.current += 1;
+    const count = e.dataTransfer.items?.length || e.dataTransfer.files?.length || 1;
+    dispatch({ type: 'SET_DRAG_ACTIVE', on: true, count });
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+    if (dragCounterRef.current === 0) dispatch({ type: 'SET_DRAG_ACTIVE', on: false, count: 0 });
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    await uploadSelectedFiles(Array.from(e.dataTransfer.files || []));
   };
 
   const handleDelete = async (e: React.MouseEvent<HTMLButtonElement>, m: Material) => {
@@ -461,25 +541,38 @@ export const MaterialManagement: React.FC = () => {
 
       <main className={`${PAGE_CONTAINER_CLASS} py-6 md:py-8`}>
         <Card className="p-4 md:p-5 space-y-4">
-          <ToolbarSection t={t} state={s} dispatch={dispatch} onRefresh={fetchItems} onUpload={handleUpload} onGenerate={() => setIsGeneratorOpen(true)} />
+          <ToolbarSection t={t} state={s} dispatch={dispatch} fileInputRef={fileInputRef} onUpload={handleUpload} onGenerate={() => setIsGeneratorOpen(true)} />
 
           {s.loading && displayItems.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-gray-400">{t('common.loading')}</div>
             </div>
           ) : displayItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-400 p-4">
+            <div className={`flex flex-col items-center justify-center py-12 text-gray-400 p-4 rounded-xl border border-dashed transition-all ${s.dragActive ? 'border-banana-400 bg-banana-50/70 dark:bg-banana-500/10 scale-[0.995]' : 'border-gray-200 dark:border-border-primary'}`}
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               <ImageIcon size={48} className="mb-4 opacity-50" />
               <div className="text-sm">{t('mg.empty')}</div>
               <div className="text-xs mt-1">{t('mg.emptyHint')}</div>
+              <div className="text-xs mt-2 text-banana-500">{s.dragActive ? t('mg.dropActive', { count: s.dragCount || 1 }) : t('mg.dropHint')}</div>
+              <div className="text-[11px] mt-1 text-gray-400">{t('mg.dropSubHint')}</div>
             </div>
           ) : (
             <MaterialGrid
               items={displayItems}
               deleting={s.deleting}
+              dragActive={s.dragActive}
+              dragCount={s.dragCount}
               t={t}
               onPreview={handlePreview}
               onDelete={handleDelete}
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
             />
           )}
         </Card>
