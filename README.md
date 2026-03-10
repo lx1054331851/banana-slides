@@ -4,6 +4,13 @@
 
 <b> 在几分钟内从想法到演示文稿，无需繁琐排版、口头提出修改，迈向真正的"Vibe PPT" </b>
 
+```bash
+cd backend && uv run alembic upgrade head && uv run python app.py
+```
+
+```bash
+cd frontend && npm run dev
+```
 
 
 <p>

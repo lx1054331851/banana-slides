@@ -28,6 +28,29 @@ function getTaskRecommendations(task: Task | null): StyleRecommendation[] {
   return Array.isArray(recs) ? recs : [];
 }
 
+function formatTaskErrorMessage(message: string): string {
+  const raw = String(message || '').trim();
+  if (!raw) return '预览生成任务失败';
+
+  const normalized = raw.toLowerCase();
+  if (
+    normalized.includes('connection error') ||
+    normalized.includes('connectionerror') ||
+    normalized.includes('connecterror') ||
+    normalized.includes('readtimeout') ||
+    normalized.includes('writetimeout') ||
+    normalized.includes('remoteprotocolerror') ||
+    normalized.includes('unexpected_eof_while_reading') ||
+    normalized.includes('connection reset') ||
+    normalized.includes('broken pipe')
+  ) {
+    return `上游模型连接不稳定，请稍后重试。
+原始错误：${raw}`;
+  }
+
+  return raw;
+}
+
 export interface StyleWorkflowPanelProps {
   projectId: string;
   taskId: string;
@@ -39,6 +62,7 @@ export interface StyleWorkflowPanelProps {
   onTaskIdChange?: (taskId: string) => void;
   onBackToProject?: () => void;
   onApplied?: () => void;
+  showApplyAction?: boolean;
 }
 
 export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
@@ -52,6 +76,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
   onTaskIdChange,
   onBackToProject,
   onApplied,
+  showApplyAction = true,
 }) => {
   const navigate = useNavigate();
   const { show, ToastContainer } = useToast({ position: 'bottom-right' });
@@ -177,6 +202,11 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
   }, [refreshProject, show]);
 
   useEffect(() => {
+    if (projectId === 'global') {
+      setProject(null);
+      setProjectLoadError('');
+      return;
+    }
     (async () => {
       try {
         setIsLoading(true);
@@ -185,7 +215,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
         setIsLoading(false);
       }
     })();
-  }, [loadProjectWithToast]);
+  }, [loadProjectWithToast, projectId]);
 
   useEffect(() => {
     if (!taskId) return;
@@ -387,11 +417,15 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
     }
 
     try {
-      await api.createStylePreset({
+      const resp = await api.createStylePreset({
         name: rec.name || '未命名风格',
         style_json: jsonText,
         preview_images: previewImages,
       });
+      const createdId = (resp.data as any)?.id;
+      if (createdId && typeof window !== 'undefined') {
+        sessionStorage.setItem('style-library-latest-style-preset-id', createdId);
+      }
       show({ message: '已保存为JSON文本模版', type: 'success' });
     } catch (e: any) {
       show({ message: `保存JSON文本模版失败：${e?.message || ''}`, type: 'error' });
@@ -399,6 +433,10 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
   };
 
   const handleApplyAndContinue = async (rec: StyleRecommendation) => {
+    if (projectId === 'global' || !showApplyAction) {
+      show({ message: '全局风格工作流请直接保存为预设后再到项目中应用', type: 'info' });
+      return;
+    }
     const jsonText = (editedJsonByRecId[rec.id] || '').trim();
     if (!jsonText) {
       show({ message: 'style_json 不能为空', type: 'error' });
@@ -491,7 +529,8 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
   const completed = typeof progress?.completed === 'number' ? progress.completed : null;
   const failed = typeof progress?.failed === 'number' ? progress.failed : null;
   const currentStep = progress?.current_step ? String(progress.current_step) : '';
-  const taskError = (task as any)?.error_message || (task as any)?.error;
+  const rawTaskError = (task as any)?.error_message || (task as any)?.error;
+  const taskError = rawTaskError ? formatTaskErrorMessage(String(rawTaskError)) : '';
   const isProcessing = taskStatus === 'PROCESSING';
   const overallPercent = total !== null && completed !== null ? Math.max(0, Math.min(100, Math.round((completed / Math.max(total, 1)) * 100))) : null;
 
@@ -666,9 +705,11 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
                       : (hasPreview ? '重跑本组预览' : '生成本组预览')}
                   </Button>
                   <Button size="sm" className="whitespace-nowrap" variant="secondary" onClick={() => handleSavePreset(rec)}>保存为预设</Button>
-                  <Button size="sm" className="whitespace-nowrap" variant="primary" loading={applyLoadingRecId === rec.id} onClick={() => handleApplyAndContinue(rec)}>
-                    {applyMode === 'apply_only' ? '选用并应用' : '选用并继续'}
-                  </Button>
+                  {showApplyAction && (
+                    <Button size="sm" className="whitespace-nowrap" variant="primary" loading={applyLoadingRecId === rec.id} onClick={() => handleApplyAndContinue(rec)}>
+                      {applyMode === 'apply_only' ? '选用并应用' : '选用并继续'}
+                    </Button>
+                  )}
                 </div>
               </div>
 

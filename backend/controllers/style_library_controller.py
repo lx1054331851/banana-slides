@@ -4,20 +4,26 @@ Style Library Controller - global style templates & presets (no user system)
 import json
 import logging
 import re
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
 from flask import Blueprint, request, current_app
 from werkzeug.utils import secure_filename
 
-from models import db, StyleTemplate, StylePreset, PresetTemplate
+from models import db, StyleTemplate, StylePreset, PresetTemplate, Task
 from services import FileService
+from services.provider_routing import resolve_routing_bundle
+from services.task_manager import task_manager
+from services.style_preview_service import generate_style_preset_task, regenerate_style_preset_image_task
 from utils import success_response, error_response, not_found, bad_request, allowed_file
 
 logger = logging.getLogger(__name__)
 
 style_library_bp = Blueprint('style_library', __name__, url_prefix='/api')
 _PREVIEW_IMAGE_KEYS = ('cover_url', 'toc_url', 'detail_url', 'ending_url')
+_STYLE_PRESET_TASK_TYPES = ('STYLE_PRESET_GENERATE', 'STYLE_PRESET_IMAGE_REGENERATE')
+_RUNNING_TASK_STATUSES = ('PENDING', 'PROCESSING', 'RUNNING')
 
 
 def _validate_json_text(text: str):
@@ -110,16 +116,191 @@ def delete_style_template(template_id: str):
         return error_response('SERVER_ERROR', str(e), 500)
 
 
+def _validate_preview_key(preview_key: str) -> str:
+    normalized = secure_filename(str(preview_key or '').strip().lower())
+    if normalized not in _PREVIEW_IMAGE_KEYS:
+        raise ValueError('preview_key must be one of cover_url/toc_url/detail_url/ending_url')
+    return normalized
+
+
+def _recover_stale_style_task(task: Task) -> None:
+    if task.status not in _RUNNING_TASK_STATUSES or task.completed_at is not None:
+        return
+
+    fail_reason = None
+    if not task_manager.is_task_active(task.id):
+        fail_reason = 'Task is not active. The server may have restarted or the worker crashed.'
+    else:
+        stale_timeout = int(current_app.config.get('TASK_STALE_TIMEOUT_SECONDS', 1800) or 0)
+        if stale_timeout > 0 and task.created_at:
+            running_seconds = int((datetime.utcnow() - task.created_at).total_seconds())
+            if running_seconds > stale_timeout:
+                fail_reason = (
+                    f'Task exceeded maximum runtime ({stale_timeout}s). '
+                    'This usually indicates an upstream model/network timeout.'
+                )
+
+    if not fail_reason:
+        return
+
+    progress = task.get_progress() or {}
+    progress['stage'] = 'failed'
+    progress['current_step'] = 'failed'
+    task.set_progress(progress)
+    task.status = 'FAILED'
+    task.error_message = task.error_message or fail_reason
+    task.completed_at = datetime.utcnow()
+    db.session.commit()
+
+
 @style_library_bp.route('/style-presets', methods=['GET'])
 def list_style_presets():
     """
     GET /api/style-presets - list style presets
     """
     try:
-        presets = StylePreset.query.order_by(StylePreset.created_at.desc()).all()
+        presets = StylePreset.query.order_by(StylePreset.updated_at.desc(), StylePreset.created_at.desc()).all()
         return success_response({'presets': [p.to_dict() for p in presets]})
     except Exception as e:
         logger.error(f"list_style_presets failed: {str(e)}", exc_info=True)
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
+@style_library_bp.route('/style-presets/tasks', methods=['GET'])
+def list_style_preset_tasks():
+    """
+    GET /api/style-presets/tasks - list active and recent failed style preset tasks
+    """
+    try:
+        tasks = Task.query.filter(
+            Task.project_id == 'global',
+            Task.task_type.in_(_STYLE_PRESET_TASK_TYPES)
+        ).order_by(Task.created_at.desc()).all()
+
+        for task in tasks:
+            _recover_stale_style_task(task)
+
+        active_tasks = [task.to_dict() for task in tasks if task.status in _RUNNING_TASK_STATUSES]
+        failed_tasks = [task.to_dict() for task in tasks if task.status == 'FAILED'][:10]
+        return success_response({'tasks': active_tasks + failed_tasks})
+    except Exception as e:
+        logger.error(f"list_style_preset_tasks failed: {str(e)}", exc_info=True)
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
+@style_library_bp.route('/style-presets/generate', methods=['POST'])
+def generate_style_preset():
+    """
+    POST /api/style-presets/generate - generate a saved style preset from a JSON skeleton
+    """
+    try:
+        data = request.get_json() or {}
+        name = (data.get('name') or '').strip() or None
+        template_json_text = (data.get('template_json') or '').strip()
+        style_requirements = (data.get('style_requirements') or '').strip()
+        language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request('generation_override must be an object')
+        try:
+            _validate_json_text(template_json_text)
+        except Exception as e:
+            return bad_request(f'template_json must be valid JSON: {str(e)}')
+
+        try:
+            routing_bundle = resolve_routing_bundle(project=None, generation_override=generation_override)
+        except Exception as e:
+            return bad_request(str(e))
+
+        task = Task(project_id='global', task_type='STYLE_PRESET_GENERATE', status='PENDING')
+        task.set_progress({
+            'stage': 'json_generating',
+            'current_step': 'queued',
+            'total': 5,
+            'completed': 0,
+            'failed': 0,
+            'template_json': template_json_text,
+            'style_requirements': style_requirements,
+            'preset_name': name or '',
+            'preview_images': {},
+        })
+        db.session.add(task)
+        db.session.commit()
+
+        app = current_app._get_current_object()
+        task_manager.submit_task(
+            task.id,
+            generate_style_preset_task,
+            template_json_text,
+            style_requirements,
+            name,
+            app,
+            language,
+            routing_bundle,
+        )
+
+        return success_response(task.to_dict(), status_code=202)
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"generate_style_preset failed: {str(e)}", exc_info=True)
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
+@style_library_bp.route('/style-presets/<preset_id>/preview-images/<preview_key>/regenerate', methods=['POST'])
+def regenerate_style_preset_preview_image(preset_id: str, preview_key: str):
+    """
+    POST /api/style-presets/{preset_id}/preview-images/{preview_key}/regenerate - regenerate a single preset preview image
+    """
+    try:
+        preset = StylePreset.query.get(preset_id)
+        if not preset:
+            return not_found('StylePreset')
+
+        normalized_preview_key = _validate_preview_key(preview_key)
+        data = request.get_json(silent=True) or {}
+        language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request('generation_override must be an object')
+
+        try:
+            routing_bundle = resolve_routing_bundle(project=None, generation_override=generation_override)
+        except Exception as e:
+            return bad_request(str(e))
+
+        task = Task(project_id='global', task_type='STYLE_PRESET_IMAGE_REGENERATE', status='PENDING')
+        task.set_progress({
+            'stage': 'single_preview_generating',
+            'current_step': 'queued',
+            'total': 1,
+            'completed': 0,
+            'failed': 0,
+            'preset_id': preset_id,
+            'preset_name': preset.name,
+            'preview_key': normalized_preview_key,
+            'preview_images': preset.get_preview_images(),
+        })
+        db.session.add(task)
+        db.session.commit()
+
+        app = current_app._get_current_object()
+        task_manager.submit_task(
+            task.id,
+            regenerate_style_preset_image_task,
+            preset_id,
+            normalized_preview_key,
+            app,
+            language,
+            routing_bundle,
+        )
+
+        return success_response(task.to_dict(), status_code=202)
+    except ValueError as e:
+        db.session.rollback()
+        return bad_request(str(e))
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"regenerate_style_preset_preview_image failed: {str(e)}", exc_info=True)
         return error_response('SERVER_ERROR', str(e), 500)
 
 

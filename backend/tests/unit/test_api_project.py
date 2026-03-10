@@ -249,3 +249,45 @@ class TestProjectDelete:
         
         assert response.status_code == 404
 
+
+
+class TestGlobalStyleRecommendationWorkflow:
+    """全局 JSON 模版风格推荐链路测试"""
+
+    @patch('controllers.project_controller.task_manager.submit_task')
+    @patch('controllers.project_controller.resolve_routing_bundle')
+    def test_start_global_style_recommendations(self, mock_resolve_routing_bundle, mock_submit_task, client):
+        mock_resolve_routing_bundle.return_value = object()
+
+        response = client.post('/api/projects/global/style/recommendations', json={
+            'template_json': '{"layout":"minimal"}',
+            'style_requirements': '科技发布会',
+            'generate_previews': True,
+        })
+
+        data = assert_success_response(response, 202)
+        assert data['data']['status'] == 'PROCESSING'
+        assert data['data']['task_id']
+        mock_resolve_routing_bundle.assert_called_once()
+        mock_submit_task.assert_called_once()
+
+    @patch('controllers.project_controller.task_manager.submit_task')
+    @patch('controllers.project_controller.resolve_routing_bundle')
+    def test_regenerate_global_style_previews(self, mock_resolve_routing_bundle, mock_submit_task, client):
+        mock_resolve_routing_bundle.return_value = object()
+
+        response = client.post('/api/projects/global/style/recommendations/rec-1/previews', json={
+            'style_json': {'palette': 'orange'},
+            'sample_pages': {
+                'cover': '封面',
+                'toc': '目录',
+                'detail': '详情',
+                'ending': '结尾',
+            }
+        })
+
+        data = assert_success_response(response, 202)
+        assert data['data']['status'] == 'PROCESSING'
+        assert data['data']['task_id']
+        mock_resolve_routing_bundle.assert_called_once()
+        mock_submit_task.assert_called_once()

@@ -52,11 +52,14 @@ class Task(db.Model):
     
     def to_dict(self):
         """Convert to dictionary"""
+        progress = self.get_progress()
         return {
             'task_id': self.id,
+            'id': self.id,
             'task_type': self.task_type,
             'status': self.status,
-            'progress': self.get_progress(),
+            'stage': progress.get('stage') if isinstance(progress, dict) else None,
+            'progress': progress,
             'error_message': self.error_message,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,

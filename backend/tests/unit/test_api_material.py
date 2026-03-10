@@ -8,9 +8,9 @@ from PIL import Image
 from conftest import assert_success_response, assert_error_response
 
 
-def _create_test_image():
+def _create_test_image(color='red'):
     """Helper to create a test PNG image bytes"""
-    img = Image.new('RGB', (100, 100), color='red')
+    img = Image.new('RGB', (100, 100), color=color)
     img_bytes = io.BytesIO()
     img.save(img_bytes, format='PNG')
     img_bytes.seek(0)
@@ -91,6 +91,26 @@ class TestMaterialUpload:
             content_type='multipart/form-data'
         )
         assert response.status_code == 400
+
+
+    def test_upload_multiple_materials(self, client):
+        """Multiple image files should upload successfully"""
+        first = _create_test_image(color='red')
+        second = _create_test_image(color='blue')
+        response = client.post(
+            '/api/materials/upload',
+            data={
+                'files': [
+                    (first, 'first.png'),
+                    (second, 'second.png'),
+                ]
+            },
+            content_type='multipart/form-data'
+        )
+        data = assert_success_response(response, 201)
+        assert data['data']['count'] == 2
+        assert len(data['data']['materials']) == 2
+        assert all('url' in item for item in data['data']['materials'])
 
 
 @pytest.mark.unit
