@@ -63,3 +63,4 @@ _local_backup/
 
 # VS Code workspace settings
 .vscode/
+.DS_Store
