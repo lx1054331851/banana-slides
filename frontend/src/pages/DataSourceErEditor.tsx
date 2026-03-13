@@ -2,9 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  ArrowRightLeft,
   Bot,
   Database,
   Grip,
+  Keyboard,
   LayoutGrid,
   Link2,
   Maximize2,
@@ -28,8 +30,9 @@ import {
   listDataSourceRelations,
   suggestDataSourceRelations,
   updateDataSourceErLayout,
+  updateDataSourceRelation,
 } from '@/api/endpoints';
-import { Button, Card, useConfirm, useToast } from '@/components/shared';
+import { Button, Card, useToast } from '@/components/shared';
 import type { DataSource, DataSourceErLayout, DataSourceRelation, DataSourceTable } from '@/types';
 import { cn } from '@/utils';
 
@@ -72,6 +75,20 @@ const relationTypeLabels: Record<string, string> = {
   many_to_many: 'N:N',
 };
 
+const relationTypeOptions = [
+  { value: 'one_to_one', label: '1:1' },
+  { value: 'one_to_many', label: '1:N' },
+  { value: 'many_to_one', label: 'N:1' },
+  { value: 'many_to_many', label: 'N:N' },
+];
+
+const TOOLBAR_BUTTON_BASE_CLASS = 'rounded-xl border shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md';
+const TOOLBAR_BUTTON_NEUTRAL_CLASS = `${TOOLBAR_BUTTON_BASE_CLASS} border-slate-200 bg-white/90 text-slate-700 hover:bg-white dark:border-border-primary dark:bg-background-primary/86 dark:text-foreground-secondary dark:hover:bg-background-hover`;
+const TOOLBAR_BUTTON_ACCENT_CLASS = `${TOOLBAR_BUTTON_BASE_CLASS} border-banana-300 bg-gradient-to-b from-banana-50 to-white text-slate-900 hover:border-banana-400 dark:border-banana-500/40 dark:bg-gradient-to-b dark:from-banana-500/10 dark:to-background-primary dark:text-foreground-primary`;
+const TOOLBAR_BUTTON_DANGER_CLASS = `${TOOLBAR_BUTTON_BASE_CLASS} border-rose-200 bg-white/90 text-rose-700 hover:border-rose-300 hover:bg-rose-50 dark:border-rose-500/30 dark:bg-background-primary/86 dark:text-rose-300 dark:hover:bg-rose-500/10`;
+const FLOATING_TOOLBAR_GROUP_CLASS = 'flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/86 p-2 shadow-[0_14px_40px_rgba(15,23,42,0.08)] backdrop-blur dark:border-border-primary dark:bg-background-primary/82';
+const SHORTCUT_TOOLTIP_WIDTH = 288;
+
 const originStyles: Record<string, string> = {
   AUTO: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-400/30',
   MANUAL: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/30',
@@ -80,6 +97,17 @@ const originStyles: Record<string, string> = {
 const RELATION_AUTO_STROKE = '#2563EB';
 const RELATION_MANUAL_STROKE = '#D97706';
 const RELATION_ACTIVE_STROKE = '#7C3AED';
+
+const reverseRelationType = (relationType: string) => {
+  switch (relationType) {
+    case 'one_to_many':
+      return 'many_to_one';
+    case 'many_to_one':
+      return 'one_to_many';
+    default:
+      return relationType;
+  }
+};
 
 const getRelationVisualStyle = (relation: Pick<DataSourceRelation, 'origin'>, isActive: boolean) => {
   if (isActive) {
@@ -932,10 +960,12 @@ export const DataSourceErEditor: React.FC = () => {
   const navigate = useNavigate();
   const { datasourceId = '' } = useParams<{ datasourceId: string }>();
   const { show, ToastContainer } = useToast();
-  const { confirm, ConfirmDialog } = useConfirm();
 
   const shellRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const toolbarOverlayRef = useRef<HTMLDivElement | null>(null);
+  const toolbarScrollRef = useRef<HTMLDivElement | null>(null);
+  const shortcutTriggerRef = useRef<HTMLButtonElement | null>(null);
   const cardBodyRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const interactionRef = useRef<CanvasInteraction>(null);
   const viewportRef = useRef<ViewportState>(DEFAULT_VIEWPORT);
@@ -952,6 +982,9 @@ export const DataSourceErEditor: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [activeRelationId, setActiveRelationId] = useState('');
+  const [shortcutTooltipOpen, setShortcutTooltipOpen] = useState(false);
+  const [shortcutTooltipPosition, setShortcutTooltipPosition] = useState<{ left: number; top: number } | null>(null);
+  const [updatingRelationId, setUpdatingRelationId] = useState<string | null>(null);
   const [selectedTableNames, setSelectedTableNames] = useState<string[]>([]);
   const [deletingRelationId, setDeletingRelationId] = useState<string | null>(null);
   const [selectionMarquee, setSelectionMarquee] = useState<Rect | null>(null);
@@ -972,6 +1005,33 @@ export const DataSourceErEditor: React.FC = () => {
   viewportRef.current = viewport;
 
   const schemaTables = datasource?.schema_tables || EMPTY_TABLES;
+
+  const updateShortcutTooltipPosition = useCallback(() => {
+    const overlayRect = toolbarOverlayRef.current?.getBoundingClientRect();
+    const triggerRect = shortcutTriggerRef.current?.getBoundingClientRect();
+
+    if (!overlayRect || !triggerRect) {
+      setShortcutTooltipPosition(null);
+      return;
+    }
+
+    setShortcutTooltipPosition({
+      left: Math.min(
+        Math.max(triggerRect.left - overlayRect.left + triggerRect.width / 2, SHORTCUT_TOOLTIP_WIDTH / 2 + 12),
+        overlayRect.width - SHORTCUT_TOOLTIP_WIDTH / 2 - 12,
+      ),
+      top: triggerRect.bottom - overlayRect.top + 10,
+    });
+  }, []);
+
+  const openShortcutTooltip = useCallback(() => {
+    updateShortcutTooltipPosition();
+    setShortcutTooltipOpen(true);
+  }, [updateShortcutTooltipPosition]);
+
+  const closeShortcutTooltip = useCallback(() => {
+    setShortcutTooltipOpen(false);
+  }, []);
 
   const schemaTableMap = useMemo(() => new Map(schemaTables.map((table) => [table.table_name, table])), [schemaTables]);
 
@@ -1682,6 +1742,73 @@ export const DataSourceErEditor: React.FC = () => {
     }
   }, [activateRelation, datasourceId, relations, reloadRelations, show]);
 
+  const applyUpdatedRelation = useCallback((nextRelation: DataSourceRelation) => {
+    setRelations((current) => current.map((relation) => (
+      relation.id === nextRelation.id ? nextRelation : relation
+    )));
+    activateRelation(nextRelation);
+  }, [activateRelation]);
+
+  const handleRelationTypeChange = useCallback(async (relation: DataSourceRelation, nextRelationType: string) => {
+    if (!datasourceId || !nextRelationType || nextRelationType === relation.relation_type) {
+      return;
+    }
+
+    setUpdatingRelationId(relation.id);
+    try {
+      const response = await updateDataSourceRelation(datasourceId, relation.id, {
+        relation_type: nextRelationType,
+      });
+      const nextRelation = response.data?.relation;
+      if (nextRelation) {
+        applyUpdatedRelation(nextRelation);
+      }
+      show({
+        message: `关系类型已更新为 ${relationTypeLabels[nextRelationType] || nextRelationType}`,
+        type: 'success',
+      });
+    } catch (error: any) {
+      show({
+        message: error?.response?.data?.error?.message || error?.message || '更新关系类型失败',
+        type: 'error',
+      });
+    } finally {
+      setUpdatingRelationId((current) => (current === relation.id ? null : current));
+    }
+  }, [applyUpdatedRelation, datasourceId, show]);
+
+  const handleReverseRelation = useCallback(async (relation: DataSourceRelation) => {
+    if (!datasourceId) {
+      return;
+    }
+
+    setUpdatingRelationId(relation.id);
+    try {
+      const response = await updateDataSourceRelation(datasourceId, relation.id, {
+        source_table: relation.target_table,
+        source_column: relation.target_column,
+        target_table: relation.source_table,
+        target_column: relation.source_column,
+        relation_type: reverseRelationType(relation.relation_type),
+      });
+      const nextRelation = response.data?.relation;
+      if (nextRelation) {
+        applyUpdatedRelation(nextRelation);
+      }
+      show({
+        message: '关系方向已反转',
+        type: 'success',
+      });
+    } catch (error: any) {
+      show({
+        message: error?.response?.data?.error?.message || error?.message || '反转关系方向失败',
+        type: 'error',
+      });
+    } finally {
+      setUpdatingRelationId((current) => (current === relation.id ? null : current));
+    }
+  }, [applyUpdatedRelation, datasourceId, show]);
+
   const resolveLinkDropTarget = useCallback((
     clientX: number,
     clientY: number,
@@ -2045,42 +2172,32 @@ export const DataSourceErEditor: React.FC = () => {
   };
 
   const handleDeleteRelation = useCallback((relation: DataSourceRelation) => {
-    confirm(
-      `确认删除关系 ${relation.source_table}.${relation.source_column} -> ${relation.target_table}.${relation.target_column} 吗？`,
-      () => {
-        void (async () => {
-          if (!datasourceId) {
-            return;
-          }
-          setDeletingRelationId(relation.id);
-          try {
-            await deleteDataSourceRelation(datasourceId, relation.id);
-            setRelations((prev) => prev.filter((item) => item.id !== relation.id));
-            if (activeRelationId === relation.id) {
-              setActiveRelationId('');
-            }
-            show({ message: '关系已删除', type: 'success' });
-          } catch (error: any) {
-            show({
-              message: error?.response?.data?.error?.message || error?.message || '删除关系失败',
-              type: 'error',
-            });
-          } finally {
-            setDeletingRelationId(null);
-          }
-        })();
-      },
-      {
-        title: '删除关系',
-        confirmText: '确认删除',
-        variant: 'danger',
-      },
-    );
-  }, [activeRelationId, confirm, datasourceId, show]);
+    void (async () => {
+      if (!datasourceId) {
+        return;
+      }
+      setDeletingRelationId(relation.id);
+      try {
+        await deleteDataSourceRelation(datasourceId, relation.id);
+        setRelations((prev) => prev.filter((item) => item.id !== relation.id));
+        if (activeRelationId === relation.id) {
+          setActiveRelationId('');
+        }
+        show({ message: '关系已删除', type: 'success' });
+      } catch (error: any) {
+        show({
+          message: error?.response?.data?.error?.message || error?.message || '删除关系失败',
+          type: 'error',
+        });
+      } finally {
+        setDeletingRelationId(null);
+      }
+    })();
+  }, [activeRelationId, datasourceId, show]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!['Delete', 'Backspace'].includes(event.key) || !activeRelation || deletingRelationId) {
+      if (!activeRelation || deletingRelationId || updatingRelationId) {
         return;
       }
 
@@ -2101,22 +2218,65 @@ export const DataSourceErEditor: React.FC = () => {
         }
       }
 
-      event.preventDefault();
-      handleDeleteRelation(activeRelation);
+      const key = event.key.toLowerCase();
+      const relationTypeByKey: Record<string, string> = {
+        '1': 'one_to_one',
+        '2': 'one_to_many',
+        '3': 'many_to_one',
+        '4': 'many_to_many',
+      };
+
+      if (['Delete', 'Backspace'].includes(event.key)) {
+        event.preventDefault();
+        handleDeleteRelation(activeRelation);
+        return;
+      }
+
+      if (key === 'r') {
+        event.preventDefault();
+        void handleReverseRelation(activeRelation);
+        return;
+      }
+
+      const nextRelationType = relationTypeByKey[key];
+      if (nextRelationType && nextRelationType !== activeRelation.relation_type) {
+        event.preventDefault();
+        void handleRelationTypeChange(activeRelation, nextRelationType);
+      }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [activeRelation, deletingRelationId, handleDeleteRelation]);
+  }, [activeRelation, deletingRelationId, handleDeleteRelation, handleRelationTypeChange, handleReverseRelation, updatingRelationId]);
+
+  useEffect(() => {
+    if (!shortcutTooltipOpen) {
+      return undefined;
+    }
+
+    const handleReposition = () => updateShortcutTooltipPosition();
+    const currentToolbarScroll = toolbarScrollRef.current;
+
+    window.addEventListener('resize', handleReposition);
+    document.addEventListener('scroll', handleReposition, true);
+    currentToolbarScroll?.addEventListener('scroll', handleReposition, { passive: true });
+
+    return () => {
+      window.removeEventListener('resize', handleReposition);
+      document.removeEventListener('scroll', handleReposition, true);
+      currentToolbarScroll?.removeEventListener('scroll', handleReposition);
+    };
+  }, [shortcutTooltipOpen, updateShortcutTooltipPosition]);
 
   return (
     <div ref={shellRef} className="min-h-screen bg-slate-100 dark:bg-background-primary">
       <div className="flex min-h-screen flex-col">
-        <div className="border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-border-primary dark:bg-background-secondary/90">
+        <div className="border-b border-slate-200 bg-white/88 px-4 py-2 backdrop-blur dark:border-border-primary dark:bg-background-secondary/88">
           <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <Button
                 variant="ghost"
+                className="rounded-xl px-3 text-slate-700 hover:bg-slate-100 dark:text-foreground-secondary dark:hover:bg-background-hover"
                 icon={<ArrowLeft size={16} />}
                 onClick={() => navigate(`/datasources?selected=${datasourceId}`)}
               >
@@ -2133,66 +2293,171 @@ export const DataSourceErEditor: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<RefreshCw size={14} />}
-                onClick={() => void loadWorkspace(true)}
-                loading={refreshing}
-              >
-                刷新
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<ScanSearch size={14} />}
-                onClick={() => void handleSuggestRelations()}
-                loading={detecting}
-                disabled={!schemaTables.length}
-              >
-                自动识别关系
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<LayoutGrid size={14} />}
-                onClick={handleAutoLayout}
-                disabled={!schemaTables.length}
-                data-testid="er-auto-layout-button"
-              >
-                自动布局
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                icon={<Trash2 size={14} />}
-                onClick={() => activeRelation && handleDeleteRelation(activeRelation)}
-                disabled={!activeRelation || deletingRelationId === activeRelation.id}
-              >
-                删除选中关系
-              </Button>
-              <Button size="sm" variant="ghost" icon={<ZoomOut size={14} />} onClick={() => adjustZoom(viewport.scale * 0.92)}>
-                缩小
-              </Button>
-              <Button size="sm" variant="ghost" icon={<ZoomIn size={14} />} onClick={() => adjustZoom(viewport.scale * 1.08)}>
-                放大
-              </Button>
-              <Button size="sm" variant="ghost" icon={<Move size={14} />} onClick={handleResetView}>
-                重置视图
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                icon={isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                onClick={() => void handleToggleFullscreen()}
-              >
-                {isFullscreen ? '退出全屏' : '全屏画布'}
-              </Button>
+              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 shadow-sm dark:border-border-primary dark:bg-background-primary dark:text-foreground-tertiary">
+                表 {schemaTables.length}
+              </span>
+              <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 shadow-sm dark:border-border-primary dark:bg-background-primary dark:text-foreground-tertiary">
+                关系 {visibleRelations.length}
+              </span>
             </div>
           </div>
         </div>
 
         <div className="relative flex-1 overflow-hidden" ref={canvasRef}>
+          <div className="pointer-events-none absolute left-1/2 top-3 z-30 w-[min(96vw,1600px)] -translate-x-1/2 px-2">
+            <div ref={toolbarOverlayRef} className="relative overflow-visible pb-1">
+              <div ref={toolbarScrollRef} className="pointer-events-auto overflow-x-auto">
+                <div className="flex min-w-max items-center justify-center gap-2 whitespace-nowrap">
+                  <div className={cn(FLOATING_TOOLBAR_GROUP_CLASS, 'px-3')}>
+                    <div
+                      onMouseEnter={openShortcutTooltip}
+                      onMouseLeave={closeShortcutTooltip}
+                    >
+                      <button
+                        ref={shortcutTriggerRef}
+                        type="button"
+                        aria-label="查看快捷键说明"
+                        aria-expanded={shortcutTooltipOpen}
+                        aria-describedby={shortcutTooltipOpen ? 'shortcut-tooltip' : undefined}
+                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-900 dark:border-border-primary dark:bg-background-hover dark:text-foreground-secondary dark:hover:bg-background-primary dark:hover:text-foreground-primary"
+                        onFocus={openShortcutTooltip}
+                        onBlur={closeShortcutTooltip}
+                        onClick={() => {
+                          if (shortcutTooltipOpen) {
+                            closeShortcutTooltip();
+                            return;
+                          }
+                          openShortcutTooltip();
+                        }}
+                      >
+                        <Keyboard size={13} />
+                        <span>快捷键</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className={FLOATING_TOOLBAR_GROUP_CLASS}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className={TOOLBAR_BUTTON_NEUTRAL_CLASS}
+                      icon={<RefreshCw size={14} />}
+                      onClick={() => void loadWorkspace(true)}
+                      loading={refreshing}
+                    >
+                      刷新
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className={TOOLBAR_BUTTON_ACCENT_CLASS}
+                      icon={<ScanSearch size={14} />}
+                      onClick={() => void handleSuggestRelations()}
+                      loading={detecting}
+                      disabled={!schemaTables.length}
+                    >
+                      自动识别
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className={TOOLBAR_BUTTON_ACCENT_CLASS}
+                      icon={<LayoutGrid size={14} />}
+                      onClick={handleAutoLayout}
+                      disabled={!schemaTables.length}
+                      data-testid="er-auto-layout-button"
+                    >
+                      布局
+                    </Button>
+                  </div>
+
+                  <div className={FLOATING_TOOLBAR_GROUP_CLASS}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className={activeRelation ? TOOLBAR_BUTTON_DANGER_CLASS : TOOLBAR_BUTTON_NEUTRAL_CLASS}
+                      icon={<Trash2 size={14} />}
+                      onClick={() => activeRelation && handleDeleteRelation(activeRelation)}
+                      disabled={!activeRelation || deletingRelationId === activeRelation.id}
+                    >
+                      删除
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className={activeRelation ? TOOLBAR_BUTTON_ACCENT_CLASS : TOOLBAR_BUTTON_NEUTRAL_CLASS}
+                      icon={<ArrowRightLeft size={14} />}
+                      onClick={() => activeRelation && void handleReverseRelation(activeRelation)}
+                      disabled={!activeRelation || deletingRelationId === activeRelation.id || updatingRelationId === activeRelation.id}
+                    >
+                      反转
+                    </Button>
+                  </div>
+
+                  <div className={FLOATING_TOOLBAR_GROUP_CLASS}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className={TOOLBAR_BUTTON_NEUTRAL_CLASS}
+                      icon={<ZoomOut size={14} />}
+                      onClick={() => adjustZoom(viewport.scale * 0.92)}
+                    >
+                      缩小
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className={TOOLBAR_BUTTON_NEUTRAL_CLASS}
+                      icon={<ZoomIn size={14} />}
+                      onClick={() => adjustZoom(viewport.scale * 1.08)}
+                    >
+                      放大
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className={TOOLBAR_BUTTON_NEUTRAL_CLASS}
+                      icon={<Move size={14} />}
+                      onClick={handleResetView}
+                    >
+                      重置
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className={TOOLBAR_BUTTON_NEUTRAL_CLASS}
+                      icon={isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                      onClick={() => void handleToggleFullscreen()}
+                    >
+                      {isFullscreen ? '退出全屏' : '全屏'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              {shortcutTooltipOpen && shortcutTooltipPosition && (
+                <div
+                  id="shortcut-tooltip"
+                  role="tooltip"
+                  className="pointer-events-none absolute z-50 w-72 -translate-x-1/2 rounded-2xl border border-slate-200 bg-white/96 p-3 text-left shadow-xl dark:border-border-primary dark:bg-background-secondary/96"
+                  style={{
+                    left: `${shortcutTooltipPosition.left}px`,
+                    top: `${shortcutTooltipPosition.top}px`,
+                  }}
+                >
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-foreground-tertiary">
+                    快捷编辑
+                  </div>
+                  <div className="mt-2 text-xs leading-5 text-slate-700 dark:text-foreground-secondary">
+                    先选中关系，再使用快捷键快速编辑。
+                  </div>
+                  <div className="mt-2 text-xs leading-5 text-slate-700 dark:text-foreground-secondary">
+                    `R` 反转方向，`1` 切换 `1:1`，`2` 切换 `1:N`，`3` 切换 `N:1`，`4` 切换 `N:N`。
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div
             className="absolute inset-0 overflow-hidden touch-none"
             onWheel={handleCanvasWheel}
@@ -2286,9 +2551,27 @@ export const DataSourceErEditor: React.FC = () => {
                     </g>
                     <g
                       transform={`translate(${midpoint.x}, ${midpoint.y}) rotate(${midpointAngle})`}
-                      pointerEvents="none"
+                      className={cn('cursor-pointer', updatingRelationId === relation.id && 'opacity-60')}
+                      data-er-interactive="true"
                       data-testid={`er-relation-arrow-${relation.id}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (updatingRelationId === relation.id || deletingRelationId === relation.id) {
+                          return;
+                        }
+                        activateRelation(relation);
+                        void handleReverseRelation(relation);
+                      }}
                     >
+                      <rect
+                        x={-14}
+                        y={-14}
+                        width={28}
+                        height={28}
+                        rx={7}
+                        fill="transparent"
+                        pointerEvents="all"
+                      />
                       <rect x={-10} y={-10} width={20} height={20} rx={5} fill={markerFill} stroke={strokeColor} />
                       <path d="M -2.5 -4.5 L 4.5 0 L -2.5 4.5 Z" fill={strokeColor} />
                     </g>
@@ -2570,6 +2853,7 @@ export const DataSourceErEditor: React.FC = () => {
                 {visibleRelations.map((relation) => {
                   const isActive = relation.id === activeRelationId;
                   const relationListCardClassName = getRelationListItemClassName(relation, isActive);
+                  const isRelationUpdating = updatingRelationId === relation.id;
                   return (
                     <div
                       key={relation.id}
@@ -2619,6 +2903,39 @@ export const DataSourceErEditor: React.FC = () => {
                           </span>
                         )}
                       </div>
+                      <div className="mt-3 flex items-center gap-2">
+                        <select
+                          value={relation.relation_type}
+                          className="h-8 min-w-[88px] rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none transition focus:border-banana-400 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary"
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => {
+                            event.stopPropagation();
+                            void handleRelationTypeChange(relation, event.target.value);
+                          }}
+                          disabled={isRelationUpdating || deletingRelationId === relation.id}
+                          data-testid={`er-relation-type-select-${relation.id}`}
+                          aria-label={`关系类型 ${relation.source_table}.${relation.source_column}`}
+                        >
+                          {relationTypeOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-border-primary dark:text-foreground-secondary dark:hover:bg-background-hover"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleReverseRelation(relation);
+                          }}
+                          disabled={isRelationUpdating || deletingRelationId === relation.id}
+                          data-testid={`er-relation-reverse-${relation.id}`}
+                        >
+                          <ArrowRightLeft size={12} />
+                          反转
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -2662,8 +2979,6 @@ export const DataSourceErEditor: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {ConfirmDialog}
       <ToastContainer />
     </div>
   );

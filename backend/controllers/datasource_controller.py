@@ -55,6 +55,42 @@ def _parse_bool(value, default: bool = True) -> bool:
     return bool(value)
 
 
+def _reverse_relation_type(relation_type: str) -> str:
+    mapping = {
+        'one_to_one': 'one_to_one',
+        'one_to_many': 'many_to_one',
+        'many_to_one': 'one_to_many',
+        'many_to_many': 'many_to_many',
+    }
+    return mapping.get(relation_type, relation_type)
+
+
+def _validate_relation_endpoints(
+    source: DataSource,
+    source_table: str,
+    source_column: str,
+    target_table: str,
+    target_column: str,
+) -> str | None:
+    if not source_table or not source_column or not target_table or not target_column:
+        return 'source_table/source_column/target_table/target_column are required'
+    if source_table == target_table and source_column == target_column:
+        return 'relation endpoints must be different fields'
+
+    table_map = {table.table_name: table for table in source.tables}
+    source_table_obj = table_map.get(source_table)
+    target_table_obj = table_map.get(target_table)
+    if not source_table_obj or not target_table_obj:
+        return 'source_table or target_table does not exist in imported schema'
+
+    source_columns = {column.column_name for column in source_table_obj.columns}
+    target_columns = {column.column_name for column in target_table_obj.columns}
+    if source_column not in source_columns or target_column not in target_columns:
+        return 'source_column or target_column does not exist in imported schema'
+
+    return None
+
+
 def _parse_er_layout(value):
     if value is None:
         return None
@@ -423,6 +459,12 @@ def suggest_data_source_relations(datasource_id):
                 candidate['target_table'],
                 candidate['target_column'],
             )
+            reverse_key = (
+                candidate['target_table'],
+                candidate['target_column'],
+                candidate['source_table'],
+                candidate['source_column'],
+            )
             if key in existing_map:
                 rel = existing_map[key]
                 rel.is_active = True
@@ -431,6 +473,26 @@ def suggest_data_source_relations(datasource_id):
                     rel.origin = 'AUTO'
                     rel.relation_type = candidate.get('relation_type') or rel.relation_type
                     rel.note = candidate.get('note') or rel.note
+                updated_count += 1
+            elif reverse_key in existing_map and (
+                existing_map[reverse_key].relation_type == _reverse_relation_type(candidate.get('relation_type') or 'many_to_one')
+                or (
+                    existing_map[reverse_key].relation_type == (candidate.get('relation_type') or 'many_to_one')
+                    and (candidate.get('relation_type') or 'many_to_one') in {'one_to_one', 'many_to_many'}
+                )
+            ):
+                rel = existing_map[reverse_key]
+                rel.source_table = candidate['source_table']
+                rel.source_column = candidate['source_column']
+                rel.target_table = candidate['target_table']
+                rel.target_column = candidate['target_column']
+                rel.relation_type = candidate.get('relation_type') or rel.relation_type
+                rel.origin = 'AUTO'
+                rel.confidence = candidate.get('confidence')
+                rel.note = candidate.get('note') or rel.note
+                rel.is_active = True
+                existing_map.pop(reverse_key, None)
+                existing_map[key] = rel
                 updated_count += 1
             else:
                 db.session.add(
@@ -481,8 +543,15 @@ def create_data_source_relation(datasource_id):
         relation_type = str(data.get('relation_type') or 'many_to_one').strip() or 'many_to_one'
         note = str(data.get('note') or '').strip() or None
 
-        if not source_table or not source_column or not target_table or not target_column:
-            return bad_request('source_table/source_column/target_table/target_column are required')
+        validation_error = _validate_relation_endpoints(
+            source,
+            source_table,
+            source_column,
+            target_table,
+            target_column,
+        )
+        if validation_error:
+            return bad_request(validation_error)
 
         existing = DataSourceRelation.query.filter_by(
             datasource_id=datasource_id,
@@ -524,17 +593,60 @@ def create_data_source_relation(datasource_id):
 @datasource_bp.route('/<datasource_id>/relations/<relation_id>', methods=['PUT'])
 def update_data_source_relation(datasource_id, relation_id):
     try:
+        source = DataSource.query.get(datasource_id)
+        if not source:
+            return not_found('DataSource')
+
         relation = DataSourceRelation.query.filter_by(id=relation_id, datasource_id=datasource_id).first()
         if not relation:
             return not_found('DataSourceRelation')
 
         data = request.get_json() or {}
+        next_source_table = str(data.get('source_table') or relation.source_table).strip()
+        next_source_column = str(data.get('source_column') or relation.source_column).strip()
+        next_target_table = str(data.get('target_table') or relation.target_table).strip()
+        next_target_column = str(data.get('target_column') or relation.target_column).strip()
+        next_relation_type = str(data.get('relation_type') or relation.relation_type).strip() or relation.relation_type
+
+        validation_error = _validate_relation_endpoints(
+            source,
+            next_source_table,
+            next_source_column,
+            next_target_table,
+            next_target_column,
+        )
+        if validation_error:
+            return bad_request(validation_error)
+
+        duplicate = DataSourceRelation.query.filter_by(
+            datasource_id=datasource_id,
+            source_table=next_source_table,
+            source_column=next_source_column,
+            target_table=next_target_table,
+            target_column=next_target_column,
+        ).first()
+        if duplicate and duplicate.id != relation.id:
+            return bad_request('relation already exists with the same source/target fields')
+
+        direction_changed = (
+            relation.source_table != next_source_table
+            or relation.source_column != next_source_column
+            or relation.target_table != next_target_table
+            or relation.target_column != next_target_column
+        )
+
+        relation.source_table = next_source_table
+        relation.source_column = next_source_column
+        relation.target_table = next_target_table
+        relation.target_column = next_target_column
         if 'is_active' in data:
             relation.is_active = _parse_bool(data.get('is_active'), default=relation.is_active)
         if 'note' in data:
             relation.note = str(data.get('note') or '').strip() or None
-        if 'relation_type' in data:
-            relation.relation_type = str(data.get('relation_type') or '').strip() or relation.relation_type
+        relation.relation_type = next_relation_type
+        if direction_changed or 'relation_type' in data or 'note' in data:
+            relation.origin = 'MANUAL'
+            relation.confidence = None
         db.session.commit()
         return success_response({'relation': relation.to_dict()})
     except Exception as exc:

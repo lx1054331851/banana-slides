@@ -1871,6 +1871,26 @@ export const createDataSourceRelation = async (
   return response.data;
 };
 
+export const updateDataSourceRelation = async (
+  datasourceId: string,
+  relationId: string,
+  payload: Partial<{
+    source_table: string;
+    source_column: string;
+    target_table: string;
+    target_column: string;
+    relation_type: string;
+    note: string | null;
+    is_active: boolean;
+  }>
+): Promise<ApiResponse<{ relation: DataSourceRelation }>> => {
+  const response = await apiClient.put<ApiResponse<{ relation: DataSourceRelation }>>(
+    `/api/data-sources/${datasourceId}/relations/${relationId}`,
+    payload
+  );
+  return response.data;
+};
+
 export const deleteDataSourceRelation = async (
   datasourceId: string,
   relationId: string

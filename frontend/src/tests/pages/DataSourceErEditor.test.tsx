@@ -163,6 +163,17 @@ const renderPage = async ({
         relation: relationsOverride[0],
       },
     })),
+    updateDataSourceRelation: vi.fn(async (_datasourceId, relationId, payload) => {
+      const currentRelation = relationsOverride.find((relation) => relation.id === relationId) || relationsOverride[0]
+      return {
+        data: {
+          relation: {
+            ...currentRelation,
+            ...payload,
+          },
+        },
+      }
+    }),
     updateDataSourceErLayout: vi.fn(async (_datasourceId, erLayout) => ({
       data: {
         er_layout: erLayout,
@@ -583,7 +594,6 @@ describe('DataSourceErEditor', () => {
 
     fireEvent.click(await screen.findByTestId('er-relation-hit-rel-1'))
     fireEvent.keyDown(document, { key })
-    fireEvent.click(await screen.findByRole('button', { name: '确认删除' }))
 
     await waitFor(() => {
       expect(api.deleteDataSourceRelation).toHaveBeenCalledWith('ds-1', 'rel-1')
@@ -591,6 +601,128 @@ describe('DataSourceErEditor', () => {
 
     await waitFor(() => {
       expect(screen.queryByTestId('er-relation-line-rel-1')).not.toBeInTheDocument()
+    })
+  })
+
+  it('updates relation type from the relations panel', async () => {
+    await renderPage()
+
+    const api = await import('@/api/endpoints')
+
+    fireEvent.click(screen.getByTestId('er-relations-toggle'))
+
+    const typeSelect = await screen.findByTestId('er-relation-type-select-rel-1')
+    fireEvent.change(typeSelect, { target: { value: 'one_to_many' } })
+
+    await waitFor(() => {
+      expect(api.updateDataSourceRelation).toHaveBeenCalledWith('ds-1', 'rel-1', {
+        relation_type: 'one_to_many',
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('er-relation-cardinality-start-rel-1')).toHaveTextContent('1')
+      expect(screen.getByTestId('er-relation-cardinality-end-rel-1')).toHaveTextContent('*')
+      expect(screen.getByDisplayValue('1:N')).toBeInTheDocument()
+    })
+  })
+
+  it('reverses relation direction from the relations panel', async () => {
+    await renderPage()
+
+    const api = await import('@/api/endpoints')
+
+    fireEvent.click(screen.getByTestId('er-relations-toggle'))
+    fireEvent.click(await screen.findByTestId('er-relation-reverse-rel-1'))
+
+    await waitFor(() => {
+      expect(api.updateDataSourceRelation).toHaveBeenCalledWith('ds-1', 'rel-1', {
+        source_table: 'users',
+        source_column: 'id',
+        target_table: 'orders',
+        target_column: 'user_id',
+        relation_type: 'one_to_many',
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('users.id')).toBeInTheDocument()
+      expect(screen.getByText('关联到 orders.user_id')).toBeInTheDocument()
+      expect(screen.getByTestId('er-relation-cardinality-start-rel-1')).toHaveTextContent('1')
+      expect(screen.getByTestId('er-relation-cardinality-end-rel-1')).toHaveTextContent('*')
+    })
+  })
+
+  it('reverses relation direction when clicking the relation arrow marker', async () => {
+    await renderPage()
+
+    const api = await import('@/api/endpoints')
+
+    fireEvent.click(await screen.findByTestId('er-relation-arrow-rel-1'))
+
+    await waitFor(() => {
+      expect(api.updateDataSourceRelation).toHaveBeenCalledWith('ds-1', 'rel-1', {
+        source_table: 'users',
+        source_column: 'id',
+        target_table: 'orders',
+        target_column: 'user_id',
+        relation_type: 'one_to_many',
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('er-relation-cardinality-start-rel-1')).toHaveTextContent('1')
+      expect(screen.getByTestId('er-relation-cardinality-end-rel-1')).toHaveTextContent('*')
+    })
+  })
+
+  it('supports relation editing keyboard shortcuts for reverse and cardinality', async () => {
+    await renderPage()
+
+    const api = await import('@/api/endpoints')
+
+    fireEvent.click(await screen.findByTestId('er-relation-hit-rel-1'))
+    fireEvent.keyDown(document, { key: 'r' })
+
+    await waitFor(() => {
+      expect(api.updateDataSourceRelation).toHaveBeenCalledWith('ds-1', 'rel-1', {
+        source_table: 'users',
+        source_column: 'id',
+        target_table: 'orders',
+        target_column: 'user_id',
+        relation_type: 'one_to_many',
+      })
+    })
+
+    fireEvent.keyDown(document, { key: '4' })
+
+    await waitFor(() => {
+      expect(api.updateDataSourceRelation).toHaveBeenLastCalledWith('ds-1', 'rel-1', {
+        relation_type: 'many_to_many',
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('er-relation-cardinality-start-rel-1')).toHaveTextContent('*')
+      expect(screen.getByTestId('er-relation-cardinality-end-rel-1')).toHaveTextContent('*')
+    })
+  })
+
+  it('shows the shortcut tooltip when hovering the info button', async () => {
+    await renderPage()
+
+    const shortcutButton = await screen.findByRole('button', { name: '查看快捷键说明' })
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+
+    fireEvent.mouseEnter(shortcutButton)
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('先选中关系，再使用快捷键快速编辑。')
+
+    fireEvent.mouseLeave(shortcutButton)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
     })
   })
 

@@ -113,6 +113,52 @@ def test_fetch_relation_candidates_prefers_llm(monkeypatch):
     assert candidates[0]['note'].startswith('llm_guess')
 
 
+def test_fetch_relation_candidates_deduplicates_inverse_llm_relations(monkeypatch):
+    source = _build_datasource_with_tables()
+    llm_response = """
+    {
+      "relations": [
+        {
+          "source_table": "orders",
+          "source_column": "id",
+          "target_table": "order_items",
+          "target_column": "order_id",
+          "relation_type": "one_to_many",
+          "confidence": 0.81,
+          "reason": "orders.id 对应多个明细"
+        },
+        {
+          "source_table": "order_items",
+          "source_column": "order_id",
+          "target_table": "orders",
+          "target_column": "id",
+          "relation_type": "many_to_one",
+          "confidence": 0.79,
+          "reason": "order_items.order_id 指向 orders.id"
+        }
+      ]
+    }
+    """
+
+    fake_ai = SimpleNamespace(
+        text_provider=SimpleNamespace(generate_text=lambda _prompt, thinking_budget=0: llm_response)
+    )
+    monkeypatch.setattr('services.data_source_service.get_ai_service', lambda: fake_ai)
+    monkeypatch.setattr(
+        DataSourceService,
+        '_fetch_relation_candidates_by_fk',
+        staticmethod(lambda *_args, **_kwargs: []),
+    )
+
+    candidates = DataSourceService.fetch_relation_candidates(source, selected_tables=['orders', 'order_items'])
+    assert len(candidates) == 1
+    assert candidates[0]['source_table'] == 'order_items'
+    assert candidates[0]['source_column'] == 'order_id'
+    assert candidates[0]['target_table'] == 'orders'
+    assert candidates[0]['target_column'] == 'id'
+    assert candidates[0]['relation_type'] == 'many_to_one'
+
+
 def test_fetch_relation_candidates_falls_back_when_llm_invalid(monkeypatch):
     source = _build_datasource_with_tables()
     llm_response = """

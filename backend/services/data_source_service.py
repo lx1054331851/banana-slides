@@ -333,13 +333,75 @@ class DataSourceService:
       "confidence": 0.9,
       "reason": "order_items.order_id 命名上指向 orders.id"
     }}
-  ]
+      ]
 }}
 """.strip()
 
     @staticmethod
+    def _reverse_relation_type(relation_type: str) -> str:
+        mapping = {
+            'one_to_one': 'one_to_one',
+            'one_to_many': 'many_to_one',
+            'many_to_one': 'one_to_many',
+            'many_to_many': 'many_to_many',
+        }
+        return mapping.get(relation_type, relation_type)
+
+    @staticmethod
+    def _score_relation_candidate(
+        source_table: str,
+        source_column: str,
+        target_table: str,
+        target_column: str,
+        relation_type: str,
+        confidence_value: float,
+        schema_details: dict[str, dict[str, dict[str, bool | str | None]]],
+    ) -> float:
+        source_meta = schema_details.get(source_table, {}).get(source_column, {})
+        target_meta = schema_details.get(target_table, {}).get(target_column, {})
+        source_name = source_column.lower()
+        target_name = target_column.lower()
+
+        score = confidence_value * 100.0
+
+        if relation_type == 'many_to_one':
+            score += 18.0
+        elif relation_type == 'one_to_many':
+            score += 8.0
+        elif relation_type == 'one_to_one':
+            score += 12.0
+
+        if source_meta.get('is_primary'):
+            score -= 18.0
+        if target_meta.get('is_primary'):
+            score += 24.0
+
+        if source_name.endswith('_id'):
+            score += 14.0
+        if source_name.endswith('_code'):
+            score += 9.0
+        if target_name == 'id':
+            score += 18.0
+        if target_name.endswith('_id'):
+            score += 6.0
+        if target_name == 'code':
+            score += 10.0
+
+        source_table_name = source_table.lower()
+        target_table_name = target_table.lower()
+        if target_name == 'id' and source_name == f"{target_table_name}_id":
+            score += 16.0
+        if target_name == 'code' and source_name == f"{target_table_name}_code":
+            score += 12.0
+        if source_table_name == target_table_name:
+            score -= 10.0
+
+        return score
+
+    @staticmethod
     def _normalize_llm_relation_candidates(raw_relations: list, schema_tables: list[dict]) -> list[dict]:
         schema_map: dict[str, set[str]] = {}
+        schema_details: dict[str, dict[str, dict[str, bool | str | None]]] = {}
         for table in schema_tables:
             table_name = str(table.get('table_name') or '').strip()
             if not table_name:
@@ -350,12 +412,19 @@ class DataSourceService:
                 for col in columns
                 if isinstance(col, dict) and str(col.get('column_name') or '').strip()
             }
+            schema_details[table_name] = {
+                str(col.get('column_name') or '').strip(): {
+                    'is_primary': bool(col.get('is_primary', False)),
+                    'data_type': col.get('data_type'),
+                }
+                for col in columns
+                if isinstance(col, dict) and str(col.get('column_name') or '').strip()
+            }
 
         allowed_relation_types = {'one_to_one', 'one_to_many', 'many_to_one', 'many_to_many'}
-        seen = set()
-        normalized: list[dict] = []
+        normalized_by_key: dict[tuple[str, str, str, str], dict] = {}
         if not isinstance(raw_relations, list):
-            return normalized
+            return []
 
         for item in raw_relations[:50]:
             if not isinstance(item, dict):
@@ -371,11 +440,6 @@ class DataSourceService:
             if source_column not in schema_map[source_table] or target_column not in schema_map[target_table]:
                 continue
 
-            key = (source_table, source_column, target_table, target_column)
-            if key in seen:
-                continue
-            seen.add(key)
-
             relation_type = str(item.get('relation_type') or '').strip().lower() or 'many_to_one'
             if relation_type not in allowed_relation_types:
                 relation_type = 'many_to_one'
@@ -390,19 +454,67 @@ class DataSourceService:
             reason = str(item.get('reason') or item.get('note') or '').strip()
             note = f"llm_guess: {reason}" if reason else 'llm_guess'
 
-            normalized.append(
-                {
-                    'source_table': source_table,
-                    'source_column': source_column,
-                    'target_table': target_table,
-                    'target_column': target_column,
-                    'relation_type': relation_type,
-                    'origin': 'AUTO',
-                    'confidence': confidence_value,
-                    'note': note,
-                }
+            candidate = {
+                'source_table': source_table,
+                'source_column': source_column,
+                'target_table': target_table,
+                'target_column': target_column,
+                'relation_type': relation_type,
+                'origin': 'AUTO',
+                'confidence': confidence_value,
+                'note': note,
+            }
+
+            key = (source_table, source_column, target_table, target_column)
+            reverse_key = (target_table, target_column, source_table, source_column)
+            direct_score = DataSourceService._score_relation_candidate(
+                source_table,
+                source_column,
+                target_table,
+                target_column,
+                relation_type,
+                confidence_value,
+                schema_details,
             )
-        return normalized
+
+            existing_direct = normalized_by_key.get(key)
+            if existing_direct:
+                existing_score = DataSourceService._score_relation_candidate(
+                    existing_direct['source_table'],
+                    existing_direct['source_column'],
+                    existing_direct['target_table'],
+                    existing_direct['target_column'],
+                    existing_direct['relation_type'],
+                    float(existing_direct.get('confidence') or 0.0),
+                    schema_details,
+                )
+                if direct_score > existing_score:
+                    normalized_by_key[key] = candidate
+                continue
+
+            existing_reverse = normalized_by_key.get(reverse_key)
+            if existing_reverse:
+                reverse_score = DataSourceService._score_relation_candidate(
+                    existing_reverse['source_table'],
+                    existing_reverse['source_column'],
+                    existing_reverse['target_table'],
+                    existing_reverse['target_column'],
+                    existing_reverse['relation_type'],
+                    float(existing_reverse.get('confidence') or 0.0),
+                    schema_details,
+                )
+                reverse_relation_type = DataSourceService._reverse_relation_type(relation_type)
+                is_semantic_reverse = existing_reverse['relation_type'] == reverse_relation_type or (
+                    existing_reverse['relation_type'] == relation_type and relation_type in {'one_to_one', 'many_to_many'}
+                )
+                if is_semantic_reverse and direct_score > reverse_score:
+                    normalized_by_key.pop(reverse_key, None)
+                    normalized_by_key[key] = candidate
+                continue
+
+            normalized_by_key[key] = candidate
+
+        return list(normalized_by_key.values())
 
     @staticmethod
     def _fetch_relation_candidates_by_llm(schema_tables: list[dict]) -> list[dict]:
