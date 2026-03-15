@@ -121,6 +121,20 @@ const styleLibraryI18n = {
 
 const TAB_STORAGE_KEY = 'style-library-tab';
 
+const resolveInitialTab = (): StyleTab => {
+  if (typeof window !== 'undefined') {
+    const queryTab = new URLSearchParams(window.location.search).get('tab');
+    if (queryTab === 'templates' || queryTab === 'presets' || queryTab === 'presetTemplates') {
+      return queryTab;
+    }
+    const saved = sessionStorage.getItem(TAB_STORAGE_KEY);
+    if (saved === 'templates' || saved === 'presets' || saved === 'presetTemplates') {
+      return saved;
+    }
+  }
+  return 'presets';
+};
+
 export const StyleLibrary: React.FC = () => {
   const navigate = useNavigate();
   const t = useT(styleLibraryI18n);
@@ -128,10 +142,7 @@ export const StyleLibrary: React.FC = () => {
   const { confirm, ConfirmDialog } = useConfirm();
   const presetTemplateInputRef = useRef<HTMLInputElement>(null);
 
-  const [activeTab, setActiveTab] = useState<StyleTab>(() => {
-    const saved = typeof window !== 'undefined' ? sessionStorage.getItem(TAB_STORAGE_KEY) : '';
-    return saved === 'templates' || saved === 'presets' || saved === 'presetTemplates' ? saved : 'presets';
-  });
+  const [activeTab, setActiveTab] = useState<StyleTab>(resolveInitialTab);
   const [templates, setTemplates] = useState<StyleTemplate[]>([]);
   const [presetTemplates, setPresetTemplates] = useState<PresetTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -184,6 +195,14 @@ export const StyleLibrary: React.FC = () => {
     if (typeof window === 'undefined') return;
     sessionStorage.setItem(TAB_STORAGE_KEY, activeTab);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const queryTab = new URLSearchParams(window.location.search).get('tab');
+    if (queryTab === 'templates' || queryTab === 'presets' || queryTab === 'presetTemplates') {
+      setActiveTab(queryTab);
+    }
+  }, []);
 
   const handleBack = useCallback(() => {
     navigate(-1);

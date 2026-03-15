@@ -117,7 +117,7 @@ export function normalizeErrorMessage(errorMessage: string | null | undefined): 
   // Handle specific error messages
   if (message.includes('no template image found')) {
     return isZh
-      ? '当前项目还没有模板，请先点击页面工具栏的"更换模板"按钮，选择或上传一张模板图片后再生成。'
+      ? '当前项目还没有模版，请先点击页面工具栏的"选择模版"按钮，选择一个图片模版、JSON文本模版或素材后再生成。'
       : 'No template found. Please select or upload a template image first.';
   } else if (message.includes('page must have outline content first')) {
     return isZh

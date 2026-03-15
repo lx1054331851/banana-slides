@@ -78,6 +78,7 @@ describe('StyleLibrary page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
+    window.history.pushState({}, '', '/style-library');
   });
 
   it('renders nav with back and home buttons', async () => {
@@ -108,6 +109,17 @@ describe('StyleLibrary page', () => {
 
     fireEvent.click(screen.getByTestId('style-library-tab-presets'));
     expect(screen.getByTestId('style-library-presets-panel')).toBeInTheDocument();
+  });
+
+  it('reads tab from query string on first render', async () => {
+    window.history.pushState({}, '', '/style-library?tab=templates');
+
+    render(<StyleLibrary />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('style-library-templates-panel')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('style-library-presets-panel')).not.toBeInTheDocument();
   });
 
   it('opens preset JSON drawer only when clicking "View JSON"', async () => {

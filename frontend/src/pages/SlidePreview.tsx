@@ -15,9 +15,9 @@ const previewI18n = {
       materialsAdded: "已添加 {{count}} 个素材", exportStarted: "导出任务已开始，可在导出任务面板查看进度",
       cannotRefresh: "无法刷新：缺少项目ID", refreshSuccess: "刷新成功",
       extraRequirementsSaved: "额外要求已保存", styleDescSaved: "风格描述已保存",
-      exportSettingsSaved: "导出设置已保存", aspectRatioSaved: "画面比例已保存", loadTemplateFailed: "加载模板失败", templateChanged: "模板更换成功",
+      exportSettingsSaved: "导出设置已保存", aspectRatioSaved: "画面比例已保存", loadTemplateFailed: "加载模版失败", templateChanged: "模版已更新",
       saveFailed: "保存失败: {{error}}", refreshFailed: "刷新失败，请稍后重试",
-      loadMaterialFailed: "加载素材失败: {{error}}", templateChangeFailed: "更换模板失败: {{error}}",
+      loadMaterialFailed: "加载素材失败: {{error}}", templateChangeFailed: "选择模版失败: {{error}}",
       versionSwitchFailed: "切换失败: {{error}}", unknownError: "未知错误",
       regionCropSuccess: "已将选中区域添加为参考图片，可在下方\"上传图片\"中查看与删除",
       regionCropFailed: "无法从当前图片裁剪区域（浏览器安全限制）。可以尝试手动上传参考图片。"
@@ -29,7 +29,7 @@ const previewI18n = {
       exportSelectedPages: "将导出选中的 {{count}} 页",
       regenerate: "重新生成", regenerating: "生成中...",
       editMode: "编辑模式", viewMode: "查看模式", page: "第 {{num}} 页",
-      projectSettings: "项目设置", changeTemplate: "更换模板", refresh: "刷新",
+      projectSettings: "项目设置", changeTemplate: "选择模版", refresh: "刷新",
       batchGenerate: "批量生成图片 ({{count}})", generateSelected: "生成选中页面 ({{count}})",
       multiSelect: "多选", cancelMultiSelect: "取消多选", pagesUnit: "页",
       noPages: "还没有页面", noPagesHint: "可直接在本页添加页面，或返回编辑页继续完善内容", backToEdit: "返回编辑",
@@ -62,9 +62,7 @@ const previewI18n = {
       gridZoomLabel: "网格缩放",
       gridZoomSmall: "小",
       gridZoomLarge: "大",
-      templateModalDesc: "选择一个新的模板将应用到后续PPT页面生成（不影响已经生成的页面）。你可以选择图片模版、已有模板或上传新模板。",
-      useTextStyle: "使用文字描述风格",
-      applyStyle: "应用风格",
+      templateModalDesc: "选择一个新的模版将应用到后续 PPT 页面生成，不影响已经生成的页面。",
       styleSaved: "风格描述已保存",
       uploadingTemplate: "正在上传模板...",
       resolution1KWarning: "1K分辨率警告",
@@ -110,9 +108,9 @@ const previewI18n = {
       materialsAdded: "Added {{count}} material(s)", exportStarted: "Export task started, check progress in export tasks panel",
       cannotRefresh: "Cannot refresh: Missing project ID", refreshSuccess: "Refresh successful",
       extraRequirementsSaved: "Extra requirements saved", styleDescSaved: "Style description saved",
-      exportSettingsSaved: "Export settings saved", aspectRatioSaved: "Aspect ratio saved", loadTemplateFailed: "Failed to load template", templateChanged: "Template changed successfully",
+      exportSettingsSaved: "Export settings saved", aspectRatioSaved: "Aspect ratio saved", loadTemplateFailed: "Failed to load template", templateChanged: "Template updated",
       saveFailed: "Save failed: {{error}}", refreshFailed: "Refresh failed, please try again later",
-      loadMaterialFailed: "Failed to load material: {{error}}", templateChangeFailed: "Failed to change template: {{error}}",
+      loadMaterialFailed: "Failed to load material: {{error}}", templateChangeFailed: "Failed to select template: {{error}}",
       versionSwitchFailed: "Switch failed: {{error}}", unknownError: "Unknown error",
       regionCropSuccess: "Selected region added as reference image. You can view and delete it in \"Upload Images\" below.",
       regionCropFailed: "Cannot crop from current image (browser security restriction). Try uploading a reference image manually."
@@ -124,7 +122,7 @@ const previewI18n = {
       exportSelectedPages: "Will export {{count}} selected page(s)",
       regenerate: "Regenerate", regenerating: "Generating...",
       editMode: "Edit Mode", viewMode: "View Mode", page: "Page {{num}}",
-      projectSettings: "Project Settings", changeTemplate: "Change Template", refresh: "Refresh",
+      projectSettings: "Project Settings", changeTemplate: "Select Template", refresh: "Refresh",
       batchGenerate: "Batch Generate Images ({{count}})", generateSelected: "Generate Selected ({{count}})",
       multiSelect: "Multi-select", cancelMultiSelect: "Cancel Multi-select", pagesUnit: " pages",
       noPages: "No pages yet", noPagesHint: "You can add pages directly here, or go back to editor", backToEdit: "Back to Editor",
@@ -157,9 +155,7 @@ const previewI18n = {
       gridZoomLabel: "Grid Zoom",
       gridZoomSmall: "Small",
       gridZoomLarge: "Large",
-      templateModalDesc: "Selecting a new template will apply to future PPT page generation (won't affect already generated pages). You can choose image templates, existing templates, or upload a new one.",
-      useTextStyle: "Use text description for style",
-      applyStyle: "Apply Style",
+      templateModalDesc: "Selecting a new template will apply to future PPT page generation without affecting pages that already exist.",
       styleSaved: "Style description saved",
       uploadingTemplate: "Uploading template...",
       resolution1KWarning: "1K Resolution Warning",
@@ -224,10 +220,17 @@ import {
   List,
   LayoutGrid,
 } from 'lucide-react';
-import { Button, Loading, Modal, Textarea, AiRefineInput, useToast, useConfirm, MaterialSelector, ProjectSettingsModal, ExportTasksPanel, TextStyleSelector, StyleWorkflowPanel } from '@/components/shared';
+import { Button, Loading, Modal, Textarea, AiRefineInput, useToast, useConfirm, MaterialSelector, ProjectSettingsModal, ExportTasksPanel } from '@/components/shared';
 import { MaterialGeneratorModal } from '@/components/shared/MaterialGeneratorModal';
-import { TemplateSelector, getTemplateFile, type TemplateSource } from '@/components/shared/TemplateSelector';
-import { listUserTemplates, type UserTemplate, type StylePreset } from '@/api/endpoints';
+import {
+  TemplateSelector,
+  getTemplateFile,
+  type TemplateSource,
+  type TemplateSelectorTab,
+  type TemplateSelection,
+  type AppliedTemplateSelection,
+} from '@/components/shared/TemplateSelector';
+import { listUserTemplates, type UserTemplate } from '@/api/endpoints';
 import { materialUrlToFile } from '@/components/shared/MaterialSelector';
 import type { Material } from '@/api/endpoints';
 import { SlideCard } from '@/components/preview/SlideCard';
@@ -245,7 +248,6 @@ import {
   exportEditablePPTX as apiExportEditablePPTX,
   getSettings,
   refineSinglePageDescription,
-  startStyleRecommendations,
 } from '@/api/endpoints';
 import type { ImageVersion, DescriptionContent, ExportExtractorMethod, ExportInpaintMethod, Page, GenerationOverride } from '@/types';
 import { normalizeErrorMessage } from '@/utils';
@@ -522,10 +524,9 @@ export const SlidePreview: React.FC = () => {
     setIsResizingSidebar(true);
   };
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
-  const [useTextStyleMode, setUseTextStyleMode] = useState(false);
-  const [draftTemplateStyle, setDraftTemplateStyle] = useState('');
-  const [stylePreviewTaskId, setStylePreviewTaskId] = useState<string | null>(null);
-  const [stylePreviewTemplateJson, setStylePreviewTemplateJson] = useState<string>('');
+  const [activeTemplateTab, setActiveTemplateTab] = useState<TemplateSelectorTab>('image');
+  const [draftTemplateSelection, setDraftTemplateSelection] = useState<TemplateSelection | null>(null);
+  const [appliedTemplateSelection, setAppliedTemplateSelection] = useState<AppliedTemplateSelection | null>(null);
   const [editPrompt, setEditPrompt] = useState('');
   // 大纲和描述编辑状态
   const [editOutlineTitle, setEditOutlineTitle] = useState('');
@@ -547,9 +548,6 @@ export const SlidePreview: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [imageVersions, setImageVersions] = useState<ImageVersion[]>([]);
   const [showVersionMenu, setShowVersionMenu] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [selectedPresetTemplateId, setSelectedPresetTemplateId] = useState<string | null>(null);
-  const [selectedStylePresetId, setSelectedStylePresetId] = useState<string | null>(null);
   const [isUploadingTemplate, setIsUploadingTemplate] = useState(false);
   const [selectedContextImages, setSelectedContextImages] = useState<{
     useTemplate: boolean;
@@ -914,6 +912,64 @@ export const SlidePreview: React.FC = () => {
       // 如果用户正在编辑，则不更新本地状态
     }
   }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality, currentProject?.export_compress_png_quantize_enabled, currentProject?.generation_defaults]);
+
+  const templateSelectionStorageKey = useMemo(
+    () => (projectId ? `preview-template-selection:${projectId}` : null),
+    [projectId]
+  );
+
+  useEffect(() => {
+    if (!templateSelectionStorageKey) {
+      setAppliedTemplateSelection(null);
+      return;
+    }
+    try {
+      const raw = sessionStorage.getItem(templateSelectionStorageKey);
+      if (!raw) {
+        setAppliedTemplateSelection(null);
+        return;
+      }
+      const parsed = JSON.parse(raw) as AppliedTemplateSelection;
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        typeof parsed.kind === 'string' &&
+        typeof parsed.id === 'string'
+      ) {
+        setAppliedTemplateSelection(parsed);
+        return;
+      }
+    } catch (error) {
+      console.warn('Failed to restore applied template selection:', error);
+    }
+    setAppliedTemplateSelection(null);
+  }, [templateSelectionStorageKey]);
+
+  const persistAppliedTemplateSelection = useCallback((selection: AppliedTemplateSelection | null) => {
+    setAppliedTemplateSelection(selection);
+    if (!templateSelectionStorageKey) return;
+    if (!selection) {
+      sessionStorage.removeItem(templateSelectionStorageKey);
+      return;
+    }
+    sessionStorage.setItem(templateSelectionStorageKey, JSON.stringify(selection));
+  }, [templateSelectionStorageKey]);
+
+  const closeTemplateModal = useCallback(() => {
+    setDraftTemplateSelection(null);
+    setIsTemplateModalOpen(false);
+  }, []);
+
+  const openTemplateModal = useCallback(() => {
+    setDraftTemplateSelection(null);
+    const nextTab: TemplateSelectorTab = currentProject?.template_style_json
+      ? 'json'
+      : appliedTemplateSelection?.kind === 'material'
+        ? 'material'
+        : 'image';
+    setActiveTemplateTab(nextTab);
+    setIsTemplateModalOpen(true);
+  }, [appliedTemplateSelection?.kind, currentProject?.template_style_json]);
 
   // 加载当前页面的历史版本
   useEffect(() => {
@@ -1801,69 +1857,84 @@ export const SlidePreview: React.FC = () => {
     }
   }, [currentProject, projectId, aspectRatio, syncProject, show]);
 
-  const handleTemplateSelect = async (templateFile: File | null, templateId?: string, source?: TemplateSource) => {
+  const handleTemplateSelect = useCallback(async (templateFile: File | null, templateId?: string, source?: TemplateSource) => {
     if (!projectId) return;
 
-    // 如果有templateId，按需加载File
     let file = templateFile;
     if (templateId && !file) {
       file = await getTemplateFile(templateId, userTemplates, source === 'preset' ? 'preset' : 'user');
       if (!file) {
         show({ message: t('slidePreview.loadTemplateFailed'), type: 'error' });
-        return;
+        return false;
       }
     }
 
     if (!file) {
-      // 如果没有文件也没有 ID，可能是取消选择
-      return;
+      return false;
     }
 
     setIsUploadingTemplate(true);
     try {
       await uploadTemplate(projectId, file);
-      // 互斥策略：切换到图片模板时清空 style_json
       await updateProject(projectId, { template_style_json: '' } as any);
       await syncProject(projectId);
-      setIsTemplateModalOpen(false);
       show({ message: t('slidePreview.templateChanged'), type: 'success' });
-      setSelectedStylePresetId(null);
-
-      // 更新选择状态
-      if (templateId) {
-        if (source === 'preset') {
-          setSelectedPresetTemplateId(templateId);
-          setSelectedTemplateId(null);
-        } else {
-          setSelectedTemplateId(templateId);
-          setSelectedPresetTemplateId(null);
-        }
-      }
+      return true;
     } catch (error: any) {
       show({
         message: t('slidePreview.templateChangeFailed', { error: error.message || t('slidePreview.unknownError') }),
         type: 'error'
       });
+      return false;
     } finally {
       setIsUploadingTemplate(false);
     }
-  };
+  }, [projectId, show, syncProject, t, userTemplates]);
 
-  const handleStylePresetSelect = async (preset: StylePreset | null) => {
+  const handleStylePresetSelect = useCallback(async (presetId: string, styleJson: string) => {
     if (!projectId) return;
-    if (!preset) {
-      setSelectedStylePresetId(null);
+    try {
+      await updateProject(projectId, { template_style_json: styleJson || '' } as any);
+      await syncProject(projectId);
+      show({ message: t('slidePreview.templateChanged'), type: 'success' });
+      return { ok: true, selection: { kind: 'style', id: presetId } as AppliedTemplateSelection };
+    } catch (error: any) {
+      show({
+        message: t('slidePreview.templateChangeFailed', { error: error.message || t('slidePreview.unknownError') }),
+        type: 'error'
+      });
+      return { ok: false, selection: null };
+    }
+  }, [projectId, show, syncProject, t]);
+
+  const handleApplyTemplateSelection = useCallback(async (selection: TemplateSelection) => {
+    if (!projectId) return;
+
+    if (selection.kind === 'style') {
+      const result = await handleStylePresetSelect(selection.presetId, selection.styleJson);
+      if (result?.ok) {
+        persistAppliedTemplateSelection(result.selection);
+        closeTemplateModal();
+      }
       return;
     }
-    await updateProject(projectId, { template_style_json: preset.style_json || '' } as any);
-    await syncProject(projectId);
-    setSelectedStylePresetId(preset.id);
-    setSelectedTemplateId(null);
-    setSelectedPresetTemplateId(null);
-    setStylePreviewTaskId(null);
-    setStylePreviewTemplateJson('');
-    setIsTemplateModalOpen(false);
-  };
+
+    if (selection.kind === 'material') {
+      const file = await materialUrlToFile(selection.material);
+      const applied = await handleTemplateSelect(file, undefined, 'upload');
+      if (applied) {
+        persistAppliedTemplateSelection({ kind: 'material', id: selection.id });
+        closeTemplateModal();
+      }
+      return;
+    }
+
+    const applied = await handleTemplateSelect(null, selection.templateId, selection.kind === 'preset' ? 'preset' : 'user');
+    if (applied) {
+      persistAppliedTemplateSelection({ kind: selection.kind, id: selection.id });
+      closeTemplateModal();
+    }
+  }, [closeTemplateModal, handleStylePresetSelect, handleTemplateSelect, persistAppliedTemplateSelection]);
 
   if (!currentProject) {
     return <Loading fullscreen message={t('preview.messages.loadingProject')} />;
@@ -2295,7 +2366,7 @@ export const SlidePreview: React.FC = () => {
             variant="ghost"
             size="sm"
             icon={<Upload size={16} className="md:w-[18px] md:h-[18px]" />}
-            onClick={() => { setDraftTemplateStyle(templateStyle); setIsTemplateModalOpen(true); }}
+            onClick={openTemplateModal}
             className="hidden lg:inline-flex"
           >
             <span className="hidden xl:inline">{t('preview.changeTemplate')}</span>
@@ -2975,7 +3046,7 @@ export const SlidePreview: React.FC = () => {
                       variant="ghost"
                       size="sm"
                       icon={<Upload size={16} />}
-                      onClick={() => { setDraftTemplateStyle(templateStyle); setIsTemplateModalOpen(true); }}
+                      onClick={openTemplateModal}
                       className="lg:hidden text-xs"
                       title={t('preview.changeTemplate')}
                     />
@@ -3124,144 +3195,21 @@ export const SlidePreview: React.FC = () => {
       {/* 模板选择 Modal */}
       <Modal
         isOpen={isTemplateModalOpen}
-        onClose={() => {
-          setIsTemplateModalOpen(false);
-          setStylePreviewTaskId(null);
-          setStylePreviewTemplateJson('');
-        }}
+        onClose={closeTemplateModal}
         title={t('preview.changeTemplate')}
-        size="lg"
+        size="full"
       >
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600 dark:text-foreground-tertiary mb-4">
-            {t('preview.templateModalDesc')}
-          </p>
-          {/* 图片模板 / 文字风格 切换 */}
-          <label className="flex items-center gap-2 cursor-pointer group">
-            <span className="text-sm text-gray-600 dark:text-foreground-tertiary group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
-              {t('preview.useTextStyle')}
-            </span>
-            <div className="relative">
-              <input
-                type="checkbox"
-                checked={useTextStyleMode}
-                onChange={(e) => {
-                  setUseTextStyleMode(e.target.checked);
-                  if (!e.target.checked) {
-                    setStylePreviewTaskId(null);
-                    setStylePreviewTemplateJson('');
-                  }
-                }}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 dark:bg-background-hover peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-banana-300 dark:peer-focus:ring-banana/30 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white dark:after:bg-foreground-secondary after:border-gray-300 dark:after:border-border-hover after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-banana"></div>
-            </div>
-          </label>
-          {useTextStyleMode ? (
-            <>
-              <TextStyleSelector
-                value={draftTemplateStyle}
-                onChange={setDraftTemplateStyle}
-                onToast={show}
-                onGenerateStylePreviews={async ({ templateJson, styleRequirements, generatePreviews }) => {
-                  try {
-                    // 先把当前输入的风格要求保存到项目（便于后端任务读取/复用）
-                    await updateProject(projectId!, { template_style: styleRequirements || '' } as any);
-                    await syncProject(projectId!);
-
-                    const resp = await startStyleRecommendations(projectId!, {
-                      template_json: templateJson,
-                      style_requirements: styleRequirements || '',
-                      generate_previews: typeof generatePreviews === 'boolean' ? generatePreviews : false,
-                    });
-                    const taskId = (resp.data as any)?.task_id;
-                    if (!taskId) throw new Error('未返回任务ID');
-                    setStylePreviewTemplateJson(templateJson);
-                    setStylePreviewTaskId(taskId);
-                  } catch (error: any) {
-                    show({ message: `生成风格预览失败: ${error?.message || '未知错误'}`, type: 'error' });
-                  }
-                }}
-              />
-              {stylePreviewTaskId ? (
-                <StyleWorkflowPanel
-                  projectId={projectId!}
-                  taskId={stylePreviewTaskId}
-                  templateJson={stylePreviewTemplateJson}
-                  applyMode="apply_only"
-                  onTaskIdChange={(newTaskId) => setStylePreviewTaskId(newTaskId)}
-                  onBackToProject={() => {
-                    setStylePreviewTaskId(null);
-                    setStylePreviewTemplateJson('');
-                  }}
-                  backButtonText="关闭预览"
-                  onApplied={() => {
-                    void syncProject(projectId!);
-                    setStylePreviewTaskId(null);
-                    setStylePreviewTemplateJson('');
-                    setIsTemplateModalOpen(false);
-                  }}
-                />
-              ) : null}
-            </>
-          ) : (
-            <>
-              <TemplateSelector
-                onSelect={handleTemplateSelect}
-                onSelectStylePreset={handleStylePresetSelect}
-                selectedTemplateId={selectedTemplateId}
-                selectedPresetTemplateId={selectedPresetTemplateId}
-                selectedStylePresetId={selectedStylePresetId}
-                showUpload={false}
-                projectId={projectId || null}
-              />
-              {isUploadingTemplate && (
-                <div className="text-center py-2 text-sm text-gray-500 dark:text-foreground-tertiary">
-                  {t('preview.uploadingTemplate')}
-                </div>
-              )}
-            </>
-          )}
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            {useTextStyleMode && (
-              <Button
-                variant="primary"
-                loading={isSavingTemplateStyle}
-                onClick={async () => {
-                  isEditingTemplateStyle.current = true;
-                  setTemplateStyle(draftTemplateStyle);
-                  setIsSavingTemplateStyle(true);
-                  try {
-                    await updateProject(projectId!, { template_style: draftTemplateStyle || '' });
-                    isEditingTemplateStyle.current = false;
-                    await syncProject(projectId!);
-                    show({ message: t('slidePreview.styleDescSaved'), type: 'success' });
-                    setStylePreviewTaskId(null);
-                    setStylePreviewTemplateJson('');
-                    setIsTemplateModalOpen(false);
-                  } catch (error: any) {
-                    show({ message: t('slidePreview.saveFailed', { error: error.message || t('slidePreview.unknownError') }), type: 'error' });
-                  } finally {
-                    setIsSavingTemplateStyle(false);
-                  }
-                }}
-              >
-                {t('preview.applyStyle')}
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setStylePreviewTaskId(null);
-                setStylePreviewTemplateJson('');
-                setIsTemplateModalOpen(false);
-              }}
-              disabled={isUploadingTemplate || isSavingTemplateStyle}
-            >
-              {t('common.close')}
-            </Button>
-          </div>
-        </div>
+        <TemplateSelector
+          projectId={projectId || null}
+          activeTab={activeTemplateTab}
+          onActiveTabChange={setActiveTemplateTab}
+          draftSelection={draftTemplateSelection}
+          onDraftSelectionChange={setDraftTemplateSelection}
+          appliedSelection={appliedTemplateSelection}
+          appliedStyleJson={currentProject?.template_style_json || ''}
+          onApplySelection={handleApplyTemplateSelection}
+          isApplyingSelection={isUploadingTemplate}
+        />
       </Modal>
       {/* 素材生成模态组件（可复用模块，这里只是示例挂载） */}
       {projectId && (
