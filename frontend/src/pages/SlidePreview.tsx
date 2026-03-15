@@ -290,7 +290,7 @@ export const SlidePreview: React.FC = () => {
     // Active task map still takes precedence for in-session running tasks.
     return Boolean(pageGeneratingTasks[page.id]) || (!hasImage && (page.status === 'QUEUED' || page.status === 'GENERATING'));
   }, [pageGeneratingTasks]);
-  
+
   const { addTask, pollTask: pollExportTask, tasks: exportTasks, restoreActiveTasks } = useExportTasksStore();
   const notifiedFailedExportTaskIds = useRef<Set<string>>(new Set());
   const activeExportTasks = useMemo(
@@ -831,7 +831,7 @@ export const SlidePreview: React.FC = () => {
       // 直接使用 projectId 同步项目数据
       syncProject(projectId);
     }
-    
+
     // 加载用户模板列表（用于按需获取File）
     const loadTemplates = async () => {
       try {
@@ -866,7 +866,7 @@ export const SlidePreview: React.FC = () => {
     if (currentProject) {
       // 检查是否是新项目
       const isNewProject = lastProjectId.current !== currentProject.id;
-      
+
       if (isNewProject) {
         // 新项目，初始化额外要求和风格描述
         setExtraRequirements(currentProject.extra_requirements || '');
@@ -1152,16 +1152,16 @@ export const SlidePreview: React.FC = () => {
 
   const handleSwitchVersion = async (versionId: string) => {
     if (!currentProject || !selectedPage?.id || !projectId) return;
-    
+
     try {
       await setCurrentImageVersion(projectId, selectedPage.id, versionId);
       await syncProject(projectId);
       setShowVersionMenu(false);
       show({ message: t('slidePreview.versionSwitched'), type: 'success' });
     } catch (error: any) {
-      show({ 
+      show({
         message: t('slidePreview.versionSwitchFailed', { error: error.message || t('slidePreview.unknownError') }),
-        type: 'error' 
+        type: 'error'
       });
     }
   };
@@ -1169,7 +1169,7 @@ export const SlidePreview: React.FC = () => {
   // 从描述内容中提取图片URL
   const extractImageUrlsFromDescription = (descriptionContent: DescriptionContent | undefined): string[] => {
     if (!descriptionContent) return [];
-    
+
     // 处理两种格式
     let text: string = '';
     if ('text' in descriptionContent) {
@@ -1177,14 +1177,14 @@ export const SlidePreview: React.FC = () => {
     } else if ('text_content' in descriptionContent && Array.isArray(descriptionContent.text_content)) {
       text = descriptionContent.text_content.join('\n');
     }
-    
+
     if (!text) return [];
-    
+
     // 匹配 markdown 图片语法: ![](url) 或 ![alt](url)
     const pattern = /!\[.*?\]\((.*?)\)/g;
     const matches: string[] = [];
     let match: RegExpExecArray | null;
-    
+
     while ((match = pattern.exec(text)) !== null) {
       const url = match[1]?.trim();
       // 只保留有效的HTTP/HTTPS URL
@@ -1192,7 +1192,7 @@ export const SlidePreview: React.FC = () => {
         matches.push(url);
       }
     }
-    
+
     return matches;
   };
 
@@ -1262,7 +1262,7 @@ export const SlidePreview: React.FC = () => {
     if (!page?.id) return;
 
     const updates: Partial<Page> = {};
-    
+
     // 检查大纲是否有变化
     const originalTitle = page.outline_content?.title || '';
     const originalPoints = page.outline_content?.points?.join('\n') || '';
@@ -1272,7 +1272,7 @@ export const SlidePreview: React.FC = () => {
         points: editOutlinePoints.split('\n').filter((p) => p.trim()),
       };
     }
-    
+
     // 检查描述是否有变化
     const descContent = page.description_content;
     let originalDesc = '';
@@ -1288,7 +1288,7 @@ export const SlidePreview: React.FC = () => {
         text: editDescription,
       } as DescriptionContent;
     }
-    
+
     // 如果有修改，保存更新
     if (Object.keys(updates).length > 0) {
       updatePageLocal(page.id, updates);
@@ -1298,7 +1298,7 @@ export const SlidePreview: React.FC = () => {
 
   const handleSubmitEdit = useCallback(async () => {
     if (!currentProject) return;
-    
+
     const page = currentProject.pages[selectedIndex];
     if (!page.id) return;
 
@@ -1318,8 +1318,8 @@ export const SlidePreview: React.FC = () => {
       {
         useTemplate: selectedContextImages.useTemplate,
         descImageUrls: selectedContextImages.descImageUrls,
-        uploadedFiles: selectedContextImages.uploadedFiles.length > 0 
-          ? selectedContextImages.uploadedFiles 
+        uploadedFiles: selectedContextImages.uploadedFiles.length > 0
+          ? selectedContextImages.uploadedFiles
           : undefined,
       },
       editGenerationOverride
@@ -1647,7 +1647,7 @@ export const SlidePreview: React.FC = () => {
         pageIds: pageIds,
         progress: { total: 100, completed: 0, percent: 0 },
       });
-      
+
       // Start polling in background (non-blocking)
       pollExportTask(exportTaskId, projectId, taskId);
     } catch (error: any) {
@@ -1677,9 +1677,9 @@ export const SlidePreview: React.FC = () => {
       await syncProject(targetProjectId);
       show({ message: t('slidePreview.refreshSuccess'), type: 'success' });
     } catch (error: any) {
-      show({ 
+      show({
         message: error.message || t('slidePreview.refreshFailed'),
-        type: 'error' 
+        type: 'error'
       });
     } finally {
       setIsRefreshing(false);
@@ -1688,7 +1688,7 @@ export const SlidePreview: React.FC = () => {
 
   const handleSaveExtraRequirements = useCallback(async () => {
     if (!currentProject || !projectId) return;
-    
+
     setIsSavingRequirements(true);
     try {
       await updateProject(projectId, { extra_requirements: extraRequirements || '' });
@@ -1698,9 +1698,9 @@ export const SlidePreview: React.FC = () => {
       await syncProject(projectId);
       show({ message: t('slidePreview.extraRequirementsSaved'), type: 'success' });
     } catch (error: any) {
-      show({ 
+      show({
         message: t('slidePreview.saveFailed', { error: error.message || t('slidePreview.unknownError') }),
-        type: 'error' 
+        type: 'error'
       });
     } finally {
       setIsSavingRequirements(false);
@@ -1709,7 +1709,7 @@ export const SlidePreview: React.FC = () => {
 
   const handleSaveTemplateStyle = useCallback(async () => {
     if (!currentProject || !projectId) return;
-    
+
     setIsSavingTemplateStyle(true);
     try {
       await updateProject(projectId, { template_style: templateStyle || '' });
@@ -1719,9 +1719,9 @@ export const SlidePreview: React.FC = () => {
       await syncProject(projectId);
       show({ message: t('slidePreview.styleDescSaved'), type: 'success' });
     } catch (error: any) {
-      show({ 
+      show({
         message: t('slidePreview.saveFailed', { error: error.message || t('slidePreview.unknownError') }),
-        type: 'error' 
+        type: 'error'
       });
     } finally {
       setIsSavingTemplateStyle(false);
@@ -1803,7 +1803,7 @@ export const SlidePreview: React.FC = () => {
 
   const handleTemplateSelect = async (templateFile: File | null, templateId?: string, source?: TemplateSource) => {
     if (!projectId) return;
-    
+
     // 如果有templateId，按需加载File
     let file = templateFile;
     if (templateId && !file) {
@@ -1813,12 +1813,12 @@ export const SlidePreview: React.FC = () => {
         return;
       }
     }
-    
+
     if (!file) {
       // 如果没有文件也没有 ID，可能是取消选择
       return;
     }
-    
+
     setIsUploadingTemplate(true);
     try {
       await uploadTemplate(projectId, file);
@@ -1828,7 +1828,7 @@ export const SlidePreview: React.FC = () => {
       setIsTemplateModalOpen(false);
       show({ message: t('slidePreview.templateChanged'), type: 'success' });
       setSelectedStylePresetId(null);
-      
+
       // 更新选择状态
       if (templateId) {
         if (source === 'preset') {
@@ -1840,9 +1840,9 @@ export const SlidePreview: React.FC = () => {
         }
       }
     } catch (error: any) {
-      show({ 
+      show({
         message: t('slidePreview.templateChangeFailed', { error: error.message || t('slidePreview.unknownError') }),
-        type: 'error' 
+        type: 'error'
       });
     } finally {
       setIsUploadingTemplate(false);
@@ -1887,7 +1887,7 @@ export const SlidePreview: React.FC = () => {
       }
       // 不再显示 "处理中 (X/Y)..." 格式，百分比已在进度条显示
     }
-    
+
     return (
       <Loading
         fullscreen
@@ -2069,7 +2069,7 @@ export const SlidePreview: React.FC = () => {
       {/* 上下文图片选择 */}
       <div className="bg-gray-50 dark:bg-background-primary rounded-lg border border-gray-200 dark:border-border-primary p-4 space-y-4">
         <h4 className="text-sm font-semibold text-gray-700 dark:text-foreground-secondary mb-3">{t('preview.selectContextImages')}</h4>
-        
+
         {/* Template图片选择 */}
         {currentProject?.template_image_path && (
           <div className="flex items-center gap-3">
@@ -2218,8 +2218,8 @@ export const SlidePreview: React.FC = () => {
         rows={4}
       />
       <div className="flex justify-between gap-3">
-        <Button 
-          variant="secondary" 
+        <Button
+          variant="secondary"
           onClick={() => {
             handleSaveOutlineAndDescription();
             closeEditModal();
@@ -2256,91 +2256,91 @@ export const SlidePreview: React.FC = () => {
             icon={<Home size={16} className="md:w-[18px] md:h-[18px]" />}
             onClick={() => navigate('/')}
             className="hidden sm:inline-flex flex-shrink-0"
-            >
-              <span className="hidden md:inline">{t('nav.home')}</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<ArrowLeft size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={() => {
-                if (fromHistory) {
-                  navigate('/history');
-                } else {
-                  navigate(`/project/${projectId}/detail`);
-                }
-              }}
-              className="flex-shrink-0"
-            >
-              <span className="hidden sm:inline">{t('common.back')}</span>
-            </Button>
-            <div className="flex items-center gap-1.5 md:gap-2 min-w-0">
-              <span className="text-xl md:text-2xl">🍌</span>
-              <span className="text-base md:text-xl font-bold truncate">{t('home.title')}</span>
-            </div>
-            <span className="text-gray-400 hidden md:inline">|</span>
-            <span className="text-sm md:text-lg font-semibold truncate hidden sm:inline">{t('preview.title')}</span>
+          >
+            <span className="hidden md:inline">{t('nav.home')}</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<ArrowLeft size={16} className="md:w-[18px] md:h-[18px]" />}
+            onClick={() => {
+              if (fromHistory) {
+                navigate('/history');
+              } else {
+                navigate(`/project/${projectId}/detail`);
+              }
+            }}
+            className="flex-shrink-0"
+          >
+            <span className="hidden sm:inline">{t('common.back')}</span>
+          </Button>
+          <div className="flex items-center gap-1.5 md:gap-2 min-w-0">
+            <span className="text-xl md:text-2xl">🍌</span>
+            <span className="text-base md:text-xl font-bold truncate">{t('home.title')}</span>
+          </div>
+          <span className="text-gray-400 hidden md:inline">|</span>
+          <span className="text-sm md:text-lg font-semibold truncate hidden sm:inline">{t('preview.title')}</span>
         </div>
         <div className="flex items-center gap-1 md:gap-3 flex-shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Settings size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={() => setIsProjectSettingsOpen(true)}
-              className="hidden lg:inline-flex"
-            >
-              <span className="hidden xl:inline">{t('preview.projectSettings')}</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Upload size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={() => { setDraftTemplateStyle(templateStyle); setIsTemplateModalOpen(true); }}
-              className="hidden lg:inline-flex"
-            >
-              <span className="hidden xl:inline">{t('preview.changeTemplate')}</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<ImagePlus size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={() => setIsMaterialModalOpen(true)}
-              className="hidden lg:inline-flex"
-            >
-              <span className="hidden xl:inline">{t('nav.materialGenerate')}</span>
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<ArrowLeft size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={() => navigate(`/project/${projectId}/detail`)}
-              className="hidden sm:inline-flex"
-            >
-              <span className="hidden md:inline">{t('common.previous')}</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<RefreshCw size={16} className={`md:w-[18px] md:h-[18px] ${isRefreshing ? 'animate-spin' : ''}`} />}
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="hidden md:inline-flex"
-            >
-              <span className="hidden lg:inline">{t('preview.refresh')}</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={isFullscreen ? <Minimize2 size={16} className="md:w-[18px] md:h-[18px]" /> : <Maximize2 size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={toggleFullscreen}
-              className="hidden md:inline-flex"
-              title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
-            >
-              <span className="hidden lg:inline">
-                {isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
-              </span>
-            </Button>
-          
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Settings size={16} className="md:w-[18px] md:h-[18px]" />}
+            onClick={() => setIsProjectSettingsOpen(true)}
+            className="hidden lg:inline-flex"
+          >
+            <span className="hidden xl:inline">{t('preview.projectSettings')}</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Upload size={16} className="md:w-[18px] md:h-[18px]" />}
+            onClick={() => { setDraftTemplateStyle(templateStyle); setIsTemplateModalOpen(true); }}
+            className="hidden lg:inline-flex"
+          >
+            <span className="hidden xl:inline">{t('preview.changeTemplate')}</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<ImagePlus size={16} className="md:w-[18px] md:h-[18px]" />}
+            onClick={() => setIsMaterialModalOpen(true)}
+            className="hidden lg:inline-flex"
+          >
+            <span className="hidden xl:inline">{t('nav.materialGenerate')}</span>
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<ArrowLeft size={16} className="md:w-[18px] md:h-[18px]" />}
+            onClick={() => navigate(`/project/${projectId}/detail`)}
+            className="hidden sm:inline-flex"
+          >
+            <span className="hidden md:inline">{t('common.previous')}</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<RefreshCw size={16} className={`md:w-[18px] md:h-[18px] ${isRefreshing ? 'animate-spin' : ''}`} />}
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="hidden md:inline-flex"
+          >
+            <span className="hidden lg:inline">{t('preview.refresh')}</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={isFullscreen ? <Minimize2 size={16} className="md:w-[18px] md:h-[18px]" /> : <Maximize2 size={16} className="md:w-[18px] md:h-[18px]" />}
+            onClick={toggleFullscreen}
+            className="hidden md:inline-flex"
+            title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
+          >
+            <span className="hidden lg:inline">
+              {isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
+            </span>
+          </Button>
+
           {/* 导出任务按钮 */}
           {exportTasks.filter(t => t.projectId === projectId).length > 0 && (
             <div className="relative" ref={exportTasksPanelRef}>
@@ -2364,16 +2364,16 @@ export const SlidePreview: React.FC = () => {
               </Button>
               {showExportTasksPanel && (
                 <div className="absolute right-0 mt-2 z-20">
-                  <ExportTasksPanel 
-                    projectId={projectId} 
+                  <ExportTasksPanel
+                    projectId={projectId}
                     pages={currentProject?.pages || []}
-                    className="w-96 max-h-[28rem] shadow-lg" 
+                    className="w-96 max-h-[28rem] shadow-lg"
                   />
                 </div>
               )}
             </div>
           )}
-          
+
           <div className="relative" ref={exportMenuRef}>
             <Button
               variant="primary"
@@ -2388,13 +2388,13 @@ export const SlidePreview: React.FC = () => {
               className="text-xs md:text-sm"
             >
               <span className="hidden sm:inline">
-                {isMultiSelectMode && selectedPageIds.size > 0 
-                  ? `${t('preview.export')} (${selectedPageIds.size})` 
+                {isMultiSelectMode && selectedPageIds.size > 0
+                  ? `${t('preview.export')} (${selectedPageIds.size})`
                   : t('preview.export')}
               </span>
               <span className="sm:hidden">
-                {isMultiSelectMode && selectedPageIds.size > 0 
-                  ? `(${selectedPageIds.size})` 
+                {isMultiSelectMode && selectedPageIds.size > 0
+                  ? `(${selectedPageIds.size})`
                   : t('preview.export')}
               </span>
             </Button>
@@ -2439,9 +2439,8 @@ export const SlidePreview: React.FC = () => {
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-w-0 min-h-0">
         {/* 左侧：缩略图列表 */}
         <aside
-          className={`relative w-full md:w-auto bg-white dark:bg-background-secondary border-b md:border-b-0 md:border-r border-gray-200 dark:border-border-primary flex flex-col flex-shrink-0 ${
-            isResizingSidebar ? 'transition-none' : 'transition-[width] duration-300 ease-out'
-          } ${isSidebarCollapsed ? 'md:items-center' : ''}`}
+          className={`relative w-full md:w-auto bg-white dark:bg-background-secondary border-b md:border-b-0 md:border-r border-gray-200 dark:border-border-primary flex flex-col flex-shrink-0 ${isResizingSidebar ? 'transition-none' : 'transition-[width] duration-300 ease-out'
+            } ${isSidebarCollapsed ? 'md:items-center' : ''}`}
           style={isMobileView ? undefined : { width: sidebarWidthPx }}
         >
           {!isMobileView && (
@@ -2451,9 +2450,8 @@ export const SlidePreview: React.FC = () => {
             />
           )}
           <div
-            className={`border-b border-gray-200 dark:border-border-primary flex-shrink-0 space-y-2 md:space-y-3 ${
-              isSidebarCollapsed ? 'px-2 py-3' : 'p-3 md:p-4'
-            }`}
+            className={`border-b border-gray-200 dark:border-border-primary flex-shrink-0 space-y-2 md:space-y-3 ${isSidebarCollapsed ? 'px-2 py-3' : 'p-3 md:p-4'
+              }`}
           >
             <div className={`flex items-center gap-2 ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
               {!isSidebarCollapsed && !isSidebarCompact && (
@@ -2498,19 +2496,18 @@ export const SlidePreview: React.FC = () => {
                 disabled={isGenerateDisabled}
               >
                 {generateButtonText}
-                </Button>
-              )}
+              </Button>
+            )}
             {!isSidebarCollapsed && !isSidebarCompact && !isMobileView && (
               <div className="space-y-2">
                 <div className="inline-flex w-full rounded-lg border border-gray-200 dark:border-border-primary overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setSidebarViewMode('list')}
-                    className={`flex-1 h-8 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors ${
-                      sidebarViewMode === 'list'
+                    className={`flex-1 h-8 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors ${sidebarViewMode === 'list'
                         ? 'bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
                         : 'bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
-                    }`}
+                      }`}
                     title={t('preview.sidebarView.list')}
                     aria-label={t('preview.sidebarView.list')}
                   >
@@ -2520,11 +2517,10 @@ export const SlidePreview: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setSidebarViewMode('grid')}
-                    className={`flex-1 h-8 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors border-l border-gray-200 dark:border-border-primary ${
-                      sidebarViewMode === 'grid'
+                    className={`flex-1 h-8 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors border-l border-gray-200 dark:border-border-primary ${sidebarViewMode === 'grid'
                         ? 'bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
                         : 'bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
-                    }`}
+                      }`}
                     title={t('preview.sidebarView.grid')}
                     aria-label={t('preview.sidebarView.grid')}
                   >
@@ -2577,11 +2573,10 @@ export const SlidePreview: React.FC = () => {
                       }
                     }}
                     title={t('preview.page', { num: index + 1 })}
-                    className={`w-12 h-9 rounded border-2 transition-all ${
-                      selectedIndex === index
+                    className={`w-12 h-9 rounded border-2 transition-all ${selectedIndex === index
                         ? 'border-banana-500 shadow-md'
                         : 'border-gray-200 dark:border-border-primary'
-                    } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
+                      } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
                   >
                     {(page.preview_image_path || page.generated_image_path) ? (
                       <img
@@ -2598,246 +2593,238 @@ export const SlidePreview: React.FC = () => {
                 </div>
               ))}
             </div>
-	          ) : (
-	            <div className="flex-1 overflow-y-auto md:overflow-y-auto overflow-x-auto md:overflow-x-visible p-3 md:p-4 min-h-0">
-	              <div className="flex items-center gap-2 text-xs mb-3">
-	                  {isSidebarCompact ? (
-	                    <button
-	                      onClick={toggleMultiSelectMode}
-	                      title={isMultiSelectMode ? t('preview.cancelMultiSelect') : t('preview.multiSelect')}
-	                      className={`w-8 h-8 rounded transition-colors inline-flex items-center justify-center ${
-	                        isMultiSelectMode
-	                          ? 'bg-banana-100 text-banana-700 hover:bg-banana-200'
-	                          : 'text-gray-500 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover'
-	                      }`}
-	                    >
-	                      {isMultiSelectMode ? <CheckSquare size={16} /> : <Square size={16} />}
-	                    </button>
-	                  ) : (
-	                    <button
-	                      onClick={toggleMultiSelectMode}
-	                      className={`px-2 py-1 rounded transition-colors flex items-center gap-1 ${
-	                        isMultiSelectMode
-	                          ? 'bg-banana-100 text-banana-700 hover:bg-banana-200'
-	                          : 'text-gray-500 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover'
-	                      }`}
-	                    >
-	                      {isMultiSelectMode ? <CheckSquare size={14} /> : <Square size={14} />}
-	                      <span>{isMultiSelectMode ? t('preview.cancelMultiSelect') : t('preview.multiSelect')}</span>
-	                    </button>
-	                  )}
-	                  {isMultiSelectMode && !isSidebarCompact && (
-	                    <>
-	                      <button
-	                        onClick={selectedPageIds.size === pagesWithImages.length ? deselectAllPages : selectAllPages}
-	                        className="text-gray-500 dark:text-foreground-tertiary hover:text-banana-600 transition-colors"
-	                      >
-	                        {selectedPageIds.size === pagesWithImages.length ? t('common.deselectAll') : t('common.selectAll')}
-	                      </button>
-	                      {selectedPageIds.size > 0 && (
-	                        <span className="text-banana-600 font-medium">
-	                          ({selectedPageIds.size}{t('preview.pagesUnit')})
-	                        </span>
-	                      )}
-	                    </>
-	                  )}
-	                  {isMultiSelectMode && isSidebarCompact && selectedPageIds.size > 0 && (
-	                    <span className="text-banana-600 font-medium">
-	                      {selectedPageIds.size}
-	                    </span>
-	                  )}
-	              </div>
-		              {isSidebarGridMode ? (
-	                <div
-                    className="grid gap-3"
-                    style={{ gridTemplateColumns: `repeat(${sidebarGridColumns}, minmax(0, 1fr))` }}
+          ) : (
+            <div className="flex-1 overflow-y-auto md:overflow-y-auto overflow-x-auto md:overflow-x-visible p-3 md:p-4 min-h-0">
+              <div className="flex items-center gap-2 text-xs mb-3">
+                {isSidebarCompact ? (
+                  <button
+                    onClick={toggleMultiSelectMode}
+                    title={isMultiSelectMode ? t('preview.cancelMultiSelect') : t('preview.multiSelect')}
+                    className={`w-8 h-8 rounded transition-colors inline-flex items-center justify-center ${isMultiSelectMode
+                        ? 'bg-banana-100 text-banana-700 hover:bg-banana-200'
+                        : 'text-gray-500 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover'
+                      }`}
                   >
-	                  {currentProject.pages.map((page, index) => {
-                      const hasImage = Boolean(page.preview_image_path || page.generated_image_path);
-                      return (
-	                    <div key={page.id || `grid-${index}`} className="relative group">
-	                      <button
-	                        onClick={() => {
-	                          if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
-	                            togglePageSelection(page.id);
-	                          } else {
-	                            setSelectedIndex(index);
-	                          }
-	                        }}
-	                        className={`w-full rounded-lg border-2 overflow-hidden bg-white dark:bg-background-secondary transition-all ${
-	                          selectedIndex === index
-	                            ? 'border-banana-500 shadow-md'
-	                            : 'border-gray-200 dark:border-border-primary hover:border-banana-300'
-	                        } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
-	                      >
-	                        <div className="text-xs font-medium px-2 py-1 border-b border-gray-100 dark:border-border-primary text-left text-gray-600 dark:text-foreground-tertiary">
-	                          {t('preview.page', { num: index + 1 })}
-	                        </div>
-	                        <div className="aspect-video bg-gray-100 dark:bg-background-primary">
-	                          {(page.preview_image_path || page.generated_image_path) ? (
-	                            <img
-	                              src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
-	                              alt={`Slide ${index + 1}`}
-	                              className="w-full h-full object-cover"
-	                            />
-	                          ) : (
-	                            <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">
-	                              {index + 1}
-	                            </div>
-	                          )}
-	                        </div>
-	                      </button>
-		                      {isMultiSelectMode && page.id && hasImage && (
-		                        <button
-	                          onClick={(e) => {
-	                            e.stopPropagation();
-	                            togglePageSelection(page.id!);
-	                          }}
-	                          className={`absolute top-2 right-2 z-10 w-5 h-5 rounded flex items-center justify-center transition-all ${
-	                            selectedPageIds.has(page.id)
-	                              ? 'bg-banana-500 text-white shadow-md'
-	                              : 'bg-white/90 border border-gray-300 dark:border-border-primary'
-	                          }`}
-	                        >
-		                          {selectedPageIds.has(page.id) && <Check size={12} />}
-		                        </button>
-		                      )}
-                              {!isMultiSelectMode && (
-		                        <button
-		                          type="button"
-		                          onClick={(e) => {
-		                            e.stopPropagation();
-                                    handleDeletePage(page);
-		                          }}
-                                  className={`absolute top-2 right-2 z-20 p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-red-600 transition-opacity hover:bg-red-50 ${
-                                    hasImage ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : 'opacity-100'
-                                  }`}
-                                  title={t('preview.confirmDeleteTitle')}
-                                  aria-label={t('preview.confirmDeleteTitle')}
-		                        >
-                                  <Trash2 size={16} />
-		                        </button>
-                              )}
-		                      <button
-		                        type="button"
-		                        onClick={(e) => {
-	                          e.stopPropagation();
-	                          void handleInsertPageAfter(page, index);
-	                        }}
-	                        title={t('preview.insertAfterPage')}
-	                        aria-label={t('preview.insertAfterPage')}
-	                        className="absolute -right-3 top-1/2 -translate-y-1/2 z-20 h-7 w-7 hidden md:inline-flex items-center justify-center rounded-full border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-secondary shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity hover:bg-banana-50 dark:hover:bg-background-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-400"
-	                      >
-	                        <Plus size={13} />
-	                      </button>
-	                    </div>
+                    {isMultiSelectMode ? <CheckSquare size={16} /> : <Square size={16} />}
+                  </button>
+                ) : (
+                  <button
+                    onClick={toggleMultiSelectMode}
+                    className={`px-2 py-1 rounded transition-colors flex items-center gap-1 ${isMultiSelectMode
+                        ? 'bg-banana-100 text-banana-700 hover:bg-banana-200'
+                        : 'text-gray-500 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover'
+                      }`}
+                  >
+                    {isMultiSelectMode ? <CheckSquare size={14} /> : <Square size={14} />}
+                    <span>{isMultiSelectMode ? t('preview.cancelMultiSelect') : t('preview.multiSelect')}</span>
+                  </button>
+                )}
+                {isMultiSelectMode && !isSidebarCompact && (
+                  <>
+                    <button
+                      onClick={selectedPageIds.size === pagesWithImages.length ? deselectAllPages : selectAllPages}
+                      className="text-gray-500 dark:text-foreground-tertiary hover:text-banana-600 transition-colors"
+                    >
+                      {selectedPageIds.size === pagesWithImages.length ? t('common.deselectAll') : t('common.selectAll')}
+                    </button>
+                    {selectedPageIds.size > 0 && (
+                      <span className="text-banana-600 font-medium">
+                        ({selectedPageIds.size}{t('preview.pagesUnit')})
+                      </span>
+                    )}
+                  </>
+                )}
+                {isMultiSelectMode && isSidebarCompact && selectedPageIds.size > 0 && (
+                  <span className="text-banana-600 font-medium">
+                    {selectedPageIds.size}
+                  </span>
+                )}
+              </div>
+              {isSidebarGridMode ? (
+                <div
+                  className="grid gap-3"
+                  style={{ gridTemplateColumns: `repeat(${sidebarGridColumns}, minmax(0, 1fr))` }}
+                >
+                  {currentProject.pages.map((page, index) => {
+                    const hasImage = Boolean(page.preview_image_path || page.generated_image_path);
+                    return (
+                      <div key={page.id || `grid-${index}`} className="relative group">
+                        <button
+                          onClick={() => {
+                            if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
+                              togglePageSelection(page.id);
+                            } else {
+                              setSelectedIndex(index);
+                            }
+                          }}
+                          className={`w-full rounded-lg border-2 overflow-hidden bg-white dark:bg-background-secondary transition-all ${selectedIndex === index
+                              ? 'border-banana-500 shadow-md'
+                              : 'border-gray-200 dark:border-border-primary hover:border-banana-300'
+                            } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
+                        >
+                          <div className="text-xs font-medium px-2 py-1 border-b border-gray-100 dark:border-border-primary text-left text-gray-600 dark:text-foreground-tertiary">
+                            {t('preview.page', { num: index + 1 })}
+                          </div>
+                          <div className="aspect-video bg-gray-100 dark:bg-background-primary">
+                            {(page.preview_image_path || page.generated_image_path) ? (
+                              <img
+                                src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
+                                alt={`Slide ${index + 1}`}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">
+                                {index + 1}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                        {isMultiSelectMode && page.id && hasImage && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePageSelection(page.id!);
+                            }}
+                            className={`absolute top-2 right-2 z-10 w-5 h-5 rounded flex items-center justify-center transition-all ${selectedPageIds.has(page.id)
+                                ? 'bg-banana-500 text-white shadow-md'
+                                : 'bg-white/90 border border-gray-300 dark:border-border-primary'
+                              }`}
+                          >
+                            {selectedPageIds.has(page.id) && <Check size={12} />}
+                          </button>
+                        )}
+                        {!isMultiSelectMode && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeletePage(page);
+                            }}
+                            className={`absolute top-2 right-2 z-20 p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-red-600 transition-opacity hover:bg-red-50 ${hasImage ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : 'opacity-100'
+                              }`}
+                            title={t('preview.confirmDeleteTitle')}
+                            aria-label={t('preview.confirmDeleteTitle')}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleInsertPageAfter(page, index);
+                          }}
+                          title={t('preview.insertAfterPage')}
+                          aria-label={t('preview.insertAfterPage')}
+                          className="absolute -right-3 top-1/2 -translate-y-1/2 z-20 h-7 w-7 hidden md:inline-flex items-center justify-center rounded-full border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-secondary shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity hover:bg-banana-50 dark:hover:bg-background-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-400"
+                        >
+                          <Plus size={13} />
+                        </button>
+                      </div>
                     );
-                    })}
-	                </div>
-	              ) : (
-	                <div className="flex md:flex-col gap-2 md:gap-4 min-w-max md:min-w-0">
-	                  {currentProject.pages.map((page, index) => (
-	                    <div key={page.id || `list-${index}`} className="md:w-full flex-shrink-0 relative group">
-	                      {/* 移动端：简化缩略图 */}
-	                      <div className="md:hidden relative">
-	                        <button
-	                          onClick={() => {
-	                            if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
-	                              togglePageSelection(page.id);
-	                            } else {
-	                              setSelectedIndex(index);
-	                            }
-	                          }}
-	                          className={`w-20 h-14 rounded border-2 transition-all ${
-	                            selectedIndex === index
-	                              ? 'border-banana-500 shadow-md'
-	                              : 'border-gray-200 dark:border-border-primary'
-	                          } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
-	                        >
-	                          {(page.preview_image_path || page.generated_image_path) ? (
-	                            <img
-	                              src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
-	                              alt={`Slide ${index + 1}`}
-	                              className="w-full h-full object-cover rounded"
-	                            />
-	                          ) : (
-	                            <div className="w-full h-full bg-gray-100 dark:bg-background-secondary rounded flex items-center justify-center text-xs text-gray-400">
-	                              {index + 1}
-	                            </div>
-	                          )}
-	                        </button>
-	                        {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
-	                          <button
-	                            onClick={(e) => {
-	                              e.stopPropagation();
-	                              togglePageSelection(page.id!);
-	                            }}
-	                            className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center transition-all ${
-	                              selectedPageIds.has(page.id)
-	                                ? 'bg-banana-500 text-white'
-	                                : 'bg-white dark:bg-background-secondary border-2 border-gray-300 dark:border-border-primary'
-	                            }`}
-	                          >
-	                            {selectedPageIds.has(page.id) && <Check size={12} />}
-	                          </button>
-	                        )}
-	                      </div>
-	                      {/* 桌面端：完整卡片 */}
-	                      <div className="hidden md:block relative">
-	                        {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
-	                          <button
-	                            onClick={(e) => {
-	                              e.stopPropagation();
-	                              togglePageSelection(page.id!);
-	                            }}
-	                            className={`absolute top-2 right-2 z-10 w-6 h-6 rounded flex items-center justify-center transition-all ${
-	                              selectedPageIds.has(page.id)
-	                                ? 'bg-banana-500 text-white shadow-md'
-	                                : 'bg-white/90 border-2 border-gray-300 dark:border-border-primary hover:border-banana-400'
-	                            }`}
-	                          >
-	                            {selectedPageIds.has(page.id) && <Check size={14} />}
-	                          </button>
-	                        )}
-	                        <SlideCard
-	                          page={page}
-	                          index={index}
-	                          isSelected={selectedIndex === index}
-	                          onClick={() => {
-	                            if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
-	                              togglePageSelection(page.id);
-	                            } else {
-	                              setSelectedIndex(index);
-	                            }
-	                          }}
-	                          onEdit={() => {
-	                            setSelectedIndex(index);
-	                            handleEditPage();
-	                          }}
-	                          onDelete={() => handleDeletePage(page)}
-                              showDelete={!isMultiSelectMode}
-	                          isGenerating={page.id ? isPageGenerating(page) : false}
-	                          aspectRatio={aspectRatio}
-	                        />
-	                        <button
-	                          type="button"
-	                          onClick={(e) => {
-	                            e.stopPropagation();
-	                            void handleInsertPageAfter(page, index);
-	                          }}
-	                          title={t('preview.insertAfterPage')}
-	                          aria-label={t('preview.insertAfterPage')}
-	                          className="absolute left-1/2 -bottom-3 -translate-x-1/2 z-20 h-7 w-7 hidden md:inline-flex items-center justify-center rounded-full border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-secondary shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity hover:bg-banana-50 dark:hover:bg-background-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-400"
-	                        >
-	                          <Plus size={13} />
-	                        </button>
-	                      </div>
-	                    </div>
-	                  ))}
-	                </div>
-	              )}
-	            </div>
-	          )}
+                  })}
+                </div>
+              ) : (
+                <div className="flex md:flex-col gap-2 md:gap-4 min-w-max md:min-w-0">
+                  {currentProject.pages.map((page, index) => (
+                    <div key={page.id || `list-${index}`} className="md:w-full flex-shrink-0 relative group">
+                      {/* 移动端：简化缩略图 */}
+                      <div className="md:hidden relative">
+                        <button
+                          onClick={() => {
+                            if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
+                              togglePageSelection(page.id);
+                            } else {
+                              setSelectedIndex(index);
+                            }
+                          }}
+                          className={`w-20 h-14 rounded border-2 transition-all ${selectedIndex === index
+                              ? 'border-banana-500 shadow-md'
+                              : 'border-gray-200 dark:border-border-primary'
+                            } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
+                        >
+                          {(page.preview_image_path || page.generated_image_path) ? (
+                            <img
+                              src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
+                              alt={`Slide ${index + 1}`}
+                              className="w-full h-full object-cover rounded"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gray-100 dark:bg-background-secondary rounded flex items-center justify-center text-xs text-gray-400">
+                              {index + 1}
+                            </div>
+                          )}
+                        </button>
+                        {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePageSelection(page.id!);
+                            }}
+                            className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center transition-all ${selectedPageIds.has(page.id)
+                                ? 'bg-banana-500 text-white'
+                                : 'bg-white dark:bg-background-secondary border-2 border-gray-300 dark:border-border-primary'
+                              }`}
+                          >
+                            {selectedPageIds.has(page.id) && <Check size={12} />}
+                          </button>
+                        )}
+                      </div>
+                      {/* 桌面端：完整卡片 */}
+                      <div className="hidden md:block relative">
+                        {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePageSelection(page.id!);
+                            }}
+                            className={`absolute top-2 right-2 z-10 w-6 h-6 rounded flex items-center justify-center transition-all ${selectedPageIds.has(page.id)
+                                ? 'bg-banana-500 text-white shadow-md'
+                                : 'bg-white/90 border-2 border-gray-300 dark:border-border-primary hover:border-banana-400'
+                              }`}
+                          >
+                            {selectedPageIds.has(page.id) && <Check size={14} />}
+                          </button>
+                        )}
+                        <SlideCard
+                          page={page}
+                          index={index}
+                          isSelected={selectedIndex === index}
+                          onClick={() => {
+                            if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
+                              togglePageSelection(page.id);
+                            } else {
+                              setSelectedIndex(index);
+                            }
+                          }}
+                          onEdit={() => {
+                            setSelectedIndex(index);
+                            handleEditPage();
+                          }}
+                          onDelete={() => handleDeletePage(page)}
+                          showDelete={!isMultiSelectMode}
+                          isGenerating={page.id ? isPageGenerating(page) : false}
+                          aspectRatio={aspectRatio}
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleInsertPageAfter(page, index);
+                          }}
+                          title={t('preview.insertAfterPage')}
+                          aria-label={t('preview.insertAfterPage')}
+                          className="absolute left-1/2 -bottom-3 -translate-x-1/2 z-20 h-7 w-7 hidden md:inline-flex items-center justify-center rounded-full border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-secondary shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity hover:bg-banana-50 dark:hover:bg-background-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-400"
+                        >
+                          <Plus size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </aside>
 
         {/* 右侧：大图预览 */}
@@ -2852,23 +2839,23 @@ export const SlidePreview: React.FC = () => {
                 <p className="text-sm md:text-base text-gray-500 dark:text-foreground-tertiary mb-6">
                   {t('preview.noPagesHint')}
                 </p>
-	                <Button
-	                  variant="primary"
-	                  icon={<Plus size={16} />}
-	                  onClick={() => void handleInsertPageAfter(undefined, -1)}
-	                  className="text-sm md:text-base"
-	                >
-	                  {t('preview.addFirstPage')}
-	                </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => navigate(`/project/${projectId}/outline`)}
-                    className="text-sm md:text-base mt-2"
-                  >
-                    {t('preview.backToEdit')}
-                  </Button>
-	              </div>
-	            </div>
+                <Button
+                  variant="primary"
+                  icon={<Plus size={16} />}
+                  onClick={() => void handleInsertPageAfter(undefined, -1)}
+                  className="text-sm md:text-base"
+                >
+                  {t('preview.addFirstPage')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => navigate(`/project/${projectId}/outline`)}
+                  className="text-sm md:text-base mt-2"
+                >
+                  {t('preview.backToEdit')}
+                </Button>
+              </div>
+            </div>
           ) : (
             <>
               {/* 预览区 */}
@@ -2876,11 +2863,10 @@ export const SlidePreview: React.FC = () => {
                 <div className={`w-full ${isFullscreen ? 'max-w-none' : 'max-w-5xl'}`}>
                   <div
                     ref={previewContainerRef}
-                    className={`relative overflow-hidden touch-manipulation ${
-                      isFullscreen
+                    className={`relative overflow-hidden touch-manipulation ${isFullscreen
                         ? 'w-screen h-screen max-w-none max-h-none bg-black rounded-none shadow-none'
                         : 'bg-white dark:bg-background-secondary rounded-lg shadow-xl'
-                    }`}
+                      }`}
                     style={isFullscreen ? undefined : { aspectRatio: aspectRatioStyle }}
                   >
                     <button
@@ -2897,9 +2883,8 @@ export const SlidePreview: React.FC = () => {
                           type="button"
                           onClick={goPrevPage}
                           disabled={selectedIndex === 0}
-                          className={`absolute left-3 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center h-10 w-10 rounded-full bg-white/85 text-gray-700 hover:bg-banana-50 shadow-md border border-gray-200/70 dark:bg-background-secondary/80 dark:text-foreground-secondary dark:hover:bg-background-hover ${
-                            selectedIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                          }`}
+                          className={`absolute left-3 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center h-10 w-10 rounded-full bg-white/85 text-gray-700 hover:bg-banana-50 shadow-md border border-gray-200/70 dark:bg-background-secondary/80 dark:text-foreground-secondary dark:hover:bg-background-hover ${selectedIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
                           title={t('preview.prevPage')}
                         >
                           <ChevronLeft size={18} />
@@ -2908,9 +2893,8 @@ export const SlidePreview: React.FC = () => {
                           type="button"
                           onClick={goNextPage}
                           disabled={selectedIndex === currentProject.pages.length - 1}
-                          className={`absolute right-3 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center h-10 w-10 rounded-full bg-white/85 text-gray-700 hover:bg-banana-50 shadow-md border border-gray-200/70 dark:bg-background-secondary/80 dark:text-foreground-secondary dark:hover:bg-background-hover ${
-                            selectedIndex === currentProject.pages.length - 1 ? 'opacity-50 cursor-not-allowed' : ''
-                          }`}
+                          className={`absolute right-3 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center h-10 w-10 rounded-full bg-white/85 text-gray-700 hover:bg-banana-50 shadow-md border border-gray-200/70 dark:bg-background-secondary/80 dark:text-foreground-secondary dark:hover:bg-background-hover ${selectedIndex === currentProject.pages.length - 1 ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
                           title={t('preview.nextPage')}
                         >
                           <ChevronRight size={18} />
@@ -3039,9 +3023,8 @@ export const SlidePreview: React.FC = () => {
                               <button
                                 key={version.version_id}
                                 onClick={() => handleSwitchVersion(version.version_id)}
-                                className={`w-full px-3 md:px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-background-hover transition-colors flex items-center justify-between text-xs md:text-sm ${
-                                  version.is_current ? 'bg-banana-50 dark:bg-background-secondary' : ''
-                                }`}
+                                className={`w-full px-3 md:px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-background-hover transition-colors flex items-center justify-between text-xs md:text-sm ${version.is_current ? 'bg-banana-50 dark:bg-background-secondary' : ''
+                                  }`}
                               >
                                 <div className="flex items-center gap-2">
                                   <span>
@@ -3056,11 +3039,11 @@ export const SlidePreview: React.FC = () => {
                                 <span className="text-xs text-gray-400 hidden md:inline">
                                   {version.created_at
                                     ? new Date(version.created_at).toLocaleString('zh-CN', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                      })
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })
                                     : ''}
                                 </span>
                               </button>
@@ -3069,12 +3052,12 @@ export const SlidePreview: React.FC = () => {
                         )}
                       </div>
                     )}
-	                    <Button
-	                      variant="secondary"
-	                      size="sm"
-	                      onClick={handleEditPage}
-	                      className="text-xs md:text-sm flex-1 sm:flex-initial"
-	                    >
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleEditPage}
+                      className="text-xs md:text-sm flex-1 sm:flex-initial"
+                    >
                       {t('common.edit')}
                     </Button>
                     <Button
@@ -3108,9 +3091,8 @@ export const SlidePreview: React.FC = () => {
         </Modal>
       ) : (
         <div
-          className={`fixed top-0 right-0 h-full z-50 transition-transform duration-300 ease-out ${
-            isEditModalOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
-          }`}
+          className={`fixed top-0 right-0 h-full z-50 transition-transform duration-300 ease-out ${isEditModalOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
+            }`}
           style={{ width: drawerWidthPx }}
         >
           <div
@@ -3138,7 +3120,7 @@ export const SlidePreview: React.FC = () => {
       )}
       <ToastContainer />
       {ConfirmDialog}
-      
+
       {/* 模板选择 Modal */}
       <Modal
         isOpen={isTemplateModalOpen}
@@ -3179,27 +3161,27 @@ export const SlidePreview: React.FC = () => {
             <>
               <TextStyleSelector
                 value={draftTemplateStyle}
-              onChange={setDraftTemplateStyle}
-              onToast={show}
-              onGenerateStylePreviews={async ({ templateJson, styleRequirements, generatePreviews }) => {
-                try {
-                  // 先把当前输入的风格要求保存到项目（便于后端任务读取/复用）
-                  await updateProject(projectId!, { template_style: styleRequirements || '' } as any);
-                  await syncProject(projectId!);
+                onChange={setDraftTemplateStyle}
+                onToast={show}
+                onGenerateStylePreviews={async ({ templateJson, styleRequirements, generatePreviews }) => {
+                  try {
+                    // 先把当前输入的风格要求保存到项目（便于后端任务读取/复用）
+                    await updateProject(projectId!, { template_style: styleRequirements || '' } as any);
+                    await syncProject(projectId!);
 
-                  const resp = await startStyleRecommendations(projectId!, {
-                    template_json: templateJson,
-                    style_requirements: styleRequirements || '',
-                    generate_previews: typeof generatePreviews === 'boolean' ? generatePreviews : false,
-                  });
-                  const taskId = (resp.data as any)?.task_id;
-                  if (!taskId) throw new Error('未返回任务ID');
-                  setStylePreviewTemplateJson(templateJson);
-                  setStylePreviewTaskId(taskId);
-                } catch (error: any) {
-                  show({ message: `生成风格预览失败: ${error?.message || '未知错误'}`, type: 'error' });
-                }
-              }}
+                    const resp = await startStyleRecommendations(projectId!, {
+                      template_json: templateJson,
+                      style_requirements: styleRequirements || '',
+                      generate_previews: typeof generatePreviews === 'boolean' ? generatePreviews : false,
+                    });
+                    const taskId = (resp.data as any)?.task_id;
+                    if (!taskId) throw new Error('未返回任务ID');
+                    setStylePreviewTemplateJson(templateJson);
+                    setStylePreviewTaskId(taskId);
+                  } catch (error: any) {
+                    show({ message: `生成风格预览失败: ${error?.message || '未知错误'}`, type: 'error' });
+                  }
+                }}
               />
               {stylePreviewTaskId ? (
                 <StyleWorkflowPanel
@@ -3405,16 +3387,16 @@ export const SlidePreview: React.FC = () => {
           <p className="text-sm text-gray-700 dark:text-foreground-secondary">
             {batchGenerateContext
               ? t(
-                  batchGenerateContext.generating > 0
-                    ? 'preview.confirmPartialGenerateWithGeneratingMessage'
-                    : 'preview.confirmPartialGenerateMessage',
-                  {
-                    generated: batchGenerateContext.generated,
-                    total: batchGenerateContext.total,
-                    missing: batchGenerateContext.missing,
-                    generating: batchGenerateContext.generating,
-                  }
-                )
+                batchGenerateContext.generating > 0
+                  ? 'preview.confirmPartialGenerateWithGeneratingMessage'
+                  : 'preview.confirmPartialGenerateMessage',
+                {
+                  generated: batchGenerateContext.generated,
+                  total: batchGenerateContext.total,
+                  missing: batchGenerateContext.missing,
+                  generating: batchGenerateContext.generating,
+                }
+              )
               : ''}
           </p>
           <div className="flex flex-col gap-2">
