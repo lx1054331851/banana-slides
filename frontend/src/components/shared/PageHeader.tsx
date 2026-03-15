@@ -57,7 +57,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   };
 
   return (
-    <nav className={cn('h-20 bg-white/85 dark:bg-background-secondary/95 border-b border-gray-200 dark:border-border-primary backdrop-blur-sm', className)}>
+    <nav className={cn('h-20 bg-white/85 dark:bg-background-secondary border-b border-gray-200 dark:border-border-primary backdrop-blur-sm', className)}>
       <div className={cn(`${PAGE_CONTAINER_CLASS} h-full flex items-center justify-between gap-3`, innerClassName)}>
         <div className="min-w-0 flex items-center gap-2 md:gap-3">
           {onBack && (
