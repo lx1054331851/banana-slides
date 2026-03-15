@@ -292,6 +292,7 @@ export const SlidePreview: React.FC = () => {
   }, [pageGeneratingTasks]);
   
   const { addTask, pollTask: pollExportTask, tasks: exportTasks, restoreActiveTasks } = useExportTasksStore();
+  const notifiedFailedExportTaskIds = useRef<Set<string>>(new Set());
   const activeExportTasks = useMemo(
     () => exportTasks.filter(
       task => task.projectId === projectId && (task.status === 'PROCESSING' || task.status === 'RUNNING' || task.status === 'PENDING')
@@ -664,6 +665,22 @@ export const SlidePreview: React.FC = () => {
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const { show, ToastContainer } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
+
+  useEffect(() => {
+    exportTasks
+      .filter(task => task.projectId === projectId && task.status === 'FAILED' && task.taskId)
+      .forEach(task => {
+        if (notifiedFailedExportTaskIds.current.has(task.id)) {
+          return;
+        }
+        notifiedFailedExportTaskIds.current.add(task.id);
+        show({
+          message: normalizeErrorMessage(task.errorMessage || t('preview.messages.exportFailed')),
+          type: 'error',
+          duration: 5000,
+        });
+      });
+  }, [exportTasks, projectId, show, t]);
 
   const executeDeletePage = useCallback(async (page: Page) => {
     const pageId = page.id || page.page_id;

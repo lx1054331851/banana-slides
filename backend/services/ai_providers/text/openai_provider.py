@@ -1,6 +1,7 @@
 """
 OpenAI SDK implementation for text generation
 """
+import base64
 import logging
 from typing import Generator
 from .base import TextProvider, strip_think_tags
@@ -128,4 +129,12 @@ class OpenAITextProvider(TextProvider):
             }],
             temperature=0.3,
         )
-        return strip_think_tags(response.choices[0].message.content or "")
+        message_content = response.choices[0].message.content
+        if isinstance(message_content, str):
+            return strip_think_tags(message_content)
+        parts = []
+        for item in message_content or []:
+            text = item.get("text") if isinstance(item, dict) else getattr(item, "text", None)
+            if text:
+                parts.append(text)
+        return strip_think_tags("\n".join(parts))
