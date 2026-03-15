@@ -66,7 +66,7 @@ const templateI18n = {
       },
       imageSearch: '搜索图片模版名称',
       jsonSearch: '搜索 JSON 文本模版名称',
-      myTemplates: '我的图片模版',
+      imageTemplates: '图片模版库',
       presetTemplates: '图片模版库',
       jsonTemplates: 'JSON文本模版',
       emptyImage: '暂无图片模版',
@@ -109,7 +109,7 @@ const templateI18n = {
       },
       imageSearch: 'Search image templates',
       jsonSearch: 'Search JSON templates',
-      myTemplates: 'My Image Templates',
+      imageTemplates: 'Image Template Library',
       presetTemplates: 'Image Template Library',
       jsonTemplates: 'JSON Text Templates',
       emptyImage: 'No image templates',
@@ -222,25 +222,29 @@ const TemplateCard: React.FC<{
   state: 'current' | 'pending' | 'idle';
   onClick: () => void;
   testId: string;
-}> = ({ title, previewUrl, state, onClick, testId }) => {
+  previewFit?: 'contain' | 'cover';
+}> = ({ title, previewUrl, state, onClick, testId, previewFit = 'contain' }) => {
   const stateClass = state === 'current'
-    ? 'border-gray-900 ring-2 ring-gray-200 dark:border-white dark:ring-white/20'
+    ? 'ring-2 ring-banana-300 shadow-[0_10px_30px_rgba(250,204,21,0.18)]'
     : state === 'pending'
-      ? 'border-banana-500 ring-2 ring-banana-200 shadow-lg shadow-banana-100/50'
-      : 'border-gray-200 dark:border-border-primary hover:border-banana-300 hover:-translate-y-0.5';
+      ? 'ring-2 ring-banana-500 shadow-[0_12px_32px_rgba(250,204,21,0.24)]'
+      : 'ring-1 ring-gray-200 hover:ring-gray-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]';
+  const previewClass = previewFit === 'contain'
+    ? 'absolute inset-0 w-full h-full object-contain bg-white p-3'
+    : 'absolute inset-0 w-full h-full object-cover';
 
   return (
     <button
       type="button"
       onClick={onClick}
       data-testid={testId}
-      className={`group relative text-left aspect-[4/3] rounded-2xl border-2 overflow-hidden transition-all ${stateClass}`}
+      className={`group relative text-left aspect-[4/3] rounded-2xl overflow-hidden bg-white shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all ${stateClass}`}
     >
       {previewUrl ? (
         <img
           src={getImageUrl(previewUrl)}
           alt={title}
-          className="absolute inset-0 w-full h-full object-cover"
+          className={previewClass}
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-background-tertiary text-gray-400">
@@ -287,9 +291,10 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [imageSearch, setImageSearch] = useState('');
   const [jsonSearch, setJsonSearch] = useState('');
-  const [imageVisible, setImageVisible] = useState({ user: INITIAL_BATCH, preset: INITIAL_BATCH });
+  const [imageVisible, setImageVisible] = useState(INITIAL_BATCH);
   const [jsonVisible, setJsonVisible] = useState(INITIAL_BATCH);
   const [materialSelectedIds, setMaterialSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedStylePreviewKey, setSelectedStylePreviewKey] = useState<keyof StylePresetPreviewImages>('cover_url');
   const imageScrollRef = useRef<HTMLDivElement | null>(null);
   const jsonScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -344,6 +349,21 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
     return presetTemplates.filter((template) => `${template.name || ''} ${template.template_id}`.toLowerCase().includes(keyword));
   }, [imageSearch, presetTemplates]);
 
+  const filteredImageTemplates = useMemo(() => {
+    return [
+      ...filteredUserTemplates.map((template) => ({
+        key: `user-${template.template_id}`,
+        testId: `template-card-user-${template.template_id}`,
+        selection: buildUserSelection(template),
+      })),
+      ...filteredPresetTemplates.map((template) => ({
+        key: `preset-${template.template_id}`,
+        testId: `template-card-preset-${template.template_id}`,
+        selection: buildPresetSelection(template),
+      })),
+    ];
+  }, [filteredPresetTemplates, filteredUserTemplates]);
+
   const filteredStylePresets = useMemo(() => {
     const keyword = jsonSearch.trim().toLowerCase();
     if (!keyword) return stylePresets;
@@ -351,11 +371,11 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
   }, [jsonSearch, stylePresets]);
 
   useEffect(() => {
-    setImageVisible({ user: INITIAL_BATCH, preset: INITIAL_BATCH });
+    setImageVisible(INITIAL_BATCH);
     if (imageScrollRef.current) {
       imageScrollRef.current.scrollTop = 0;
     }
-  }, [imageSearch, userTemplates.length, presetTemplates.length]);
+  }, [filteredImageTemplates.length, imageSearch]);
 
   useEffect(() => {
     setJsonVisible(INITIAL_BATCH);
@@ -395,6 +415,22 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
   const displaySelection = draftSelection || resolvedCurrentSelection;
   const draftMatchesCurrent = isSameSelection(draftSelection, resolvedCurrentSelection);
 
+  useEffect(() => {
+    if (displaySelection?.kind !== 'style') {
+      setSelectedStylePreviewKey('cover_url');
+      return;
+    }
+
+    const nextKey = previewSlotMeta.find(({ key }) => displaySelection.previewImages[key])?.key || 'cover_url';
+    setSelectedStylePreviewKey(nextKey);
+  }, [displaySelection?.id, displaySelection?.kind]);
+
+  const activePreviewUrl = useMemo(() => {
+    if (!displaySelection) return '';
+    if (displaySelection.kind !== 'style') return displaySelection.previewUrl;
+    return displaySelection.previewImages[selectedStylePreviewKey] || displaySelection.previewUrl;
+  }, [displaySelection, selectedStylePreviewKey]);
+
   const getCardState = (selection: TemplateSelection): 'current' | 'pending' | 'idle' => {
     if (isSameSelection(draftSelection, selection) && !isSameSelection(selection, resolvedCurrentSelection)) {
       return 'pending';
@@ -413,10 +449,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
     if (!node) return;
     const remaining = node.scrollHeight - node.scrollTop - node.clientHeight;
     if (remaining < 180) {
-      setImageVisible((prev) => ({
-        user: Math.min(prev.user + BATCH_SIZE, filteredUserTemplates.length),
-        preset: Math.min(prev.preset + BATCH_SIZE, filteredPresetTemplates.length),
-      }));
+      setImageVisible((prev) => Math.min(prev + BATCH_SIZE, filteredImageTemplates.length));
     }
   };
 
@@ -449,9 +482,12 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
 
   return (
     <>
-      <div className="flex flex-col gap-5 lg:flex-row">
-        <div className="min-w-0 flex-1 rounded-3xl border border-gray-200 dark:border-border-primary bg-gray-50/75 dark:bg-background-tertiary/25 overflow-hidden">
-          <div className="sticky top-0 z-10 border-b border-gray-200 dark:border-border-primary bg-white/90 dark:bg-background-secondary/90 backdrop-blur">
+      <div
+        data-testid="template-selector-layout"
+        className="flex h-[72vh] min-h-[560px] max-h-[760px] flex-col gap-5 lg:flex-row"
+      >
+        <div className="min-w-0 flex-1 rounded-3xl border border-gray-200 dark:border-border-primary bg-gray-50/75 dark:bg-background-tertiary/25 overflow-hidden flex flex-col min-h-0">
+          <div className="sticky top-0 z-10 rounded-t-3xl border-b border-gray-200 dark:border-border-primary bg-white/90 dark:bg-background-secondary/90 backdrop-blur">
             <div className="flex gap-1 p-2">
               {([
                 ['image', t('template.tabs.image')],
@@ -465,8 +501,8 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                   data-testid={`template-selector-tab-${tab}`}
                   className={`flex-1 rounded-2xl px-4 py-3 text-sm font-medium transition-colors ${
                     activeTab === tab
-                      ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
-                      : 'text-gray-600 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover'
+                      ? 'bg-gradient-to-r from-banana-500 to-banana-600 text-black shadow-md shadow-banana-200/70'
+                      : 'text-gray-600 dark:text-foreground-tertiary hover:bg-banana-50 dark:hover:bg-background-hover'
                   }`}
                 >
                   {label}
@@ -475,8 +511,8 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
             </div>
           </div>
 
-          <div className="p-4">
-            <div className={activeTab === 'image' ? 'block' : 'hidden'}>
+          <div className="flex-1 min-h-0 p-4">
+            <div className={`${activeTab === 'image' ? 'flex' : 'hidden'} h-full min-h-0 flex-col`}>
               <div className="flex items-center gap-3 mb-4">
                 <input
                   value={imageSearch}
@@ -504,56 +540,28 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                 </Button>
               </div>
 
-              <div ref={imageScrollRef} onScroll={handleImageScroll} className="max-h-[58vh] overflow-y-auto pr-1 space-y-6">
+              <div ref={imageScrollRef} onScroll={handleImageScroll} className="min-h-0 flex-1 overflow-y-auto px-1 py-1 pr-2 space-y-6">
                 <section>
                   <div className="mb-3">
-                    <div className="text-sm font-semibold text-gray-900 dark:text-white">{t('template.myTemplates')}</div>
+                    <div className="text-sm font-semibold text-gray-900 dark:text-white">{t('template.imageTemplates')}</div>
                   </div>
-                  {filteredUserTemplates.length === 0 ? (
+                  {filteredImageTemplates.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary px-4 py-10 text-center">
                       <div className="text-sm text-gray-500 dark:text-foreground-tertiary">{t('template.emptyImage')}</div>
                       <div className="mt-1 text-xs text-gray-400 dark:text-foreground-tertiary">{t('template.emptyImageHint')}</div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
-                      {filteredUserTemplates.slice(0, imageVisible.user).map((template) => {
-                        const selection = buildUserSelection(template);
+                      {filteredImageTemplates.slice(0, imageVisible).map(({ key, selection, testId }) => {
                         return (
                           <TemplateCard
-                            key={template.template_id}
+                            key={key}
                             title={selection.name}
                             previewUrl={selection.previewUrl}
                             state={getCardState(selection)}
                             onClick={() => onDraftSelectionChange(selection)}
-                            testId={`template-card-user-${template.template_id}`}
-                          />
-                        );
-                      })}
-                    </div>
-                  )}
-                </section>
-
-                <section>
-                  <div className="mb-3">
-                    <div className="text-sm font-semibold text-gray-900 dark:text-white">{t('template.presetTemplates')}</div>
-                  </div>
-                  {filteredPresetTemplates.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary px-4 py-10 text-center">
-                      <div className="text-sm text-gray-500 dark:text-foreground-tertiary">{t('template.emptyImage')}</div>
-                      <div className="mt-1 text-xs text-gray-400 dark:text-foreground-tertiary">{t('template.emptyImageHint')}</div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
-                      {filteredPresetTemplates.slice(0, imageVisible.preset).map((template) => {
-                        const selection = buildPresetSelection(template);
-                        return (
-                          <TemplateCard
-                            key={template.template_id}
-                            title={selection.name}
-                            previewUrl={selection.previewUrl}
-                            state={getCardState(selection)}
-                            onClick={() => onDraftSelectionChange(selection)}
-                            testId={`template-card-preset-${template.template_id}`}
+                            testId={testId}
+                            previewFit="contain"
                           />
                         );
                       })}
@@ -563,7 +571,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
               </div>
             </div>
 
-            <div className={activeTab === 'json' ? 'block' : 'hidden'}>
+            <div className={`${activeTab === 'json' ? 'flex' : 'hidden'} h-full min-h-0 flex-col`}>
               <div className="flex items-center gap-3 mb-4">
                 <input
                   value={jsonSearch}
@@ -591,7 +599,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                 </Button>
               </div>
 
-              <div ref={jsonScrollRef} onScroll={handleJsonScroll} className="max-h-[58vh] overflow-y-auto pr-1">
+              <div ref={jsonScrollRef} onScroll={handleJsonScroll} className="min-h-0 flex-1 overflow-y-auto px-1 py-1 pr-2">
                 {filteredStylePresets.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary px-4 py-10 text-center">
                     <div className="text-sm text-gray-500 dark:text-foreground-tertiary">{t('template.emptyJson')}</div>
@@ -609,6 +617,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                           state={getCardState(selection)}
                           onClick={() => onDraftSelectionChange(selection)}
                           testId={`template-card-style-${preset.id}`}
+                          previewFit="contain"
                         />
                       );
                     })}
@@ -617,7 +626,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
               </div>
             </div>
 
-            <div className={activeTab === 'material' ? 'block' : 'hidden'}>
+            <div className={`${activeTab === 'material' ? 'flex' : 'hidden'} h-full min-h-0 flex-col`}>
               <div className="flex items-center justify-between gap-3 mb-4">
                 <p className="text-sm text-gray-500 dark:text-foreground-tertiary">{t('template.materialHint')}</p>
                 <Button
@@ -630,39 +639,43 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                   {t('template.goToMaterialLibrary')}
                 </Button>
               </div>
-              <MaterialLibraryPanel
-                projectId={projectId || undefined}
-                selectedIds={materialSelectedIds}
-                onSelectedIdsChange={setMaterialSelectedIds}
-                onSelectedMaterialsChange={(materials) => {
-                  setAvailableMaterials(materials);
-                  if (materials[0]) {
-                    onDraftSelectionChange(buildMaterialSelection(materials[0]));
-                    return;
-                  }
-                  if (draftSelection?.kind === 'material') {
-                    onDraftSelectionChange(null);
-                  }
-                }}
-                multiple={false}
-                showUpload={false}
-                showGenerate={false}
-                showDelete={false}
-                showSelectionSummary={false}
-                emptyHintMode="select-only"
-                className="space-y-4"
-              />
+              {activeTab === 'material' ? (
+                <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1 pr-2">
+                  <MaterialLibraryPanel
+                    projectId={projectId || undefined}
+                    selectedIds={materialSelectedIds}
+                    onSelectedIdsChange={setMaterialSelectedIds}
+                    onSelectedMaterialsChange={(materials) => {
+                      setAvailableMaterials(materials);
+                      if (materials[0]) {
+                        onDraftSelectionChange(buildMaterialSelection(materials[0]));
+                        return;
+                      }
+                      if (draftSelection?.kind === 'material') {
+                        onDraftSelectionChange(null);
+                      }
+                    }}
+                    multiple={false}
+                    showUpload={false}
+                    showGenerate={false}
+                    showDelete={false}
+                    showSelectionSummary={false}
+                    emptyHintMode="select-only"
+                    className="space-y-4"
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
 
-        <aside className="w-full lg:w-[360px] xl:w-[400px] shrink-0 rounded-3xl border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary p-5 flex flex-col">
-          <div>
+        <aside
+          data-testid="template-selector-sidebar"
+          className="w-full lg:w-[360px] xl:w-[400px] shrink-0 rounded-3xl border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary p-5 flex flex-col h-full min-h-0 overflow-y-auto"
+        >
+          <div className="shrink-0">
             <div className="text-xs uppercase tracking-[0.14em] text-gray-400 dark:text-foreground-tertiary">
               {displaySelection ? t('template.selectionTitle') : t('template.currentTitle')}
-            </div>
-            <div className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
-              {displaySelection?.name || t('template.selectionPlaceholder')}
             </div>
             <div className="mt-3 inline-flex rounded-full border border-gray-200 dark:border-border-primary px-3 py-1 text-xs text-gray-600 dark:text-foreground-tertiary">
               {renderSelectionStatus()}
@@ -673,11 +686,15 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
           </div>
 
           <div className="mt-5 rounded-3xl overflow-hidden border border-gray-200 dark:border-border-primary bg-gray-100 dark:bg-background-tertiary aspect-[4/3] flex items-center justify-center">
-            {displaySelection?.previewUrl ? (
+            {activePreviewUrl ? (
               <img
-                src={getImageUrl(displaySelection.previewUrl)}
+                src={getImageUrl(activePreviewUrl)}
                 alt={displaySelection.name}
-                className={`w-full h-full ${displaySelection.kind === 'style' ? 'object-contain bg-white' : 'object-cover'}`}
+                className={`w-full h-full ${
+                  displaySelection.kind === 'material'
+                    ? 'object-cover'
+                    : 'object-contain bg-white p-3'
+                }`}
               />
             ) : (
               <div className="p-6 text-center text-gray-400 dark:text-foreground-tertiary">
@@ -691,8 +708,21 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
             <div className="mt-4 grid grid-cols-4 gap-2">
               {previewSlotMeta.map(({ key, labelKey }) => {
                 const previewUrl = displaySelection.previewImages[key];
+                const isActive = selectedStylePreviewKey === key && Boolean(previewUrl);
                 return (
-                  <div key={key} className="rounded-2xl border border-gray-200 dark:border-border-primary overflow-hidden bg-gray-50 dark:bg-background-tertiary">
+                  <button
+                    key={key}
+                    type="button"
+                    data-testid={`template-style-preview-${key}`}
+                    onClick={() => previewUrl && setSelectedStylePreviewKey(key)}
+                    disabled={!previewUrl}
+                    aria-pressed={isActive}
+                    className={`overflow-hidden rounded-2xl bg-gray-50 dark:bg-background-tertiary text-left transition-all ${
+                      isActive
+                        ? 'ring-2 ring-banana-300 shadow-[0_8px_22px_rgba(250,204,21,0.18)]'
+                        : 'ring-1 ring-gray-200 hover:ring-gray-300'
+                    } ${previewUrl ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+                  >
                     <div className="aspect-[4/3] bg-gray-100 dark:bg-background-primary flex items-center justify-center">
                       {previewUrl ? (
                         <img
@@ -707,7 +737,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                     <div className="px-2 py-1 text-[11px] text-center text-gray-500 dark:text-foreground-tertiary">
                       {t(`template.previewSlots.${labelKey}` as any)}
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>

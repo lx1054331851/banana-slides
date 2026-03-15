@@ -2728,15 +2728,15 @@ export const SlidePreview: React.FC = () => {
                               setSelectedIndex(index);
                             }
                           }}
-                          className={`w-full rounded-lg border-2 overflow-hidden bg-white dark:bg-background-secondary transition-all ${selectedIndex === index
-                              ? 'border-banana-500 shadow-md'
-                              : 'border-gray-200 dark:border-border-primary hover:border-banana-300'
+                          className={`w-full overflow-hidden rounded-lg bg-white dark:bg-background-secondary shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all ${selectedIndex === index
+                              ? 'ring-2 ring-banana-300 shadow-[0_10px_30px_rgba(250,204,21,0.18)]'
+                              : 'ring-1 ring-gray-200 hover:ring-gray-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]'
                             } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
                         >
-                          <div className="text-xs font-medium px-2 py-1 border-b border-gray-100 dark:border-border-primary text-left text-gray-600 dark:text-foreground-tertiary">
+                          <div className="text-xs font-medium px-2 py-1 text-left text-gray-600 dark:text-foreground-tertiary bg-white/90 dark:bg-background-secondary/90">
                             {t('preview.page', { num: index + 1 })}
                           </div>
-                          <div className="aspect-video bg-gray-100 dark:bg-background-primary">
+                          <div className="aspect-video bg-gray-100 dark:bg-background-primary ring-1 ring-gray-200/90">
                             {(page.preview_image_path || page.generated_image_path) ? (
                               <img
                                 src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
@@ -2809,9 +2809,9 @@ export const SlidePreview: React.FC = () => {
                               setSelectedIndex(index);
                             }
                           }}
-                          className={`w-20 h-14 rounded border-2 transition-all ${selectedIndex === index
-                              ? 'border-banana-500 shadow-md'
-                              : 'border-gray-200 dark:border-border-primary'
+                          className={`h-14 w-20 rounded bg-white dark:bg-background-secondary shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all ${selectedIndex === index
+                              ? 'ring-2 ring-banana-300 shadow-[0_10px_30px_rgba(250,204,21,0.18)]'
+                              : 'ring-1 ring-gray-200'
                             } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
                         >
                           {(page.preview_image_path || page.generated_image_path) ? (
@@ -2821,7 +2821,7 @@ export const SlidePreview: React.FC = () => {
                               className="w-full h-full object-cover rounded"
                             />
                           ) : (
-                            <div className="w-full h-full bg-gray-100 dark:bg-background-secondary rounded flex items-center justify-center text-xs text-gray-400">
+                            <div className="w-full h-full rounded bg-gray-100 dark:bg-background-secondary flex items-center justify-center text-xs text-gray-400">
                               {index + 1}
                             </div>
                           )}

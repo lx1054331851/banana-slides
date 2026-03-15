@@ -42,4 +42,35 @@ describe('SlideCard', () => {
     fireEvent.click(screen.getByLabelText('slideCard.editPage'))
     expect(onEdit).toHaveBeenCalledTimes(1)
   })
+
+  it('uses the same light ring style as template cards', () => {
+    const { container, rerender } = render(
+      <SlideCard
+        page={basePage}
+        index={1}
+        isSelected={false}
+        onClick={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
+
+    const card = container.firstChild as HTMLElement
+    expect(card).toHaveClass('ring-1')
+    expect(card).toHaveClass('ring-gray-200')
+
+    rerender(
+      <SlideCard
+        page={basePage}
+        index={1}
+        isSelected={true}
+        onClick={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
+
+    expect(card).toHaveClass('ring-2')
+    expect(card).toHaveClass('ring-banana-300')
+  })
 })
