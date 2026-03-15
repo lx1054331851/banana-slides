@@ -197,7 +197,7 @@ test.describe('UI-driven E2E test: From user interface to PPT export', () => {
         await page.waitForTimeout(300)
         
         console.log('  Confirmed regeneration and dialog closed')
-      } catch (e) {
+      } catch {
         // Dialog didn't appear or already closed, continue
         console.log('  No confirmation dialog, continuing...')
       }
@@ -286,7 +286,7 @@ test.describe('UI-driven E2E test: From user interface to PPT export', () => {
       await generateImagesNavBtn.click({ timeout: 2000 })
       console.log('  Button clicked successfully (normal click)')
       clickSucceeded = true
-    } catch (e) {
+    } catch {
       console.log('  Normal click blocked by overlay')
     }
     
@@ -318,17 +318,17 @@ test.describe('UI-driven E2E test: From user interface to PPT export', () => {
     // ====================================
     console.log('🎨 Step 11: Selecting template...')
     
-    // Click "更换模板" button to open template selection modal
+    // Click "选择模版" button to open template selection modal
     // The button might be hidden on small screens, so try multiple selectors
-    const changeTemplateBtn = page.locator('button:has-text("更换模板"), button[title="更换模板"]').first()
+    const changeTemplateBtn = page.locator('button:has-text("选择模版"), button[title="选择模版"]').first()
     await changeTemplateBtn.waitFor({ state: 'visible', timeout: 10000 })
     await changeTemplateBtn.scrollIntoViewIfNeeded()
     await changeTemplateBtn.click()
-    console.log('✓ Clicked "更换模板" button, opening template selection modal...')
+    console.log('✓ Clicked "选择模版" button, opening template selection modal...')
     
-    // Wait for template modal to open (check for modal title and preset templates section)
-    await page.waitForSelector('text="更换模板"', { timeout: 5000 })
-    await page.waitForSelector('text="预设模板"', { timeout: 5000 })
+    // Wait for template modal to open (check for modal title and image templates tab)
+    await page.waitForSelector('text="选择模版"', { timeout: 5000 })
+    await page.waitForSelector('text="图片模版"', { timeout: 5000 })
     await page.waitForTimeout(500) // Wait for modal animation
     
     // Select the first preset template 
@@ -338,15 +338,13 @@ test.describe('UI-driven E2E test: From user interface to PPT export', () => {
     // Click the first preset template card in the grid (if name click didn't work)
     if (!templateSelected) {
       try {
-        // Find the preset templates section and click the first template card
-        // The preset templates are in a grid with class containing "aspect-[4/3]"
-        const presetSection = page.locator('h4:has-text("预设模板")').locator('..')
-        const firstTemplateCard = presetSection.locator('div[class*="aspect-[4/3]"]').first()
+        const firstTemplateCard = page.locator('[data-testid^="template-card-preset-"]').first()
         await firstTemplateCard.waitFor({ state: 'visible', timeout: 3000 })
         await firstTemplateCard.click()
+        await page.getByTestId('template-selector-apply').click()
         templateSelected = true
-        console.log('✓ Selected first preset template by clicking first card')
-      } catch (e) {
+        console.log('✓ Selected first preset template and applied it')
+      } catch {
         console.log('  Warning: Could not select template by card, trying alternative...')
       }
     }
@@ -355,36 +353,15 @@ test.describe('UI-driven E2E test: From user interface to PPT export', () => {
       throw new Error('Failed to select preset template')
     }
     
-    // Wait for template selection to complete dynamically
-    // The handleTemplateSelect function will:
-    // 1. Show "正在上传模板..." (isUploadingTemplate = true)
-    // 2. Upload template and sync project
-    // 3. Close modal (setIsTemplateModalOpen(false))
-    // 4. Show success toast "模板更换成功"
-    
-    console.log('  Waiting for template upload to complete...')
-    
-    // Wait for "正在上传模板..." to appear (indicates upload started)
-    const uploadingText = page.locator('text="正在上传模板..."')
-    const uploadStarted = await uploadingText.isVisible({ timeout: 3000 }).catch(() => false)
-    if (uploadStarted) {
-      console.log('  Template upload started, waiting for completion...')
-    }
-    
     // Wait for modal to close (most reliable indicator that selection is complete)
     // Modal component returns null when isOpen=false, so the modal DOM disappears
     // We check for the modal's unique content that only exists when modal is open
     await expect(async () => {
-      // Check if modal backdrop or modal content is still visible
-      // The modal has a backdrop with class "fixed inset-0 bg-black/50"
-      // and the modal content has title "更换模板" in a specific structure
-      const modalBackdrop = page.locator('.fixed.inset-0.bg-black\\/50').first()
-      const modalContent = page.locator('h2:has-text("更换模板")').first()
+      const modalContent = page.locator('h2:has-text("选择模版")').first()
       
-      const isBackdropVisible = await modalBackdrop.isVisible().catch(() => false)
       const isContentVisible = await modalContent.isVisible().catch(() => false)
       
-      if (isBackdropVisible || isContentVisible) {
+      if (isContentVisible) {
         throw new Error('Template selection modal still open')
       }
       return true
@@ -397,9 +374,9 @@ test.describe('UI-driven E2E test: From user interface to PPT export', () => {
     
     // Optionally wait for success toast (non-blocking, just for verification)
     try {
-      await page.waitForSelector('text="模板更换成功"', { timeout: 3000 })
+      await page.waitForSelector('text=/模版已更新|Template updated/', { timeout: 3000 })
       console.log('✓ Success toast appeared')
-    } catch (e) {
+    } catch {
       // Toast might have disappeared quickly, that's okay
     }
     
@@ -429,7 +406,7 @@ test.describe('UI-driven E2E test: From user interface to PPT export', () => {
         if (match) {
           pageCount = parseInt(match[1], 10)
         }
-      } catch (e) {
+      } catch {
         // Fallback: try to count page thumbnails or cards
         const thumbnails = page.locator('[data-page-index], .page-thumbnail, .slide-thumbnail')
         const thumbnailCount = await thumbnails.count()
@@ -726,4 +703,3 @@ test.describe('UI E2E - Simplified (skip long waits)', () => {
     console.log('\n✅ UI flow verification passed!\n')
   })
 })
-

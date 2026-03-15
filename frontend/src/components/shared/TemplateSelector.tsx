@@ -1,11 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Button, Modal, useToast, MaterialSelector } from '@/components/shared';
-import { useT } from '@/hooks/useT';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUpRight, Check, FileCode2, Image as ImageIcon, Layers3, RefreshCw } from 'lucide-react';
 import { getImageUrl } from '@/api/client';
 import {
   listUserTemplates,
-  uploadUserTemplate,
-  deleteUserTemplate,
   listPresetTemplates,
   listStylePresets,
   type UserTemplate,
@@ -14,576 +11,752 @@ import {
   type StylePreset,
   type StylePresetPreviewImages,
 } from '@/api/endpoints';
-import { materialUrlToFile } from '@/components/shared/MaterialSelector';
-import { ImagePlus, Trash2 } from 'lucide-react';
+import { useT } from '@/hooks/useT';
+import { Button } from './Button';
+import { useToast } from './Toast';
+import { MaterialLibraryPanel } from './MaterialSelector';
+
+const INITIAL_BATCH = 24;
+const BATCH_SIZE = 24;
 
 export type TemplateSource = 'user' | 'preset' | 'upload';
+export type TemplateSelectorTab = 'image' | 'json' | 'material';
+
+export type TemplateSelection =
+  | {
+      kind: 'user';
+      id: string;
+      name: string;
+      previewUrl: string;
+      templateId: string;
+    }
+  | {
+      kind: 'preset';
+      id: string;
+      name: string;
+      previewUrl: string;
+      templateId: string;
+    }
+  | {
+      kind: 'style';
+      id: string;
+      name: string;
+      previewUrl: string;
+      presetId: string;
+      styleJson: string;
+      previewImages: StylePresetPreviewImages;
+    }
+  | {
+      kind: 'material';
+      id: string;
+      name: string;
+      previewUrl: string;
+      material: Material;
+    };
+
+export type AppliedTemplateSelection = Pick<TemplateSelection, 'kind' | 'id'>;
 
 const templateI18n = {
   zh: {
     template: {
-      myTemplates: '我的模板',
-      presetTemplates: '图片模版',
-      styleTemplates: 'JSON文本模版',
-      morePresetTemplates: '更多图片模版',
-      moreStyleTemplates: '更多JSON文本模版',
-      more: '更多',
-      noPresetTemplates: '暂无图片模版',
-      noStyleTemplates: '暂无JSON文本模版',
-      uploadTemplate: '上传模板',
-      deleteTemplate: '删除模板',
-      templateSelected: '已选择',
-      saveToLibraryOnUpload: '上传模板时同时保存到我的模板库',
-      selectFromMaterials: '从素材库选择',
-      selectAsTemplate: '从素材库选择作为模板',
-      cannotDeleteInUse: '当前使用中的模板不能删除，请先取消选择或切换',
-      messages: {
-        uploadSuccess: '模板上传成功',
-        uploadFailed: '模板上传失败',
-        deleteSuccess: '模板已删除',
-        deleteFailed: '删除模板失败',
-        styleTemplateApplied: '已选择JSON文本模版',
-        styleTemplateApplyFailed: '选择JSON文本模版失败',
-      }
+      tabs: {
+        image: '图片模版',
+        json: 'JSON文本模版',
+        material: '从素材库选择',
+      },
+      imageSearch: '搜索图片模版名称',
+      jsonSearch: '搜索 JSON 文本模版名称',
+      imageTemplates: '图片模版库',
+      presetTemplates: '图片模版库',
+      jsonTemplates: 'JSON文本模版',
+      emptyImage: '暂无图片模版',
+      emptyJson: '暂无 JSON 文本模版',
+      emptyImageHint: '请前往模板管理维护图片模版',
+      emptyJsonHint: '请前往模板管理维护 JSON 文本模版',
+      goToStyleLibrary: '去模板管理',
+      goToMaterialLibrary: '去素材管理',
+      statusCurrent: '当前使用',
+      statusPending: '已选中待应用',
+      statusIdle: '可选择',
+      applySelection: '应用当前选择',
+      applyCurrent: '当前已在使用',
+      selectionTitle: '当前选择',
+      currentTitle: '当前使用中',
+      selectionPlaceholder: '左侧选择一个模版后，在这里确认并应用到后续页面生成。',
+      selectionTip: '点击卡片只会进入草稿态；只有点击“应用当前选择”才会更新项目。',
+      noPreview: '当前模版暂无预览图',
+      sourceMyTemplate: '来源：我的图片模版',
+      sourcePresetTemplate: '来源：图片模版库',
+      sourceJsonTemplate: '来源：JSON文本模版',
+      sourceMaterial: '来源：素材库',
+      refresh: '刷新',
+      loadFailed: '加载模版失败',
+      materialHint: '这里只支持选择已有素材；上传和生成请前往素材管理完成。',
+      previewSlots: {
+        cover: '封面',
+        toc: '目录',
+        detail: '详情',
+        ending: '结尾',
+      },
     },
-    material: {
-      messages: {
-        savedToLibrary: '素材已保存到模板库',
-        selectedAsTemplate: '已从素材库选择作为模板',
-        loadMaterialFailed: '加载素材失败'
-      }
-    }
   },
   en: {
     template: {
-      myTemplates: 'My Templates',
-      presetTemplates: 'Image Templates',
-      styleTemplates: 'JSON Text Templates',
-      morePresetTemplates: 'More Image Templates',
-      moreStyleTemplates: 'More JSON Text Templates',
-      more: 'More',
-      noPresetTemplates: 'No image templates',
-      noStyleTemplates: 'No JSON text templates',
-      uploadTemplate: 'Upload Template',
-      deleteTemplate: 'Delete Template',
-      templateSelected: 'Selected',
-      saveToLibraryOnUpload: 'Save to my template library when uploading',
-      selectFromMaterials: 'Select from Materials',
-      selectAsTemplate: 'Select from materials as template',
-      cannotDeleteInUse: 'Cannot delete template in use, please deselect or switch first',
-      messages: {
-        uploadSuccess: 'Template uploaded successfully',
-        uploadFailed: 'Failed to upload template',
-        deleteSuccess: 'Template deleted',
-        deleteFailed: 'Failed to delete template',
-        styleTemplateApplied: 'JSON text template selected',
-        styleTemplateApplyFailed: 'Failed to select JSON text template',
-      }
+      tabs: {
+        image: 'Image Templates',
+        json: 'JSON Templates',
+        material: 'From Materials',
+      },
+      imageSearch: 'Search image templates',
+      jsonSearch: 'Search JSON templates',
+      imageTemplates: 'Image Template Library',
+      presetTemplates: 'Image Template Library',
+      jsonTemplates: 'JSON Text Templates',
+      emptyImage: 'No image templates',
+      emptyJson: 'No JSON templates',
+      emptyImageHint: 'Manage image templates in the template library',
+      emptyJsonHint: 'Manage JSON templates in the template library',
+      goToStyleLibrary: 'Open Template Library',
+      goToMaterialLibrary: 'Open Material Management',
+      statusCurrent: 'Current',
+      statusPending: 'Pending Apply',
+      statusIdle: 'Selectable',
+      applySelection: 'Apply Current Selection',
+      applyCurrent: 'Already Applied',
+      selectionTitle: 'Current Selection',
+      currentTitle: 'Currently Applied',
+      selectionPlaceholder: 'Choose a template from the left, then confirm it here before applying it to future page generation.',
+      selectionTip: 'Clicking a card only creates a draft. The project changes only after “Apply Current Selection”.',
+      noPreview: 'No preview available for this template',
+      sourceMyTemplate: 'Source: My Image Templates',
+      sourcePresetTemplate: 'Source: Image Template Library',
+      sourceJsonTemplate: 'Source: JSON Text Templates',
+      sourceMaterial: 'Source: Material Library',
+      refresh: 'Refresh',
+      loadFailed: 'Failed to load templates',
+      materialHint: 'This tab only selects existing materials. Upload or generate materials in Material Management.',
+      previewSlots: {
+        cover: 'Cover',
+        toc: 'TOC',
+        detail: 'Detail',
+        ending: 'Ending',
+      },
     },
-    material: {
-      messages: {
-        savedToLibrary: 'Material saved to template library',
-        selectedAsTemplate: 'Selected from library as template',
-        loadMaterialFailed: 'Failed to load materials'
-      }
-    }
   }
 };
 
 interface TemplateSelectorProps {
-  onSelect: (templateFile: File | null, templateId?: string, source?: TemplateSource) => void;
-  onSelectStylePreset?: (preset: StylePreset | null) => Promise<void> | void;
-  selectedTemplateId?: string | null;
-  selectedPresetTemplateId?: string | null;
-  selectedStylePresetId?: string | null;
-  showUpload?: boolean;
   projectId?: string | null;
+  activeTab: TemplateSelectorTab;
+  onActiveTabChange: (tab: TemplateSelectorTab) => void;
+  draftSelection: TemplateSelection | null;
+  onDraftSelectionChange: (selection: TemplateSelection | null) => void;
+  appliedSelection: AppliedTemplateSelection | null;
+  appliedStyleJson?: string | null;
+  onApplySelection: (selection: TemplateSelection) => Promise<void> | void;
+  isApplyingSelection?: boolean;
 }
 
+const buildUserSelection = (template: UserTemplate): TemplateSelection => ({
+  kind: 'user',
+  id: template.template_id,
+  name: template.name || template.template_id,
+  previewUrl: template.thumb_url || template.template_image_url,
+  templateId: template.template_id,
+});
+
+const buildPresetSelection = (template: PresetTemplate): TemplateSelection => ({
+  kind: 'preset',
+  id: template.template_id,
+  name: template.name || template.template_id,
+  previewUrl: template.thumb_url || template.template_image_url,
+  templateId: template.template_id,
+});
+
+const getStylePresetCover = (preset: StylePreset) => {
+  const preview: Partial<StylePresetPreviewImages> = preset.preview_images || {};
+  return preview.cover_url || preview.toc_url || preview.detail_url || preview.ending_url || '';
+};
+
+const buildStyleSelection = (preset: StylePreset): TemplateSelection => ({
+  kind: 'style',
+  id: preset.id,
+  name: preset.name || preset.id,
+  previewUrl: getStylePresetCover(preset),
+  presetId: preset.id,
+  styleJson: preset.style_json,
+  previewImages: {
+    cover_url: preset.preview_images?.cover_url || '',
+    toc_url: preset.preview_images?.toc_url || '',
+    detail_url: preset.preview_images?.detail_url || '',
+    ending_url: preset.preview_images?.ending_url || '',
+  },
+});
+
+const buildMaterialSelection = (material: Material): TemplateSelection => ({
+  kind: 'material',
+  id: material.id,
+  name: (material.prompt && material.prompt.trim()) ||
+    (material.name && material.name.trim()) ||
+    material.filename ||
+    material.url,
+  previewUrl: material.url,
+  material,
+});
+
+const isSameSelection = (
+  left: Pick<TemplateSelection, 'kind' | 'id'> | null | undefined,
+  right: Pick<TemplateSelection, 'kind' | 'id'> | null | undefined,
+) => Boolean(left && right && left.kind === right.kind && left.id === right.id);
+
+const previewSlotMeta: Array<{ key: keyof StylePresetPreviewImages; labelKey: keyof typeof templateI18n.zh.template.previewSlots }> = [
+  { key: 'cover_url', labelKey: 'cover' },
+  { key: 'toc_url', labelKey: 'toc' },
+  { key: 'detail_url', labelKey: 'detail' },
+  { key: 'ending_url', labelKey: 'ending' },
+];
+
+const TemplateCard: React.FC<{
+  title: string;
+  previewUrl?: string;
+  state: 'current' | 'pending' | 'idle';
+  onClick: () => void;
+  testId: string;
+  previewFit?: 'contain' | 'cover';
+}> = ({ title, previewUrl, state, onClick, testId, previewFit = 'contain' }) => {
+  const stateClass = state === 'current'
+    ? 'ring-2 ring-banana-300 shadow-[0_10px_30px_rgba(250,204,21,0.18)]'
+    : state === 'pending'
+      ? 'ring-2 ring-banana-500 shadow-[0_12px_32px_rgba(250,204,21,0.24)]'
+      : 'ring-1 ring-gray-200 hover:ring-gray-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]';
+  const previewClass = previewFit === 'contain'
+    ? 'absolute inset-0 w-full h-full object-contain bg-white p-3'
+    : 'absolute inset-0 w-full h-full object-cover';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testId}
+      className={`group relative text-left aspect-[4/3] rounded-2xl overflow-hidden bg-white shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all ${stateClass}`}
+    >
+      {previewUrl ? (
+        <img
+          src={getImageUrl(previewUrl)}
+          alt={title}
+          className={previewClass}
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-background-tertiary text-gray-400">
+          <ImageIcon size={26} />
+        </div>
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 p-3">
+        <div className="text-sm font-medium text-white line-clamp-2">{title}</div>
+      </div>
+      {state === 'pending' && (
+        <div className="absolute top-3 left-3 rounded-full bg-banana-500 px-2 py-1 text-xs font-semibold text-black inline-flex items-center gap-1">
+          <Check size={12} />
+          已选中
+        </div>
+      )}
+      {state === 'current' && (
+        <div className="absolute top-3 left-3 rounded-full bg-white/95 px-2 py-1 text-xs font-semibold text-gray-900 inline-flex items-center gap-1">
+          <Layers3 size={12} />
+          当前使用
+        </div>
+      )}
+    </button>
+  );
+};
+
 export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
-  onSelect,
-  onSelectStylePreset,
-  selectedTemplateId,
-  selectedPresetTemplateId,
-  selectedStylePresetId,
-  showUpload = true,
   projectId,
+  activeTab,
+  onActiveTabChange,
+  draftSelection,
+  onDraftSelectionChange,
+  appliedSelection,
+  appliedStyleJson,
+  onApplySelection,
+  isApplyingSelection = false,
 }) => {
   const t = useT(templateI18n);
+  const { show, ToastContainer } = useToast();
   const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([]);
   const [presetTemplates, setPresetTemplates] = useState<PresetTemplate[]>([]);
   const [stylePresets, setStylePresets] = useState<StylePreset[]>([]);
-  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
-  const [isLoadingPresetTemplates, setIsLoadingPresetTemplates] = useState(false);
-  const [isLoadingStylePresets, setIsLoadingStylePresets] = useState(false);
-  const [isMaterialSelectorOpen, setIsMaterialSelectorOpen] = useState(false);
-  const [isPresetTemplateModalOpen, setIsPresetTemplateModalOpen] = useState(false);
-  const [isStylePresetModalOpen, setIsStylePresetModalOpen] = useState(false);
-  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
-  const [selectingStylePresetId, setSelectingStylePresetId] = useState<string | null>(null);
-  const [saveToLibrary, setSaveToLibrary] = useState(true);
-  const { show, ToastContainer } = useToast();
+  const [availableMaterials, setAvailableMaterials] = useState<Material[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [imageSearch, setImageSearch] = useState('');
+  const [jsonSearch, setJsonSearch] = useState('');
+  const [imageVisible, setImageVisible] = useState(INITIAL_BATCH);
+  const [jsonVisible, setJsonVisible] = useState(INITIAL_BATCH);
+  const [materialSelectedIds, setMaterialSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedStylePreviewKey, setSelectedStylePreviewKey] = useState<keyof StylePresetPreviewImages>('cover_url');
+  const imageScrollRef = useRef<HTMLDivElement | null>(null);
+  const jsonScrollRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    void loadUserTemplates();
-    void loadPresetTemplates();
-    void loadStylePresets();
-  }, []);
-
-  const loadUserTemplates = async () => {
-    setIsLoadingTemplates(true);
+  const loadAll = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const response = await listUserTemplates();
-      setUserTemplates(response.data?.templates || []);
+      const [userResp, presetResp, styleResp] = await Promise.all([
+        listUserTemplates(),
+        listPresetTemplates(),
+        listStylePresets(),
+      ]);
+      setUserTemplates(userResp.data?.templates || []);
+      setPresetTemplates(presetResp.data?.templates || []);
+      setStylePresets(styleResp.data?.presets || []);
     } catch (error: any) {
-      console.error('Failed to load user templates:', error);
-    } finally {
-      setIsLoadingTemplates(false);
-    }
-  };
-
-  const loadPresetTemplates = async () => {
-    setIsLoadingPresetTemplates(true);
-    try {
-      const response = await listPresetTemplates();
-      setPresetTemplates(response.data?.templates || []);
-    } catch (error: any) {
-      console.error('Failed to load preset templates:', error);
-    } finally {
-      setIsLoadingPresetTemplates(false);
-    }
-  };
-
-  const loadStylePresets = async () => {
-    setIsLoadingStylePresets(true);
-    try {
-      const response = await listStylePresets();
-      setStylePresets(response.data?.presets || []);
-    } catch (error: any) {
-      console.error('Failed to load style presets:', error);
-    } finally {
-      setIsLoadingStylePresets(false);
-    }
-  };
-
-  const clearStylePresetSelection = async () => {
-    if (!onSelectStylePreset) return;
-    try {
-      await onSelectStylePreset(null);
-    } catch {
-      // Parent handles toast if needed.
-    }
-  };
-
-  const handleTemplateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      try {
-        if (showUpload) {
-          const response = await uploadUserTemplate(file);
-          if (response.data) {
-            const template = response.data;
-            setUserTemplates(prev => [template, ...prev]);
-            await clearStylePresetSelection();
-            onSelect(file, template.template_id, 'user');
-            show({ message: t('template.messages.uploadSuccess'), type: 'success' });
-          }
-        } else if (saveToLibrary) {
-          const response = await uploadUserTemplate(file);
-          if (response.data) {
-            const template = response.data;
-            setUserTemplates(prev => [template, ...prev]);
-            await clearStylePresetSelection();
-            onSelect(file, template.template_id, 'user');
-            show({ message: t('material.messages.savedToLibrary'), type: 'success' });
-          }
-        } else {
-          await clearStylePresetSelection();
-          onSelect(file, undefined, 'upload');
-        }
-      } catch (error: any) {
-        console.error('Failed to upload template:', error);
-        show({ message: t('template.messages.uploadFailed') + ': ' + (error.message || t('common.unknownError')), type: 'error' });
-      }
-    }
-    e.target.value = '';
-  };
-
-  const handleSelectUserTemplate = async (template: UserTemplate) => {
-    await clearStylePresetSelection();
-    onSelect(null, template.template_id, 'user');
-  };
-
-  const handleSelectPresetTemplate = async (template: PresetTemplate, closeModal: boolean = false) => {
-    await clearStylePresetSelection();
-    onSelect(null, template.template_id, 'preset');
-    if (closeModal) {
-      setIsPresetTemplateModalOpen(false);
-    }
-  };
-
-  const handleSelectStylePreset = async (preset: StylePreset, closeModal: boolean = false) => {
-    if (!onSelectStylePreset) return;
-    setSelectingStylePresetId(preset.id);
-    try {
-      await onSelectStylePreset(preset);
-      show({ message: t('template.messages.styleTemplateApplied'), type: 'success' });
-      if (closeModal) {
-        setIsStylePresetModalOpen(false);
-      }
-    } catch (error: any) {
-      console.error('Failed to apply style preset:', error);
+      console.error('Failed to load templates:', error);
       show({
-        message: t('template.messages.styleTemplateApplyFailed') + ': ' + (error?.message || t('common.unknownError')),
-        type: 'error'
+        message: `${t('template.loadFailed')}: ${error?.message || ''}`,
+        type: 'error',
       });
     } finally {
-      setSelectingStylePresetId(null);
+      setIsLoading(false);
     }
-  };
+  }, [show]);
 
-  const handleSelectMaterials = async (materials: Material[], saveAsTemplate?: boolean) => {
-    if (materials.length === 0) return;
+  useEffect(() => {
+    void loadAll();
+  }, [loadAll]);
 
-    try {
-      const file = await materialUrlToFile(materials[0]);
-
-      if (saveAsTemplate) {
-        const response = await uploadUserTemplate(file);
-        if (response.data) {
-          const template = response.data;
-          setUserTemplates(prev => [template, ...prev]);
-          await clearStylePresetSelection();
-          onSelect(file, template.template_id, 'user');
-          show({ message: t('material.messages.savedToLibrary'), type: 'success' });
-        }
-      } else {
-        await clearStylePresetSelection();
-        onSelect(file, undefined, 'upload');
-        show({ message: t('material.messages.selectedAsTemplate'), type: 'success' });
-      }
-    } catch (error: any) {
-      console.error('Failed to load material:', error);
-      show({ message: t('material.messages.loadMaterialFailed') + ': ' + (error.message || t('common.unknownError')), type: 'error' });
-    }
-  };
-
-  const handleDeleteUserTemplate = async (template: UserTemplate, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (selectedTemplateId === template.template_id) {
-      show({ message: t('template.cannotDeleteInUse'), type: 'info' });
+  useEffect(() => {
+    if (activeTab !== 'material') return;
+    if (draftSelection?.kind === 'material') {
+      setMaterialSelectedIds(new Set([draftSelection.id]));
       return;
     }
-    setDeletingTemplateId(template.template_id);
-    try {
-      await deleteUserTemplate(template.template_id);
-      setUserTemplates((prev) => prev.filter((item) => item.template_id !== template.template_id));
-      show({ message: t('template.messages.deleteSuccess'), type: 'success' });
-    } catch (error: any) {
-      console.error('Failed to delete template:', error);
-      show({ message: t('template.messages.deleteFailed') + ': ' + (error.message || t('common.unknownError')), type: 'error' });
-    } finally {
-      setDeletingTemplateId(null);
+    if (appliedSelection?.kind === 'material') {
+      setMaterialSelectedIds(new Set([appliedSelection.id]));
+      return;
+    }
+    setMaterialSelectedIds(new Set());
+  }, [activeTab, appliedSelection, draftSelection]);
+
+  const filteredUserTemplates = useMemo(() => {
+    const keyword = imageSearch.trim().toLowerCase();
+    if (!keyword) return userTemplates;
+    return userTemplates.filter((template) => `${template.name || ''} ${template.template_id}`.toLowerCase().includes(keyword));
+  }, [imageSearch, userTemplates]);
+
+  const filteredPresetTemplates = useMemo(() => {
+    const keyword = imageSearch.trim().toLowerCase();
+    if (!keyword) return presetTemplates;
+    return presetTemplates.filter((template) => `${template.name || ''} ${template.template_id}`.toLowerCase().includes(keyword));
+  }, [imageSearch, presetTemplates]);
+
+  const filteredImageTemplates = useMemo(() => {
+    return [
+      ...filteredUserTemplates.map((template) => ({
+        key: `user-${template.template_id}`,
+        testId: `template-card-user-${template.template_id}`,
+        selection: buildUserSelection(template),
+      })),
+      ...filteredPresetTemplates.map((template) => ({
+        key: `preset-${template.template_id}`,
+        testId: `template-card-preset-${template.template_id}`,
+        selection: buildPresetSelection(template),
+      })),
+    ];
+  }, [filteredPresetTemplates, filteredUserTemplates]);
+
+  const filteredStylePresets = useMemo(() => {
+    const keyword = jsonSearch.trim().toLowerCase();
+    if (!keyword) return stylePresets;
+    return stylePresets.filter((preset) => `${preset.name || ''} ${preset.id}`.toLowerCase().includes(keyword));
+  }, [jsonSearch, stylePresets]);
+
+  useEffect(() => {
+    setImageVisible(INITIAL_BATCH);
+    if (imageScrollRef.current) {
+      imageScrollRef.current.scrollTop = 0;
+    }
+  }, [filteredImageTemplates.length, imageSearch]);
+
+  useEffect(() => {
+    setJsonVisible(INITIAL_BATCH);
+    if (jsonScrollRef.current) {
+      jsonScrollRef.current.scrollTop = 0;
+    }
+  }, [jsonSearch, stylePresets.length]);
+
+  const resolvedCurrentSelection = useMemo<TemplateSelection | null>(() => {
+    if (appliedSelection) {
+      if (appliedSelection.kind === 'user') {
+        const template = userTemplates.find((item) => item.template_id === appliedSelection.id);
+        return template ? buildUserSelection(template) : null;
+      }
+      if (appliedSelection.kind === 'preset') {
+        const template = presetTemplates.find((item) => item.template_id === appliedSelection.id);
+        return template ? buildPresetSelection(template) : null;
+      }
+      if (appliedSelection.kind === 'style') {
+        const preset = stylePresets.find((item) => item.id === appliedSelection.id);
+        return preset ? buildStyleSelection(preset) : null;
+      }
+      if (appliedSelection.kind === 'material') {
+        const material = availableMaterials.find((item) => item.id === appliedSelection.id);
+        return material ? buildMaterialSelection(material) : null;
+      }
+    }
+
+    if (appliedStyleJson) {
+      const matchedPreset = stylePresets.find((preset) => (preset.style_json || '').trim() === appliedStyleJson.trim());
+      return matchedPreset ? buildStyleSelection(matchedPreset) : null;
+    }
+
+    return null;
+  }, [appliedSelection, appliedStyleJson, availableMaterials, presetTemplates, stylePresets, userTemplates]);
+
+  const displaySelection = draftSelection || resolvedCurrentSelection;
+  const draftMatchesCurrent = isSameSelection(draftSelection, resolvedCurrentSelection);
+
+  useEffect(() => {
+    if (displaySelection?.kind !== 'style') {
+      setSelectedStylePreviewKey('cover_url');
+      return;
+    }
+
+    const nextKey = previewSlotMeta.find(({ key }) => displaySelection.previewImages[key])?.key || 'cover_url';
+    setSelectedStylePreviewKey(nextKey);
+  }, [displaySelection?.id, displaySelection?.kind]);
+
+  const activePreviewUrl = useMemo(() => {
+    if (!displaySelection) return '';
+    if (displaySelection.kind !== 'style') return displaySelection.previewUrl;
+    return displaySelection.previewImages[selectedStylePreviewKey] || displaySelection.previewUrl;
+  }, [displaySelection, selectedStylePreviewKey]);
+
+  const getCardState = (selection: TemplateSelection): 'current' | 'pending' | 'idle' => {
+    if (isSameSelection(draftSelection, selection) && !isSameSelection(selection, resolvedCurrentSelection)) {
+      return 'pending';
+    }
+    if (isSameSelection(selection, resolvedCurrentSelection)) {
+      return 'current';
+    }
+    if (isSameSelection(draftSelection, selection) && isSameSelection(selection, resolvedCurrentSelection)) {
+      return 'current';
+    }
+    return 'idle';
+  };
+
+  const handleImageScroll = () => {
+    const node = imageScrollRef.current;
+    if (!node) return;
+    const remaining = node.scrollHeight - node.scrollTop - node.clientHeight;
+    if (remaining < 180) {
+      setImageVisible((prev) => Math.min(prev + BATCH_SIZE, filteredImageTemplates.length));
     }
   };
 
-  const getStylePresetCover = (preset: StylePreset) => {
-    const preview: Partial<StylePresetPreviewImages> = preset.preview_images || {};
-    return preview.cover_url || preview.toc_url || preview.detail_url || preview.ending_url || '';
+  const handleJsonScroll = () => {
+    const node = jsonScrollRef.current;
+    if (!node) return;
+    const remaining = node.scrollHeight - node.scrollTop - node.clientHeight;
+    if (remaining < 180) {
+      setJsonVisible((prev) => Math.min(prev + BATCH_SIZE, filteredStylePresets.length));
+    }
   };
 
-  const visiblePresetTemplates = useMemo(() => presetTemplates.slice(0, 4), [presetTemplates]);
-  const hasMorePresetTemplates = presetTemplates.length > 4;
-  const visibleStylePresets = useMemo(() => stylePresets.slice(0, 4), [stylePresets]);
-  const hasMoreStylePresets = stylePresets.length > 4;
+  const openExternalPage = (path: string) => {
+    if (typeof window === 'undefined') return;
+    window.open(path, '_blank', 'noopener,noreferrer');
+  };
+
+  const renderSelectionSource = (selection: TemplateSelection) => {
+    if (selection.kind === 'user') return t('template.sourceMyTemplate');
+    if (selection.kind === 'preset') return t('template.sourcePresetTemplate');
+    if (selection.kind === 'style') return t('template.sourceJsonTemplate');
+    return t('template.sourceMaterial');
+  };
+
+  const renderSelectionStatus = () => {
+    if (!displaySelection) return t('template.statusIdle');
+    if (draftSelection && !draftMatchesCurrent) return t('template.statusPending');
+    return t('template.statusCurrent');
+  };
 
   return (
     <>
-      <div className="space-y-4">
-        <div>
-          <h4 className="text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">{t('template.myTemplates')}</h4>
-          <div className="grid grid-cols-4 gap-4 mb-4">
-            {userTemplates.map((template) => (
-              <div
-                key={template.template_id}
-                onClick={() => void handleSelectUserTemplate(template)}
-                className={`aspect-[4/3] rounded-lg border-2 cursor-pointer transition-all relative group ${
-                  selectedTemplateId === template.template_id
-                    ? 'border-banana-500 ring-2 ring-banana-200'
-                    : 'border-gray-200 dark:border-border-primary hover:border-banana-300'
-                }`}
-              >
-                <img
-                  src={getImageUrl(template.thumb_url || template.template_image_url)}
-                  alt={template.name || 'Template'}
-                  className="absolute inset-0 w-full h-full object-cover"
+      <div
+        data-testid="template-selector-layout"
+        className="flex h-[72vh] min-h-[560px] max-h-[760px] flex-col gap-5 lg:flex-row"
+      >
+        <div className="min-w-0 flex-1 rounded-3xl border border-gray-200 dark:border-border-primary bg-gray-50/75 dark:bg-background-tertiary/25 overflow-hidden flex flex-col min-h-0">
+          <div className="sticky top-0 z-10 rounded-t-3xl border-b border-gray-200 dark:border-border-primary bg-white/90 dark:bg-background-secondary/90 backdrop-blur">
+            <div className="flex gap-1 p-2">
+              {([
+                ['image', t('template.tabs.image')],
+                ['json', t('template.tabs.json')],
+                ['material', t('template.tabs.material')],
+              ] as Array<[TemplateSelectorTab, string]>).map(([tab, label]) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => onActiveTabChange(tab)}
+                  data-testid={`template-selector-tab-${tab}`}
+                  className={`flex-1 rounded-2xl px-4 py-3 text-sm font-medium transition-colors ${
+                    activeTab === tab
+                      ? 'bg-gradient-to-r from-banana-500 to-banana-600 text-black shadow-md shadow-banana-200/70'
+                      : 'text-gray-600 dark:text-foreground-tertiary hover:bg-banana-50 dark:hover:bg-background-hover'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-1 min-h-0 p-4">
+            <div className={`${activeTab === 'image' ? 'flex' : 'hidden'} h-full min-h-0 flex-col`}>
+              <div className="flex items-center gap-3 mb-4">
+                <input
+                  value={imageSearch}
+                  onChange={(e) => setImageSearch(e.target.value)}
+                  placeholder={t('template.imageSearch')}
+                  className="flex-1 px-4 py-2.5 text-sm rounded-2xl border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500"
                 />
-                {selectedTemplateId !== template.template_id && (
-                  <button
-                    type="button"
-                    onClick={(e) => void handleDeleteUserTemplate(template, e)}
-                    disabled={deletingTemplateId === template.template_id}
-                    className={`absolute top-2 right-2 w-8 h-8 bg-black/55 backdrop-blur-sm text-white rounded-full flex items-center justify-center shadow-md z-20 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100 transition-all duration-200 hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${
-                      deletingTemplateId === template.template_id ? 'opacity-60 cursor-not-allowed' : ''
-                    }`}
-                    aria-label={t('template.deleteTemplate')}
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                )}
-                {selectedTemplateId === template.template_id && (
-                  <div className="absolute inset-0 bg-banana-500 bg-opacity-20 flex items-center justify-center pointer-events-none">
-                    <span className="text-white font-semibold text-sm">{t('template.templateSelected')}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<ArrowUpRight size={16} />}
+                  onClick={() => openExternalPage('/style-library?tab=presetTemplates')}
+                  data-testid="template-selector-open-style-library-images"
+                >
+                  {t('template.goToStyleLibrary')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />}
+                  onClick={() => void loadAll()}
+                  disabled={isLoading}
+                >
+                  {t('template.refresh')}
+                </Button>
+              </div>
+
+              <div ref={imageScrollRef} onScroll={handleImageScroll} className="min-h-0 flex-1 overflow-y-auto px-1 py-1 pr-2 space-y-6">
+                <section>
+                  <div className="mb-3">
+                    <div className="text-sm font-semibold text-gray-900 dark:text-white">{t('template.imageTemplates')}</div>
+                  </div>
+                  {filteredImageTemplates.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary px-4 py-10 text-center">
+                      <div className="text-sm text-gray-500 dark:text-foreground-tertiary">{t('template.emptyImage')}</div>
+                      <div className="mt-1 text-xs text-gray-400 dark:text-foreground-tertiary">{t('template.emptyImageHint')}</div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+                      {filteredImageTemplates.slice(0, imageVisible).map(({ key, selection, testId }) => {
+                        return (
+                          <TemplateCard
+                            key={key}
+                            title={selection.name}
+                            previewUrl={selection.previewUrl}
+                            state={getCardState(selection)}
+                            onClick={() => onDraftSelectionChange(selection)}
+                            testId={testId}
+                            previewFit="contain"
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+              </div>
+            </div>
+
+            <div className={`${activeTab === 'json' ? 'flex' : 'hidden'} h-full min-h-0 flex-col`}>
+              <div className="flex items-center gap-3 mb-4">
+                <input
+                  value={jsonSearch}
+                  onChange={(e) => setJsonSearch(e.target.value)}
+                  placeholder={t('template.jsonSearch')}
+                  className="flex-1 px-4 py-2.5 text-sm rounded-2xl border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<ArrowUpRight size={16} />}
+                  onClick={() => openExternalPage('/style-library?tab=presets')}
+                  data-testid="template-selector-open-style-library-json"
+                >
+                  {t('template.goToStyleLibrary')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />}
+                  onClick={() => void loadAll()}
+                  disabled={isLoading}
+                >
+                  {t('template.refresh')}
+                </Button>
+              </div>
+
+              <div ref={jsonScrollRef} onScroll={handleJsonScroll} className="min-h-0 flex-1 overflow-y-auto px-1 py-1 pr-2">
+                {filteredStylePresets.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary px-4 py-10 text-center">
+                    <div className="text-sm text-gray-500 dark:text-foreground-tertiary">{t('template.emptyJson')}</div>
+                    <div className="mt-1 text-xs text-gray-400 dark:text-foreground-tertiary">{t('template.emptyJsonHint')}</div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+                    {filteredStylePresets.slice(0, jsonVisible).map((preset) => {
+                      const selection = buildStyleSelection(preset);
+                      return (
+                        <TemplateCard
+                          key={preset.id}
+                          title={selection.name}
+                          previewUrl={selection.previewUrl}
+                          state={getCardState(selection)}
+                          onClick={() => onDraftSelectionChange(selection)}
+                          testId={`template-card-style-${preset.id}`}
+                          previewFit="contain"
+                        />
+                      );
+                    })}
                   </div>
                 )}
               </div>
-            ))}
+            </div>
 
-            <label className="aspect-[4/3] rounded-lg border-2 border-dashed border-gray-300 dark:border-border-primary hover:border-banana-500 cursor-pointer transition-all flex flex-col items-center justify-center gap-2 relative overflow-hidden">
-              <span className="text-2xl">+</span>
-              <span className="text-sm text-gray-500 dark:text-foreground-tertiary">{t('template.uploadTemplate')}</span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleTemplateUpload}
-                className="hidden"
-                disabled={isLoadingTemplates}
+            <div className={`${activeTab === 'material' ? 'flex' : 'hidden'} h-full min-h-0 flex-col`}>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <p className="text-sm text-gray-500 dark:text-foreground-tertiary">{t('template.materialHint')}</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<ArrowUpRight size={16} />}
+                  onClick={() => openExternalPage('/materials')}
+                  data-testid="template-selector-open-material-library"
+                >
+                  {t('template.goToMaterialLibrary')}
+                </Button>
+              </div>
+              {activeTab === 'material' ? (
+                <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1 pr-2">
+                  <MaterialLibraryPanel
+                    projectId={projectId || undefined}
+                    selectedIds={materialSelectedIds}
+                    onSelectedIdsChange={setMaterialSelectedIds}
+                    onSelectedMaterialsChange={(materials) => {
+                      setAvailableMaterials(materials);
+                      if (materials[0]) {
+                        onDraftSelectionChange(buildMaterialSelection(materials[0]));
+                        return;
+                      }
+                      if (draftSelection?.kind === 'material') {
+                        onDraftSelectionChange(null);
+                      }
+                    }}
+                    multiple={false}
+                    showUpload={false}
+                    showGenerate={false}
+                    showDelete={false}
+                    showSelectionSummary={false}
+                    emptyHintMode="select-only"
+                    className="space-y-4"
+                  />
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <aside
+          data-testid="template-selector-sidebar"
+          className="w-full lg:w-[360px] xl:w-[400px] shrink-0 rounded-3xl border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary p-5 flex flex-col h-full min-h-0 overflow-y-auto"
+        >
+          <div className="shrink-0">
+            <div className="text-xs uppercase tracking-[0.14em] text-gray-400 dark:text-foreground-tertiary">
+              {displaySelection ? t('template.selectionTitle') : t('template.currentTitle')}
+            </div>
+            <div className="mt-3 inline-flex rounded-full border border-gray-200 dark:border-border-primary px-3 py-1 text-xs text-gray-600 dark:text-foreground-tertiary">
+              {renderSelectionStatus()}
+            </div>
+            <p className="mt-3 text-sm text-gray-500 dark:text-foreground-tertiary">
+              {displaySelection ? renderSelectionSource(displaySelection) : t('template.selectionTip')}
+            </p>
+          </div>
+
+          <div className="mt-5 rounded-3xl overflow-hidden border border-gray-200 dark:border-border-primary bg-gray-100 dark:bg-background-tertiary aspect-[4/3] flex items-center justify-center">
+            {activePreviewUrl ? (
+              <img
+                src={getImageUrl(activePreviewUrl)}
+                alt={displaySelection.name}
+                className={`w-full h-full ${
+                  displaySelection.kind === 'material'
+                    ? 'object-cover'
+                    : 'object-contain bg-white p-3'
+                }`}
               />
-            </label>
-          </div>
-
-          {!showUpload && (
-            <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={saveToLibrary}
-                  onChange={(e) => setSaveToLibrary(e.target.checked)}
-                  className="w-4 h-4 text-banana-500 border-gray-300 dark:border-border-primary rounded focus:ring-banana-500"
-                />
-                <span className="text-sm text-gray-700 dark:text-foreground-secondary">
-                  {t('template.saveToLibraryOnUpload')}
-                </span>
-              </label>
-            </div>
-          )}
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-medium text-gray-700 dark:text-foreground-secondary">{t('template.presetTemplates')}</h4>
-            {hasMorePresetTemplates && (
-              <button
-                type="button"
-                data-testid="preset-template-more-button"
-                onClick={() => setIsPresetTemplateModalOpen(true)}
-                className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-border-primary hover:border-banana-500 hover:text-banana-600 dark:hover:text-banana transition-colors"
-              >
-                {t('template.more')}
-              </button>
+            ) : (
+              <div className="p-6 text-center text-gray-400 dark:text-foreground-tertiary">
+                <ImageIcon size={36} className="mx-auto mb-3" />
+                <div className="text-sm">{t('template.selectionPlaceholder')}</div>
+              </div>
             )}
           </div>
-          {isLoadingPresetTemplates ? (
-            <div className="text-xs text-gray-500 dark:text-foreground-tertiary">Loading…</div>
-          ) : presetTemplates.length === 0 ? (
-            <div className="text-xs text-gray-500 dark:text-foreground-tertiary">{t('template.noPresetTemplates')}</div>
-          ) : (
-            <div className="grid grid-cols-4 gap-4" data-testid="preset-templates-grid">
-              {visiblePresetTemplates.map((template) => {
-                const isSelected = selectedPresetTemplateId === template.template_id;
+
+          {displaySelection?.kind === 'style' && (
+            <div className="mt-4 grid grid-cols-4 gap-2">
+              {previewSlotMeta.map(({ key, labelKey }) => {
+                const previewUrl = displaySelection.previewImages[key];
+                const isActive = selectedStylePreviewKey === key && Boolean(previewUrl);
                 return (
-                  <div
-                    key={template.template_id}
-                    onClick={() => void handleSelectPresetTemplate(template)}
-                    className={`aspect-[4/3] rounded-lg border-2 cursor-pointer transition-all bg-gray-100 dark:bg-background-secondary relative overflow-hidden flex items-center justify-center ${
-                      isSelected
-                        ? 'border-banana-500 ring-2 ring-banana-200'
-                        : 'border-gray-200 dark:border-border-primary hover:border-banana-500'
-                    }`}
+                  <button
+                    key={key}
+                    type="button"
+                    data-testid={`template-style-preview-${key}`}
+                    onClick={() => previewUrl && setSelectedStylePreviewKey(key)}
+                    disabled={!previewUrl}
+                    aria-pressed={isActive}
+                    className={`overflow-hidden rounded-2xl bg-gray-50 dark:bg-background-tertiary text-left transition-all ${
+                      isActive
+                        ? 'ring-2 ring-banana-300 shadow-[0_8px_22px_rgba(250,204,21,0.18)]'
+                        : 'ring-1 ring-gray-200 hover:ring-gray-300'
+                    } ${previewUrl ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
                   >
-                    <img
-                      src={getImageUrl(template.thumb_url || template.template_image_url)}
-                      alt={template.name || 'Image Template'}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute left-1 right-1 bottom-1 px-1 py-0.5 rounded bg-black/45 text-white text-[10px] truncate">
-                      {template.name || template.template_id}
+                    <div className="aspect-[4/3] bg-gray-100 dark:bg-background-primary flex items-center justify-center">
+                      {previewUrl ? (
+                        <img
+                          src={getImageUrl(previewUrl)}
+                          alt={t(`template.previewSlots.${labelKey}` as any)}
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <FileCode2 size={16} className="text-gray-400" />
+                      )}
                     </div>
-                    {isSelected && (
-                      <div className="absolute inset-0 bg-banana-500 bg-opacity-20 flex items-center justify-center pointer-events-none">
-                        <span className="text-white font-semibold text-sm">{t('template.templateSelected')}</span>
-                      </div>
-                    )}
-                  </div>
+                    <div className="px-2 py-1 text-[11px] text-center text-gray-500 dark:text-foreground-tertiary">
+                      {t(`template.previewSlots.${labelKey}` as any)}
+                    </div>
+                  </button>
                 );
               })}
             </div>
           )}
-        </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-medium text-gray-700 dark:text-foreground-secondary">{t('template.styleTemplates')}</h4>
-            {hasMoreStylePresets && (
-              <button
-                type="button"
-                data-testid="style-more-button"
-                onClick={() => setIsStylePresetModalOpen(true)}
-                className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-border-primary hover:border-banana-500 hover:text-banana-600 dark:hover:text-banana transition-colors"
-              >
-                {t('template.more')}
-              </button>
-            )}
-          </div>
-          {isLoadingStylePresets ? (
-            <div className="text-xs text-gray-500 dark:text-foreground-tertiary">Loading…</div>
-          ) : stylePresets.length === 0 ? (
-            <div className="text-xs text-gray-500 dark:text-foreground-tertiary">{t('template.noStyleTemplates')}</div>
-          ) : (
-            <div className="grid grid-cols-4 gap-4" data-testid="style-presets-grid">
-              {visibleStylePresets.map((preset) => {
-                const coverUrl = getStylePresetCover(preset);
-                const isSelected = selectedStylePresetId === preset.id;
-                return (
-                  <div
-                    key={preset.id}
-                    onClick={() => void handleSelectStylePreset(preset)}
-                    className={`aspect-[4/3] rounded-lg border-2 cursor-pointer transition-all bg-gray-100 dark:bg-background-secondary relative overflow-hidden flex items-center justify-center ${
-                      isSelected
-                        ? 'border-banana-500 ring-2 ring-banana-200'
-                        : 'border-gray-200 dark:border-border-primary hover:border-banana-500'
-                    }`}
-                  >
-                    {coverUrl ? (
-                      <img
-                        src={getImageUrl(coverUrl)}
-                        alt={preset.name || 'JSON Text Template'}
-                        className="w-full h-full object-contain object-center"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center p-2 text-xs text-gray-500 dark:text-foreground-tertiary text-center">
-                        {preset.name || preset.id}
-                      </div>
-                    )}
-                    <div className="absolute left-1 right-1 bottom-1 px-1 py-0.5 rounded bg-black/45 text-white text-[10px] truncate">
-                      {preset.name || preset.id}
-                    </div>
-                    {isSelected && (
-                      <div className="absolute inset-0 bg-banana-500 bg-opacity-20 flex items-center justify-center pointer-events-none">
-                        <span className="text-white font-semibold text-sm">{t('template.templateSelected')}</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {projectId && (
-          <div className="mt-4">
-            <h4 className="text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">{t('template.selectFromMaterials')}</h4>
+          <div className="mt-auto pt-5">
             <Button
-              variant="secondary"
-              size="sm"
-              icon={<ImagePlus size={16} />}
-              onClick={() => setIsMaterialSelectorOpen(true)}
+              variant="primary"
+              onClick={() => draftSelection && void onApplySelection(draftSelection)}
+              disabled={!draftSelection || draftMatchesCurrent || isApplyingSelection}
               className="w-full"
+              data-testid="template-selector-apply"
             >
-              {t('template.selectAsTemplate')}
+              {draftMatchesCurrent ? t('template.applyCurrent') : t('template.applySelection')}
             </Button>
           </div>
-        )}
+        </aside>
       </div>
-
       <ToastContainer />
-
-      <Modal
-        isOpen={isPresetTemplateModalOpen}
-        onClose={() => setIsPresetTemplateModalOpen(false)}
-        title={t('template.morePresetTemplates')}
-        size="xl"
-      >
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {presetTemplates.map((template) => {
-            const isSelected = selectedPresetTemplateId === template.template_id;
-            return (
-              <button
-                key={template.template_id}
-                type="button"
-                onClick={() => void handleSelectPresetTemplate(template, true)}
-                className={`relative aspect-[4/3] rounded-lg border-2 overflow-hidden text-left transition-all flex items-center justify-center bg-gray-100 dark:bg-background-secondary ${
-                  isSelected
-                    ? 'border-banana-500 ring-2 ring-banana-200'
-                    : 'border-gray-200 dark:border-border-primary hover:border-banana-400'
-                }`}
-              >
-                <img
-                  src={getImageUrl(template.thumb_url || template.template_image_url)}
-                  alt={template.name || 'Image Template'}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-x-0 bottom-0 px-2 py-1 bg-black/45 text-white text-xs truncate">
-                  {template.name || template.template_id}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={isStylePresetModalOpen}
-        onClose={() => setIsStylePresetModalOpen(false)}
-        title={t('template.moreStyleTemplates')}
-        size="xl"
-      >
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {stylePresets.map((preset) => {
-            const coverUrl = getStylePresetCover(preset);
-            const isSelected = selectedStylePresetId === preset.id;
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                disabled={selectingStylePresetId === preset.id}
-                onClick={() => void handleSelectStylePreset(preset, true)}
-                className={`relative aspect-[4/3] rounded-lg border-2 overflow-hidden text-left transition-all flex items-center justify-center bg-gray-100 dark:bg-background-secondary ${
-                  isSelected
-                    ? 'border-banana-500 ring-2 ring-banana-200'
-                    : 'border-gray-200 dark:border-border-primary hover:border-banana-400'
-                } ${selectingStylePresetId === preset.id ? 'opacity-60 cursor-not-allowed' : ''}`}
-              >
-                {coverUrl ? (
-                  <img
-                    src={getImageUrl(coverUrl)}
-                    alt={preset.name || 'JSON Text Template'}
-                    className="w-full h-full object-contain object-center"
-                  />
-                ) : (
-                  <div className="absolute inset-0 bg-gray-100 dark:bg-background-secondary flex items-center justify-center p-2 text-xs text-gray-500 dark:text-foreground-tertiary text-center">
-                    {preset.name || preset.id}
-                  </div>
-                )}
-                <div className="absolute inset-x-0 bottom-0 px-2 py-1 bg-black/45 text-white text-xs truncate">
-                  {preset.name || preset.id}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </Modal>
-
-      {projectId && (
-        <MaterialSelector
-          projectId={projectId}
-          isOpen={isMaterialSelectorOpen}
-          onClose={() => setIsMaterialSelectorOpen(false)}
-          onSelect={handleSelectMaterials}
-          multiple={false}
-          showSaveAsTemplateOption={true}
-        />
-      )}
     </>
   );
 };
@@ -603,7 +776,7 @@ export const getTemplateFile = async (
   if (source === 'preset') {
     try {
       const presetResponse = await listPresetTemplates();
-      const presetTemplate = (presetResponse.data?.templates || []).find((t) => t.template_id === templateId);
+      const presetTemplate = (presetResponse.data?.templates || []).find((template) => template.template_id === templateId);
       if (presetTemplate?.template_image_url) {
         return await loadFromTemplateUrl(presetTemplate.template_image_url, 'preset-template.png');
       }
@@ -612,25 +785,12 @@ export const getTemplateFile = async (
     }
   }
 
-  const userTemplate = userTemplates.find((t) => t.template_id === templateId);
+  const userTemplate = userTemplates.find((template) => template.template_id === templateId);
   if (userTemplate?.template_image_url) {
     try {
       return await loadFromTemplateUrl(userTemplate.template_image_url, 'template.png');
     } catch (error) {
       console.error('Failed to load user template:', error);
-      return null;
-    }
-  }
-
-  if (source !== 'preset') {
-    try {
-      const presetResponse = await listPresetTemplates();
-      const presetTemplate = (presetResponse.data?.templates || []).find((t) => t.template_id === templateId);
-      if (presetTemplate?.template_image_url) {
-        return await loadFromTemplateUrl(presetTemplate.template_image_url, 'preset-template.png');
-      }
-    } catch (error) {
-      console.error('Fallback load preset template failed:', error);
     }
   }
 

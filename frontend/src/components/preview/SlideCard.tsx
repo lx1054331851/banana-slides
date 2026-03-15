@@ -64,10 +64,10 @@ export const SlideCard: React.FC<SlideCardProps> = ({
 
   return (
     <div
-      className={`group relative cursor-pointer rounded-xl border bg-white dark:bg-background-secondary p-2.5 transition-shadow ${
+      className={`group relative cursor-pointer rounded-xl bg-white dark:bg-background-secondary p-2.5 shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all ${
         isSelected
-          ? 'border-banana-300 shadow-md ring-2 ring-banana-400'
-          : 'border-gray-200 dark:border-border-primary hover:border-banana-200 hover:shadow-sm'
+          ? 'ring-2 ring-banana-300 shadow-[0_10px_30px_rgba(250,204,21,0.18)]'
+          : 'ring-1 ring-gray-200 hover:ring-gray-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]'
       }`}
       onClick={onClick}
     >
@@ -149,7 +149,7 @@ export const SlideCard: React.FC<SlideCardProps> = ({
 
       {/* 缩略图 */}
       <div
-        className="relative mt-2 ml-3 bg-gray-50 dark:bg-background-primary rounded-lg overflow-hidden border border-gray-100 dark:border-border-primary"
+        className="relative mt-2 ml-3 overflow-hidden rounded-lg bg-gray-50 dark:bg-background-primary ring-1 ring-gray-200/90"
         style={{ aspectRatio: aspectRatio.replace(':', '/') }}
       >
         {generating ? (
