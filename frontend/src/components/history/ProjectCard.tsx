@@ -74,7 +74,6 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   const pageCount = project.pages?.length || 0;
   const statusText = getStatusText(project);
   const statusColor = getStatusColor(project);
-  
   const firstPageImage = shouldLoadImage ? getFirstPageImage(project) : null;
 
   if (isGridView) {
@@ -103,7 +102,11 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
             </div>
             <button
               onClick={(e) => onDelete(e, project)}
-              className="p-2 -m-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              disabled={isBatchMode || isEditing}
+              className={`p-2 -m-2 rounded-lg transition-colors ${isBatchMode || isEditing
+                ? 'text-gray-300 cursor-not-allowed'
+                : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                }`}
               title={t('common.delete')}
             >
               <Trash2 size={16} />
@@ -160,7 +163,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 pt-1">
+          <div className="grid grid-cols-2 gap-2 pt-1 mt-auto">
             <button
               type="button"
               onClick={(e) => onOpenOutline(e, project)}
@@ -299,7 +302,11 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
           </button>
           <button
             onClick={(e) => onDelete(e, project)}
-            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            disabled={isBatchMode || isEditing}
+            className={`p-2 rounded-lg transition-colors ${isBatchMode || isEditing
+              ? 'text-gray-300 cursor-not-allowed'
+              : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+              }`}
             title={t('common.delete')}
           >
             <Trash2 size={16} className="md:w-[18px] md:h-[18px]" />

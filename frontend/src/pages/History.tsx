@@ -418,35 +418,10 @@ export const History: React.FC = () => {
         )}
       />
 
-      <main className={`${PAGE_CONTAINER_CLASS} py-6 md:py-8`}>
-        <div className="mb-6 md:mb-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <p className="text-sm md:text-base text-gray-600 dark:text-foreground-tertiary">{t('history.subtitle')}</p>
-          <div className="flex w-full lg:w-auto flex-col sm:flex-row sm:items-center gap-3">
-            {projects.length > 0 && selectedProjects.size > 0 && (
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm text-gray-600 dark:text-foreground-tertiary">
-                  {t('history.selectedCount', { count: selectedProjects.size })}
-                </span>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setSelectedProjects(new Set())}
-                  disabled={isDeleting}
-                >
-                  {t('history.cancelSelect')}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<Trash2 size={16} />}
-                  onClick={handleBatchDelete}
-                  disabled={isDeleting}
-                  loading={isDeleting}
-                >
-                  {t('history.batchDelete')}
-                </Button>
-              </div>
-            )}
+      <main className={`${PAGE_CONTAINER_CLASS} py-5 md:py-6`}>
+        <div className="mb-4 md:mb-5 space-y-3">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+            <p className="text-sm md:text-base text-gray-600 dark:text-foreground-tertiary">{t('history.subtitle')}</p>
             {projects.length > 0 && (
               <div className="flex items-center gap-1 sm:self-end lg:self-auto">
                 <button
@@ -476,6 +451,46 @@ export const History: React.FC = () => {
               </div>
             )}
           </div>
+          {projects.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-gray-200 bg-white/70 px-4 py-3 dark:!border-border-primary dark:!bg-background-secondary dark:shadow-[0_10px_30px_rgba(0,0,0,0.28)]">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedProjects.size === projects.length && projects.length > 0}
+                  onChange={handleSelectAll}
+                  className="w-4 h-4 text-banana-600 border-gray-300 dark:border-border-primary rounded focus:ring-banana-500"
+                />
+                <span className="text-sm text-gray-700 dark:text-foreground-secondary">
+                  {selectedProjects.size === projects.length ? t('common.deselectAll') : t('common.selectAll')}
+                </span>
+              </label>
+              {selectedProjects.size > 0 && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-sm text-gray-600 dark:text-foreground-tertiary">
+                    {t('history.selectedCount', { count: selectedProjects.size })}
+                  </span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setSelectedProjects(new Set())}
+                    disabled={isDeleting}
+                  >
+                    {t('history.cancelSelect')}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<Trash2 size={16} />}
+                    onClick={handleBatchDelete}
+                    disabled={isDeleting}
+                    loading={isDeleting}
+                  >
+                    {t('history.batchDelete')}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {isLoading ? (
@@ -505,23 +520,6 @@ export const History: React.FC = () => {
           </Card>
         ) : (
           <div className="space-y-4">
-            {/* 全选工具栏 */}
-            {projects.length > 0 && (
-              <div className="flex items-center gap-3 pb-2 border-b border-gray-200 dark:border-border-primary">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedProjects.size === projects.length && projects.length > 0}
-                    onChange={handleSelectAll}
-                    className="w-4 h-4 text-banana-600 border-gray-300 dark:border-border-primary rounded focus:ring-banana-500"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-foreground-secondary">
-                    {selectedProjects.size === projects.length ? t('common.deselectAll') : t('common.selectAll')}
-                  </span>
-                </label>
-              </div>
-            )}
-
             <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-4'}>
               {projects.map((project) => {
                 const projectId = project.id || project.project_id;
