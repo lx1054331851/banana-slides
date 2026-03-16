@@ -355,7 +355,7 @@ export const StyleLibrary: React.FC = () => {
               type="button"
               onClick={() => setActiveTab('presetTemplates')}
               data-testid="style-library-tab-preset-templates"
-              className={`px-4 py-2 text-sm rounded-lg transition-colors ${activeTab === 'presetTemplates' ? 'bg-banana-500 text-black' : 'text-black hover:bg-gray-100 dark:hover:bg-background-hover'}`}
+              className={`px-4 py-2 text-sm rounded-lg transition-colors ${activeTab === 'presetTemplates' ? 'bg-banana-500 text-black' : 'text-gray-700 dark:text-foreground-secondary hover:text-gray-900 dark:hover:text-foreground-primary hover:bg-gray-100 dark:hover:bg-background-hover'}`}
             >
               {t('tabs.presetTemplates')}
             </button>
@@ -363,7 +363,7 @@ export const StyleLibrary: React.FC = () => {
               type="button"
               onClick={() => setActiveTab('presets')}
               data-testid="style-library-tab-presets"
-              className={`px-4 py-2 text-sm rounded-lg transition-colors ${activeTab === 'presets' ? 'bg-banana-500 text-black' : 'text-black hover:bg-gray-100 dark:hover:bg-background-hover'}`}
+              className={`px-4 py-2 text-sm rounded-lg transition-colors ${activeTab === 'presets' ? 'bg-banana-500 text-black' : 'text-gray-700 dark:text-foreground-secondary hover:text-gray-900 dark:hover:text-foreground-primary hover:bg-gray-100 dark:hover:bg-background-hover'}`}
             >
               {t('tabs.presets')}
             </button>
@@ -371,7 +371,7 @@ export const StyleLibrary: React.FC = () => {
               type="button"
               onClick={() => setActiveTab('templates')}
               data-testid="style-library-tab-templates"
-              className={`px-4 py-2 text-sm rounded-lg transition-colors ${activeTab === 'templates' ? 'bg-banana-500 text-black' : 'text-black hover:bg-gray-100 dark:hover:bg-background-hover'}`}
+              className={`px-4 py-2 text-sm rounded-lg transition-colors ${activeTab === 'templates' ? 'bg-banana-500 text-black' : 'text-gray-700 dark:text-foreground-secondary hover:text-gray-900 dark:hover:text-foreground-primary hover:bg-gray-100 dark:hover:bg-background-hover'}`}
             >
               {t('tabs.templates')}
             </button>
