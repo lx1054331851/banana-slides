@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { History as HistoryIcon, RefreshCw, Trash2 } from 'lucide-react';
+import { History as HistoryIcon, LayoutGrid, List, RefreshCw, Trash2 } from 'lucide-react';
 import { Button, Loading, Card, PageHeader, PAGE_CONTAINER_CLASS, Pagination, useToast, useConfirm } from '@/components/shared';
 import { ProjectCard } from '@/components/history/ProjectCard';
 import { useProjectStore } from '@/store/useProjectStore';
@@ -19,6 +19,7 @@ const historyI18n = {
     history: {
       title: '历史项目',
       subtitle: '查看和管理你的所有项目',
+      viewMode: { list: '列表', grid: '网格' },
       noProjects: '暂无历史项目',
       createFirst: '创建你的第一个项目开始使用吧',
       selectedCount: '已选择 {{count}} 项',
@@ -47,6 +48,7 @@ const historyI18n = {
     history: {
       title: 'Project History',
       subtitle: 'View and manage all your projects',
+      viewMode: { list: 'List', grid: 'Grid' },
       noProjects: 'No projects yet',
       createFirst: 'Create your first project to get started',
       selectedCount: '{{count}} selected',
@@ -72,6 +74,7 @@ const historyI18n = {
 
 const DEFAULT_PAGE_SIZE = 5;
 const PAGE_SIZE_KEY = 'history_page_size';
+const VIEW_MODE_KEY = 'history_view_mode';
 
 export const History: React.FC = () => {
   const navigate = useNavigate();
@@ -84,6 +87,14 @@ export const History: React.FC = () => {
   const [pageSize, setPageSize] = useState(() => {
     const saved = localStorage.getItem(PAGE_SIZE_KEY);
     return saved ? Number(saved) : DEFAULT_PAGE_SIZE;
+  });
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
+    try {
+      const saved = localStorage.getItem(VIEW_MODE_KEY);
+      return saved === 'grid' ? 'grid' : 'list';
+    } catch {
+      return 'list';
+    }
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -138,6 +149,11 @@ export const History: React.FC = () => {
     setPageSize(size);
     setCurrentPage(1);
     setSelectedProjects(new Set());
+  }, []);
+
+  const handleViewModeChange = useCallback((mode: 'list' | 'grid') => {
+    setViewMode(mode);
+    localStorage.setItem(VIEW_MODE_KEY, mode);
   }, []);
 
   // ===== 项目选择与导航 =====
@@ -403,33 +419,63 @@ export const History: React.FC = () => {
       />
 
       <main className={`${PAGE_CONTAINER_CLASS} py-6 md:py-8`}>
-        <div className="mb-6 md:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="mb-6 md:mb-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <p className="text-sm md:text-base text-gray-600 dark:text-foreground-tertiary">{t('history.subtitle')}</p>
-          {projects.length > 0 && selectedProjects.size > 0 && (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600 dark:text-foreground-tertiary">
-                {t('history.selectedCount', { count: selectedProjects.size })}
-              </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setSelectedProjects(new Set())}
-                disabled={isDeleting}
-              >
-                {t('history.cancelSelect')}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<Trash2 size={16} />}
-                onClick={handleBatchDelete}
-                disabled={isDeleting}
-                loading={isDeleting}
-              >
-                {t('history.batchDelete')}
-              </Button>
-            </div>
-          )}
+          <div className="flex w-full lg:w-auto flex-col sm:flex-row sm:items-center gap-3">
+            {projects.length > 0 && selectedProjects.size > 0 && (
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-sm text-gray-600 dark:text-foreground-tertiary">
+                  {t('history.selectedCount', { count: selectedProjects.size })}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setSelectedProjects(new Set())}
+                  disabled={isDeleting}
+                >
+                  {t('history.cancelSelect')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Trash2 size={16} />}
+                  onClick={handleBatchDelete}
+                  disabled={isDeleting}
+                  loading={isDeleting}
+                >
+                  {t('history.batchDelete')}
+                </Button>
+              </div>
+            )}
+            {projects.length > 0 && (
+              <div className="flex items-center gap-1 sm:self-end lg:self-auto">
+                <button
+                  type="button"
+                  onClick={() => handleViewModeChange('list')}
+                  className={`h-8 px-2.5 rounded-lg border text-sm font-medium transition-colors flex items-center gap-1.5 ${viewMode === 'list'
+                    ? 'border-banana-500 bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
+                    : 'border-gray-200 dark:border-border-primary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
+                    }`}
+                  title={t('history.viewMode.list')}
+                >
+                  <List size={16} />
+                  <span className="hidden md:inline">{t('history.viewMode.list')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleViewModeChange('grid')}
+                  className={`h-8 px-2.5 rounded-lg border text-sm font-medium transition-colors flex items-center gap-1.5 ${viewMode === 'grid'
+                    ? 'border-banana-500 bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
+                    : 'border-gray-200 dark:border-border-primary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
+                    }`}
+                  title={t('history.viewMode.grid')}
+                >
+                  <LayoutGrid size={16} />
+                  <span className="hidden md:inline">{t('history.viewMode.grid')}</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {isLoading ? (
@@ -475,31 +521,34 @@ export const History: React.FC = () => {
                 </label>
               </div>
             )}
-            
-            {projects.map((project) => {
-              const projectId = project.id || project.project_id;
-              if (!projectId) return null;
 
-              return (
-                <ProjectCard
-                  key={projectId}
-                  project={project}
-                  isSelected={selectedProjects.has(projectId)}
-                  isEditing={editingProjectId === projectId}
-                  editingTitle={editingTitle}
-                  onPreview={handlePreviewProject}
-                  onOpenOutline={handleOpenOutline}
-                  onOpenDetail={handleOpenDetail}
-                  onToggleSelect={handleToggleSelect}
-                  onDelete={handleDeleteProject}
-                  onStartEdit={handleStartEdit}
-                  onTitleChange={setEditingTitle}
-                  onTitleKeyDown={handleTitleKeyDown}
-                  onSaveEdit={handleSaveEdit}
-                  isBatchMode={selectedProjects.size > 0}
-                />
-              );
-            })}
+            <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-4'}>
+              {projects.map((project) => {
+                const projectId = project.id || project.project_id;
+                if (!projectId) return null;
+
+                return (
+                  <ProjectCard
+                    key={projectId}
+                    project={project}
+                    isSelected={selectedProjects.has(projectId)}
+                    isEditing={editingProjectId === projectId}
+                    editingTitle={editingTitle}
+                    onPreview={handlePreviewProject}
+                    onOpenOutline={handleOpenOutline}
+                    onOpenDetail={handleOpenDetail}
+                    onToggleSelect={handleToggleSelect}
+                    onDelete={handleDeleteProject}
+                    onStartEdit={handleStartEdit}
+                    onTitleChange={setEditingTitle}
+                    onTitleKeyDown={handleTitleKeyDown}
+                    onSaveEdit={handleSaveEdit}
+                    isBatchMode={selectedProjects.size > 0}
+                    viewMode={viewMode}
+                  />
+                );
+              })}
+            </div>
 
             {/* 分页 */}
             <div className="pt-4">

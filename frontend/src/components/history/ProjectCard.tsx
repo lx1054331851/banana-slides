@@ -30,6 +30,7 @@ export interface ProjectCardProps {
   onTitleKeyDown: (e: React.KeyboardEvent, projectId: string) => void;
   onSaveEdit: (projectId: string) => void;
   isBatchMode: boolean;
+  viewMode?: 'list' | 'grid';
 }
 
 export const ProjectCard: React.FC<ProjectCardProps> = ({
@@ -47,22 +48,24 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   onTitleKeyDown,
   onSaveEdit,
   isBatchMode,
+  viewMode = 'list',
 }) => {
   const t = useT(projectCardI18n);
+  const isGridView = viewMode === 'grid';
   // 检测屏幕尺寸，只在非手机端加载图片（必须在早期返回之前声明hooks）
   const [shouldLoadImage, setShouldLoadImage] = useState(false);
   
   useEffect(() => {
     const checkScreenSize = () => {
       // sm breakpoint is 640px
-      setShouldLoadImage(window.innerWidth >= 640);
+      setShouldLoadImage(isGridView || window.innerWidth >= 640);
     };
     
     checkScreenSize();
     window.addEventListener('resize', checkScreenSize);
     
     return () => window.removeEventListener('resize', checkScreenSize);
-  }, []);
+  }, [isGridView]);
 
   const projectId = project.id || project.project_id;
   if (!projectId) return null;
@@ -73,6 +76,120 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   const statusColor = getStatusColor(project);
   
   const firstPageImage = shouldLoadImage ? getFirstPageImage(project) : null;
+
+  if (isGridView) {
+    return (
+      <Card
+        className={`group h-full p-4 md:p-5 transition-all ${isSelected
+          ? 'border-2 border-banana-500 bg-banana-50/70 dark:bg-background-secondary shadow-yellow'
+          : 'border border-gray-200 dark:border-border-primary hover:shadow-lg hover:-translate-y-0.5'
+          } ${isBatchMode ? 'cursor-default' : 'cursor-pointer'}`}
+        onClick={() => onPreview(project)}
+      >
+        <div className="flex h-full flex-col gap-4">
+          <div className="flex items-start gap-3">
+            <div className="pt-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => onToggleSelect(projectId)}
+                className="w-4 h-4 text-banana-600 border-gray-300 dark:border-border-primary rounded focus:ring-banana-500 cursor-pointer"
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className={`inline-flex px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${statusColor}`}>
+                {statusText}
+              </span>
+            </div>
+            <button
+              onClick={(e) => onDelete(e, project)}
+              className="p-2 -m-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              title={t('common.delete')}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+
+          <div className="aspect-[16/9] w-full rounded-2xl overflow-hidden bg-gray-100 dark:bg-background-primary border border-gray-200 dark:border-border-primary">
+            {firstPageImage ? (
+              <img
+                src={firstPageImage}
+                alt={t('projectCard.page', { num: 1 })}
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-gray-400">
+                <FileText size={28} />
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 min-h-0">
+            {isEditing ? (
+              <input
+                type="text"
+                value={editingTitle}
+                onChange={(e) => onTitleChange(e.target.value)}
+                onKeyDown={(e) => onTitleKeyDown(e, projectId)}
+                onBlur={() => onSaveEdit(projectId)}
+                autoFocus
+                className="w-full text-base font-semibold text-gray-900 dark:text-foreground-primary px-2.5 py-2 border border-banana-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <h3
+                className={`text-base md:text-lg font-semibold text-gray-900 dark:text-foreground-primary line-clamp-2 min-h-[3.5rem] ${isBatchMode
+                  ? 'cursor-default'
+                  : 'cursor-pointer hover:text-banana-600 transition-colors'
+                  }`}
+                onClick={(e) => onStartEdit(e, project)}
+                title={isBatchMode ? undefined : t('common.edit')}
+              >
+                {title}
+              </h3>
+            )}
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs md:text-sm text-gray-500 dark:text-foreground-tertiary">
+              <span className="flex items-center gap-1">
+                <FileText size={14} />
+                {t('projectCard.pages', { count: pageCount })}
+              </span>
+              <span className="flex items-center gap-1">
+                <Clock size={14} />
+                {formatDate(project.updated_at || project.created_at)}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <button
+              type="button"
+              onClick={(e) => onOpenOutline(e, project)}
+              disabled={isBatchMode || isEditing}
+              className={`h-10 px-3 text-sm font-medium rounded-xl border border-gray-200 dark:border-border-primary text-gray-700 dark:text-foreground-secondary transition-colors ${isBatchMode || isEditing
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-banana-50 dark:hover:bg-background-hover'
+                }`}
+              title={t('projectCard.outline')}
+            >
+              {t('projectCard.outline')}
+            </button>
+            <button
+              type="button"
+              onClick={(e) => onOpenDetail(e, project)}
+              disabled={isBatchMode || isEditing}
+              className={`h-10 px-3 text-sm font-medium rounded-xl border border-gray-200 dark:border-border-primary text-gray-700 dark:text-foreground-secondary transition-colors ${isBatchMode || isEditing
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-banana-50 dark:hover:bg-background-hover'
+                }`}
+              title={t('projectCard.detail')}
+            >
+              {t('projectCard.detail')}
+            </button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card
