@@ -320,6 +320,7 @@ const PREVIEW_SPLIT_DEFAULT_RATIO = 0.45;
 const PREVIEW_SPLIT_DIVIDER_PX = 12;
 const PREVIEW_VISUAL_MIN_WIDTH = 360;
 const PREVIEW_EDITOR_MIN_WIDTH = 420;
+const FLOATING_FULLSCREEN_BUTTON_SIZE = 44;
 
 type PageDraft = {
   title: string;
@@ -822,6 +823,7 @@ export const SlidePreview: React.FC = () => {
   const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [floatingFullscreenButtonPosition, setFloatingFullscreenButtonPosition] = useState({ x: 0.92, y: 0.1 });
   const [imageVersions, setImageVersions] = useState<ImageVersion[]>([]);
   const [showVersionMenu, setShowVersionMenu] = useState(false);
   const [isUploadingTemplate, setIsUploadingTemplate] = useState(false);
@@ -912,6 +914,9 @@ export const SlidePreview: React.FC = () => {
       uploadedFiles: File[];
     };
   }>>({});
+  const floatingFullscreenDragRef = useRef<{ moved: boolean } | null>(null);
+  const [isDraggingFloatingFullscreenButton, setIsDraggingFloatingFullscreenButton] = useState(false);
+  const suppressFloatingFullscreenClickRef = useRef(false);
 
   useEffect(() => {
     void (async () => {
@@ -1212,6 +1217,71 @@ export const SlidePreview: React.FC = () => {
       void requestFullscreen();
     }
   }, [exitFullscreen, requestFullscreen]);
+
+  useEffect(() => {
+    if (!isDraggingFloatingFullscreenButton) return;
+
+    const handleMove = (event: MouseEvent) => {
+      const container = previewContainerRef.current;
+      const dragState = floatingFullscreenDragRef.current;
+      if (!container || !dragState) return;
+
+      const rect = container.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+
+      const nextX = (event.clientX - rect.left) / rect.width;
+      const nextY = (event.clientY - rect.top) / rect.height;
+      const xPadding = FLOATING_FULLSCREEN_BUTTON_SIZE / (2 * rect.width);
+      const yPadding = FLOATING_FULLSCREEN_BUTTON_SIZE / (2 * rect.height);
+
+      const clampedX = Math.min(Math.max(nextX, xPadding), 1 - xPadding);
+      const clampedY = Math.min(Math.max(nextY, yPadding), 1 - yPadding);
+
+      if (!dragState.moved) {
+        dragState.moved =
+          Math.abs(event.movementX) > 1 ||
+          Math.abs(event.movementY) > 1;
+      }
+
+      setFloatingFullscreenButtonPosition({ x: clampedX, y: clampedY });
+    };
+
+    const handleUp = () => {
+      if (floatingFullscreenDragRef.current?.moved) {
+        suppressFloatingFullscreenClickRef.current = true;
+      }
+      floatingFullscreenDragRef.current = null;
+      setIsDraggingFloatingFullscreenButton(false);
+      document.body.style.userSelect = '';
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+      document.body.style.userSelect = '';
+    };
+  }, [isDraggingFloatingFullscreenButton]);
+
+  const handleFloatingFullscreenButtonMouseDown = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    floatingFullscreenDragRef.current = { moved: false };
+    setIsDraggingFloatingFullscreenButton(true);
+  }, []);
+
+  const handleFloatingFullscreenButtonClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (suppressFloatingFullscreenClickRef.current) {
+      suppressFloatingFullscreenClickRef.current = false;
+      return;
+    }
+    toggleFullscreen();
+  }, [toggleFullscreen]);
 
   const pageCount = currentProject?.pages?.length ?? 0;
 
@@ -2837,10 +2907,6 @@ export const SlidePreview: React.FC = () => {
     : selectedPageHasImage
       ? '图片已生成'
       : t('preview.notGenerated');
-  const previewContextHint = selectedPageHasImage
-    ? '当前页已有生成图，左侧主区显示图片预览。'
-    : '当前页暂无图片，左侧主区显示文本画布预览。';
-
   return (
     <div className="h-screen bg-gray-50 dark:bg-background-primary flex flex-col overflow-hidden">
       {/* 顶栏 */}
@@ -2924,19 +2990,6 @@ export const SlidePreview: React.FC = () => {
           >
             <span className="hidden lg:inline">{t('preview.refresh')}</span>
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={isFullscreen ? <Minimize2 size={16} className="md:w-[18px] md:h-[18px]" /> : <Maximize2 size={16} className="md:w-[18px] md:h-[18px]" />}
-            onClick={toggleFullscreen}
-            className="hidden md:inline-flex"
-            title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
-          >
-            <span className="hidden lg:inline">
-              {isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
-            </span>
-          </Button>
-
           {/* 导出任务按钮 */}
           {exportTasks.filter(t => t.projectId === projectId).length > 0 && (
             <div className="relative" ref={exportTasksPanelRef}>
@@ -3434,16 +3487,7 @@ export const SlidePreview: React.FC = () => {
               className="mb-3"
               showToast={show}
             />
-            <div className="grid gap-3 xl:grid-cols-[260px_minmax(0,1fr)_220px] xl:items-center">
-              <div className="rounded-2xl border border-gray-200 bg-white/90 px-4 py-3 text-sm text-gray-600 shadow-sm dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-foreground-tertiary">
-                  当前页上下文
-                </div>
-                <div className="mt-2 font-medium text-gray-800 dark:text-foreground-primary">
-                  {currentProject.pages.length > 0 ? `第 ${selectedIndex + 1} / ${currentProject.pages.length} 页` : '暂无页面'}
-                </div>
-                <div className="mt-1 text-xs text-gray-500 dark:text-foreground-tertiary">{previewContextHint}</div>
-              </div>
+            <div className="mx-auto w-full max-w-6xl">
               <div className="min-w-0 rounded-2xl border border-banana-200/70 bg-white/90 px-4 py-3 shadow-sm dark:border-banana-700/40 dark:bg-background-primary">
                 <AiRefineInput
                   title=""
@@ -3451,13 +3495,6 @@ export const SlidePreview: React.FC = () => {
                   onSubmit={handleAiRefineDescriptions}
                   className="!border-0 !bg-transparent !p-0"
                 />
-              </div>
-              <div className="rounded-2xl border border-gray-200 bg-white/90 px-4 py-3 text-right text-sm text-gray-600 shadow-sm dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-foreground-tertiary">
-                  当前状态
-                </div>
-                <div className="mt-2">{textStatusLabel}</div>
-                <div className="mt-1 text-xs text-gray-500 dark:text-foreground-tertiary">{imageStatusLabel}</div>
               </div>
             </div>
           </div>
@@ -3531,18 +3568,7 @@ export const SlidePreview: React.FC = () => {
                       className="min-w-0 overflow-hidden rounded-[28px] border border-gray-200 bg-white/95 shadow-[0_20px_50px_rgba(15,23,42,0.08)] dark:border-border-primary dark:bg-background-secondary"
                     >
                       <div className="flex h-full flex-col">
-                        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 px-4 py-4 dark:border-border-primary">
-                          <div>
-                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-foreground-tertiary">
-                              区域 2
-                            </div>
-                            <div className="mt-1 text-base font-semibold text-gray-900 dark:text-foreground-primary">
-                              {selectedPageHasImage ? '图片预览区' : '文本画布预览区'}
-                            </div>
-                            <div className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
-                              {selectedPageHasImage ? '保留全屏、历史版本和区域选图能力。' : '实时映射右侧文本编辑结果。'}
-                            </div>
-                          </div>
+                        <div className="flex flex-wrap items-center justify-end gap-3 border-b border-gray-200 px-4 py-4 dark:border-border-primary">
                           <div className="flex flex-wrap items-center gap-2">
                             {selectedPageHasImage && imageVersions.length > 1 && (
                               <div className="relative">
@@ -3593,16 +3619,6 @@ export const SlidePreview: React.FC = () => {
                             >
                               {t('preview.refresh')}
                             </Button>
-                            {selectedPageHasImage && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                icon={isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                                onClick={toggleFullscreen}
-                              >
-                                {isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
-                              </Button>
-                            )}
                           </div>
                         </div>
                         <div className="flex-1 overflow-auto p-4 md:p-5">
@@ -3629,6 +3645,20 @@ export const SlidePreview: React.FC = () => {
                                     draggable={false}
                                     crossOrigin="anonymous"
                                   />
+                                  <button
+                                    type="button"
+                                    aria-label={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
+                                    title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
+                                    onMouseDown={handleFloatingFullscreenButtonMouseDown}
+                                    onClick={handleFloatingFullscreenButtonClick}
+                                    className={`absolute z-20 inline-flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-800 shadow-[0_10px_28px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.7)] transition-colors hover:border-banana-400 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 ${isDraggingFloatingFullscreenButton ? 'cursor-grabbing' : 'cursor-grab'}`}
+                                    style={{
+                                      left: `${floatingFullscreenButtonPosition.x * 100}%`,
+                                      top: `${floatingFullscreenButtonPosition.y * 100}%`,
+                                    }}
+                                  >
+                                    {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                                  </button>
                                   {selectionRect && (
                                     <div
                                       className="pointer-events-none absolute border-2 border-banana-500 bg-banana-400/10"
@@ -3920,9 +3950,6 @@ export const SlidePreview: React.FC = () => {
                             >
                               {selectedPageHasImage ? '重新生成图片' : '生成图片'}
                             </Button>
-                            <span className="ml-auto text-xs text-gray-500 dark:text-foreground-tertiary">
-                              {currentProject.pages.filter((page) => page.description_content).length} / {currentProject.pages.length} 页已完成
-                            </span>
                           </div>
                           <input
                             ref={importFileRef}
