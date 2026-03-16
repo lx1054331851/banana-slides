@@ -201,8 +201,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  ArrowRight,
   ChevronDown,
-  ChevronUp,
   X,
   Trash2,
   Upload,
@@ -212,15 +212,31 @@ import {
   CheckSquare,
   Square,
   Check,
-  FileText,
   Loader2,
   Maximize2,
   Minimize2,
   Plus,
   List,
   LayoutGrid,
+  FileText,
+  Settings2,
+  HelpCircle,
 } from 'lucide-react';
-import { Button, Loading, Modal, Textarea, AiRefineInput, useToast, useConfirm, MaterialSelector, ProjectSettingsModal, ExportTasksPanel } from '@/components/shared';
+import {
+  Button,
+  Loading,
+  Modal,
+  Textarea,
+  AiRefineInput,
+  useToast,
+  useConfirm,
+  MaterialSelector,
+  ProjectSettingsModal,
+  ExportTasksPanel,
+  FilePreviewModal,
+  ReferenceFileList,
+  CoverEndingInfoModal,
+} from '@/components/shared';
 import { MaterialGeneratorModal } from '@/components/shared/MaterialGeneratorModal';
 import {
   TemplateSelector,
@@ -248,9 +264,31 @@ import {
   exportEditablePPTX as apiExportEditablePPTX,
   getSettings,
   refineSinglePageDescription,
+  refineDescriptions,
+  detectCoverEndingFields,
+  addPage,
+  updatePageDescription,
+  getTaskStatus,
+  updateSettings,
 } from '@/api/endpoints';
-import type { ImageVersion, DescriptionContent, ExportExtractorMethod, ExportInpaintMethod, Page, GenerationOverride } from '@/types';
+import type {
+  ImageVersion,
+  DescriptionContent,
+  ExportExtractorMethod,
+  ExportInpaintMethod,
+  Page,
+  GenerationOverride,
+  CoverEndingFieldDetect,
+  PresentationMeta,
+} from '@/types';
 import { normalizeErrorMessage } from '@/utils';
+import {
+  exportProjectToMarkdown,
+  parseMarkdownPages,
+  getDescriptionText,
+  applyPresentationMetaToDescription,
+  parsePresentationMeta,
+} from '@/utils/projectUtils';
 import {
   PROJECT_DEFAULT_IMAGE_MODEL,
   PROJECT_DEFAULT_IMAGE_SOURCE,
@@ -259,6 +297,134 @@ import {
   normalizeProjectDefaultImageModel,
   normalizeProjectDefaultImageResolution,
 } from '@/config/projectAiDefaults';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  rectSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+const DEFAULT_EXTRA_FIELDS = ['视觉元素', '视觉焦点', '排版布局', '演讲者备注'];
+const PRESET_EXTRA_FIELDS = new Set(DEFAULT_EXTRA_FIELDS);
+const PREVIEW_SPLIT_STORAGE_KEY = 'previewSplitRatio';
+const PREVIEW_SPLIT_DEFAULT_RATIO = 0.45;
+const PREVIEW_SPLIT_DIVIDER_PX = 12;
+const PREVIEW_VISUAL_MIN_WIDTH = 360;
+const PREVIEW_EDITOR_MIN_WIDTH = 420;
+
+type PageDraft = {
+  title: string;
+  points: string;
+  description: string;
+  extraFields: Record<string, string>;
+};
+
+const getPageDraftKey = (page?: Page | null, index = 0): string | null => {
+  if (!page) return null;
+  return page.id || page.page_id || `index-${index}`;
+};
+
+const getDescriptionExtraFields = (
+  descriptionContent?: DescriptionContent | null
+): Record<string, string> => {
+  if (!descriptionContent || !descriptionContent.extra_fields) {
+    return {};
+  }
+  return Object.entries(descriptionContent.extra_fields).reduce<Record<string, string>>((acc, [key, value]) => {
+    acc[key] = typeof value === 'string' ? value : '';
+    return acc;
+  }, {});
+};
+
+const serializeExtraFields = (fields: Record<string, string>): Record<string, string> | undefined => {
+  const entries = Object.entries(fields)
+    .map(([key, value]) => [key.trim(), value.trim()] as const)
+    .filter(([key, value]) => key && value);
+  if (entries.length === 0) return undefined;
+  return Object.fromEntries(entries);
+};
+
+const areStringRecordsEqual = (left: Record<string, string>, right: Record<string, string>): boolean => {
+  const leftKeys = Object.keys(left).filter((key) => left[key]?.trim());
+  const rightKeys = Object.keys(right).filter((key) => right[key]?.trim());
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((key) => (left[key] || '').trim() === (right[key] || '').trim());
+};
+
+const SortableFieldPill: React.FC<{
+  name: string;
+  active: boolean;
+  removable?: boolean;
+  inImagePrompt?: boolean;
+  imagePromptTooltip?: string;
+  onToggle: () => void;
+  onRemove: () => void;
+  onToggleImagePrompt?: () => void;
+}> = ({ name, active, onToggle, onRemove, removable = true, inImagePrompt, imagePromptTooltip, onToggleImagePrompt }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: name });
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition: isDragging ? undefined : transition,
+    opacity: isDragging ? 0.5 : undefined,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <button
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      type="button"
+      className={`group inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border cursor-grab active:cursor-grabbing ${
+        active
+          ? 'bg-banana-50 dark:bg-banana-900/20 border-banana-300 dark:border-banana-700 text-banana-700 dark:text-banana-400'
+          : 'bg-gray-50 dark:bg-background-hover border-gray-200 dark:border-border-primary text-gray-400 dark:text-foreground-tertiary line-through'
+      }`}
+      onClick={onToggle}
+    >
+      {name}
+      {active && onToggleImagePrompt && (
+        <span
+          role="button"
+          className={`relative group/img ml-0.5 transition-colors ${inImagePrompt ? 'text-banana-500' : 'text-gray-300 dark:text-gray-600'}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleImagePrompt();
+          }}
+        >
+          <ImageIcon size={10} />
+          {imagePromptTooltip && (
+            <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-40 px-2 py-1 text-[10px] leading-snug text-gray-600 dark:text-foreground-secondary bg-white dark:bg-background-primary border border-gray-200 dark:border-border-primary rounded-md shadow-md opacity-0 pointer-events-none group-hover/img:opacity-100 transition-opacity z-50">
+              {imagePromptTooltip}
+            </span>
+          )}
+        </span>
+      )}
+      {!active && removable && (
+        <span
+          role="button"
+          className="opacity-0 group-hover:opacity-100 ml-0.5 text-gray-400 hover:text-red-500 transition-all"
+          onClick={(event) => {
+            event.stopPropagation();
+            onRemove();
+          }}
+        >
+          <X size={10} />
+        </span>
+      )}
+    </button>
+  );
+};
 
 export const SlidePreview: React.FC = () => {
   const navigate = useNavigate();
@@ -274,6 +440,7 @@ export const SlidePreview: React.FC = () => {
     currentProject,
     syncProject,
     generateImages,
+    generateDescriptions,
     editPageImage,
     saveAllPages,
     deletePageById,
@@ -284,6 +451,8 @@ export const SlidePreview: React.FC = () => {
     pageGeneratingTasks,
     warningMessage,
   } = useProjectStore();
+  const { show, ToastContainer } = useToast();
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const isPageGenerating = useCallback((page?: Page | null) => {
     if (!page?.id) return false;
@@ -304,7 +473,6 @@ export const SlidePreview: React.FC = () => {
   const isExporting = activeExportTasks.length > 0;
 
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isMobileView, setIsMobileView] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth < 768;
@@ -313,8 +481,6 @@ export const SlidePreview: React.FC = () => {
     if (typeof window === 'undefined') return 1200;
     return window.innerWidth;
   });
-  const [drawerWidthPct, setDrawerWidthPct] = useState(0.4);
-  const [isResizingDrawer, setIsResizingDrawer] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [sidebarViewMode, setSidebarViewMode] = useState<'list' | 'grid'>(() => {
     try {
@@ -337,10 +503,52 @@ export const SlidePreview: React.FC = () => {
   });
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [sidebarWidthPxExpanded, setSidebarWidthPxExpanded] = useState(sidebarDefaultWidth);
-  const resizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const sidebarResizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const sidebarResizeRafRef = useRef<number | null>(null);
   const sidebarResizePendingRef = useRef<number | null>(null);
+  const [previewSplitRatio, setPreviewSplitRatio] = useState(() => {
+    try {
+      const stored = Number(localStorage.getItem(PREVIEW_SPLIT_STORAGE_KEY));
+      if (Number.isFinite(stored) && stored > 0.2 && stored < 0.8) {
+        return stored;
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return PREVIEW_SPLIT_DEFAULT_RATIO;
+  });
+  const [previewSplitContainerWidth, setPreviewSplitContainerWidth] = useState(0);
+  const [isResizingPreviewSplit, setIsResizingPreviewSplit] = useState(false);
+  const previewSplitContainerRef = useRef<HTMLDivElement | null>(null);
+  const previewSplitResizeRef = useRef<{ startX: number; startWidth: number; availableWidth: number } | null>(null);
+  const [previewFileId, setPreviewFileId] = useState<string | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const [isRenovationProcessing, setIsRenovationProcessing] = useState(false);
+  const [renovationProgress, setRenovationProgress] = useState<{ total: number; completed: number } | null>(null);
+  const [detectFields, setDetectFields] = useState<CoverEndingFieldDetect[]>([]);
+  const [isCoverEndingModalOpen, setIsCoverEndingModalOpen] = useState(false);
+  const [coverEndingModalMode, setCoverEndingModalMode] = useState<'missing' | 'all'>('missing');
+  const [isCheckingCoverEnding, setIsCheckingCoverEnding] = useState(false);
+  const [generationMode, setGenerationMode] = useState<'streaming' | 'parallel'>('streaming');
+  const [extraFieldNames, setExtraFieldNames] = useState<string[]>(DEFAULT_EXTRA_FIELDS);
+  const [imagePromptFields, setImagePromptFields] = useState<string[]>(['视觉元素', '视觉焦点', '排版布局']);
+  const [availableFields, setAvailableFields] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('banana-available-extra-fields');
+      return stored ? JSON.parse(stored) : DEFAULT_EXTRA_FIELDS;
+    } catch {
+      return DEFAULT_EXTRA_FIELDS;
+    }
+  });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+  const [newFieldName, setNewFieldName] = useState('');
+  const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
+  const settingsSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const [descriptionRequirementsDraft, setDescriptionRequirementsDraft] = useState('');
+  const [isSavingDescriptionRequirements, setIsSavingDescriptionRequirements] = useState(false);
+  const [pageDrafts, setPageDrafts] = useState<Record<string, PageDraft>>({});
   // 页面挂载时恢复正在进行的导出任务（页面刷新后）
   useEffect(() => {
     restoreActiveTasks();
@@ -371,35 +579,64 @@ export const SlidePreview: React.FC = () => {
         setEditOutlineTitle('');
         setEditOutlinePoints('');
         setEditDescription('');
+        setEditExtraFields({});
       }
       return;
     }
 
-    const pageKey = page.id ?? `index-${selectedIndex}`;
+    const pageKey = getPageDraftKey(page, selectedIndex);
+    if (!pageKey) return;
     if (pageKey === lastSelectedPageKeyRef.current) return;
     lastSelectedPageKeyRef.current = pageKey;
 
+    const pageDraft = pageDrafts[pageKey];
+    if (pageDraft) {
+      setEditOutlineTitle(pageDraft.title);
+      setEditOutlinePoints(pageDraft.points);
+      setEditDescription(pageDraft.description);
+      setEditExtraFields(pageDraft.extraFields);
+      return;
+    }
+
     setEditOutlineTitle(page.outline_content?.title || '');
     setEditOutlinePoints(page.outline_content?.points?.join('\n') || '');
+    setEditDescription(getDescriptionText(page.description_content));
+    setEditExtraFields(getDescriptionExtraFields(page.description_content));
+  }, [currentProject, selectedIndex, pageDrafts]);
 
-    const descContent = page.description_content;
-    let descText = '';
-    if (descContent) {
-      if ('text' in descContent) {
-        descText = descContent.text as string;
-      } else if ('text_content' in descContent && Array.isArray(descContent.text_content)) {
-        descText = descContent.text_content.join('\n');
-      }
+  useEffect(() => {
+    if (!currentProject) return;
+    const page = currentProject.pages[selectedIndex];
+    const pageId = page?.id;
+    if (!pageId) {
+      setEditPrompt('');
+      setSelectedContextImages({
+        useTemplate: false,
+        descImageUrls: [],
+        uploadedFiles: [],
+      });
+      return;
     }
-    setEditDescription(descText);
-  }, [currentProject, selectedIndex]);
 
-  const drawerMinWidth = 360;
-  const drawerMaxWidth = Math.min(960, Math.round(viewportWidth * 0.75));
-  const drawerWidthPx = Math.min(
-    Math.max(Math.round(viewportWidth * drawerWidthPct), drawerMinWidth),
-    drawerMaxWidth
-  );
+    const cached = editContextByPage[pageId];
+    if (!cached) {
+      setEditPrompt('');
+      setSelectedContextImages({
+        useTemplate: false,
+        descImageUrls: [],
+        uploadedFiles: [],
+      });
+      return;
+    }
+
+    setEditPrompt(cached.prompt);
+    setSelectedContextImages({
+      useTemplate: cached.contextImages.useTemplate,
+      descImageUrls: [...cached.contextImages.descImageUrls],
+      uploadedFiles: [...cached.contextImages.uploadedFiles],
+    });
+  }, [currentProject?.id, selectedIndex]);
+
   const sidebarCollapsedWidth = 72;
   const sidebarMinWidth = sidebarCollapsedWidth;
   const sidebarMaxWidth = Math.round(viewportWidth * (2 / 3));
@@ -422,11 +659,12 @@ export const SlidePreview: React.FC = () => {
   }, [sidebarGridThumbMaxWidthPx]);
 
   useEffect(() => {
-    if (!viewportWidth) return;
-    const minPct = drawerMinWidth / viewportWidth;
-    const maxPct = drawerMaxWidth / viewportWidth;
-    setDrawerWidthPct((prev) => Math.min(Math.max(prev, minPct), maxPct));
-  }, [viewportWidth, drawerMinWidth, drawerMaxWidth]);
+    try {
+      localStorage.setItem(PREVIEW_SPLIT_STORAGE_KEY, String(previewSplitRatio));
+    } catch {
+      // ignore storage errors
+    }
+  }, [previewSplitRatio]);
 
   useEffect(() => {
     if (!viewportWidth) return;
@@ -434,28 +672,6 @@ export const SlidePreview: React.FC = () => {
       Math.min(Math.max(prev, sidebarMinWidth), sidebarMaxWidth)
     );
   }, [viewportWidth, sidebarMinWidth, sidebarMaxWidth]);
-
-  useEffect(() => {
-    if (!isResizingDrawer) return;
-    const handleMove = (e: MouseEvent) => {
-      if (!resizeStartRef.current) return;
-      const delta = resizeStartRef.current.startX - e.clientX;
-      let nextWidth = resizeStartRef.current.startWidth + delta;
-      nextWidth = Math.min(Math.max(nextWidth, drawerMinWidth), drawerMaxWidth);
-      setDrawerWidthPct(nextWidth / viewportWidth);
-    };
-    const handleUp = () => {
-      setIsResizingDrawer(false);
-    };
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-    document.body.style.userSelect = 'none';
-    return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-      document.body.style.userSelect = '';
-    };
-  }, [isResizingDrawer, drawerMinWidth, drawerMaxWidth, viewportWidth]);
 
   useEffect(() => {
     if (!isResizingSidebar) return;
@@ -507,14 +723,6 @@ export const SlidePreview: React.FC = () => {
     isSidebarCollapsed,
   ]);
 
-  const handleDrawerResizeStart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    resizeStartRef.current = {
-      startX: e.clientX,
-      startWidth: drawerWidthPx,
-    };
-    setIsResizingDrawer(true);
-  };
   const handleSidebarResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
     sidebarResizeStartRef.current = {
@@ -523,6 +731,75 @@ export const SlidePreview: React.FC = () => {
     };
     setIsResizingSidebar(true);
   };
+
+  useEffect(() => {
+    const node = previewSplitContainerRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+
+    const updateWidth = () => {
+      setPreviewSplitContainerWidth(node.getBoundingClientRect().width);
+    };
+
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [sidebarWidthPx, isMobileView, currentProject?.id]);
+
+  const resolvedPreviewSplitRatio = useMemo(() => {
+    if (isMobileView) return PREVIEW_SPLIT_DEFAULT_RATIO;
+    if (!previewSplitContainerWidth) return previewSplitRatio;
+
+    const availableWidth = Math.max(1, previewSplitContainerWidth - PREVIEW_SPLIT_DIVIDER_PX);
+    const minRatio = PREVIEW_VISUAL_MIN_WIDTH / availableWidth;
+    const maxRatio = (availableWidth - PREVIEW_EDITOR_MIN_WIDTH) / availableWidth;
+    const clampedMin = Math.min(Math.max(minRatio, 0.2), 0.8);
+    const clampedMax = Math.max(clampedMin, Math.min(maxRatio, 0.8));
+    return Math.min(Math.max(previewSplitRatio, clampedMin), clampedMax);
+  }, [isMobileView, previewSplitContainerWidth, previewSplitRatio]);
+
+  useEffect(() => {
+    if (!isResizingPreviewSplit) return;
+
+    const handleMove = (event: MouseEvent) => {
+      const resizeState = previewSplitResizeRef.current;
+      if (!resizeState) return;
+      const nextWidth = resizeState.startWidth + (event.clientX - resizeState.startX);
+      const clampedWidth = Math.min(
+        Math.max(nextWidth, PREVIEW_VISUAL_MIN_WIDTH),
+        Math.max(PREVIEW_VISUAL_MIN_WIDTH, resizeState.availableWidth - PREVIEW_EDITOR_MIN_WIDTH)
+      );
+      setPreviewSplitRatio(clampedWidth / resizeState.availableWidth);
+    };
+
+    const handleUp = () => {
+      setIsResizingPreviewSplit(false);
+      previewSplitResizeRef.current = null;
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+      document.body.style.userSelect = '';
+    };
+  }, [isResizingPreviewSplit]);
+
+  const handlePreviewSplitResizeStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (isMobileView || !previewSplitContainerRef.current) return;
+    event.preventDefault();
+    const containerWidth = previewSplitContainerRef.current.getBoundingClientRect().width;
+    const availableWidth = Math.max(1, containerWidth - PREVIEW_SPLIT_DIVIDER_PX);
+    previewSplitResizeRef.current = {
+      startX: event.clientX,
+      startWidth: availableWidth * resolvedPreviewSplitRatio,
+      availableWidth,
+    };
+    setIsResizingPreviewSplit(true);
+  }, [isMobileView, resolvedPreviewSplitRatio]);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [activeTemplateTab, setActiveTemplateTab] = useState<TemplateSelectorTab>('image');
   const [draftTemplateSelection, setDraftTemplateSelection] = useState<TemplateSelection | null>(null);
@@ -532,6 +809,7 @@ export const SlidePreview: React.FC = () => {
   const [editOutlineTitle, setEditOutlineTitle] = useState('');
   const [editOutlinePoints, setEditOutlinePoints] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editExtraFields, setEditExtraFields] = useState<Record<string, string>>({});
   const [isAiRefiningDescription, setIsAiRefiningDescription] = useState(false);
   const [showDescriptionRefineInput, setShowDescriptionRefineInput] = useState(false);
   const lastSelectedPageKeyRef = useRef<string | null>(null);
@@ -542,8 +820,6 @@ export const SlidePreview: React.FC = () => {
   // 多选导出相关状态
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
-  const [isOutlineExpanded, setIsOutlineExpanded] = useState(false);
-  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [imageVersions, setImageVersions] = useState<ImageVersion[]>([]);
@@ -638,6 +914,135 @@ export const SlidePreview: React.FC = () => {
   }>>({});
 
   useEffect(() => {
+    void (async () => {
+      try {
+        const response = await getSettings();
+        const settings = response.data;
+        if (!settings) return;
+        setGenerationMode(settings.description_generation_mode || 'streaming');
+        const activeFields = settings.description_extra_fields || DEFAULT_EXTRA_FIELDS;
+        setExtraFieldNames(activeFields);
+        if (settings.image_prompt_extra_fields) {
+          setImagePromptFields(settings.image_prompt_extra_fields);
+        }
+        setAvailableFields((prev) => {
+          const merged = [...new Set([...prev, ...activeFields])];
+          localStorage.setItem('banana-available-extra-fields', JSON.stringify(merged));
+          return merged;
+        });
+        sessionStorage.setItem('banana-settings', JSON.stringify(settings));
+      } catch {
+        // ignore settings load failures
+      }
+    })();
+  }, []);
+
+  const saveSettingsDebounced = useCallback((updates: Record<string, unknown>) => {
+    if (settingsSaveTimerRef.current) clearTimeout(settingsSaveTimerRef.current);
+    settingsSaveTimerRef.current = setTimeout(async () => {
+      try {
+        const response = await updateSettings(updates as any);
+        if (response.data) {
+          sessionStorage.setItem('banana-settings', JSON.stringify(response.data));
+        }
+      } catch (error) {
+        console.error('Failed to save preview settings:', error);
+      }
+    }, 800);
+  }, []);
+
+  const fieldSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const handleFieldDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = availableFields.indexOf(active.id as string);
+    const newIndex = availableFields.indexOf(over.id as string);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const nextPool = arrayMove(availableFields, oldIndex, newIndex);
+    setAvailableFields(nextPool);
+    localStorage.setItem('banana-available-extra-fields', JSON.stringify(nextPool));
+    const activeSet = new Set(extraFieldNames);
+    const nextActive = nextPool.filter((field) => activeSet.has(field));
+    setExtraFieldNames(nextActive);
+    saveSettingsDebounced({ description_extra_fields: nextActive });
+  }, [availableFields, extraFieldNames, saveSettingsDebounced]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setSettingsOpen(false);
+      }
+      if (fileMenuRef.current && !fileMenuRef.current.contains(event.target as Node)) {
+        setFileMenuOpen(false);
+      }
+    };
+    if (settingsOpen || fileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [settingsOpen, fileMenuOpen]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    const taskId = localStorage.getItem('renovationTaskId');
+    if (!taskId) return;
+
+    setIsRenovationProcessing(true);
+    let cancelled = false;
+    let pollFailCount = 0;
+
+    const poll = async () => {
+      try {
+        const response = await getTaskStatus(projectId, taskId);
+        if (cancelled) return;
+        const task = response.data;
+        if (!task) return;
+
+        if (task.progress) {
+          setRenovationProgress({
+            total: task.progress.total || 0,
+            completed: task.progress.completed || 0,
+          });
+        }
+
+        if (task.status === 'COMPLETED') {
+          localStorage.removeItem('renovationTaskId');
+          setIsRenovationProcessing(false);
+          setRenovationProgress(null);
+          await syncProject(projectId);
+          return;
+        }
+
+        if (task.status === 'FAILED') {
+          localStorage.removeItem('renovationTaskId');
+          setIsRenovationProcessing(false);
+          setRenovationProgress(null);
+          show({ message: task.error_message || 'PDF 解析失败，请返回重试', type: 'error' });
+          return;
+        }
+
+        pollFailCount = 0;
+        setTimeout(poll, 3000);
+      } catch {
+        if (cancelled) return;
+        pollFailCount += 1;
+        if (pollFailCount >= 3) {
+          setIsRenovationProcessing(false);
+          setRenovationProgress(null);
+          show({ message: '与服务器通信失败，请检查网络后刷新页面重试', type: 'error' });
+          return;
+        }
+        setTimeout(poll, 3000);
+      }
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, show, syncProject]);
+
+  useEffect(() => {
     if (!showExportMenu && !showExportTasksPanel) return;
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -661,8 +1066,6 @@ export const SlidePreview: React.FC = () => {
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
-  const { show, ToastContainer } = useToast();
-  const { confirm, ConfirmDialog } = useConfirm();
 
   useEffect(() => {
     exportTasks
@@ -713,6 +1116,29 @@ export const SlidePreview: React.FC = () => {
     }
     setSelectedIndex(Math.max(0, fallbackIndex + 1));
   }, [insertPageAt, show, t]);
+
+  const persistCurrentPageDraft = useCallback((updates: Partial<PageDraft>) => {
+    if (!currentProject) return;
+    const page = currentProject.pages[selectedIndex];
+    const pageKey = getPageDraftKey(page, selectedIndex);
+    if (!pageKey) return;
+
+    setPageDrafts((prev) => {
+      const baseDraft = prev[pageKey] || {
+        title: page?.outline_content?.title || '',
+        points: page?.outline_content?.points?.join('\n') || '',
+        description: getDescriptionText(page?.description_content),
+        extraFields: getDescriptionExtraFields(page?.description_content),
+      };
+      return {
+        ...prev,
+        [pageKey]: {
+          ...baseDraft,
+          ...updates,
+        },
+      };
+    });
+  }, [currentProject, selectedIndex]);
 
   // Memoize pages with generated images to avoid re-computing in multiple places
   const pagesWithImages = useMemo(() => {
@@ -882,7 +1308,9 @@ export const SlidePreview: React.FC = () => {
         const normalizedModel = normalizeProjectDefaultImageModel(imageDefaults.model);
         setProjectDefaultImageSource(PROJECT_DEFAULT_IMAGE_SOURCE);
         setProjectDefaultImageModel(normalizedModel);
+        setEditRunImageModel(normalizedModel);
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
+        setDescriptionRequirementsDraft(currentProject.description_requirements || '');
         lastProjectId.current = currentProject.id || null;
         isEditingRequirements.current = false;
         isEditingTemplateStyle.current = false;
@@ -907,11 +1335,13 @@ export const SlidePreview: React.FC = () => {
         const normalizedModel = normalizeProjectDefaultImageModel(imageDefaults.model);
         setProjectDefaultImageSource(PROJECT_DEFAULT_IMAGE_SOURCE);
         setProjectDefaultImageModel(normalizedModel);
+        setEditRunImageModel(normalizedModel);
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
+        setDescriptionRequirementsDraft(currentProject.description_requirements || '');
       }
       // 如果用户正在编辑，则不更新本地状态
     }
-  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality, currentProject?.export_compress_png_quantize_enabled, currentProject?.generation_defaults]);
+  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.description_requirements, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality, currentProject?.export_compress_png_quantize_enabled, currentProject?.generation_defaults]);
 
   const templateSelectionStorageKey = useMemo(
     () => (projectId ? `preview-template-selection:${projectId}` : null),
@@ -1158,54 +1588,6 @@ export const SlidePreview: React.FC = () => {
     });
   };
 
-  const handleRegeneratePage = useCallback(async () => {
-    if (!currentProject) return;
-    const page = currentProject.pages[selectedIndex];
-    if (!page.id) return;
-
-    // 如果该页面正在生成，不重复提交
-    if (isPageGenerating(page)) {
-      show({ message: t('slidePreview.pageGenerating'), type: 'info' });
-      return;
-    }
-
-    // 先检查分辨率，如果是1K则显示警告
-    await checkResolutionAndExecute(async () => {
-      try {
-        // 使用统一的 generateImages，传入单个页面 ID
-        await generateImages([page.id!]);
-        show({ message: t('slidePreview.generationStarted'), type: 'success' });
-      } catch (error: any) {
-        // 提取后端返回的更具体错误信息
-        let errorMessage = '生成失败';
-        const respData = error?.response?.data;
-
-        if (respData) {
-          if (respData.error?.message) {
-            errorMessage = respData.error.message;
-          } else if (respData.message) {
-            errorMessage = respData.message;
-          } else if (respData.error) {
-            errorMessage =
-              typeof respData.error === 'string'
-                ? respData.error
-                : respData.error.message || errorMessage;
-          }
-        } else if (error.message) {
-          errorMessage = error.message;
-        }
-
-        // 使用统一的错误消息规范化函数
-        errorMessage = normalizeErrorMessage(errorMessage);
-
-        show({
-          message: errorMessage,
-          type: 'error',
-        });
-      }
-    });
-  }, [currentProject, selectedIndex, generateImages, show, checkResolutionAndExecute, isPageGenerating]);
-
   const handleSwitchVersion = async (versionId: string) => {
     if (!currentProject || !selectedPage?.id || !projectId) return;
 
@@ -1223,20 +1605,12 @@ export const SlidePreview: React.FC = () => {
   };
 
   // 从描述内容中提取图片URL
-  const extractImageUrlsFromDescription = (descriptionContent: DescriptionContent | undefined): string[] => {
-    if (!descriptionContent) return [];
-
-    // 处理两种格式
-    let text: string = '';
-    if ('text' in descriptionContent) {
-      text = descriptionContent.text as string;
-    } else if ('text_content' in descriptionContent && Array.isArray(descriptionContent.text_content)) {
-      text = descriptionContent.text_content.join('\n');
-    }
-
+  const extractImageUrlsFromDescription = (descriptionContent: DescriptionContent | string | undefined): string[] => {
+    const text = typeof descriptionContent === 'string'
+      ? descriptionContent
+      : getDescriptionText(descriptionContent);
     if (!text) return [];
 
-    // 匹配 markdown 图片语法: ![](url) 或 ![alt](url)
     const pattern = /!\[.*?\]\((.*?)\)/g;
     const matches: string[] = [];
     let match: RegExpExecArray | null;
@@ -1252,31 +1626,11 @@ export const SlidePreview: React.FC = () => {
     return matches;
   };
 
-  const handleEditPage = () => {
+  const handleEditPage = useCallback(() => {
     if (!currentProject) return;
     const page = currentProject.pages[selectedIndex];
     const pageId = page?.id;
-
-    setIsOutlineExpanded(false);
-    setIsDescriptionExpanded(false);
-
-    // 初始化大纲和描述编辑状态
-    setEditOutlineTitle(page?.outline_content?.title || '');
-    setEditOutlinePoints(page?.outline_content?.points?.join('\n') || '');
-    // 提取描述文本
-    const descContent = page?.description_content;
-    let descText = '';
-    if (descContent) {
-      if ('text' in descContent) {
-        descText = descContent.text as string;
-      } else if ('text_content' in descContent && Array.isArray(descContent.text_content)) {
-        descText = descContent.text_content.join('\n');
-      }
-    }
-    setEditDescription(descText);
-
     if (pageId && editContextByPage[pageId]) {
-      // 恢复该页上次编辑的内容和图片选择
       const cached = editContextByPage[pageId];
       setEditPrompt(cached.prompt);
       setSelectedContextImages({
@@ -1284,32 +1638,15 @@ export const SlidePreview: React.FC = () => {
         descImageUrls: [...cached.contextImages.descImageUrls],
         uploadedFiles: [...cached.contextImages.uploadedFiles],
       });
-    } else {
-      // 首次编辑该页，使用默认值
-      setEditPrompt('');
-      setSelectedContextImages({
-        useTemplate: false,
-        descImageUrls: [],
-        uploadedFiles: [],
-      });
     }
-
-    // 打开编辑弹窗时，清空上一次的选区和模式
     setIsRegionSelectionMode(false);
     setSelectionStart(null);
     setSelectionRect(null);
     setIsSelectingRegion(false);
     setEditRunImageModel(projectDefaultImageModel);
-
-    setIsEditModalOpen(true);
-  };
-
-  const closeEditModal = useCallback(() => {
-    setIsEditModalOpen(false);
-    setEditRunImageModel(projectDefaultImageModel);
     setShowDescriptionRefineInput(false);
     setIsAiRefiningDescription(false);
-  }, [projectDefaultImageModel]);
+  }, [currentProject, selectedIndex, editContextByPage, projectDefaultImageModel]);
 
   // 保存大纲和描述修改
   const handleSaveOutlineAndDescription = useCallback(() => {
@@ -1329,59 +1666,65 @@ export const SlidePreview: React.FC = () => {
       };
     }
 
-    // 检查描述是否有变化
-    const descContent = page.description_content;
-    let originalDesc = '';
-    if (descContent) {
-      if ('text' in descContent) {
-        originalDesc = descContent.text as string;
-      } else if ('text_content' in descContent && Array.isArray(descContent.text_content)) {
-        originalDesc = descContent.text_content.join('\n');
-      }
-    }
-    if (editDescription !== originalDesc) {
+    const originalDesc = getDescriptionText(page.description_content);
+    const originalExtraFields = getDescriptionExtraFields(page.description_content);
+    const serializedExtraFields = serializeExtraFields(editExtraFields);
+    if (editDescription !== originalDesc || !areStringRecordsEqual(editExtraFields, originalExtraFields)) {
       updates.description_content = {
         text: editDescription,
+        ...(serializedExtraFields ? { extra_fields: serializedExtraFields } : {}),
       } as DescriptionContent;
     }
 
-    // 如果有修改，保存更新
     if (Object.keys(updates).length > 0) {
       updatePageLocal(page.id, updates);
+      persistCurrentPageDraft({
+        title: editOutlineTitle,
+        points: editOutlinePoints,
+        description: editDescription,
+        extraFields: editExtraFields,
+      });
       show({ message: t('slidePreview.outlineSaved'), type: 'success' });
     }
-  }, [currentProject, selectedIndex, editOutlineTitle, editOutlinePoints, editDescription, updatePageLocal, show]);
+  }, [currentProject, selectedIndex, editOutlineTitle, editOutlinePoints, editDescription, editExtraFields, updatePageLocal, persistCurrentPageDraft, show, t]);
 
-  const handleSubmitEdit = useCallback(async () => {
+  const handleGenerateImageFromControls = useCallback(async () => {
     if (!currentProject) return;
 
     const page = currentProject.pages[selectedIndex];
     if (!page.id) return;
 
-    // 先保存大纲和描述的修改
     handleSaveOutlineAndDescription();
-    // 等待本地防抖更新真正落库，避免后端读到旧的 description_content
     await saveAllPages();
     const normalizedEditModel = normalizeProjectDefaultImageModel(editRunImageModel || projectDefaultImageModel);
     const editGenerationOverride: GenerationOverride = {
       image: { model: normalizedEditModel },
     };
-
-    // 调用后端编辑接口
-    await editPageImage(
-      page.id,
-      editPrompt,
-      {
-        useTemplate: selectedContextImages.useTemplate,
-        descImageUrls: selectedContextImages.descImageUrls,
-        uploadedFiles: selectedContextImages.uploadedFiles.length > 0
-          ? selectedContextImages.uploadedFiles
-          : undefined,
-      },
-      editGenerationOverride
+    const hasExistingImage = Boolean(page.generated_image_path || page.preview_image_path);
+    const hasContextInputs = Boolean(
+      editPrompt.trim() ||
+      selectedContextImages.useTemplate ||
+      selectedContextImages.descImageUrls.length > 0 ||
+      selectedContextImages.uploadedFiles.length > 0
     );
 
-    // 缓存当前页的编辑上下文，便于后续快速重复执行
+    if (hasExistingImage || hasContextInputs) {
+      await editPageImage(
+        page.id,
+        editPrompt,
+        {
+          useTemplate: selectedContextImages.useTemplate,
+          descImageUrls: selectedContextImages.descImageUrls,
+          uploadedFiles: selectedContextImages.uploadedFiles.length > 0
+            ? selectedContextImages.uploadedFiles
+            : undefined,
+        },
+        editGenerationOverride
+      );
+    } else {
+      await generateImages([page.id], editGenerationOverride);
+    }
+
     setEditContextByPage((prev) => ({
       ...prev,
       [page.id!]: {
@@ -1393,9 +1736,13 @@ export const SlidePreview: React.FC = () => {
         },
       },
     }));
+    setEditRunImageModel(projectDefaultImageModel);
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, handleSaveOutlineAndDescription, saveAllPages, generateImages]);
 
-    closeEditModal();
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, handleSaveOutlineAndDescription, saveAllPages, closeEditModal]);
+  const handleSaveCurrentPage = useCallback(async () => {
+    handleSaveOutlineAndDescription();
+    await saveAllPages();
+  }, [handleSaveOutlineAndDescription, saveAllPages]);
 
   const handleAiRefineDescription = useCallback(async (requirement: string, previousRequirements: string[]) => {
     if (!currentProject || !projectId) return;
@@ -1416,7 +1763,9 @@ export const SlidePreview: React.FC = () => {
         previousRequirements
       );
 
-      setEditDescription(response.data?.refined_description || '');
+      const nextDescription = response.data?.refined_description || '';
+      setEditDescription(nextDescription);
+      persistCurrentPageDraft({ description: nextDescription });
       show({
         message: response.data?.message || t('preview.refineApplied'),
         type: 'success',
@@ -1427,7 +1776,252 @@ export const SlidePreview: React.FC = () => {
       show({ message: errorMessage, type: 'error' });
       throw error;
     }
-  }, [currentProject, projectId, selectedIndex, editDescription, editOutlineTitle, editOutlinePoints, show, t]);
+  }, [currentProject, projectId, selectedIndex, editDescription, editOutlineTitle, editOutlinePoints, persistCurrentPageDraft, show, t]);
+
+  const handleGenerateDescriptions = useCallback(async () => {
+    if (!currentProject) return;
+    const hasDescriptions = currentProject.pages.some((page) => page.description_content);
+    const executeGenerate = async () => {
+      await generateDescriptions();
+      await syncProject(projectId);
+    };
+
+    if (hasDescriptions) {
+      confirm(
+        '部分页面已有描述，重新生成将覆盖，确定继续吗？',
+        () => {
+          void executeGenerate();
+        },
+        { title: '确认重新生成', variant: 'warning' }
+      );
+      return;
+    }
+
+    await executeGenerate();
+  }, [confirm, currentProject, generateDescriptions, projectId, syncProject]);
+
+  const handleAiRefineDescriptions = useCallback(async (requirement: string, previousRequirements: string[]) => {
+    if (!currentProject || !projectId) return;
+    try {
+      const response = await refineDescriptions(projectId, requirement, previousRequirements);
+      await syncProject(projectId);
+      show({
+        message: response.data?.message || '页面描述修改成功',
+        type: 'success',
+      });
+    } catch (error: any) {
+      const errorMessage =
+        error?.response?.data?.error?.message ||
+        error?.message ||
+        '修改失败，请稍后重试';
+      show({ message: errorMessage, type: 'error' });
+      throw error;
+    }
+  }, [currentProject, projectId, show, syncProject]);
+
+  const handleExportDescriptions = useCallback(() => {
+    if (!currentProject) return;
+    exportProjectToMarkdown(currentProject, { outline: false, description: true });
+    show({ message: '导出成功', type: 'success' });
+  }, [currentProject, show]);
+
+  const handleExportFull = useCallback(() => {
+    if (!currentProject) return;
+    exportProjectToMarkdown(currentProject);
+    show({ message: '导出成功', type: 'success' });
+  }, [currentProject, show]);
+
+  const handleImportDescriptions = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (importFileRef.current) importFileRef.current.value = '';
+    if (!file || !currentProject || !projectId) return;
+
+    try {
+      const text = await file.text();
+      const parsed = parseMarkdownPages(text);
+      if (parsed.length === 0) {
+        show({ message: '文件中未找到有效页面', type: 'error' });
+        return;
+      }
+
+      const startIndex = currentProject.pages.reduce(
+        (max, page) => Math.max(max, (page.order_index ?? 0) + 1),
+        0
+      );
+      await Promise.all(parsed.map(({ title, points, text: desc, part, extra_fields }, index) =>
+        addPage(projectId, {
+          outline_content: { title, points },
+          description_content: desc ? { text: desc, ...(extra_fields ? { extra_fields } : {}) } : undefined,
+          part,
+          order_index: startIndex + index,
+        })
+      ));
+      await syncProject(projectId);
+      show({ message: '导入成功', type: 'success' });
+    } catch {
+      show({ message: '导入失败，请检查文件格式', type: 'error' });
+    }
+  }, [currentProject, projectId, show, syncProject]);
+
+  const getSortedPages = useCallback(() => {
+    if (!currentProject) return [];
+    return [...currentProject.pages].sort((left, right) => (left.order_index ?? 0) - (right.order_index ?? 0));
+  }, [currentProject]);
+
+  const handleCoverEndingSave = useCallback(async (meta: PresentationMeta) => {
+    if (!currentProject || !projectId) return;
+    const sortedPages = getSortedPages();
+    if (sortedPages.length === 0) return;
+    const coverPage = sortedPages[0];
+    const endingPage = sortedPages[sortedPages.length - 1];
+    const coverId = coverPage.id || coverPage.page_id;
+    const endingId = endingPage.id || endingPage.page_id;
+
+    try {
+      const baseMeta = parsePresentationMeta(currentProject.presentation_meta);
+      const mergedMeta: PresentationMeta = {
+        ...baseMeta,
+        ...meta,
+        _cover_ending_checked: true,
+        _cover_ending_skipped: false,
+        _cover_ending_completed: true,
+      };
+      await updateProject(projectId, { presentation_meta: JSON.stringify(mergedMeta || {}) } as any);
+
+      const coverText = getDescriptionText(coverPage.description_content);
+      const endingText = getDescriptionText(endingPage.description_content);
+      const updatedCover = applyPresentationMetaToDescription(coverText, mergedMeta, {
+        pageRole: 'cover',
+        detectFields,
+      });
+      const updatedEnding = applyPresentationMetaToDescription(endingText, mergedMeta, {
+        pageRole: 'ending',
+        detectFields,
+      });
+
+      const saveRequests: Promise<any>[] = [];
+      if (coverId) {
+        saveRequests.push(updatePageDescription(projectId, coverId, { text: updatedCover }));
+      }
+      if (endingId && endingId !== coverId) {
+        saveRequests.push(updatePageDescription(projectId, endingId, { text: updatedEnding }));
+      }
+      if (saveRequests.length > 0) {
+        await Promise.all(saveRequests);
+      }
+
+      await syncProject(projectId);
+      setIsCoverEndingModalOpen(false);
+      setCoverEndingModalMode('missing');
+    } catch (error: any) {
+      show({ message: error.message || '保存失败，请重试', type: 'error' });
+    }
+  }, [currentProject, projectId, getSortedPages, detectFields, syncProject, show]);
+
+  const handleCoverEndingSkip = useCallback(async () => {
+    if (!currentProject || !projectId) {
+      setIsCoverEndingModalOpen(false);
+      return;
+    }
+
+    try {
+      const baseMeta = parsePresentationMeta(currentProject.presentation_meta);
+      const mergedMeta: PresentationMeta = {
+        ...baseMeta,
+        _cover_ending_checked: true,
+        _cover_ending_skipped: true,
+        _cover_ending_completed: false,
+      };
+      await updateProject(projectId, { presentation_meta: JSON.stringify(mergedMeta) } as any);
+      await syncProject(projectId);
+    } catch (error) {
+      console.warn('保存跳过状态失败:', error);
+    } finally {
+      setIsCoverEndingModalOpen(false);
+      setCoverEndingModalMode('missing');
+    }
+  }, [currentProject, projectId, syncProject]);
+
+  const handleCoverEndingView = useCallback(async () => {
+    if (!currentProject || !projectId) {
+      setDetectFields([]);
+      setCoverEndingModalMode('all');
+      setIsCoverEndingModalOpen(true);
+      return;
+    }
+
+    const sortedPages = getSortedPages();
+    if (sortedPages.length === 0) {
+      setDetectFields([]);
+      setCoverEndingModalMode('all');
+      setIsCoverEndingModalOpen(true);
+      return;
+    }
+
+    const coverPage = sortedPages[0];
+    const endingPage = sortedPages[sortedPages.length - 1];
+    const coverText = getDescriptionText(coverPage.description_content);
+    const endingText = getDescriptionText(endingPage.description_content);
+
+    try {
+      setIsCheckingCoverEnding(true);
+      const response = await detectCoverEndingFields(projectId, {
+        cover: { page_id: coverPage.id || coverPage.page_id, description: coverText },
+        ending: { page_id: endingPage.id || endingPage.page_id, description: endingText },
+      });
+      setDetectFields(response.data?.fields || []);
+    } catch (error) {
+      console.warn('查看封面/结尾信息时检测失败，继续打开编辑框', error);
+      setDetectFields([]);
+    } finally {
+      setIsCheckingCoverEnding(false);
+      setCoverEndingModalMode('all');
+      setIsCoverEndingModalOpen(true);
+    }
+  }, [currentProject, projectId, getSortedPages]);
+
+  const handleCoverEndingClose = useCallback(() => {
+    setIsCoverEndingModalOpen(false);
+    setCoverEndingModalMode('missing');
+  }, []);
+
+  const handleOpenGenerateFlow = useCallback(async () => {
+    if (!currentProject || !projectId) return;
+    const sortedPages = getSortedPages();
+    if (sortedPages.length === 0) return;
+    const coverPage = sortedPages[0];
+    const endingPage = sortedPages[sortedPages.length - 1];
+    const coverText = getDescriptionText(coverPage.description_content);
+    const endingText = getDescriptionText(endingPage.description_content);
+
+    try {
+      const meta = parsePresentationMeta(currentProject.presentation_meta);
+      if (meta._cover_ending_checked) {
+        await checkResolutionAndExecute(handleGenerateImageFromControls);
+        return;
+      }
+      setIsCheckingCoverEnding(true);
+      show({ message: '正在检查封面/结尾信息...', type: 'info' });
+      const response = await detectCoverEndingFields(projectId, {
+        cover: { page_id: coverPage.id || coverPage.page_id, description: coverText },
+        ending: { page_id: endingPage.id || endingPage.page_id, description: endingText },
+      });
+      const fields = response.data?.fields || [];
+      const missing = fields.filter((field) => !field.present || field.is_placeholder);
+      if (missing.length > 0) {
+        setDetectFields(fields);
+        setCoverEndingModalMode('missing');
+        setIsCoverEndingModalOpen(true);
+        return;
+      }
+    } catch (error) {
+      console.warn('封面/结尾检测失败，跳过检测流程', error);
+    } finally {
+      setIsCheckingCoverEnding(false);
+    }
+
+    await checkResolutionAndExecute(handleGenerateImageFromControls);
+  }, [currentProject, projectId, getSortedPages, show, checkResolutionAndExecute, handleGenerateImageFromControls]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -1476,9 +2070,8 @@ export const SlidePreview: React.FC = () => {
     }
   };
 
-  // 编辑弹窗打开时，实时把输入与图片选择写入缓存（前端会话内）
   useEffect(() => {
-    if (!isEditModalOpen || !currentProject) return;
+    if (!currentProject) return;
     const page = currentProject.pages[selectedIndex];
     const pageId = page?.id;
     if (!pageId) return;
@@ -1494,16 +2087,7 @@ export const SlidePreview: React.FC = () => {
         },
       },
     }));
-  }, [isEditModalOpen, currentProject, selectedIndex, editPrompt, selectedContextImages]);
-
-  useEffect(() => {
-    if (!isEditModalOpen || isMobileView) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeEditModal();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isEditModalOpen, isMobileView, closeEditModal]);
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages]);
 
   // ========== 预览图矩形选择相关逻辑（编辑弹窗内） ==========
   const handleSelectionMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -1784,6 +2368,23 @@ export const SlidePreview: React.FC = () => {
     }
   }, [currentProject, projectId, templateStyle, syncProject, show]);
 
+  const handleSaveDescriptionRequirements = useCallback(async () => {
+    if (!currentProject || !projectId) return;
+    setIsSavingDescriptionRequirements(true);
+    try {
+      await updateProject(projectId, { description_requirements: descriptionRequirementsDraft || '' });
+      await syncProject(projectId);
+      show({ message: '描述生成要求已保存', type: 'success' });
+    } catch (error: any) {
+      show({
+        message: t('slidePreview.saveFailed', { error: error.message || t('slidePreview.unknownError') }),
+        type: 'error',
+      });
+    } finally {
+      setIsSavingDescriptionRequirements(false);
+    }
+  }, [currentProject, projectId, descriptionRequirementsDraft, syncProject, show, t]);
+
   const handleSaveGenerationDefaults = useCallback(async () => {
     if (!currentProject || !projectId) return;
     setIsSavingGenerationDefaults(true);
@@ -1990,331 +2591,255 @@ export const SlidePreview: React.FC = () => {
       ? t('preview.generateSelected', { count: selectedPageIds.size })
       : t('preview.batchGenerate', { count: currentProject.pages.length });
   const isGenerateDisabled = isMultiSelectMode && selectedPageIds.size === 0;
+  const missingImageCount = currentProject.pages.filter(p => !p.generated_image_path).length;
+  const selectedPageHasImage = Boolean(selectedPage?.generated_image_path || selectedPage?.preview_image_path);
+  const currentPagePoints = editOutlinePoints
+    .split('\n')
+    .map((point) => point.trim())
+    .filter(Boolean);
+  const canvasFieldNames = [...new Set([
+    ...extraFieldNames,
+    ...Object.keys(editExtraFields),
+  ])];
+  const draftDescImageUrls = extractImageUrlsFromDescription(editDescription);
 
-  const editPageContent = (
-    <div className="space-y-4">
-      {/* 图片（支持矩形区域选择） */}
-      <div
-        className="bg-gray-100 dark:bg-background-secondary rounded-lg overflow-hidden relative"
-        style={{ aspectRatio: aspectRatioStyle }}
-        onMouseDown={handleSelectionMouseDown}
-        onMouseMove={handleSelectionMouseMove}
-        onMouseUp={handleSelectionMouseUp}
-        onMouseLeave={handleSelectionMouseUp}
-      >
-        {imageUrl && (
-          <>
-            {/* 左上角：区域选图模式开关 */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                // 切换矩形选择模式
-                setIsRegionSelectionMode((prev) => !prev);
-                // 切模式时清空当前选区
-                setSelectionStart(null);
-                setSelectionRect(null);
-                setIsSelectingRegion(false);
-              }}
-              className="absolute top-2 left-2 z-10 px-2 py-1 rounded bg-white/80 text-[10px] text-gray-700 dark:text-foreground-secondary hover:bg-banana-50 dark:hover:bg-background-hover shadow-sm dark:shadow-background-primary/30 flex items-center gap-1"
-            >
-              <Sparkles size={12} />
-              <span>{isRegionSelectionMode ? t('preview.endRegionSelect') : t('preview.regionSelect')}</span>
-            </button>
-
-            <img
-              ref={imageRef}
-              src={imageUrl}
-              alt="Current slide"
-              className="w-full h-full object-contain select-none"
-              draggable={false}
-              crossOrigin="anonymous"
-            />
-            {selectionRect && (
-              <div
-                className="absolute border-2 border-banana-500 bg-banana-400/10 pointer-events-none"
-                style={{
-                  left: selectionRect.left,
-                  top: selectionRect.top,
-                  width: selectionRect.width,
-                  height: selectionRect.height,
-                }}
-              />
-            )}
-          </>
-        )}
-      </div>
-
-      {/* 大纲内容 - 可编辑 */}
-      <div className="bg-gray-50 dark:bg-background-primary rounded-lg border border-gray-200 dark:border-border-primary">
-        <button
-          onClick={() => setIsOutlineExpanded(!isOutlineExpanded)}
-          className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-background-hover transition-colors"
-        >
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-foreground-secondary">{t('preview.pageOutline')}</h4>
-          {isOutlineExpanded ? (
-            <ChevronUp size={18} className="text-gray-500 dark:text-foreground-tertiary" />
-          ) : (
-            <ChevronDown size={18} className="text-gray-500 dark:text-foreground-tertiary" />
-          )}
-        </button>
-        {isOutlineExpanded && (
-          <div className="px-4 pb-4 space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-foreground-tertiary mb-1">{t('outline.titleLabel')}</label>
-              <input
-                type="text"
-                value={editOutlineTitle}
-                onChange={(e) => setEditOutlineTitle(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-900 dark:text-foreground-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-banana-500"
-                placeholder={t('preview.enterTitle')}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-foreground-tertiary mb-1">{t('preview.pointsPerLine')}</label>
-              <textarea
-                value={editOutlinePoints}
-                onChange={(e) => setEditOutlinePoints(e.target.value)}
-                rows={4}
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-900 dark:text-foreground-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-banana-500 resize-none"
-                placeholder={t('preview.enterPointsPerLine')}
-              />
-            </div>
+  const textCanvasContent = (
+    <div
+      className="bg-[#f7f5ef] dark:bg-background-secondary rounded-[24px] shadow-[0_20px_60px_rgba(15,23,42,0.08)] border border-white/70 dark:border-border-primary p-4 sm:p-6 lg:p-8"
+      style={{ aspectRatio: aspectRatioStyle }}
+      data-testid="preview-text-canvas"
+    >
+      <div className="h-full grid gap-4 grid-rows-[auto_auto_minmax(0,1fr)_auto]">
+        <div className="rounded-2xl border border-amber-200/70 bg-white/85 dark:bg-background-primary px-5 py-4">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700/80">Title</div>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">实时预览</span>
           </div>
-        )}
-      </div>
+          <div className="min-h-[48px] text-xl font-semibold text-slate-900 dark:text-foreground-primary sm:text-2xl">
+            {editOutlineTitle || t('preview.enterTitle')}
+          </div>
+        </div>
 
-      {/* 描述内容 - 可编辑 */}
-      <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
-        <button
-          onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-          className="w-full px-4 py-3 flex items-center justify-between hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
-        >
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-foreground-secondary">{t('preview.pageDescription')}</h4>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsDescriptionExpanded(true);
-                setShowDescriptionRefineInput((prev) => !prev);
-              }}
-              className="inline-flex items-center gap-1 rounded-md border border-blue-300 dark:border-blue-600 bg-white/80 dark:bg-background-secondary px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 hover:bg-white dark:hover:bg-background-hover transition-colors"
-              title={t('preview.refineDescriptionTooltip')}
-            >
-              <Sparkles size={14} />
-              <span>{t('preview.refineDescription')}</span>
-            </button>
-            {isDescriptionExpanded ? (
-              <ChevronUp size={18} className="text-gray-500 dark:text-foreground-tertiary" />
+        <div className="rounded-2xl border border-slate-200 bg-white/85 dark:bg-background-primary px-5 py-4 min-h-[120px]">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">{t('preview.pointsPerLine')}</div>
+          <div className="h-full min-h-[68px] overflow-y-auto">
+            {currentPagePoints.length === 0 ? (
+              <div className="text-sm leading-6 text-slate-400 dark:text-foreground-tertiary">
+                {t('preview.enterPointsPerLine')}
+              </div>
             ) : (
-              <ChevronDown size={18} className="text-gray-500 dark:text-foreground-tertiary" />
+              <ul className="space-y-2 text-sm leading-6 text-slate-700 dark:text-foreground-secondary">
+                {currentPagePoints.map((point, index) => (
+                  <li key={`${point}-${index}`} className="flex gap-2">
+                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400" />
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-        </button>
-        {isDescriptionExpanded && (
-          <div className="px-4 pb-4 space-y-3">
-            {showDescriptionRefineInput && (
-              <div className="rounded-lg border border-blue-200 dark:border-blue-700 bg-white/70 dark:bg-background-secondary/80 p-2">
-                <AiRefineInput
-                  title=""
-                  placeholder={t('preview.refinePlaceholder')}
-                  onSubmit={handleAiRefineDescription}
-                  className="!p-0 !bg-transparent !border-0"
-                  onStatusChange={setIsAiRefiningDescription}
+        </div>
+
+        <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.38fr)]">
+          <div className="rounded-2xl border border-blue-200/80 bg-white/90 dark:bg-background-primary p-4 min-h-0 flex flex-col">
+            <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-700/80">
+              {t('preview.pageDescription')}
+            </div>
+            <div className="flex-1 overflow-y-auto rounded-xl border border-blue-100 bg-blue-50/40 px-4 py-3 text-sm leading-6 text-slate-700 dark:border-blue-800 dark:bg-background-secondary dark:text-foreground-secondary whitespace-pre-wrap">
+              {editDescription || t('preview.enterDescription')}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white/85 dark:bg-background-primary p-4 min-h-0 flex flex-col">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 mb-3">Extra Fields</div>
+            <div className="grid gap-3 min-h-0 overflow-y-auto pr-1">
+              {canvasFieldNames.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400">
+                  暂无额外字段
+                </div>
+              ) : canvasFieldNames.map((fieldName) => (
+                <label key={fieldName} className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
+                  <div className="text-xs font-medium text-slate-500 mb-1">{fieldName}</div>
+                  <div className="max-h-24 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-foreground-secondary">
+                    {editExtraFields[fieldName] || '暂无内容'}
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const sharedImageControls = (
+    <div className="rounded-[24px] border border-gray-200 bg-white/95 dark:bg-background-secondary dark:border-border-primary p-4 md:p-5 shadow-[0_12px_30px_rgba(15,23,42,0.06)] space-y-4">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+        <div className="flex-1 space-y-4">
+          <div className="bg-gray-50 dark:bg-background-primary rounded-xl border border-gray-200 dark:border-border-primary p-4 space-y-4">
+            <h4 className="text-sm font-semibold text-gray-700 dark:text-foreground-secondary">{t('preview.selectContextImages')}</h4>
+            {currentProject?.template_image_path && (
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="use-template"
+                  checked={selectedContextImages.useTemplate}
+                  onChange={(event) =>
+                    setSelectedContextImages((prev) => ({
+                      ...prev,
+                      useTemplate: event.target.checked,
+                    }))
+                  }
+                  className="w-4 h-4 text-banana-600 rounded focus:ring-banana-500"
                 />
+                <label htmlFor="use-template" className="flex items-center gap-2 cursor-pointer">
+                  <ImageIcon size={16} className="text-gray-500 dark:text-foreground-tertiary" />
+                  <span className="text-sm text-gray-700 dark:text-foreground-secondary">{t('preview.useTemplateImage')}</span>
+                  <img
+                    src={getImageUrl(currentProject.template_image_path, currentProject.updated_at)}
+                    alt="Template"
+                    className="w-16 h-10 object-cover rounded border border-gray-300 dark:border-border-primary"
+                  />
+                </label>
               </div>
             )}
-            <textarea
-              value={editDescription}
-              onChange={(e) => setEditDescription(e.target.value)}
-              rows={8}
-              className="w-full min-h-[12rem] px-3 py-2 text-sm border border-blue-300 dark:border-blue-700 bg-white dark:bg-background-secondary text-gray-900 dark:text-foreground-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-banana-500 resize-y"
-              placeholder={t('preview.enterDescription')}
-              readOnly={isAiRefiningDescription}
-            />
-          </div>
-        )}
-      </div>
 
-      {/* 上下文图片选择 */}
-      <div className="bg-gray-50 dark:bg-background-primary rounded-lg border border-gray-200 dark:border-border-primary p-4 space-y-4">
-        <h4 className="text-sm font-semibold text-gray-700 dark:text-foreground-secondary mb-3">{t('preview.selectContextImages')}</h4>
-
-        {/* Template图片选择 */}
-        {currentProject?.template_image_path && (
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="use-template"
-              checked={selectedContextImages.useTemplate}
-              onChange={(e) =>
-                setSelectedContextImages((prev) => ({
-                  ...prev,
-                  useTemplate: e.target.checked,
-                }))
-              }
-              className="w-4 h-4 text-banana-600 rounded focus:ring-banana-500"
-            />
-            <label htmlFor="use-template" className="flex items-center gap-2 cursor-pointer">
-              <ImageIcon size={16} className="text-gray-500 dark:text-foreground-tertiary" />
-              <span className="text-sm text-gray-700 dark:text-foreground-secondary">{t('preview.useTemplateImage')}</span>
-              {currentProject.template_image_path && (
-                <img
-                  src={getImageUrl(currentProject.template_image_path, currentProject.updated_at)}
-                  alt="Template"
-                  className="w-16 h-10 object-cover rounded border border-gray-300 dark:border-border-primary"
-                />
-              )}
-            </label>
-          </div>
-        )}
-
-        {/* Desc中的图片 */}
-        {selectedPage?.description_content && (() => {
-          const descImageUrls = extractImageUrlsFromDescription(selectedPage.description_content);
-          return descImageUrls.length > 0 ? (
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-foreground-secondary">{t('preview.imagesInDescription')}:</label>
-              <div className="grid grid-cols-3 gap-2">
-                {descImageUrls.map((url, idx) => (
-                  <div key={idx} className="relative group">
-                    <img
-                      src={url}
-                      alt={`Desc image ${idx + 1}`}
-                      className="w-full h-20 object-cover rounded border-2 border-gray-300 dark:border-border-primary cursor-pointer transition-all"
-                      style={{
-                        borderColor: selectedContextImages.descImageUrls.includes(url)
-                          ? 'var(--banana-yellow)'
-                          : 'var(--border-primary)',
-                      }}
+            {draftDescImageUrls.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-foreground-secondary">{t('preview.imagesInDescription')}:</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {draftDescImageUrls.map((url, index) => (
+                    <button
+                      key={`${url}-${index}`}
+                      type="button"
+                      className={`relative overflow-hidden rounded-lg border-2 transition-all ${
+                        selectedContextImages.descImageUrls.includes(url)
+                          ? 'border-banana-400 ring-2 ring-banana-200'
+                          : 'border-gray-200 dark:border-border-primary'
+                      }`}
                       onClick={() => {
                         setSelectedContextImages((prev) => {
                           const isSelected = prev.descImageUrls.includes(url);
                           return {
                             ...prev,
                             descImageUrls: isSelected
-                              ? prev.descImageUrls.filter((u) => u !== url)
+                              ? prev.descImageUrls.filter((item) => item !== url)
                               : [...prev.descImageUrls, url],
                           };
                         });
                       }}
-                    />
-                    {selectedContextImages.descImageUrls.includes(url) && (
-                      <div className="absolute inset-0 bg-banana-500/20 border-2 border-banana-500 rounded flex items-center justify-center">
-                        <div className="w-6 h-6 bg-banana-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">✓</span>
+                    >
+                      <img src={url} alt={`Desc image ${index + 1}`} className="h-20 w-full object-cover" />
+                      {selectedContextImages.descImageUrls.includes(url) && (
+                        <div className="absolute inset-0 bg-banana-500/15 flex items-center justify-center text-white text-xs font-semibold">
+                          <span className="rounded-full bg-banana-500 px-2 py-1">已选中</span>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-foreground-secondary">{t('preview.uploadImages')}:</label>
+                {projectId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<ImagePlus size={16} />}
+                    onClick={() => setIsMaterialSelectorOpen(true)}
+                  >
+                    {t('preview.selectFromMaterials')}
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {selectedContextImages.uploadedFiles.map((_file, index) => (
+                  <div key={index} className="relative group">
+                    <img
+                      src={uploadedFileUrls.current[index] || ''}
+                      alt={`Uploaded ${index + 1}`}
+                      className="w-20 h-20 object-cover rounded border border-gray-300 dark:border-border-primary"
+                    />
+                    <button
+                      onClick={() => removeUploadedFile(index)}
+                      className="no-min-touch-target absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X size={12} />
+                    </button>
                   </div>
                 ))}
+                <label className="w-20 h-20 border-2 border-dashed border-gray-300 dark:border-border-primary rounded flex flex-col items-center justify-center cursor-pointer hover:border-banana-500 transition-colors">
+                  <Upload size={20} className="text-gray-400 mb-1" />
+                  <span className="text-xs text-gray-500 dark:text-foreground-tertiary">{t('preview.upload')}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                </label>
               </div>
             </div>
-          ) : null;
-        })()}
+          </div>
 
-        {/* 上传图片 */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700 dark:text-foreground-secondary">{t('preview.uploadImages')}:</label>
-            {projectId && (
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<ImagePlus size={16} />}
-                onClick={() => setIsMaterialSelectorOpen(true)}
-              >
-                {t('preview.selectFromMaterials')}
-              </Button>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {selectedContextImages.uploadedFiles.map((_file, idx) => (
-              <div key={idx} className="relative group">
-                <img
-                  src={uploadedFileUrls.current[idx] || ''}
-                  alt={`Uploaded ${idx + 1}`}
-                  className="w-20 h-20 object-cover rounded border border-gray-300 dark:border-border-primary"
-                />
-                <button
-                  onClick={() => removeUploadedFile(idx)}
-                  className="no-min-touch-target absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ))}
-            <label className="w-20 h-20 border-2 border-dashed border-gray-300 dark:border-border-primary rounded flex flex-col items-center justify-center cursor-pointer hover:border-banana-500 transition-colors">
-              <Upload size={20} className="text-gray-400 mb-1" />
-              <span className="text-xs text-gray-500 dark:text-foreground-tertiary">{t('preview.upload')}</span>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={handleFileUpload}
-              />
-            </label>
-          </div>
+          <Textarea
+            label={t('preview.editPromptLabel')}
+            placeholder={t('preview.editPromptPlaceholder')}
+            value={editPrompt}
+            onChange={(event) => setEditPrompt(event.target.value)}
+            rows={4}
+          />
         </div>
-      </div>
 
-      <div className="bg-gray-50 dark:bg-background-primary rounded-lg border border-gray-200 dark:border-border-primary p-4 space-y-2">
-        <label className="block text-sm font-semibold text-gray-700 dark:text-foreground-secondary">
-          {t('preview.editRunImageModelLabel')}
-        </label>
-        <select
-          value={editRunImageModel}
-          onChange={(e) => setEditRunImageModel(e.target.value)}
-          className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary text-sm text-gray-900 dark:text-foreground-primary focus:outline-none focus:ring-2 focus:ring-banana-500"
-        >
-          {PROJECT_SUPPORTED_IMAGE_MODELS.map((model) => (
-            <option key={model} value={model}>
-              {model}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
-          {t('preview.editRunImageModelHint')}
-        </p>
-      </div>
-
-      {/* 编辑框 */}
-      <Textarea
-        label={t('preview.editPromptLabel')}
-        placeholder={t('preview.editPromptPlaceholder')}
-        value={editPrompt}
-        onChange={(e) => setEditPrompt(e.target.value)}
-        rows={4}
-      />
-      <div className="flex justify-between gap-3">
-        <Button
-          variant="secondary"
-          onClick={() => {
-            handleSaveOutlineAndDescription();
-            closeEditModal();
-          }}
-          disabled={isAiRefiningDescription}
-        >
-          {t('preview.saveOutlineOnly')}
-        </Button>
-        <div className="flex gap-3">
-          <Button variant="ghost" onClick={closeEditModal}>
-            {t('common.cancel')}
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleSubmitEdit}
-            disabled={isAiRefiningDescription}
-          >
-            {t('preview.generateImage')}
-          </Button>
+        <div className="w-full xl:w-[280px] space-y-4">
+          <div className="bg-gray-50 dark:bg-background-primary rounded-xl border border-gray-200 dark:border-border-primary p-4 space-y-2">
+            <label className="block text-sm font-semibold text-gray-700 dark:text-foreground-secondary">
+              {t('preview.editRunImageModelLabel')}
+            </label>
+            <select
+              data-testid="preview-edit-run-image-model"
+              value={editRunImageModel}
+              onChange={(event) => setEditRunImageModel(event.target.value)}
+              className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary text-sm text-gray-900 dark:text-foreground-primary focus:outline-none focus:ring-2 focus:ring-banana-500"
+            >
+              {PROJECT_SUPPORTED_IMAGE_MODELS.map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
+              {t('preview.editRunImageModelHint')}
+            </p>
+          </div>
         </div>
       </div>
     </div>
   );
-  const missingImageCount = currentProject.pages.filter(p => !p.generated_image_path).length;
+
+  const currentPageDescriptionText = getDescriptionText(selectedPage?.description_content);
+  const currentPageExtraFields = getDescriptionExtraFields(selectedPage?.description_content);
+  const isCurrentPageDirty = Boolean(
+    selectedPage && (
+      editOutlineTitle !== (selectedPage.outline_content?.title || '') ||
+      editOutlinePoints !== (selectedPage.outline_content?.points?.join('\n') || '') ||
+      editDescription !== currentPageDescriptionText ||
+      !areStringRecordsEqual(editExtraFields, currentPageExtraFields)
+    )
+  );
+  const textStatusLabel = isCurrentPageDirty ? '文本未保存' : '文本已保存';
+  const imageStatusLabel = isPageGenerating(selectedPage)
+    ? t('preview.generating')
+    : selectedPageHasImage
+      ? '图片已生成'
+      : t('preview.notGenerated');
+  const previewContextHint = selectedPageHasImage
+    ? '当前页已有生成图，左侧主区显示图片预览。'
+    : '当前页暂无图片，左侧主区显示文本画布预览。';
 
   return (
     <div className="h-screen bg-gray-50 dark:bg-background-primary flex flex-col overflow-hidden">
@@ -2338,7 +2863,7 @@ export const SlidePreview: React.FC = () => {
               if (fromHistory) {
                 navigate('/history');
               } else {
-                navigate(`/project/${projectId}/detail`);
+                navigate(`/project/${projectId}/outline`);
               }
             }}
             className="flex-shrink-0"
@@ -2384,7 +2909,7 @@ export const SlidePreview: React.FC = () => {
             variant="secondary"
             size="sm"
             icon={<ArrowLeft size={16} className="md:w-[18px] md:h-[18px]" />}
-            onClick={() => navigate(`/project/${projectId}/detail`)}
+            onClick={() => navigate(`/project/${projectId}/outline`)}
             className="hidden sm:inline-flex"
           >
             <span className="hidden md:inline">{t('common.previous')}</span>
@@ -2898,8 +3423,45 @@ export const SlidePreview: React.FC = () => {
           )}
         </aside>
 
-        {/* 右侧：大图预览 */}
         <main className="flex-1 flex flex-col bg-gradient-to-br from-banana-50 dark:from-background-primary via-white dark:via-background-primary to-gray-50 dark:to-background-primary min-w-0 overflow-hidden">
+          <div
+            data-testid="preview-secondary-toolbar"
+            className="border-b border-gray-200 dark:border-border-primary bg-white/85 dark:bg-background-secondary/90 px-4 py-4 md:px-6"
+          >
+            <ReferenceFileList
+              projectId={projectId}
+              onFileClick={setPreviewFileId}
+              className="mb-3"
+              showToast={show}
+            />
+            <div className="grid gap-3 xl:grid-cols-[260px_minmax(0,1fr)_220px] xl:items-center">
+              <div className="rounded-2xl border border-gray-200 bg-white/90 px-4 py-3 text-sm text-gray-600 shadow-sm dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-foreground-tertiary">
+                  当前页上下文
+                </div>
+                <div className="mt-2 font-medium text-gray-800 dark:text-foreground-primary">
+                  {currentProject.pages.length > 0 ? `第 ${selectedIndex + 1} / ${currentProject.pages.length} 页` : '暂无页面'}
+                </div>
+                <div className="mt-1 text-xs text-gray-500 dark:text-foreground-tertiary">{previewContextHint}</div>
+              </div>
+              <div className="min-w-0 rounded-2xl border border-banana-200/70 bg-white/90 px-4 py-3 shadow-sm dark:border-banana-700/40 dark:bg-background-primary">
+                <AiRefineInput
+                  title=""
+                  placeholder="例如：让描述更详细、删除第2页的某个要点、强调XXX的重要性... · Ctrl+Enter提交"
+                  onSubmit={handleAiRefineDescriptions}
+                  className="!border-0 !bg-transparent !p-0"
+                />
+              </div>
+              <div className="rounded-2xl border border-gray-200 bg-white/90 px-4 py-3 text-right text-sm text-gray-600 shadow-sm dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-foreground-tertiary">
+                  当前状态
+                </div>
+                <div className="mt-2">{textStatusLabel}</div>
+                <div className="mt-1 text-xs text-gray-500 dark:text-foreground-tertiary">{imageStatusLabel}</div>
+              </div>
+            </div>
+          </div>
+
           {currentProject.pages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center overflow-y-auto">
               <div className="text-center">
@@ -2929,218 +3491,610 @@ export const SlidePreview: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* 预览区 */}
-              <div className="flex-1 overflow-y-auto min-h-0 flex items-center justify-center p-4 md:p-8">
-                <div className={`w-full ${isFullscreen ? 'max-w-none' : 'max-w-5xl'}`}>
+              <div className="flex-1 min-h-0 overflow-hidden p-4 md:p-6">
+                <div className="mx-auto flex h-full w-full max-w-[1800px] flex-col gap-4">
+                  {isRenovationProcessing && (
+                    <div className="rounded-2xl border border-banana-200 bg-white/90 px-4 py-4 shadow-sm">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700 dark:text-foreground-secondary">正在解析页面内容...</span>
+                        {renovationProgress && renovationProgress.total > 0 && (
+                          <span className="text-sm font-medium text-banana-600 dark:text-banana">
+                            {renovationProgress.completed}/{renovationProgress.total} 页
+                          </span>
+                        )}
+                      </div>
+                      <div className="h-2.5 overflow-hidden rounded-full bg-gray-200 dark:bg-background-hover">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-banana-400 to-banana-500 transition-all duration-500"
+                          style={{
+                            width: renovationProgress && renovationProgress.total > 0
+                              ? `${Math.round((renovationProgress.completed / renovationProgress.total) * 100)}%`
+                              : '10%',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div
-                    ref={previewContainerRef}
-                    className={`relative overflow-hidden touch-manipulation ${isFullscreen
-                        ? 'w-screen h-screen max-w-none max-h-none bg-black rounded-none shadow-none'
-                        : 'bg-white dark:bg-background-secondary rounded-lg shadow-xl'
-                      }`}
-                    style={isFullscreen ? undefined : { aspectRatio: aspectRatioStyle }}
+                    ref={previewSplitContainerRef}
+                    data-testid="preview-main-split"
+                    className={`min-h-0 flex-1 ${isMobileView ? 'flex flex-col gap-4 overflow-y-auto' : 'grid overflow-hidden'}`}
+                    style={!isMobileView
+                      ? {
+                        gridTemplateColumns: `minmax(${PREVIEW_VISUAL_MIN_WIDTH}px, ${Math.max(resolvedPreviewSplitRatio * 100, 1)}fr) ${PREVIEW_SPLIT_DIVIDER_PX}px minmax(${PREVIEW_EDITOR_MIN_WIDTH}px, ${Math.max((1 - resolvedPreviewSplitRatio) * 100, 1)}fr)`,
+                      }
+                      : undefined}
                   >
-                    <button
-                      type="button"
-                      onClick={toggleFullscreen}
-                      className="absolute top-3 right-3 z-10 inline-flex items-center justify-center h-9 w-9 rounded-full bg-white/85 text-gray-700 hover:bg-banana-50 shadow-md border border-gray-200/70 dark:bg-background-secondary/80 dark:text-foreground-secondary dark:hover:bg-background-hover"
-                      title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
+                    <section
+                      data-testid="preview-visual-pane"
+                      className="min-w-0 overflow-hidden rounded-[28px] border border-gray-200 bg-white/95 shadow-[0_20px_50px_rgba(15,23,42,0.08)] dark:border-border-primary dark:bg-background-secondary"
                     >
-                      {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                    </button>
-                    {isFullscreen && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={goPrevPage}
-                          disabled={selectedIndex === 0}
-                          className={`absolute left-3 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center h-10 w-10 rounded-full bg-white/85 text-gray-700 hover:bg-banana-50 shadow-md border border-gray-200/70 dark:bg-background-secondary/80 dark:text-foreground-secondary dark:hover:bg-background-hover ${selectedIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                            }`}
-                          title={t('preview.prevPage')}
-                        >
-                          <ChevronLeft size={18} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={goNextPage}
-                          disabled={selectedIndex === currentProject.pages.length - 1}
-                          className={`absolute right-3 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center h-10 w-10 rounded-full bg-white/85 text-gray-700 hover:bg-banana-50 shadow-md border border-gray-200/70 dark:bg-background-secondary/80 dark:text-foreground-secondary dark:hover:bg-background-hover ${selectedIndex === currentProject.pages.length - 1 ? 'opacity-50 cursor-not-allowed' : ''
-                            }`}
-                          title={t('preview.nextPage')}
-                        >
-                          <ChevronRight size={18} />
-                        </button>
-                      </>
-                    )}
-                    {(selectedPage?.generated_image_path || selectedPage?.preview_image_path) ? (
-                      <img
-                        src={imageUrl}
-                        alt={`Slide ${selectedIndex + 1}`}
-                        className={`w-full h-full select-none ${isFullscreen ? 'object-contain' : 'object-cover'}`}
-                        draggable={false}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-background-secondary">
-                        <div className="text-center">
-                          <div className="text-6xl mb-4">🍌</div>
-                          <p className="text-gray-500 dark:text-foreground-tertiary mb-4">
-                            {isPageGenerating(selectedPage)
-                              ? t('preview.generating')
-                              : t('preview.notGenerated')}
-                          </p>
-                          {!isPageGenerating(selectedPage) && (
+                      <div className="flex h-full flex-col">
+                        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 px-4 py-4 dark:border-border-primary">
+                          <div>
+                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-foreground-tertiary">
+                              区域 2
+                            </div>
+                            <div className="mt-1 text-base font-semibold text-gray-900 dark:text-foreground-primary">
+                              {selectedPageHasImage ? '图片预览区' : '文本画布预览区'}
+                            </div>
+                            <div className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
+                              {selectedPageHasImage ? '保留全屏、历史版本和区域选图能力。' : '实时映射右侧文本编辑结果。'}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {selectedPageHasImage && imageVersions.length > 1 && (
+                              <div className="relative">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setShowVersionMenu((prev) => !prev)}
+                                >
+                                  {t('preview.historyVersions')} ({imageVersions.length})
+                                </Button>
+                                {showVersionMenu && (
+                                  <div className="absolute right-0 top-full mt-2 z-30 max-h-96 w-56 overflow-y-auto rounded-lg border border-gray-200 bg-white py-2 shadow-lg dark:border-border-primary dark:bg-background-secondary">
+                                    {imageVersions.map((version) => (
+                                      <button
+                                        key={version.version_id}
+                                        onClick={() => handleSwitchVersion(version.version_id)}
+                                        className={`w-full px-3 py-2 text-left text-sm transition-colors hover:bg-gray-50 dark:hover:bg-background-hover ${version.is_current ? 'bg-banana-50 dark:bg-background-primary' : ''}`}
+                                      >
+                                        {t('preview.version')} {version.version_number}
+                                        {version.is_current && <span className="ml-2 text-banana-600">({t('preview.current')})</span>}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {selectedPageHasImage && (
+                              <Button
+                                variant={isRegionSelectionMode ? 'primary' : 'ghost'}
+                                size="sm"
+                                icon={<Sparkles size={14} />}
+                                onClick={() => {
+                                  setIsRegionSelectionMode((prev) => !prev);
+                                  setSelectionStart(null);
+                                  setSelectionRect(null);
+                                  setIsSelectingRegion(false);
+                                }}
+                              >
+                                {isRegionSelectionMode ? t('preview.endRegionSelect') : t('preview.regionSelect')}
+                              </Button>
+                            )}
                             <Button
-                              variant="primary"
-                              onClick={handleRegeneratePage}
+                              variant="ghost"
+                              size="sm"
+                              icon={<RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />}
+                              onClick={handleRefresh}
+                              disabled={isRefreshing}
                             >
-                              {t('preview.generateThisPage')}
+                              {t('preview.refresh')}
                             </Button>
+                            {selectedPageHasImage && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                icon={isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                                onClick={toggleFullscreen}
+                              >
+                                {isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex-1 overflow-auto p-4 md:p-5">
+                          {selectedPageHasImage ? (
+                            <div className="flex h-full min-h-[320px] items-center justify-center">
+                              <div className={`w-full ${isFullscreen ? 'max-w-none' : 'max-w-5xl'}`}>
+                                <div
+                                  ref={previewContainerRef}
+                                  className={`relative overflow-hidden touch-manipulation ${isFullscreen
+                                    ? 'h-screen w-screen max-h-none max-w-none rounded-none bg-black shadow-none'
+                                    : 'rounded-2xl bg-white shadow-xl dark:bg-background-primary'
+                                  }`}
+                                  style={isFullscreen ? undefined : { aspectRatio: aspectRatioStyle }}
+                                  onMouseDown={handleSelectionMouseDown}
+                                  onMouseMove={handleSelectionMouseMove}
+                                  onMouseUp={handleSelectionMouseUp}
+                                  onMouseLeave={handleSelectionMouseUp}
+                                >
+                                  <img
+                                    ref={imageRef}
+                                    src={imageUrl}
+                                    alt={`Slide ${selectedIndex + 1}`}
+                                    className={`h-full w-full select-none ${isFullscreen ? 'object-contain' : 'object-contain'}`}
+                                    draggable={false}
+                                    crossOrigin="anonymous"
+                                  />
+                                  {selectionRect && (
+                                    <div
+                                      className="pointer-events-none absolute border-2 border-banana-500 bg-banana-400/10"
+                                      style={{
+                                        left: selectionRect.left,
+                                        top: selectionRect.top,
+                                        width: selectionRect.width,
+                                        height: selectionRect.height,
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="relative mx-auto w-full max-w-5xl">
+                              {textCanvasContent}
+                              {isPageGenerating(selectedPage) && (
+                                <div className="pointer-events-none absolute right-4 top-4 rounded-full bg-banana-500 px-3 py-1 text-xs font-medium text-white shadow-sm">
+                                  {t('preview.generating')}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
+                    </section>
+
+                    {!isMobileView && (
+                      <div
+                        data-testid="preview-split-divider"
+                        role="separator"
+                        aria-orientation="vertical"
+                        className={`group relative cursor-col-resize ${isResizingPreviewSplit ? 'bg-banana-300/70' : 'bg-transparent'}`}
+                        onMouseDown={handlePreviewSplitResizeStart}
+                      >
+                        <div className="absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 rounded-full bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
+                      </div>
                     )}
+
+                    <section
+                      data-testid="preview-editor-pane"
+                      className="min-h-0 min-w-0 overflow-hidden rounded-[28px] border border-gray-200 bg-white/95 shadow-[0_20px_50px_rgba(15,23,42,0.08)] dark:border-border-primary dark:bg-background-secondary"
+                    >
+                      <div className="flex h-full flex-col">
+                        <div
+                          data-testid="preview-editor-toolbar"
+                          className="border-b border-gray-200 px-4 py-4 dark:border-border-primary"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              icon={<Sparkles size={16} />}
+                              onClick={() => void handleGenerateDescriptions()}
+                            >
+                              批量生成描述
+                            </Button>
+                            <div className="relative" ref={settingsRef}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSettingsOpen((prev) => !prev)}
+                                icon={<Settings2 size={16} />}
+                              >
+                                描述设置
+                              </Button>
+                              {settingsOpen && (
+                                <div className="absolute left-0 top-full mt-2 z-30 w-80 rounded-xl border border-gray-200 bg-white p-4 shadow-lg dark:border-border-primary dark:bg-background-secondary">
+                                  <div className="space-y-4">
+                                    <div>
+                                      <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
+                                        生成模式
+                                        <span className="relative group">
+                                          <HelpCircle size={12} className="cursor-help text-gray-400" />
+                                          <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 w-56 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] leading-relaxed text-gray-600 opacity-0 shadow-md transition-opacity group-hover:opacity-100 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
+                                            流式：AI 从第一页开始逐页输出，速度慢但效果更好。并行：AI 根据大纲并行生成每页描述，速度快但可能不够细致。
+                                          </span>
+                                        </span>
+                                      </label>
+                                      <div className="flex gap-1">
+                                        {(['streaming', 'parallel'] as const).map((mode) => (
+                                          <button
+                                            key={mode}
+                                            type="button"
+                                            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                              generationMode === mode
+                                                ? 'bg-banana-500 text-white'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-background-hover dark:text-foreground-tertiary dark:hover:bg-background-primary'
+                                            }`}
+                                            onClick={() => {
+                                              setGenerationMode(mode);
+                                              saveSettingsDebounced({ description_generation_mode: mode });
+                                            }}
+                                          >
+                                            {mode === 'streaming' ? '流式' : '并行'}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
+                                        额外字段
+                                        <span className="relative group">
+                                          <HelpCircle size={12} className="cursor-help text-gray-400" />
+                                          <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 w-56 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] leading-relaxed text-gray-600 opacity-0 shadow-md transition-opacity group-hover:opacity-100 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
+                                            启用后，AI 生成描述时会带上这些字段。点击胶囊启用/禁用，拖拽调整顺序。
+                                          </span>
+                                        </span>
+                                      </label>
+                                      <DndContext sensors={fieldSensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd}>
+                                        <SortableContext items={availableFields} strategy={rectSortingStrategy}>
+                                          <div className="mb-2 flex flex-wrap gap-1.5">
+                                            {availableFields.map((name) => {
+                                              const active = extraFieldNames.includes(name);
+                                              return (
+                                                <SortableFieldPill
+                                                  key={name}
+                                                  name={name}
+                                                  active={active}
+                                                  removable={!PRESET_EXTRA_FIELDS.has(name)}
+                                                  onToggle={() => {
+                                                    const next = active
+                                                      ? extraFieldNames.filter((field) => field !== name)
+                                                      : [...extraFieldNames, name];
+                                                    const normalizedNext = next.length > 0 ? next : DEFAULT_EXTRA_FIELDS;
+                                                    setExtraFieldNames(normalizedNext);
+                                                    saveSettingsDebounced({ description_extra_fields: normalizedNext });
+                                                  }}
+                                                  inImagePrompt={imagePromptFields.includes(name)}
+                                                  imagePromptTooltip={imagePromptFields.includes(name) ? '该字段会影响生成的图片效果，点击可关闭' : '该字段不会影响生成的图片，点击可开启'}
+                                                  onToggleImagePrompt={() => {
+                                                    const next = imagePromptFields.includes(name)
+                                                      ? imagePromptFields.filter((field) => field !== name)
+                                                      : [...imagePromptFields, name];
+                                                    setImagePromptFields(next);
+                                                    saveSettingsDebounced({ image_prompt_extra_fields: next });
+                                                  }}
+                                                  onRemove={() => {
+                                                    const nextPool = availableFields.filter((field) => field !== name);
+                                                    setAvailableFields(nextPool);
+                                                    localStorage.setItem('banana-available-extra-fields', JSON.stringify(nextPool));
+                                                  }}
+                                                />
+                                              );
+                                            })}
+                                          </div>
+                                        </SortableContext>
+                                      </DndContext>
+                                      <div className="flex gap-1">
+                                        <input
+                                          type="text"
+                                          className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-banana-500/30 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary"
+                                          placeholder="添加字段"
+                                          value={newFieldName}
+                                          onChange={(event) => setNewFieldName(event.target.value)}
+                                          onKeyDown={(event) => {
+                                            if (event.key === 'Enter' && newFieldName.trim()) {
+                                              event.preventDefault();
+                                              const trimmed = newFieldName.trim();
+                                              if (!availableFields.includes(trimmed) && availableFields.length < 10) {
+                                                const nextPool = [...availableFields, trimmed];
+                                                setAvailableFields(nextPool);
+                                                localStorage.setItem('banana-available-extra-fields', JSON.stringify(nextPool));
+                                                const nextActive = [...extraFieldNames, trimmed];
+                                                setExtraFieldNames(nextActive);
+                                                saveSettingsDebounced({ description_extra_fields: nextActive });
+                                                setNewFieldName('');
+                                              }
+                                            }
+                                          }}
+                                        />
+                                        <button
+                                          type="button"
+                                          className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-banana-500 disabled:opacity-40 dark:hover:bg-background-hover"
+                                          disabled={!newFieldName.trim() || availableFields.includes(newFieldName.trim()) || availableFields.length >= 10}
+                                          onClick={() => {
+                                            const trimmed = newFieldName.trim();
+                                            if (trimmed && !availableFields.includes(trimmed) && availableFields.length < 10) {
+                                              const nextPool = [...availableFields, trimmed];
+                                              setAvailableFields(nextPool);
+                                              localStorage.setItem('banana-available-extra-fields', JSON.stringify(nextPool));
+                                              const nextActive = [...extraFieldNames, trimmed];
+                                              setExtraFieldNames(nextActive);
+                                              saveSettingsDebounced({ description_extra_fields: nextActive });
+                                              setNewFieldName('');
+                                            }
+                                          }}
+                                        >
+                                          <Plus size={14} />
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
+                                        描述生成要求
+                                      </label>
+                                      <Textarea
+                                        value={descriptionRequirementsDraft}
+                                        onChange={(event) => setDescriptionRequirementsDraft(event.target.value)}
+                                        rows={3}
+                                        placeholder="例如：每页描述控制在100字以内、多使用数据和案例、强调关键指标..."
+                                      />
+                                      <div className="mt-2 flex justify-end">
+                                        <Button
+                                          variant="secondary"
+                                          size="sm"
+                                          onClick={() => void handleSaveDescriptionRequirements()}
+                                          loading={isSavingDescriptionRequirements}
+                                        >
+                                          保存要求
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="relative" ref={fileMenuRef}>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                icon={<FileText size={16} />}
+                                onClick={() => setFileMenuOpen((prev) => !prev)}
+                              >
+                                导入/导出
+                                <ChevronDown size={14} className={`ml-1 transition-transform ${fileMenuOpen ? 'rotate-180' : ''}`} />
+                              </Button>
+                              {fileMenuOpen && (
+                                <div className="absolute left-0 top-full mt-2 z-30 min-w-[170px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg dark:border-border-primary dark:bg-background-secondary">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleExportDescriptions();
+                                      setFileMenuOpen(false);
+                                    }}
+                                    disabled={!currentProject.pages.some((page) => page.description_content)}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:text-foreground-tertiary dark:hover:bg-background-hover"
+                                  >
+                                    <Download size={14} />
+                                    导出描述
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleExportFull();
+                                      setFileMenuOpen(false);
+                                    }}
+                                    disabled={!currentProject.pages.some((page) => page.description_content)}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:text-foreground-tertiary dark:hover:bg-background-hover"
+                                  >
+                                    <Download size={14} />
+                                    导出大纲+描述
+                                  </button>
+                                  <div className="border-t border-gray-100 dark:border-border-primary" />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      importFileRef.current?.click();
+                                      setFileMenuOpen(false);
+                                    }}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:text-foreground-tertiary dark:hover:bg-background-hover"
+                                  >
+                                    <Upload size={14} />
+                                    导入描述
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              icon={<FileText size={16} />}
+                              onClick={() => void handleCoverEndingView()}
+                            >
+                              封面/结尾信息
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              icon={<ArrowRight size={16} />}
+                              onClick={() => void handleOpenGenerateFlow()}
+                              disabled={isCheckingCoverEnding}
+                              loading={isCheckingCoverEnding}
+                            >
+                              {selectedPageHasImage ? '重新生成图片' : '生成图片'}
+                            </Button>
+                            <span className="ml-auto text-xs text-gray-500 dark:text-foreground-tertiary">
+                              {currentProject.pages.filter((page) => page.description_content).length} / {currentProject.pages.length} 页已完成
+                            </span>
+                          </div>
+                          <input
+                            ref={importFileRef}
+                            type="file"
+                            accept=".md,.txt"
+                            className="hidden"
+                            onChange={handleImportDescriptions}
+                          />
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 md:p-5">
+                          <div className="space-y-4">
+                            <div className="rounded-2xl border border-amber-200/70 bg-white px-4 py-4 shadow-sm dark:border-amber-900/40 dark:bg-background-primary">
+                              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700/80">标题</div>
+                              <input
+                                type="text"
+                                value={editOutlineTitle}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setEditOutlineTitle(value);
+                                  persistCurrentPageDraft({ title: value });
+                                }}
+                                placeholder={t('preview.enterTitle')}
+                                data-testid="preview-text-title-input"
+                                className="w-full bg-transparent text-lg font-semibold text-slate-900 outline-none dark:text-foreground-primary"
+                              />
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-border-primary dark:bg-background-primary">
+                              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('preview.pointsPerLine')}</div>
+                              <textarea
+                                value={editOutlinePoints}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setEditOutlinePoints(value);
+                                  persistCurrentPageDraft({ points: value });
+                                }}
+                                placeholder={t('preview.enterPointsPerLine')}
+                                data-testid="preview-text-points-input"
+                                className="min-h-[140px] max-h-[260px] w-full resize-y rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm leading-6 text-slate-700 outline-none dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary"
+                              />
+                            </div>
+
+                            <div className="rounded-2xl border border-blue-200/80 bg-white px-4 py-4 shadow-sm dark:border-blue-900/40 dark:bg-background-primary">
+                              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700/80">
+                                  {t('preview.pageDescription')}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  icon={<Sparkles size={14} />}
+                                  onClick={() => setShowDescriptionRefineInput((prev) => !prev)}
+                                >
+                                  {t('preview.refineDescription')}
+                                </Button>
+                              </div>
+                              {showDescriptionRefineInput && (
+                                <div className="mb-3 rounded-xl border border-blue-200 bg-white/90 p-2 dark:border-blue-700 dark:bg-background-secondary">
+                                  <AiRefineInput
+                                    title=""
+                                    placeholder={t('preview.refinePlaceholder')}
+                                    onSubmit={handleAiRefineDescription}
+                                    className="!border-0 !bg-transparent !p-0"
+                                    onStatusChange={setIsAiRefiningDescription}
+                                  />
+                                </div>
+                              )}
+                              <textarea
+                                value={editDescription}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setEditDescription(value);
+                                  persistCurrentPageDraft({ description: value });
+                                }}
+                                placeholder={t('preview.enterDescription')}
+                                readOnly={isAiRefiningDescription}
+                                data-testid="preview-text-description-input"
+                                className="min-h-[220px] max-h-[420px] w-full resize-y rounded-xl border border-blue-100 bg-blue-50/40 px-4 py-3 text-sm leading-6 text-slate-700 outline-none dark:border-blue-800 dark:bg-background-secondary dark:text-foreground-secondary"
+                              />
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-border-primary dark:bg-background-primary">
+                              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">额外字段</div>
+                              <div className="space-y-3">
+                                {canvasFieldNames.length === 0 ? (
+                                  <div className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400">
+                                    暂无额外字段
+                                  </div>
+                                ) : canvasFieldNames.map((fieldName) => (
+                                  <label key={fieldName} className="block rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3 dark:border-border-primary dark:bg-background-secondary">
+                                    <div className="mb-2 text-xs font-medium text-slate-500">{fieldName}</div>
+                                    <textarea
+                                      value={editExtraFields[fieldName] || ''}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        setEditExtraFields((prev) => {
+                                          const next = { ...prev, [fieldName]: value };
+                                          persistCurrentPageDraft({ extraFields: next });
+                                          return next;
+                                        });
+                                      }}
+                                      rows={3}
+                                      className="max-h-36 w-full resize-y bg-transparent text-sm leading-6 text-slate-700 outline-none dark:text-foreground-secondary"
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+
+                            {sharedImageControls}
+                          </div>
+                        </div>
+                      </div>
+                    </section>
                   </div>
                 </div>
               </div>
 
-              {/* 控制栏 */}
-              <div className="bg-white dark:bg-background-secondary border-t border-gray-200 dark:border-border-primary px-3 md:px-6 py-3 md:py-4 flex-shrink-0">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 max-w-5xl mx-auto">
-                  {/* 导航 */}
-                  <div className="flex items-center gap-2 w-full sm:w-auto justify-center">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<ChevronLeft size={16} className="md:w-[18px] md:h-[18px]" />}
-                      onClick={() => setSelectedIndex(Math.max(0, selectedIndex - 1))}
-                      disabled={selectedIndex === 0}
-                      className="text-xs md:text-sm"
-                    >
-                      <span className="hidden sm:inline">{t('preview.prevPage')}</span>
-                      <span className="sm:hidden">{t('preview.prevPage')}</span>
-                    </Button>
-                    <span className="px-2 md:px-4 text-xs md:text-sm text-gray-600 dark:text-foreground-tertiary whitespace-nowrap">
-                      {selectedIndex + 1} / {currentProject.pages.length}
+              <div
+                data-testid="preview-status-bar"
+                className="border-t border-gray-200 bg-white/92 px-4 py-3 dark:border-border-primary dark:bg-background-secondary/95"
+              >
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-foreground-secondary">
+                    <span className="rounded-full bg-gray-100 px-3 py-1 dark:bg-background-hover">
+                      第 {selectedIndex + 1} / {currentProject.pages.length} 页
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<ChevronRight size={16} className="md:w-[18px] md:h-[18px]" />}
-                      onClick={() =>
-                        setSelectedIndex(
-                          Math.min(currentProject.pages.length - 1, selectedIndex + 1)
-                        )
-                      }
-                      disabled={selectedIndex === currentProject.pages.length - 1}
-                      className="text-xs md:text-sm"
-                    >
-                      <span className="hidden sm:inline">{t('preview.nextPage')}</span>
-                      <span className="sm:hidden">{t('preview.nextPage')}</span>
-                    </Button>
+                    <span className={`rounded-full px-3 py-1 ${isCurrentPageDirty ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {textStatusLabel}
+                    </span>
+                    <span className={`rounded-full px-3 py-1 ${selectedPageHasImage ? 'bg-sky-100 text-sky-700' : 'bg-gray-100 text-gray-600 dark:bg-background-hover dark:text-foreground-tertiary'}`}>
+                      {imageStatusLabel}
+                    </span>
                   </div>
-
-                  {/* 操作 */}
-                  <div className="flex items-center gap-1.5 md:gap-2 w-full sm:w-auto justify-center">
-                    {/* 手机端：模板更换按钮 */}
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     <Button
                       variant="ghost"
                       size="sm"
-                      icon={<Upload size={16} />}
-                      onClick={openTemplateModal}
-                      className="lg:hidden text-xs"
-                      title={t('preview.changeTemplate')}
-                    />
-                    {/* 手机端：素材生成按钮 */}
+                      icon={<ChevronLeft size={16} />}
+                      onClick={goPrevPage}
+                      disabled={selectedIndex === 0}
+                    >
+                      {t('preview.prevPage')}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      icon={<ImagePlus size={16} />}
-                      onClick={() => setIsMaterialModalOpen(true)}
-                      className="lg:hidden text-xs"
-                      title={t('nav.materialGenerate')}
-                    />
-                    {/* 手机端：刷新按钮 */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />}
-                      onClick={handleRefresh}
-                      disabled={isRefreshing}
-                      className="md:hidden text-xs"
-                      title={t('preview.refresh')}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                      onClick={toggleFullscreen}
-                      className="md:hidden text-xs"
-                      title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
-                    />
-                    {imageVersions.length > 1 && (
-                      <div className="relative">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowVersionMenu(!showVersionMenu)}
-                          className="text-xs md:text-sm"
-                        >
-                          <span className="hidden md:inline">{t('preview.historyVersions')} ({imageVersions.length})</span>
-                          <span className="md:hidden">{t('preview.versions')}</span>
-                        </Button>
-                        {showVersionMenu && (
-                          <div className="absolute right-0 bottom-full mb-2 w-56 md:w-64 bg-white dark:bg-background-secondary rounded-lg shadow-lg border border-gray-200 dark:border-border-primary py-2 z-20 max-h-96 overflow-y-auto">
-                            {imageVersions.map((version) => (
-                              <button
-                                key={version.version_id}
-                                onClick={() => handleSwitchVersion(version.version_id)}
-                                className={`w-full px-3 md:px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-background-hover transition-colors flex items-center justify-between text-xs md:text-sm ${version.is_current ? 'bg-banana-50 dark:bg-background-secondary' : ''
-                                  }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span>
-                                    {t('preview.version')} {version.version_number}
-                                  </span>
-                                  {version.is_current && (
-                                    <span className="text-xs text-banana-600 font-medium">
-                                      ({t('preview.current')})
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="text-xs text-gray-400 hidden md:inline">
-                                  {version.created_at
-                                    ? new Date(version.created_at).toLocaleString('zh-CN', {
-                                      month: 'short',
-                                      day: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })
-                                    : ''}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                      icon={<ChevronRight size={16} />}
+                      onClick={goNextPage}
+                      disabled={selectedIndex === currentProject.pages.length - 1}
+                    >
+                      {t('preview.nextPage')}
+                    </Button>
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={handleEditPage}
-                      className="text-xs md:text-sm flex-1 sm:flex-initial"
+                      data-testid="preview-primary-save"
+                      onClick={() => void handleSaveCurrentPage()}
+                      disabled={isAiRefiningDescription}
                     >
-                      {t('common.edit')}
+                      仅保存文本
                     </Button>
                     <Button
-                      variant="ghost"
+                      variant="primary"
                       size="sm"
-                      onClick={handleRegeneratePage}
-                      disabled={selectedPage?.id ? isPageGenerating(selectedPage) : false}
-                      className="text-xs md:text-sm flex-1 sm:flex-initial"
+                      data-testid="preview-primary-generate"
+                      onClick={() => void handleOpenGenerateFlow()}
+                      disabled={isAiRefiningDescription || isCheckingCoverEnding}
+                      loading={isCheckingCoverEnding}
                     >
-                      {selectedPage?.id && isPageGenerating(selectedPage)
-                        ? t('preview.regenerating')
-                        : t('preview.regenerate')}
+                      {selectedPageHasImage ? '重新生成图片' : '生成图片'}
                     </Button>
                   </div>
                 </div>
@@ -3149,48 +4103,19 @@ export const SlidePreview: React.FC = () => {
           )}
         </main>
       </div>
-
-      {/* 编辑对话框 / 侧边栏 */}
-      {isMobileView ? (
-        <Modal
-          isOpen={isEditModalOpen}
-          onClose={closeEditModal}
-          title={t('preview.editPage')}
-          size="lg"
-        >
-          {editPageContent}
-        </Modal>
-      ) : (
-        <div
-          className={`fixed top-0 right-0 h-full z-50 transition-transform duration-300 ease-out ${isEditModalOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'
-            }`}
-          style={{ width: drawerWidthPx }}
-        >
-          <div
-            className="absolute left-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-banana-100/60"
-            onMouseDown={handleDrawerResizeStart}
-          />
-          <div className="h-full flex flex-col bg-white dark:bg-background-secondary border-l border-gray-200 dark:border-border-primary shadow-xl">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-border-primary">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                {t('preview.editPage')}
-              </h2>
-              <button
-                onClick={closeEditModal}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-background-hover transition-colors"
-                aria-label="关闭"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 md:p-5">
-              {isEditModalOpen && editPageContent}
-            </div>
-          </div>
-        </div>
-      )}
       <ToastContainer />
       {ConfirmDialog}
+      <CoverEndingInfoModal
+        isOpen={isCoverEndingModalOpen}
+        detectFields={detectFields}
+        initialMeta={parsePresentationMeta(currentProject.presentation_meta)}
+        onSave={handleCoverEndingSave}
+        onSkip={handleCoverEndingSkip}
+        onClose={handleCoverEndingClose}
+        mode={coverEndingModalMode}
+        showSkip={coverEndingModalMode === 'missing'}
+      />
+      <FilePreviewModal fileId={previewFileId} onClose={() => setPreviewFileId(null)} />
 
       {/* 模板选择 Modal */}
       <Modal

@@ -60,6 +60,8 @@ export interface GenerationOverride {
   image_caption?: OverrideRoute;
 }
 
+export type PreviewMode = 'text' | 'image';
+
 export interface CoverEndingFieldDetect {
   key: string;
   page_role: 'cover' | 'ending';
