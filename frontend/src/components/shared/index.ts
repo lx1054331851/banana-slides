@@ -22,6 +22,7 @@ export { GithubRepoCard } from './GithubRepoCard';
 export { Markdown } from './Markdown';
 export { AiRefineInput } from './AiRefineInput';
 export { GlobalAiAssistantDrawer } from './GlobalAiAssistantDrawer';
+export { PageAiWorkbench } from './PageAiWorkbench';
 export { ShimmerOverlay } from './ShimmerOverlay';
 export { ImagePreviewList } from './ImagePreviewList';
 export { ProjectResourcesList } from './ProjectResourcesList';

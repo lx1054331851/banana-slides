@@ -184,9 +184,10 @@ test.describe('Preview four-region layout and sidebar interactions', () => {
     await expect(page.getByTestId('preview-visual-pane')).toBeVisible()
     await expect(page.getByTestId('preview-editor-pane')).toBeVisible()
     await expect(page.getByTestId('preview-status-bar')).toBeVisible()
+    await expect(page.getByTestId('page-ai-workbench')).toBeVisible()
     await expect(page.getByTestId('preview-mode-text')).toHaveCount(0)
     await expect(page.getByTestId('preview-mode-image')).toHaveCount(0)
-    await expect(page.getByTestId('preview-text-canvas')).toBeVisible()
+    await expect(page.getByTestId('preview-editor-canvas')).toBeVisible()
     await expect(page.getByText('图片预览区')).toHaveCount(0)
 
     await page.goto(`/project/${imageProjectId}/preview`)
@@ -246,6 +247,7 @@ test.describe('Preview four-region layout and sidebar interactions', () => {
     await expect(page.getByTestId('preview-visual-pane')).toBeVisible()
     await expect(page.getByTestId('preview-editor-pane')).toBeVisible()
     await expect(page.getByTestId('preview-status-bar')).toBeVisible()
+    await expect(page.getByTestId('page-ai-workbench')).toBeVisible()
     await expect(page.getByTestId('preview-mode-text')).toHaveCount(0)
     await expect(page.getByTestId('preview-mode-image')).toHaveCount(0)
 

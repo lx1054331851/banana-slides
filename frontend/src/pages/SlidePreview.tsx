@@ -19,7 +19,7 @@ const previewI18n = {
       saveFailed: "保存失败: {{error}}", refreshFailed: "刷新失败，请稍后重试",
       loadMaterialFailed: "加载素材失败: {{error}}", templateChangeFailed: "选择模版失败: {{error}}",
       versionSwitchFailed: "切换失败: {{error}}", unknownError: "未知错误",
-      regionCropSuccess: "已将选中区域添加为参考图片，可在下方\"上传图片\"中查看与删除",
+      regionCropSuccess: "已将选中区域添加到页面级 AI 引用，可继续输入修改要求后发送",
       regionCropFailed: "无法从当前图片裁剪区域（浏览器安全限制）。可以尝试手动上传参考图片。"
     },
     preview: {
@@ -65,6 +65,21 @@ const previewI18n = {
       editRunImageModelHint: "仅对本次生成生效，不会保存到项目设置",
       editPromptLabel: "输入修改指令(将自动添加页面描述)",
       editPromptPlaceholder: "例如：将框选区域内的素材移除、把背景改成蓝色、增大标题字号、更改文本框样式为虚线...",
+      pageAiTitle: "页面级 AI 优化",
+      pageAiSubtitle: "仅作用于当前页图片编辑/重生成，自动带入当前页描述上下文。",
+      pageAiEmptyTitle: "先补充修改意图，再让 AI 处理当前页",
+      pageAiEmptyDescription: "你可以引用框选区域、上传图片、素材库图片、模板图或描述内图片，再配合文字一起发送。",
+      pageAiReferencesTitle: "当前引用",
+      pageAiReferencesEmpty: "还没有引用内容。可先区域选图、上传图片，或从下方可用来源里加入引用。",
+      pageAiDescriptionSourcesTitle: "描述内可用图片",
+      pageAiTemplateReference: "模板图",
+      pageAiMaterialReference: "素材库",
+      pageAiUploadReference: "上传图片",
+      pageAiLoading: "正在处理当前页图片...",
+      pageAiSendTooltip: "发送到页面级 AI",
+      pageAiInputHint: "Enter 发送，Shift+Enter 换行",
+      pageAiResponseFallback: "已开始处理当前页图片，请稍候查看最新结果。",
+      pageAiReferenceOnlyFallback: "请参考这些引用修改当前页图片。",
       saveOutlineOnly: "仅保存大纲/描述", generateImage: "生成图片",
       collapseSidebar: "收起左侧导航",
       expandSidebar: "展开左侧导航",
@@ -126,7 +141,7 @@ const previewI18n = {
       saveFailed: "Save failed: {{error}}", refreshFailed: "Refresh failed, please try again later",
       loadMaterialFailed: "Failed to load material: {{error}}", templateChangeFailed: "Failed to select template: {{error}}",
       versionSwitchFailed: "Switch failed: {{error}}", unknownError: "Unknown error",
-      regionCropSuccess: "Selected region added as reference image. You can view and delete it in \"Upload Images\" below.",
+      regionCropSuccess: "Selected region added to page-level AI references. You can continue typing and send it.",
       regionCropFailed: "Cannot crop from current image (browser security restriction). Try uploading a reference image manually."
     },
     preview: {
@@ -172,6 +187,21 @@ const previewI18n = {
       editRunImageModelHint: "Only applies to this generation and will not be saved to project settings.",
       editPromptLabel: "Enter edit instructions (page description will be auto-added)",
       editPromptPlaceholder: "e.g., Remove elements in selected area, change background to blue, increase title font size, change text box style to dashed...",
+      pageAiTitle: "Page AI Optimize",
+      pageAiSubtitle: "Only affects the current page image and automatically uses the current page description as context.",
+      pageAiEmptyTitle: "Add intent, then let AI work on this page",
+      pageAiEmptyDescription: "Reference a selected region, uploaded image, material library image, template image, or description image, then send them with text.",
+      pageAiReferencesTitle: "Current References",
+      pageAiReferencesEmpty: "No references yet. Select a region, upload an image, or add one from the available sources below.",
+      pageAiDescriptionSourcesTitle: "Images From Description",
+      pageAiTemplateReference: "Template Image",
+      pageAiMaterialReference: "Materials",
+      pageAiUploadReference: "Upload Image",
+      pageAiLoading: "Processing the current page image...",
+      pageAiSendTooltip: "Send to page AI",
+      pageAiInputHint: "Enter to send, Shift+Enter for newline",
+      pageAiResponseFallback: "Started processing the current page image. Please check back shortly.",
+      pageAiReferenceOnlyFallback: "Please update the current page image using these references.",
       saveOutlineOnly: "Save Outline/Description Only", generateImage: "Generate Image",
       collapseSidebar: "Collapse sidebar",
       expandSidebar: "Expand sidebar",
@@ -256,7 +286,6 @@ import {
   Loading,
   Modal,
   Textarea,
-  AiRefineInput,
   useToast,
   useConfirm,
   MaterialSelector,
@@ -266,6 +295,7 @@ import {
   ReferenceFileList,
   CoverEndingInfoModal,
   GlobalAiAssistantDrawer,
+  PageAiWorkbench,
 } from '@/components/shared';
 import { MaterialGeneratorModal } from '@/components/shared/MaterialGeneratorModal';
 import {
@@ -293,7 +323,6 @@ import {
   exportImagesTask as apiExportImagesTask,
   exportEditablePPTX as apiExportEditablePPTX,
   getSettings,
-  refineSinglePageDescription,
   refineDescriptions,
   detectCoverEndingFields,
   addPage,
@@ -310,6 +339,9 @@ import type {
   GenerationOverride,
   CoverEndingFieldDetect,
   PresentationMeta,
+  PageAiMessage,
+  PageAiReference,
+  PageAiRegionBounds,
 } from '@/types';
 import { normalizeErrorMessage } from '@/utils';
 import {
@@ -358,6 +390,53 @@ type PageDraft = {
   description: string;
   extraFields: Record<string, string>;
 };
+
+type PageAiUploadedReference = {
+  id: string;
+  sourceType: 'region' | 'upload' | 'material';
+  file: File;
+  previewUrl: string;
+  label: string;
+  regionBounds?: PageAiRegionBounds;
+};
+
+type PageAiContextState = {
+  draftInput: string;
+  messages: PageAiMessage[];
+  model: string;
+  contextImages: {
+    useTemplate: boolean;
+    descImageUrls: string[];
+    uploadedReferences: PageAiUploadedReference[];
+  };
+};
+
+const createPageAiMessage = (
+  role: PageAiMessage['role'],
+  content: string,
+  attachments: PageAiReference[] = [],
+  tone: PageAiMessage['tone'] = 'default',
+): PageAiMessage => ({
+  id: `${role}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  role,
+  content,
+  tone,
+  attachments,
+});
+
+const createUploadedReference = (
+  file: File,
+  sourceType: PageAiUploadedReference['sourceType'],
+  label: string = file.name,
+  meta?: Pick<PageAiUploadedReference, 'regionBounds'>,
+): PageAiUploadedReference => ({
+  id: `${sourceType}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  sourceType,
+  file,
+  previewUrl: URL.createObjectURL(file),
+  label,
+  ...meta,
+});
 
 const getPageDraftKey = (page?: Page | null, index = 0): string | null => {
   if (!page) return null;
@@ -641,10 +720,12 @@ export const SlidePreview: React.FC = () => {
     const pageId = page?.id;
     if (!pageId) {
       setEditPrompt('');
+      setPageAiMessages([]);
+      setEditRunImageModel(PROJECT_DEFAULT_IMAGE_MODEL);
       setSelectedContextImages({
         useTemplate: false,
         descImageUrls: [],
-        uploadedFiles: [],
+        uploadedReferences: [],
       });
       return;
     }
@@ -652,19 +733,23 @@ export const SlidePreview: React.FC = () => {
     const cached = editContextByPage[pageId];
     if (!cached) {
       setEditPrompt('');
+      setPageAiMessages([]);
+      setEditRunImageModel(PROJECT_DEFAULT_IMAGE_MODEL);
       setSelectedContextImages({
         useTemplate: false,
         descImageUrls: [],
-        uploadedFiles: [],
+        uploadedReferences: [],
       });
       return;
     }
 
-    setEditPrompt(cached.prompt);
+    setEditPrompt(cached.draftInput);
+    setPageAiMessages(cached.messages);
+    setEditRunImageModel(cached.model);
     setSelectedContextImages({
       useTemplate: cached.contextImages.useTemplate,
       descImageUrls: [...cached.contextImages.descImageUrls],
-      uploadedFiles: [...cached.contextImages.uploadedFiles],
+      uploadedReferences: [...cached.contextImages.uploadedReferences],
     });
   }, [currentProject?.id, selectedIndex]);
 
@@ -841,8 +926,6 @@ export const SlidePreview: React.FC = () => {
   const [editOutlinePoints, setEditOutlinePoints] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editExtraFields, setEditExtraFields] = useState<Record<string, string>>({});
-  const [isAiRefiningDescription, setIsAiRefiningDescription] = useState(false);
-  const [showDescriptionRefineInput, setShowDescriptionRefineInput] = useState(false);
   const [activeExternalField, setActiveExternalField] = useState<string | null>(null);
   const [isGlobalAiDrawerOpen, setIsGlobalAiDrawerOpen] = useState(false);
   const lastSelectedPageKeyRef = useRef<string | null>(null);
@@ -859,17 +942,19 @@ export const SlidePreview: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [floatingFullscreenButtonPosition, setFloatingFullscreenButtonPosition] = useState({ x: 0.92, y: 0.1 });
   const [imageVersions, setImageVersions] = useState<ImageVersion[]>([]);
-  const [showVersionMenu, setShowVersionMenu] = useState(false);
   const [isUploadingTemplate, setIsUploadingTemplate] = useState(false);
   const [selectedContextImages, setSelectedContextImages] = useState<{
     useTemplate: boolean;
     descImageUrls: string[];
-    uploadedFiles: File[];
+    uploadedReferences: PageAiUploadedReference[];
   }>({
     useTemplate: false,
     descImageUrls: [],
-    uploadedFiles: [],
+    uploadedReferences: [],
   });
+  const [activePreviewReferenceId, setActivePreviewReferenceId] = useState<string | null>(null);
+  const [pageAiMessages, setPageAiMessages] = useState<PageAiMessage[]>([]);
+  const [isPageAiSubmitting, setIsPageAiSubmitting] = useState(false);
   const [extraRequirements, setExtraRequirements] = useState<string>('');
   const [isSavingRequirements, setIsSavingRequirements] = useState(false);
   const isEditingRequirements = useRef(false); // 跟踪用户是否正在编辑额外要求
@@ -940,14 +1025,7 @@ export const SlidePreview: React.FC = () => {
     missingPageIds: string[];
   } | null>(null);
   // 每页编辑参数缓存（前端会话内缓存，便于重复执行）
-  const [editContextByPage, setEditContextByPage] = useState<Record<string, {
-    prompt: string;
-    contextImages: {
-      useTemplate: boolean;
-      descImageUrls: string[];
-      uploadedFiles: File[];
-    };
-  }>>({});
+  const [editContextByPage, setEditContextByPage] = useState<Record<string, PageAiContextState>>({});
   const floatingFullscreenDragRef = useRef<{ moved: boolean } | null>(null);
   const [isDraggingFloatingFullscreenButton, setIsDraggingFloatingFullscreenButton] = useState(false);
   const suppressFloatingFullscreenClickRef = useRef(false);
@@ -1513,14 +1591,12 @@ export const SlidePreview: React.FC = () => {
     const loadVersions = async () => {
       if (!currentProject || !projectId || selectedIndex < 0 || selectedIndex >= currentProject.pages.length) {
         setImageVersions([]);
-        setShowVersionMenu(false);
         return;
       }
 
       const page = currentProject.pages[selectedIndex];
       if (!page?.id) {
         setImageVersions([]);
-        setShowVersionMenu(false);
         return;
       }
 
@@ -1700,7 +1776,6 @@ export const SlidePreview: React.FC = () => {
     try {
       await setCurrentImageVersion(projectId, selectedPage.id, versionId);
       await syncProject(projectId);
-      setShowVersionMenu(false);
       show({ message: t('slidePreview.versionSwitched'), type: 'success' });
     } catch (error: any) {
       show({
@@ -1738,21 +1813,20 @@ export const SlidePreview: React.FC = () => {
     const pageId = page?.id;
     if (pageId && editContextByPage[pageId]) {
       const cached = editContextByPage[pageId];
-      setEditPrompt(cached.prompt);
+      setEditPrompt(cached.draftInput);
+      setPageAiMessages(cached.messages);
+      setEditRunImageModel(cached.model);
       setSelectedContextImages({
         useTemplate: cached.contextImages.useTemplate,
         descImageUrls: [...cached.contextImages.descImageUrls],
-        uploadedFiles: [...cached.contextImages.uploadedFiles],
+        uploadedReferences: [...cached.contextImages.uploadedReferences],
       });
     }
     setIsRegionSelectionMode(false);
     setSelectionStart(null);
     setSelectionRect(null);
     setIsSelectingRegion(false);
-    setEditRunImageModel(projectDefaultImageModel);
-    setShowDescriptionRefineInput(false);
-    setIsAiRefiningDescription(false);
-  }, [currentProject, selectedIndex, editContextByPage, projectDefaultImageModel]);
+  }, [currentProject, selectedIndex, editContextByPage]);
 
   // 保存大纲和描述修改
   const handleSaveOutlineAndDescription = useCallback(() => {
@@ -1794,7 +1868,15 @@ export const SlidePreview: React.FC = () => {
     }
   }, [currentProject, selectedIndex, editOutlineTitle, editOutlinePoints, editDescription, editExtraFields, updatePageLocal, persistCurrentPageDraft, show, t]);
 
-  const handleGenerateImageFromControls = useCallback(async () => {
+  const executePageImageGeneration = useCallback(async (options?: {
+    prompt?: string;
+    contextImages?: {
+      useTemplate: boolean;
+      descImageUrls: string[];
+      uploadedReferences: PageAiUploadedReference[];
+    };
+    model?: string;
+  }) => {
     if (!currentProject) return;
 
     const page = currentProject.pages[selectedIndex];
@@ -1802,27 +1884,30 @@ export const SlidePreview: React.FC = () => {
     try {
       handleSaveOutlineAndDescription();
       await saveAllPages();
-      const normalizedEditModel = normalizeProjectDefaultImageModel(editRunImageModel || projectDefaultImageModel);
-      const editGenerationOverride: GenerationOverride = {
-        image: { model: normalizedEditModel },
-      };
+      const nextPrompt = options?.prompt ?? editPrompt;
+      const nextContextImages = options?.contextImages ?? selectedContextImages;
+      const nextModel = options?.model ?? editRunImageModel;
+      const normalizedEditModel = normalizeProjectDefaultImageModel(nextModel || projectDefaultImageModel);
+      const editGenerationOverride: GenerationOverride | undefined = normalizedEditModel
+        ? { image: { model: normalizedEditModel } }
+        : undefined;
       const hasExistingImage = Boolean(page.generated_image_path || page.preview_image_path);
       const hasContextInputs = Boolean(
-        editPrompt.trim() ||
-        selectedContextImages.useTemplate ||
-        selectedContextImages.descImageUrls.length > 0 ||
-        selectedContextImages.uploadedFiles.length > 0
+        nextPrompt.trim() ||
+        nextContextImages.useTemplate ||
+        nextContextImages.descImageUrls.length > 0 ||
+        nextContextImages.uploadedReferences.length > 0
       );
 
       if (hasExistingImage || hasContextInputs) {
         await editPageImage(
           page.id,
-          editPrompt,
+          nextPrompt,
           {
-            useTemplate: selectedContextImages.useTemplate,
-            descImageUrls: selectedContextImages.descImageUrls,
-            uploadedFiles: selectedContextImages.uploadedFiles.length > 0
-              ? selectedContextImages.uploadedFiles
+            useTemplate: nextContextImages.useTemplate,
+            descImageUrls: nextContextImages.descImageUrls,
+            uploadedFiles: nextContextImages.uploadedReferences.length > 0
+              ? nextContextImages.uploadedReferences.map((reference) => reference.file)
               : undefined,
           },
           editGenerationOverride
@@ -1834,15 +1919,16 @@ export const SlidePreview: React.FC = () => {
       setEditContextByPage((prev) => ({
         ...prev,
         [page.id!]: {
-          prompt: editPrompt,
+          draftInput: nextPrompt,
+          messages: prev[page.id!]?.messages || pageAiMessages,
+          model: normalizedEditModel,
           contextImages: {
-            useTemplate: selectedContextImages.useTemplate,
-            descImageUrls: [...selectedContextImages.descImageUrls],
-            uploadedFiles: [...selectedContextImages.uploadedFiles],
+            useTemplate: nextContextImages.useTemplate,
+            descImageUrls: [...nextContextImages.descImageUrls],
+            uploadedReferences: [...nextContextImages.uploadedReferences],
           },
         },
       }));
-      setEditRunImageModel(projectDefaultImageModel);
     } catch (error: any) {
       const errorMessage =
         error?.response?.data?.error?.message ||
@@ -1852,46 +1938,12 @@ export const SlidePreview: React.FC = () => {
       show({ message: errorMessage, type: 'error' });
       throw error;
     }
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, handleSaveOutlineAndDescription, saveAllPages, generateImages]);
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, handleSaveOutlineAndDescription, saveAllPages, generateImages, pageAiMessages, show, t]);
 
   const handleSaveCurrentPage = useCallback(async () => {
     handleSaveOutlineAndDescription();
     await saveAllPages();
   }, [handleSaveOutlineAndDescription, saveAllPages]);
-
-  const handleAiRefineDescription = useCallback(async (requirement: string, previousRequirements: string[]) => {
-    if (!currentProject || !projectId) return;
-
-    const page = currentProject.pages[selectedIndex];
-    if (!page?.id) return;
-
-    try {
-      const response = await refineSinglePageDescription(
-        projectId,
-        page.id,
-        requirement,
-        editDescription,
-        {
-          title: editOutlineTitle,
-          points: editOutlinePoints.split('\n').filter((point) => point.trim()),
-        },
-        previousRequirements
-      );
-
-      const nextDescription = response.data?.refined_description || '';
-      setEditDescription(nextDescription);
-      persistCurrentPageDraft({ description: nextDescription });
-      show({
-        message: response.data?.message || t('preview.refineApplied'),
-        type: 'success',
-      });
-    } catch (error: any) {
-      console.error('页面描述优化失败:', error);
-      const errorMessage = error?.response?.data?.error?.message || error?.message || t('preview.refineFailed');
-      show({ message: errorMessage, type: 'error' });
-      throw error;
-    }
-  }, [currentProject, projectId, selectedIndex, editDescription, editOutlineTitle, editOutlinePoints, persistCurrentPageDraft, show, t]);
 
   const handleGenerateDescriptions = useCallback(async () => {
     if (!currentProject) return;
@@ -2102,7 +2154,7 @@ export const SlidePreview: React.FC = () => {
     setCoverEndingModalMode('missing');
   }, []);
 
-  const handleOpenGenerateFlow = useCallback(async () => {
+  const runGenerateFlow = useCallback(async (action: () => Promise<void>) => {
     if (!currentProject || !projectId) return;
     if (generateFlowLockRef.current) return;
     generateFlowLockRef.current = true;
@@ -2127,7 +2179,7 @@ export const SlidePreview: React.FC = () => {
       try {
         const meta = parsePresentationMeta(currentProject.presentation_meta);
         if (meta._cover_ending_checked) {
-          await checkResolutionAndExecute(handleGenerateImageFromControls);
+          await checkResolutionAndExecute(action);
           return;
         }
         setIsCheckingCoverEnding(true);
@@ -2150,48 +2202,68 @@ export const SlidePreview: React.FC = () => {
         setIsCheckingCoverEnding(false);
       }
 
-      await checkResolutionAndExecute(handleGenerateImageFromControls);
+      await checkResolutionAndExecute(action);
     } finally {
       generateFlowLockRef.current = false;
     }
-  }, [currentProject, projectId, getSortedPages, show, checkResolutionAndExecute, handleGenerateImageFromControls]);
+  }, [currentProject, projectId, getSortedPages, show, checkResolutionAndExecute]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+  const handleQuickGenerateImage = useCallback(async () => {
+    await runGenerateFlow(async () => {
+      if (!currentProject) return;
+      const page = currentProject.pages[selectedIndex];
+      if (!page?.id) return;
+      handleSaveOutlineAndDescription();
+      await saveAllPages();
+      await generateImages([page.id]);
+    });
+  }, [runGenerateFlow, currentProject, selectedIndex, handleSaveOutlineAndDescription, saveAllPages, generateImages]);
+
+  const handleFileUpload = useCallback((files: File[]) => {
     setSelectedContextImages((prev) => ({
       ...prev,
-      uploadedFiles: [...prev.uploadedFiles, ...files],
+      uploadedReferences: [
+        ...prev.uploadedReferences,
+        ...files.map((file) => createUploadedReference(file, 'upload')),
+      ],
     }));
-  };
+  }, []);
 
-  const removeUploadedFile = (index: number) => {
+  const removeUploadedReference = useCallback((referenceId: string) => {
     setSelectedContextImages((prev) => ({
       ...prev,
-      uploadedFiles: prev.uploadedFiles.filter((_, i) => i !== index),
+      uploadedReferences: prev.uploadedReferences.filter((reference) => reference.id !== referenceId),
     }));
-  };
+  }, []);
 
-  // Manage object URLs for uploaded files to prevent memory leaks
-  const uploadedFileUrls = useRef<string[]>([]);
+  const uploadedReferenceCleanupRef = useRef<PageAiUploadedReference[]>([]);
   useEffect(() => {
-    uploadedFileUrls.current.forEach(url => URL.revokeObjectURL(url));
-    uploadedFileUrls.current = selectedContextImages.uploadedFiles.map(file => URL.createObjectURL(file));
-  }, [selectedContextImages.uploadedFiles]);
+    const combined = [
+      ...selectedContextImages.uploadedReferences,
+      ...Object.values(editContextByPage).flatMap((context) => context.contextImages.uploadedReferences),
+    ];
+    const deduped = combined.filter((reference, index, array) => array.findIndex((item) => item.id === reference.id) === index);
+    uploadedReferenceCleanupRef.current = deduped;
+  }, [selectedContextImages.uploadedReferences, editContextByPage]);
   useEffect(() => {
     return () => {
-      uploadedFileUrls.current.forEach(url => URL.revokeObjectURL(url));
+      uploadedReferenceCleanupRef.current.forEach((reference) => {
+        URL.revokeObjectURL(reference.previewUrl);
+      });
     };
   }, []);
 
   const handleSelectMaterials = async (materials: Material[]) => {
     try {
-      // 将选中的素材转换为File对象并添加到上传列表
       const files = await Promise.all(
         materials.map((material) => materialUrlToFile(material))
       );
       setSelectedContextImages((prev) => ({
         ...prev,
-        uploadedFiles: [...prev.uploadedFiles, ...files],
+        uploadedReferences: [
+          ...prev.uploadedReferences,
+          ...files.map((file, index) => createUploadedReference(file, 'material', materials[index]?.name || file.name)),
+        ],
       }));
       show({ message: t('slidePreview.materialsAdded', { count: materials.length }), type: 'success' });
     } catch (error: any) {
@@ -2212,15 +2284,17 @@ export const SlidePreview: React.FC = () => {
     setEditContextByPage((prev) => ({
       ...prev,
       [pageId]: {
-        prompt: editPrompt,
+        draftInput: editPrompt,
+        messages: pageAiMessages,
+        model: editRunImageModel,
         contextImages: {
           useTemplate: selectedContextImages.useTemplate,
           descImageUrls: [...selectedContextImages.descImageUrls],
-          uploadedFiles: [...selectedContextImages.uploadedFiles],
+          uploadedReferences: [...selectedContextImages.uploadedReferences],
         },
       },
     }));
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages]);
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, pageAiMessages, editRunImageModel]);
 
   // ========== 预览图矩形选择相关逻辑（编辑弹窗内） ==========
   const handleSelectionMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -2308,12 +2382,25 @@ export const SlidePreview: React.FC = () => {
         canvas.toBlob((blob) => {
           if (!blob) return;
           const file = new File([blob], `crop-${Date.now()}.png`, { type: 'image/png' });
-          // 把选中区域作为额外参考图片加入上传列表
           setSelectedContextImages((prev) => ({
             ...prev,
-            uploadedFiles: [...prev.uploadedFiles, file],
+            uploadedReferences: [
+              ...prev.uploadedReferences,
+              createUploadedReference(
+                file,
+                'region',
+                `框选区域 ${prev.uploadedReferences.filter((item) => item.sourceType === 'region').length + 1}`,
+                {
+                  regionBounds: {
+                    leftRatio: left / displayWidth,
+                    topRatio: top / displayHeight,
+                    widthRatio: width / displayWidth,
+                    heightRatio: height / displayHeight,
+                  },
+                }
+              ),
+            ],
           }));
-          // 给用户一个明显反馈：选区已作为图片加入下方“上传图片”
           show({
             message: t('slidePreview.regionCropSuccess'),
             type: 'success',
@@ -2674,7 +2761,10 @@ export const SlidePreview: React.FC = () => {
     ...extraFieldNames,
     ...Object.keys(editExtraFields),
   ])];
-  const draftDescImageUrls = extractImageUrlsFromDescription(editDescription);
+  const draftDescImageUrls = useMemo(
+    () => extractImageUrlsFromDescription(editDescription),
+    [editDescription]
+  );
 
   useEffect(() => {
     if (activeExternalField && !canvasFieldNames.includes(activeExternalField)) {
@@ -2683,7 +2773,28 @@ export const SlidePreview: React.FC = () => {
   }, [activeExternalField, canvasFieldNames]);
 
   useEffect(() => {
+    setSelectedContextImages((prev) => {
+      const nextDescImageUrls = prev.descImageUrls.filter((url) => draftDescImageUrls.includes(url));
+      const nextUseTemplate = prev.useTemplate && Boolean(currentProject?.template_image_path);
+      const sameDescImages =
+        nextDescImageUrls.length === prev.descImageUrls.length &&
+        nextDescImageUrls.every((url, index) => url === prev.descImageUrls[index]);
+
+      if (sameDescImages && nextUseTemplate === prev.useTemplate) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        descImageUrls: nextDescImageUrls,
+        useTemplate: nextUseTemplate,
+      };
+    });
+  }, [draftDescImageUrls, currentProject?.template_image_path]);
+
+  useEffect(() => {
     setActiveExternalField(null);
+    setActivePreviewReferenceId(null);
   }, [selectedIndex]);
 
   if (!currentProject) {
@@ -2745,11 +2856,11 @@ export const SlidePreview: React.FC = () => {
 
   const editorCanvasContent = (
     <div
-      className="rounded-[24px] border border-[#eadfbf] bg-[#f7f5ef] p-4 sm:p-5 lg:p-6 dark:border-border-primary dark:bg-background-secondary"
-      style={{ aspectRatio: aspectRatioStyle }}
+      className="min-h-[520px] w-full min-w-0 rounded-[24px] border border-[#eadfbf] bg-[#f7f5ef] p-4 sm:min-h-[560px] sm:p-5 lg:min-h-[580px] lg:p-6 dark:border-border-primary dark:bg-background-secondary"
+      style={isMobileView ? undefined : { width: '100%', maxWidth: '100%', aspectRatio: aspectRatioStyle }}
       data-testid="preview-editor-canvas"
     >
-      <div className="grid h-full min-h-0 gap-4 grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]">
+      <div className="grid h-full min-h-0 gap-3 grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-4 lg:grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]">
         <div className="rounded-2xl border border-amber-200/70 bg-white/90 px-5 py-3 dark:border-amber-900/40 dark:bg-background-primary">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700/80">标题</div>
           <input
@@ -2766,8 +2877,8 @@ export const SlidePreview: React.FC = () => {
           />
         </div>
 
-        <div className="min-h-0 rounded-2xl border border-slate-200 bg-white/90 px-5 py-3 dark:border-border-primary dark:bg-background-primary">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{t('preview.pointsPerLine')}</div>
+        <div className="min-h-0 overflow-hidden rounded-2xl border border-slate-200 bg-white/90 px-5 py-3 dark:border-border-primary dark:bg-background-primary flex flex-col">
+          <div className="mb-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{t('preview.pointsPerLine')}</div>
           <textarea
             value={editOutlinePoints}
             onChange={(event) => {
@@ -2777,12 +2888,12 @@ export const SlidePreview: React.FC = () => {
             }}
             placeholder={t('preview.enterPointsPerLine')}
             data-testid="preview-text-points-input"
-            className="min-h-[88px] h-[calc(100%-1.75rem)] w-full resize-none rounded-xl border border-slate-200/80 bg-white/60 px-4 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-300 dark:border-border-primary dark:bg-background-primary/40 dark:text-foreground-secondary"
+            className="min-h-[72px] w-full flex-1 resize-none overflow-y-auto rounded-xl border border-slate-200/80 bg-white/60 px-4 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-300 dark:border-border-primary dark:bg-background-primary/40 dark:text-foreground-secondary"
           />
         </div>
 
-        <div className="min-h-0 rounded-2xl border border-slate-200 bg-white/90 px-5 py-3 dark:border-border-primary dark:bg-background-primary">
-          <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+        <div className="min-h-0 overflow-hidden rounded-2xl border border-slate-200 bg-white/90 px-5 py-3 dark:border-border-primary dark:bg-background-primary flex flex-col">
+          <div className="mb-3 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
             {t('preview.pageDescription')}
           </div>
           <textarea
@@ -2793,9 +2904,8 @@ export const SlidePreview: React.FC = () => {
               persistCurrentPageDraft({ description: value });
             }}
             placeholder={t('preview.enterDescription')}
-            readOnly={isAiRefiningDescription}
             data-testid="preview-text-description-input"
-            className="min-h-[180px] h-[calc(100%-1.75rem)] w-full resize-none rounded-xl border border-slate-200/80 bg-white/60 px-4 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-300 dark:border-border-primary dark:bg-background-primary/40 dark:text-foreground-secondary"
+            className="min-h-[140px] min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-slate-200/80 bg-white/60 px-4 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-300 dark:border-border-primary dark:bg-background-primary/40 dark:text-foreground-secondary"
           />
         </div>
       </div>
@@ -2857,192 +2967,150 @@ export const SlidePreview: React.FC = () => {
     </div>
   );
 
-  const contentAssistControls = (
-    <div className="rounded-[22px] border border-slate-200 bg-white/95 p-4 dark:border-border-primary dark:bg-background-secondary">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">内容辅助</div>
-          <div className="mt-1 text-sm text-slate-500 dark:text-foreground-tertiary">AI 只作用于当前页的页面描述，不改变页面外控制参数。</div>
-        </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<Sparkles size={14} />}
-          onClick={() => setShowDescriptionRefineInput((prev) => !prev)}
-        >
-          {t('preview.refineDescription')}
-        </Button>
-      </div>
-      {showDescriptionRefineInput ? (
-        <div className="rounded-xl border border-blue-200 bg-white/90 p-2 dark:border-blue-700 dark:bg-background-secondary">
-          <AiRefineInput
-            title=""
-            placeholder={t('preview.refinePlaceholder')}
-            onSubmit={handleAiRefineDescription}
-            className="!border-0 !bg-transparent !p-0"
-            onStatusChange={setIsAiRefiningDescription}
-          />
-        </div>
-      ) : (
-        <div className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-400 dark:border-border-primary dark:text-foreground-tertiary">
-          点击“{t('preview.refineDescription')}”后，可直接优化右侧 PPT 容器中的页面描述。
-        </div>
-      )}
-    </div>
-  );
+  const templatePreviewUrl = currentProject.template_image_path
+    ? getImageUrl(currentProject.template_image_path, currentProject.updated_at)
+    : undefined;
+  const selectedPageAiReferences: PageAiReference[] = (() => {
+    const references: PageAiReference[] = [];
+    if (selectedContextImages.useTemplate && templatePreviewUrl) {
+      references.push({
+        id: 'template-reference',
+        sourceType: 'template',
+        label: t('preview.pageAiTemplateReference'),
+        previewUrl: templatePreviewUrl,
+      });
+    }
+    selectedContextImages.descImageUrls.forEach((url, index) => {
+      references.push({
+        id: `description-reference:${url}`,
+        sourceType: 'description',
+        label: `${t('preview.imagesInDescription')} ${index + 1}`,
+        previewUrl: url,
+      });
+    });
+    selectedContextImages.uploadedReferences.forEach((reference) => {
+      references.push({
+        id: reference.id,
+        sourceType: reference.sourceType,
+        label: reference.label,
+        previewUrl: reference.previewUrl,
+        regionBounds: reference.regionBounds,
+      });
+    });
+    return references;
+  })();
 
-  const sharedImageControls = (
-    <div className="rounded-[24px] border border-gray-200 bg-white/95 dark:bg-background-secondary dark:border-border-primary p-4 md:p-5 shadow-[0_12px_30px_rgba(15,23,42,0.06)] space-y-4">
-      <div>
-        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">生成控制</div>
-        <div className="mt-1 text-sm text-slate-500 dark:text-foreground-tertiary">上下文图片、素材、模型和修改指令都放在页面容器外统一配置。</div>
-      </div>
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-        <div className="flex-1 space-y-4">
-          <div className="bg-gray-50 dark:bg-background-primary rounded-xl border border-gray-200 dark:border-border-primary p-4 space-y-4">
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-foreground-secondary">{t('preview.selectContextImages')}</h4>
-            {currentProject?.template_image_path && (
-              <div className="flex flex-wrap items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="use-template"
-                  checked={selectedContextImages.useTemplate}
-                  onChange={(event) =>
-                    setSelectedContextImages((prev) => ({
-                      ...prev,
-                      useTemplate: event.target.checked,
-                    }))
-                  }
-                  className="w-4 h-4 text-banana-600 rounded focus:ring-banana-500"
-                />
-                <label htmlFor="use-template" className="flex items-center gap-2 cursor-pointer">
-                  <ImageIcon size={16} className="text-gray-500 dark:text-foreground-tertiary" />
-                  <span className="text-sm text-gray-700 dark:text-foreground-secondary">{t('preview.useTemplateImage')}</span>
-                  <img
-                    src={getImageUrl(currentProject.template_image_path, currentProject.updated_at)}
-                    alt="Template"
-                    className="w-16 h-10 object-cover rounded border border-gray-300 dark:border-border-primary"
-                  />
-                </label>
-              </div>
-            )}
+  const descriptionImageOptions = draftDescImageUrls.map((url, index) => ({
+    id: `description-option:${url}`,
+    label: `${t('preview.imagesInDescription')} ${index + 1}`,
+    url,
+    selected: selectedContextImages.descImageUrls.includes(url),
+  }));
 
-            {draftDescImageUrls.length > 0 && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-foreground-secondary">{t('preview.imagesInDescription')}:</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {draftDescImageUrls.map((url, index) => (
-                    <button
-                      key={`${url}-${index}`}
-                      type="button"
-                      className={`relative overflow-hidden rounded-lg border-2 transition-all ${
-                        selectedContextImages.descImageUrls.includes(url)
-                          ? 'border-banana-400 ring-2 ring-banana-200'
-                          : 'border-gray-200 dark:border-border-primary'
-                      }`}
-                      onClick={() => {
-                        setSelectedContextImages((prev) => {
-                          const isSelected = prev.descImageUrls.includes(url);
-                          return {
-                            ...prev,
-                            descImageUrls: isSelected
-                              ? prev.descImageUrls.filter((item) => item !== url)
-                              : [...prev.descImageUrls, url],
-                          };
-                        });
-                      }}
-                    >
-                      <img src={url} alt={`Desc image ${index + 1}`} className="h-20 w-full object-cover" />
-                      {selectedContextImages.descImageUrls.includes(url) && (
-                        <div className="absolute inset-0 bg-banana-500/15 flex items-center justify-center text-white text-xs font-semibold">
-                          <span className="rounded-full bg-banana-500 px-2 py-1">已选中</span>
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+  const handleToggleTemplateReference = () => {
+    setSelectedContextImages((prev) => ({
+      ...prev,
+      useTemplate: !prev.useTemplate,
+    }));
+  };
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-foreground-secondary">{t('preview.uploadImages')}:</label>
-                {projectId && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={<ImagePlus size={16} />}
-                    onClick={() => setIsMaterialSelectorOpen(true)}
-                  >
-                    {t('preview.selectFromMaterials')}
-                  </Button>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {selectedContextImages.uploadedFiles.map((_file, index) => (
-                  <div key={index} className="relative group">
-                    <img
-                      src={uploadedFileUrls.current[index] || ''}
-                      alt={`Uploaded ${index + 1}`}
-                      className="w-20 h-20 object-cover rounded border border-gray-300 dark:border-border-primary"
-                    />
-                    <button
-                      onClick={() => removeUploadedFile(index)}
-                      className="no-min-touch-target absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-                <label className="w-20 h-20 border-2 border-dashed border-gray-300 dark:border-border-primary rounded flex flex-col items-center justify-center cursor-pointer hover:border-banana-500 transition-colors">
-                  <Upload size={20} className="text-gray-400 mb-1" />
-                  <span className="text-xs text-gray-500 dark:text-foreground-tertiary">{t('preview.upload')}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                </label>
-              </div>
-            </div>
-          </div>
+  const handleToggleDescriptionImage = (url: string) => {
+    setSelectedContextImages((prev) => {
+      const isSelected = prev.descImageUrls.includes(url);
+      return {
+        ...prev,
+        descImageUrls: isSelected
+          ? prev.descImageUrls.filter((item) => item !== url)
+          : [...prev.descImageUrls, url],
+      };
+    });
+  };
 
-          <Textarea
-            label={t('preview.editPromptLabel')}
-            placeholder={t('preview.editPromptPlaceholder')}
-            value={editPrompt}
-            onChange={(event) => setEditPrompt(event.target.value)}
-            rows={4}
-          />
-        </div>
+  const handleRemovePageAiReference = (referenceId: string) => {
+    if (activePreviewReferenceId === referenceId) {
+      setActivePreviewReferenceId(null);
+    }
+    if (referenceId === 'template-reference') {
+      setSelectedContextImages((prev) => ({ ...prev, useTemplate: false }));
+      return;
+    }
+    if (referenceId.startsWith('description-reference:')) {
+      const url = referenceId.replace('description-reference:', '');
+      setSelectedContextImages((prev) => ({
+        ...prev,
+        descImageUrls: prev.descImageUrls.filter((item) => item !== url),
+      }));
+      return;
+    }
+    removeUploadedReference(referenceId);
+  };
 
-        <div className="w-full xl:w-[280px] space-y-4">
-          <div className="bg-gray-50 dark:bg-background-primary rounded-xl border border-gray-200 dark:border-border-primary p-4 space-y-2">
-            <label className="block text-sm font-semibold text-gray-700 dark:text-foreground-secondary">
-              {t('preview.editRunImageModelLabel')}
-            </label>
-            <select
-              data-testid="preview-edit-run-image-model"
-              value={editRunImageModel}
-              onChange={(event) => setEditRunImageModel(event.target.value)}
-              className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary text-sm text-gray-900 dark:text-foreground-primary focus:outline-none focus:ring-2 focus:ring-banana-500"
-            >
-              {PROJECT_SUPPORTED_IMAGE_MODELS.map((model) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
-              {t('preview.editRunImageModelHint')}
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const handlePreviewReferenceFocus = useCallback((reference: PageAiReference) => {
+    setActivePreviewReferenceId(reference.id);
+    if (reference.sourceType !== 'region' || !reference.regionBounds || !imageRef.current) {
+      return;
+    }
+    const img = imageRef.current;
+    const rect = img.getBoundingClientRect();
+    setSelectionRect({
+      left: reference.regionBounds.leftRatio * rect.width,
+      top: reference.regionBounds.topRatio * rect.height,
+      width: reference.regionBounds.widthRatio * rect.width,
+      height: reference.regionBounds.heightRatio * rect.height,
+    });
+    setIsRegionSelectionMode(false);
+    setIsSelectingRegion(false);
+    setSelectionStart(null);
+    img.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+  }, []);
+
+  const handlePageAiSend = async () => {
+    if (!currentProject) return;
+    const draftText = editPrompt.trim();
+    if (!draftText && selectedPageAiReferences.length === 0) return;
+
+    const userMessage = createPageAiMessage(
+      'user',
+      draftText || t('preview.pageAiReferenceOnlyFallback'),
+      selectedPageAiReferences.map((reference) => ({ ...reference })),
+    );
+    setPageAiMessages((prev) => [...prev, userMessage]);
+    setIsPageAiSubmitting(true);
+
+    try {
+      await checkResolutionAndExecute(async () => {
+        await executePageImageGeneration({
+          prompt: draftText,
+          contextImages: selectedContextImages,
+          model: editRunImageModel,
+        });
+      });
+      setPageAiMessages((prev) => [
+        ...prev,
+        createPageAiMessage('assistant', t('preview.pageAiResponseFallback')),
+      ]);
+      setEditPrompt('');
+      setEditRunImageModel(projectDefaultImageModel);
+      setActivePreviewReferenceId(null);
+      setSelectedContextImages({
+        useTemplate: false,
+        descImageUrls: [],
+        uploadedReferences: [],
+      });
+    } catch (error: any) {
+      const errorMessage =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        error?.message ||
+        t('preview.generationFailed');
+      setPageAiMessages((prev) => [
+        ...prev,
+        createPageAiMessage('assistant', errorMessage, [], 'error'),
+      ]);
+    } finally {
+      setIsPageAiSubmitting(false);
+    }
+  };
 
   const currentPageDescriptionText = getDescriptionText(selectedPage?.description_content);
   const currentPageExtraFields = getDescriptionExtraFields(selectedPage?.description_content);
@@ -3897,7 +3965,7 @@ export const SlidePreview: React.FC = () => {
                   icon={<FileText size={16} />}
                   className="h-9 rounded-xl"
                   onClick={() => void handleSaveCurrentPage()}
-                  disabled={isAiRefiningDescription}
+                  disabled={isPageAiSubmitting}
                 >
                   仅保存文本
                 </Button>
@@ -3907,8 +3975,8 @@ export const SlidePreview: React.FC = () => {
                   icon={<ImagePlus size={16} />}
                   className="h-9 rounded-xl"
                   data-testid="preview-primary-generate"
-                  onClick={() => void handleOpenGenerateFlow()}
-                  disabled={isAiRefiningDescription || isCheckingCoverEnding}
+                  onClick={() => void handleQuickGenerateImage()}
+                  disabled={isPageAiSubmitting || isCheckingCoverEnding}
                   loading={isCheckingCoverEnding}
                 >
                   {selectedPageHasImage ? '重新生成图片' : '生成图片'}
@@ -3993,104 +4061,90 @@ export const SlidePreview: React.FC = () => {
                       className="min-w-0 overflow-hidden"
                     >
                       <div className="flex h-full flex-col">
-                        {selectedPageHasImage && (
-                          <div className="flex flex-wrap items-center justify-end gap-3 px-4 py-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                              {imageVersions.length > 1 && (
-                                <div className="relative">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setShowVersionMenu((prev) => !prev)}
-                                  >
-                                    {t('preview.historyVersions')} ({imageVersions.length})
-                                  </Button>
-                                  {showVersionMenu && (
-                                    <div className="absolute right-0 top-full mt-2 z-30 max-h-96 w-56 overflow-y-auto rounded-lg border border-gray-200 bg-white py-2 shadow-lg dark:border-border-primary dark:bg-background-secondary">
-                                      {imageVersions.map((version) => (
-                                        <button
-                                          key={version.version_id}
-                                          onClick={() => handleSwitchVersion(version.version_id)}
-                                          className={`w-full px-3 py-2 text-left text-sm transition-colors hover:bg-gray-50 dark:hover:bg-background-hover ${version.is_current ? 'bg-banana-50 dark:bg-background-primary' : ''}`}
-                                        >
-                                          {t('preview.version')} {version.version_number}
-                                          {version.is_current && <span className="ml-2 text-banana-600">({t('preview.current')})</span>}
-                                        </button>
-                                      ))}
+                        <div className="flex-1 overflow-auto px-2 pb-2 pt-1 md:px-3 md:pb-3 md:pt-2">
+                          <div className={`flex h-full min-h-[320px] ${selectedPageHasImage ? 'items-center justify-stretch' : 'items-center justify-center'}`}>
+                            <div className={selectedPageHasImage ? 'h-full w-full' : 'w-full'}>
+                              <div className={`flex ${selectedPageHasImage ? 'h-full flex-col items-center justify-center gap-4' : ''}`}>
+                                <div
+                                  ref={previewContainerRef}
+                                  className={`relative overflow-hidden touch-manipulation ${isFullscreen
+                                    ? 'h-screen w-screen max-h-none max-w-none rounded-none bg-black shadow-none'
+                                    : 'rounded-2xl border border-[#eadfbf] bg-white dark:border-border-primary dark:bg-background-primary'
+                                  }`}
+                                  style={isFullscreen ? undefined : { aspectRatio: aspectRatioStyle, width: '100%' }}
+                                  onMouseDown={selectedPageHasImage ? handleSelectionMouseDown : undefined}
+                                  onMouseMove={selectedPageHasImage ? handleSelectionMouseMove : undefined}
+                                  onMouseUp={selectedPageHasImage ? handleSelectionMouseUp : undefined}
+                                  onMouseLeave={selectedPageHasImage ? handleSelectionMouseUp : undefined}
+                                >
+                                  {selectedPageHasImage ? (
+                                    <>
+                                      <img
+                                        ref={imageRef}
+                                        src={imageUrl}
+                                        alt={`Slide ${selectedIndex + 1}`}
+                                        className={`h-full w-full select-none ${isFullscreen ? 'object-contain' : 'object-contain'}`}
+                                        draggable={false}
+                                        crossOrigin="anonymous"
+                                      />
+                                      <button
+                                        type="button"
+                                        aria-label={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
+                                        title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
+                                        onMouseDown={handleFloatingFullscreenButtonMouseDown}
+                                        onClick={handleFloatingFullscreenButtonClick}
+                                        className={`absolute z-20 inline-flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-800 shadow-[0_10px_28px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.7)] transition-colors hover:border-banana-400 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 ${isDraggingFloatingFullscreenButton ? 'cursor-grabbing' : 'cursor-grab'}`}
+                                        style={{
+                                          left: `${floatingFullscreenButtonPosition.x * 100}%`,
+                                          top: `${floatingFullscreenButtonPosition.y * 100}%`,
+                                        }}
+                                      >
+                                        {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                                      </button>
+                                      {selectionRect && (
+                                        <div
+                                          className="pointer-events-none absolute border-2 border-banana-500 bg-banana-400/10"
+                                          style={{
+                                            left: selectionRect.left,
+                                            top: selectionRect.top,
+                                            width: selectionRect.width,
+                                            height: selectionRect.height,
+                                          }}
+                                        />
+                                      )}
+                                    </>
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#f7f5ef] text-sm text-slate-400 dark:bg-background-secondary dark:text-foreground-tertiary">
+                                      尚未生成图片
                                     </div>
                                   )}
                                 </div>
-                              )}
-                              <Button
-                                variant={isRegionSelectionMode ? 'primary' : 'ghost'}
-                                size="sm"
-                                icon={<Sparkles size={14} />}
-                                onClick={() => {
-                                  setIsRegionSelectionMode((prev) => !prev);
-                                  setSelectionStart(null);
-                                  setSelectionRect(null);
-                                  setIsSelectingRegion(false);
-                                }}
-                              >
-                                {isRegionSelectionMode ? t('preview.endRegionSelect') : t('preview.regionSelect')}
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                        <div className="flex-1 overflow-auto px-2 pb-2 pt-1 md:px-3 md:pb-3 md:pt-2">
-                          <div className={`flex h-full min-h-[320px] ${selectedPageHasImage ? 'items-start justify-stretch' : 'items-center justify-center'}`}>
-                            <div className={selectedPageHasImage ? 'h-full w-full' : 'w-full'}>
-                              <div
-                                ref={previewContainerRef}
-                                className={`relative overflow-hidden touch-manipulation ${isFullscreen
-                                  ? 'h-screen w-screen max-h-none max-w-none rounded-none bg-black shadow-none'
-                                  : 'rounded-2xl border border-[#eadfbf] bg-white dark:border-border-primary dark:bg-background-primary'
-                                }`}
-                                style={isFullscreen ? undefined : { aspectRatio: aspectRatioStyle, width: '100%' }}
-                                onMouseDown={selectedPageHasImage ? handleSelectionMouseDown : undefined}
-                                onMouseMove={selectedPageHasImage ? handleSelectionMouseMove : undefined}
-                                onMouseUp={selectedPageHasImage ? handleSelectionMouseUp : undefined}
-                                onMouseLeave={selectedPageHasImage ? handleSelectionMouseUp : undefined}
-                              >
-                                {selectedPageHasImage ? (
-                                  <>
-                                    <img
-                                      ref={imageRef}
-                                      src={imageUrl}
-                                      alt={`Slide ${selectedIndex + 1}`}
-                                      className={`h-full w-full select-none ${isFullscreen ? 'object-contain' : 'object-contain'}`}
-                                      draggable={false}
-                                      crossOrigin="anonymous"
-                                    />
-                                    <button
-                                      type="button"
-                                      aria-label={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
-                                      title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
-                                      onMouseDown={handleFloatingFullscreenButtonMouseDown}
-                                      onClick={handleFloatingFullscreenButtonClick}
-                                      className={`absolute z-20 inline-flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-800 shadow-[0_10px_28px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.7)] transition-colors hover:border-banana-400 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 ${isDraggingFloatingFullscreenButton ? 'cursor-grabbing' : 'cursor-grab'}`}
-                                      style={{
-                                        left: `${floatingFullscreenButtonPosition.x * 100}%`,
-                                        top: `${floatingFullscreenButtonPosition.y * 100}%`,
-                                      }}
-                                    >
-                                      {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-                                    </button>
-                                    {selectionRect && (
-                                      <div
-                                        className="pointer-events-none absolute border-2 border-banana-500 bg-banana-400/10"
-                                        style={{
-                                          left: selectionRect.left,
-                                          top: selectionRect.top,
-                                          width: selectionRect.width,
-                                          height: selectionRect.height,
-                                        }}
-                                      />
-                                    )}
-                                  </>
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#f7f5ef] text-sm text-slate-400 dark:bg-background-secondary dark:text-foreground-tertiary">
-                                    尚未生成图片
+                                {selectedPageHasImage && imageVersions.length > 1 && !isFullscreen && (
+                                  <div className="flex w-full flex-col items-center gap-2 px-2 pb-1">
+                                    <div className="text-xs font-medium tracking-[0.18em] text-[#9f8b5b] dark:text-foreground-tertiary">
+                                      {t('preview.historyVersions')} ({imageVersions.length})
+                                    </div>
+                                    <div className="flex flex-wrap items-center justify-center gap-2">
+                                      {[...imageVersions]
+                                        .sort((a, b) => a.version_number - b.version_number)
+                                        .map((version, index) => (
+                                          <button
+                                            key={version.version_id}
+                                            type="button"
+                                            onClick={() => handleSwitchVersion(version.version_id)}
+                                            aria-pressed={version.is_current}
+                                            aria-label={`${t('preview.version')} ${index + 1}${version.is_current ? `，${t('preview.current')}` : ''}`}
+                                            title={`${t('preview.version')} ${index + 1}${version.is_current ? ` (${t('preview.current')})` : ''}`}
+                                            className={`inline-flex h-10 w-10 items-center justify-center rounded-full border text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 ${
+                                              version.is_current
+                                                ? 'border-banana-500 bg-banana-500 text-white shadow-[0_10px_24px_rgba(245,181,0,0.28)]'
+                                                : 'border-[#d8caa6] bg-white text-[#6f5f3d] hover:border-banana-400 hover:text-banana-600 dark:border-border-primary dark:bg-background-primary dark:text-foreground-primary'
+                                            }`}
+                                          >
+                                            {index + 1}
+                                          </button>
+                                        ))}
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -4114,19 +4168,63 @@ export const SlidePreview: React.FC = () => {
 
                     <section
                       data-testid="preview-editor-pane"
-                      className="min-h-0 min-w-0 overflow-hidden"
+                      className="min-h-0 min-w-0 overflow-visible"
                     >
-                      <div className="flex h-full flex-col px-3 py-3 md:px-4 md:py-4">
+                      <div className="flex h-full flex-col px-3 pt-3 md:px-4 md:pt-4">
                         <div className="shrink-0">
                           {editorCanvasContent}
                         </div>
                         <div className="mt-3 shrink-0">
                           {externalFieldTags}
                         </div>
-                        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
-                          <div className="space-y-4 pb-2">
-                            {contentAssistControls}
-                            {sharedImageControls}
+                        <div className="mt-2 min-h-0 flex-1 overflow-visible">
+                          <div className="h-full">
+                            <PageAiWorkbench
+                              title={t('preview.pageAiTitle')}
+                              subtitle={t('preview.pageAiSubtitle')}
+                              emptyTitle={t('preview.pageAiEmptyTitle')}
+                              emptyDescription={t('preview.pageAiEmptyDescription')}
+                              inputPlaceholder={t('preview.editPromptPlaceholder')}
+                              inputHint={t('preview.pageAiInputHint')}
+                              sendTooltip={t('preview.pageAiSendTooltip')}
+                              referencesTitle={t('preview.pageAiReferencesTitle')}
+                              referencesEmpty={t('preview.pageAiReferencesEmpty')}
+                              descriptionSourcesTitle={t('preview.pageAiDescriptionSourcesTitle')}
+                              templateLabel={t('preview.pageAiTemplateReference')}
+                              materialLabel={t('preview.pageAiMaterialReference')}
+                              uploadLabel={t('preview.pageAiUploadReference')}
+                              loadingLabel={t('preview.pageAiLoading')}
+                              regionSelectLabel={t('preview.regionSelect')}
+                              regionSelectActiveLabel={t('preview.endRegionSelect')}
+                              modelLabel={t('preview.editRunImageModelLabel')}
+                              modelHint={t('preview.editRunImageModelHint')}
+                              messages={pageAiMessages}
+                              references={selectedPageAiReferences}
+                              descriptionImageOptions={descriptionImageOptions}
+                              hasTemplateReference={selectedContextImages.useTemplate}
+                              templatePreviewUrl={templatePreviewUrl}
+                              activeReferenceId={activePreviewReferenceId}
+                              inputValue={editPrompt}
+                              modelValue={editRunImageModel}
+                              modelOptions={PROJECT_SUPPORTED_IMAGE_MODELS}
+                              isSubmitting={isPageAiSubmitting}
+                              isRegionSelectionActive={isRegionSelectionMode}
+                              onInputChange={setEditPrompt}
+                              onModelChange={setEditRunImageModel}
+                              onSend={() => void handlePageAiSend()}
+                              onToggleRegionSelect={() => {
+                                setIsRegionSelectionMode((prev) => !prev);
+                                setSelectionStart(null);
+                                setSelectionRect(null);
+                                setIsSelectingRegion(false);
+                              }}
+                              onToggleTemplate={handleToggleTemplateReference}
+                              onToggleDescriptionImage={handleToggleDescriptionImage}
+                              onReferenceClick={handlePreviewReferenceFocus}
+                              onRemoveReference={handleRemovePageAiReference}
+                              onOpenMaterialSelector={projectId ? () => setIsMaterialSelectorOpen(true) : undefined}
+                              onUploadFiles={handleFileUpload}
+                            />
                           </div>
                         </div>
                       </div>
@@ -4216,7 +4314,7 @@ export const SlidePreview: React.FC = () => {
         isOpen={isTemplateModalOpen}
         onClose={closeTemplateModal}
         title={t('preview.changeTemplate')}
-        size="full"
+        size="wide"
       >
         <TemplateSelector
           projectId={projectId || null}

@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.use({ baseURL: process.env.BASE_URL || 'http://localhost:3000' });
 
 test.describe('Preview single edit model override', () => {
-  test('uses per-edit model override only for current submit and removes top run override UI', async ({ page }) => {
+  test('uses per-edit model override only for page-ai send and resets after submit', async ({ page }) => {
     const projectId = 'mock-single-edit-model';
     const pageId = 'page-1';
     const projectDefaultModel = 'gemini-3-pro-image-preview';
@@ -139,15 +139,18 @@ test.describe('Preview single edit model override', () => {
     await expect(page.getByTestId('preview-mode-text')).toHaveCount(0);
     await expect(page.getByTestId('preview-mode-image')).toHaveCount(0);
     await expect(page.getByTestId('preview-editor-pane')).toBeVisible();
+    await expect(page.getByTestId('page-ai-workbench')).toBeVisible();
 
     const modelSelect = page.getByTestId('preview-edit-run-image-model');
     await expect(modelSelect).toBeVisible();
     await expect(modelSelect).toHaveValue(projectDefaultModel);
 
     await modelSelect.selectOption(pickedModel);
-    await page.getByTestId('preview-primary-generate').click();
+    await page.getByTestId('page-ai-input').fill('把标题改成更亮的蓝色');
+    await page.getByTestId('page-ai-send').click();
 
     await expect.poll(() => capturedEditPayload).not.toBeNull();
+    expect(capturedEditPayload.edit_instruction).toContain('把标题改成更亮的蓝色');
     expect(capturedEditPayload.generation_override?.image?.model).toBe(pickedModel);
     await expect(modelSelect).toHaveValue(projectDefaultModel);
   });
