@@ -30,6 +30,20 @@ const previewI18n = {
       regenerate: "重新生成", regenerating: "生成中...",
       editMode: "编辑模式", viewMode: "查看模式", page: "第 {{num}} 页",
       projectSettings: "项目设置", changeTemplate: "选择模版", refresh: "刷新",
+      globalAiOpen: "打开 AI 助手",
+      globalAiTitle: "AI 文档助手",
+      globalAiSubtitle: "作为全局工具，统一修改整套页面描述与表达风格",
+      globalAiWelcomeTitle: "让 AI 直接改整套文档",
+      globalAiWelcomeDescription: "你可以用自然语言告诉我如何改写整个项目，例如统一语气、删除冗余页面重点、加强业务结论，或让内容更适合汇报场景。",
+      globalAiSuggestionTone: "把整体改得更像高管汇报，语气更专业，结论更前置",
+      globalAiSuggestionTrim: "删除重复表述，压缩每页文字长度，并突出关键指标",
+      globalAiSuggestionFlow: "重写页面描述，让逻辑更连贯，页与页之间过渡更自然",
+      globalAiPlaceholder: "例如：让全部页面更像董事会汇报，删除第 2 页冗余要点，强调成本收益和落地路径...",
+      globalAiLoading: "正在更新整个项目的页面描述...",
+      globalAiResponseFallback: "已根据你的要求更新整套文档描述，你可以继续追加修改。",
+      globalAiErrorFallback: "修改失败，请稍后重试。",
+      globalAiSubmitTooltip: "发送指令",
+      globalAiInputHint: "Enter 发送，Shift+Enter 换行",
       batchGenerate: "批量生成图片 ({{count}})", generateSelected: "生成选中页面 ({{count}})",
       multiSelect: "多选", cancelMultiSelect: "取消多选", pagesUnit: "页",
       noPages: "还没有页面", noPagesHint: "可直接在本页添加页面，或返回编辑页继续完善内容", backToEdit: "返回编辑",
@@ -123,6 +137,20 @@ const previewI18n = {
       regenerate: "Regenerate", regenerating: "Generating...",
       editMode: "Edit Mode", viewMode: "View Mode", page: "Page {{num}}",
       projectSettings: "Project Settings", changeTemplate: "Select Template", refresh: "Refresh",
+      globalAiOpen: "Open AI Assistant",
+      globalAiTitle: "AI Document Assistant",
+      globalAiSubtitle: "A global tool to refine the full deck's descriptions and narrative style",
+      globalAiWelcomeTitle: "Let AI rewrite the whole deck",
+      globalAiWelcomeDescription: "Use natural language to revise the project globally, such as aligning tone, removing redundant points, strengthening business conclusions, or making the content more presentation-ready.",
+      globalAiSuggestionTone: "Rewrite the deck in a more executive presentation tone with conclusions first",
+      globalAiSuggestionTrim: "Remove repetitive wording, shorten each page, and highlight the key metrics",
+      globalAiSuggestionFlow: "Rewrite the page descriptions so the story flows more naturally from page to page",
+      globalAiPlaceholder: "e.g. Make the whole deck sound more executive, remove redundant points from page 2, and emphasize ROI and delivery path...",
+      globalAiLoading: "Updating descriptions across the whole project...",
+      globalAiResponseFallback: "The deck descriptions have been updated based on your request. You can keep refining.",
+      globalAiErrorFallback: "Update failed. Please try again.",
+      globalAiSubmitTooltip: "Send instruction",
+      globalAiInputHint: "Enter to send, Shift+Enter for newline",
       batchGenerate: "Batch Generate Images ({{count}})", generateSelected: "Generate Selected ({{count}})",
       multiSelect: "Multi-select", cancelMultiSelect: "Cancel Multi-select", pagesUnit: " pages",
       noPages: "No pages yet", noPagesHint: "You can add pages directly here, or go back to editor", backToEdit: "Back to Editor",
@@ -201,7 +229,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
-  ArrowRight,
   ChevronDown,
   X,
   Trash2,
@@ -221,6 +248,8 @@ import {
   FileText,
   Settings2,
   HelpCircle,
+  ArrowUpDown,
+  BookOpen,
 } from 'lucide-react';
 import {
   Button,
@@ -236,6 +265,7 @@ import {
   FilePreviewModal,
   ReferenceFileList,
   CoverEndingInfoModal,
+  GlobalAiAssistantDrawer,
 } from '@/components/shared';
 import { MaterialGeneratorModal } from '@/components/shared/MaterialGeneratorModal';
 import {
@@ -813,11 +843,14 @@ export const SlidePreview: React.FC = () => {
   const [editExtraFields, setEditExtraFields] = useState<Record<string, string>>({});
   const [isAiRefiningDescription, setIsAiRefiningDescription] = useState(false);
   const [showDescriptionRefineInput, setShowDescriptionRefineInput] = useState(false);
+  const [activeExternalField, setActiveExternalField] = useState<string | null>(null);
+  const [isGlobalAiDrawerOpen, setIsGlobalAiDrawerOpen] = useState(false);
   const lastSelectedPageKeyRef = useRef<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showExportTasksPanel, setShowExportTasksPanel] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement | null>(null);
   const exportTasksPanelRef = useRef<HTMLDivElement | null>(null);
+  const externalFieldPopoverRef = useRef<HTMLDivElement | null>(null);
   // 多选导出相关状态
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
@@ -980,12 +1013,15 @@ export const SlidePreview: React.FC = () => {
       if (fileMenuRef.current && !fileMenuRef.current.contains(event.target as Node)) {
         setFileMenuOpen(false);
       }
+      if (externalFieldPopoverRef.current && !externalFieldPopoverRef.current.contains(event.target as Node)) {
+        setActiveExternalField(null);
+      }
     };
-    if (settingsOpen || fileMenuOpen) {
+    if (settingsOpen || fileMenuOpen || activeExternalField) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [settingsOpen, fileMenuOpen]);
+  }, [settingsOpen, fileMenuOpen, activeExternalField]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -1875,17 +1911,19 @@ export const SlidePreview: React.FC = () => {
     try {
       const response = await refineDescriptions(projectId, requirement, previousRequirements);
       await syncProject(projectId);
+      const successMessage = response.data?.message || '页面描述修改成功';
       show({
-        message: response.data?.message || '页面描述修改成功',
+        message: successMessage,
         type: 'success',
       });
+      return successMessage;
     } catch (error: any) {
       const errorMessage =
         error?.response?.data?.error?.message ||
         error?.message ||
         '修改失败，请稍后重试';
       show({ message: errorMessage, type: 'error' });
-      throw error;
+      throw new Error(errorMessage);
     }
   }, [currentProject, projectId, show, syncProject]);
 
@@ -2607,6 +2645,22 @@ export const SlidePreview: React.FC = () => {
     }
   }, [closeTemplateModal, handleStylePresetSelect, handleTemplateSelect, persistAppliedTemplateSelection]);
 
+  const canvasFieldNames = [...new Set([
+    ...extraFieldNames,
+    ...Object.keys(editExtraFields),
+  ])];
+  const draftDescImageUrls = extractImageUrlsFromDescription(editDescription);
+
+  useEffect(() => {
+    if (activeExternalField && !canvasFieldNames.includes(activeExternalField)) {
+      setActiveExternalField(null);
+    }
+  }, [activeExternalField, canvasFieldNames]);
+
+  useEffect(() => {
+    setActiveExternalField(null);
+  }, [selectedIndex]);
+
   if (!currentProject) {
     return <Loading fullscreen message={t('preview.messages.loadingProject')} />;
   }
@@ -2663,87 +2717,161 @@ export const SlidePreview: React.FC = () => {
   const isGenerateDisabled = isMultiSelectMode && selectedPageIds.size === 0;
   const missingImageCount = currentProject.pages.filter(p => !p.generated_image_path).length;
   const selectedPageHasImage = Boolean(selectedPage?.generated_image_path || selectedPage?.preview_image_path);
-  const currentPagePoints = editOutlinePoints
-    .split('\n')
-    .map((point) => point.trim())
-    .filter(Boolean);
-  const canvasFieldNames = [...new Set([
-    ...extraFieldNames,
-    ...Object.keys(editExtraFields),
-  ])];
-  const draftDescImageUrls = extractImageUrlsFromDescription(editDescription);
 
-  const textCanvasContent = (
+  const editorCanvasContent = (
     <div
-      className="bg-[#f7f5ef] dark:bg-background-secondary rounded-[24px] shadow-[0_20px_60px_rgba(15,23,42,0.08)] border border-white/70 dark:border-border-primary p-4 sm:p-6 lg:p-8"
+      className="rounded-[24px] border border-[#eadfbf] bg-[#f7f5ef] p-4 sm:p-5 lg:p-6 dark:border-border-primary dark:bg-background-secondary"
       style={{ aspectRatio: aspectRatioStyle }}
-      data-testid="preview-text-canvas"
+      data-testid="preview-editor-canvas"
     >
-      <div className="h-full grid gap-4 grid-rows-[auto_auto_minmax(0,1fr)_auto]">
-        <div className="rounded-2xl border border-amber-200/70 bg-white/85 dark:bg-background-primary px-5 py-4">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700/80">Title</div>
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">实时预览</span>
-          </div>
-          <div className="min-h-[48px] text-xl font-semibold text-slate-900 dark:text-foreground-primary sm:text-2xl">
-            {editOutlineTitle || t('preview.enterTitle')}
-          </div>
+      <div className="grid h-full min-h-0 gap-4 grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]">
+        <div className="rounded-2xl border border-amber-200/70 bg-white/90 px-5 py-3 dark:border-amber-900/40 dark:bg-background-primary">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700/80">标题</div>
+          <input
+            type="text"
+            value={editOutlineTitle}
+            onChange={(event) => {
+              const value = event.target.value;
+              setEditOutlineTitle(value);
+              persistCurrentPageDraft({ title: value });
+            }}
+            placeholder={t('preview.enterTitle')}
+            data-testid="preview-text-title-input"
+            className="min-h-[48px] w-full bg-transparent text-xl font-semibold text-slate-900 outline-none placeholder:text-slate-300 dark:text-foreground-primary sm:text-2xl"
+          />
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white/85 dark:bg-background-primary px-5 py-4 min-h-[120px]">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 mb-2">{t('preview.pointsPerLine')}</div>
-          <div className="h-full min-h-[68px] overflow-y-auto">
-            {currentPagePoints.length === 0 ? (
-              <div className="text-sm leading-6 text-slate-400 dark:text-foreground-tertiary">
-                {t('preview.enterPointsPerLine')}
-              </div>
-            ) : (
-              <ul className="space-y-2 text-sm leading-6 text-slate-700 dark:text-foreground-secondary">
-                {currentPagePoints.map((point, index) => (
-                  <li key={`${point}-${index}`} className="flex gap-2">
-                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400" />
-                    <span>{point}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+        <div className="min-h-0 rounded-2xl border border-slate-200 bg-white/90 px-5 py-3 dark:border-border-primary dark:bg-background-primary">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{t('preview.pointsPerLine')}</div>
+          <textarea
+            value={editOutlinePoints}
+            onChange={(event) => {
+              const value = event.target.value;
+              setEditOutlinePoints(value);
+              persistCurrentPageDraft({ points: value });
+            }}
+            placeholder={t('preview.enterPointsPerLine')}
+            data-testid="preview-text-points-input"
+            className="min-h-[88px] h-[calc(100%-1.75rem)] w-full resize-none rounded-xl border border-slate-200/80 bg-white/60 px-4 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-300 dark:border-border-primary dark:bg-background-primary/40 dark:text-foreground-secondary"
+          />
         </div>
 
-        <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.38fr)]">
-          <div className="rounded-2xl border border-blue-200/80 bg-white/90 dark:bg-background-primary p-4 min-h-0 flex flex-col">
-            <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-700/80">
-              {t('preview.pageDescription')}
-            </div>
-            <div className="flex-1 overflow-y-auto rounded-xl border border-blue-100 bg-blue-50/40 px-4 py-3 text-sm leading-6 text-slate-700 dark:border-blue-800 dark:bg-background-secondary dark:text-foreground-secondary whitespace-pre-wrap">
-              {editDescription || t('preview.enterDescription')}
-            </div>
+        <div className="min-h-0 rounded-2xl border border-slate-200 bg-white/90 px-5 py-3 dark:border-border-primary dark:bg-background-primary">
+          <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+            {t('preview.pageDescription')}
           </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white/85 dark:bg-background-primary p-4 min-h-0 flex flex-col">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 mb-3">Extra Fields</div>
-            <div className="grid gap-3 min-h-0 overflow-y-auto pr-1">
-              {canvasFieldNames.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400">
-                  暂无额外字段
-                </div>
-              ) : canvasFieldNames.map((fieldName) => (
-                <label key={fieldName} className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                  <div className="text-xs font-medium text-slate-500 mb-1">{fieldName}</div>
-                  <div className="max-h-24 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-slate-700 dark:text-foreground-secondary">
-                    {editExtraFields[fieldName] || '暂无内容'}
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
+          <textarea
+            value={editDescription}
+            onChange={(event) => {
+              const value = event.target.value;
+              setEditDescription(value);
+              persistCurrentPageDraft({ description: value });
+            }}
+            placeholder={t('preview.enterDescription')}
+            readOnly={isAiRefiningDescription}
+            data-testid="preview-text-description-input"
+            className="min-h-[180px] h-[calc(100%-1.75rem)] w-full resize-none rounded-xl border border-slate-200/80 bg-white/60 px-4 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-300 dark:border-border-primary dark:bg-background-primary/40 dark:text-foreground-secondary"
+          />
         </div>
       </div>
     </div>
   );
 
+  const externalFieldTags = (
+    <div className="relative" ref={externalFieldPopoverRef}>
+      {activeExternalField && (
+        <div className="absolute bottom-full left-0 z-30 mb-3 w-[min(420px,100%)] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_22px_48px_rgba(15,23,42,0.18)] ring-1 ring-slate-200/80 dark:border-border-primary dark:bg-background-secondary dark:ring-border-primary">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="text-base font-semibold text-slate-900 dark:text-foreground-primary">{activeExternalField}</div>
+            <button
+              type="button"
+              onClick={() => setActiveExternalField(null)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-700 dark:border-border-primary dark:bg-background-primary dark:text-foreground-tertiary"
+              aria-label="close external field popover"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <textarea
+            value={editExtraFields[activeExternalField] || ''}
+            onChange={(event) => {
+              const value = event.target.value;
+              setEditExtraFields((prev) => {
+                const next = { ...prev, [activeExternalField]: value };
+                persistCurrentPageDraft({ extraFields: next });
+                return next;
+              });
+            }}
+            rows={4}
+            className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-300 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary"
+            placeholder={`输入 ${activeExternalField}`}
+          />
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {canvasFieldNames.length === 0 ? (
+          <span className="rounded-full border border-dashed border-slate-200 px-3 py-1.5 text-xs text-slate-400 dark:border-border-primary dark:text-foreground-tertiary">
+            暂无字段
+          </span>
+        ) : canvasFieldNames.map((fieldName) => (
+          <button
+            key={fieldName}
+            type="button"
+            onClick={() => setActiveExternalField((prev) => prev === fieldName ? null : fieldName)}
+            className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+              activeExternalField === fieldName
+                ? 'border-banana-300 bg-banana-50 text-banana-700 dark:border-banana-500/60 dark:bg-banana-500/10 dark:text-banana'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:bg-background-hover'
+            }`}
+          >
+            {fieldName}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const contentAssistControls = (
+    <div className="rounded-[22px] border border-slate-200 bg-white/95 p-4 dark:border-border-primary dark:bg-background-secondary">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">内容辅助</div>
+          <div className="mt-1 text-sm text-slate-500 dark:text-foreground-tertiary">AI 只作用于当前页的页面描述，不改变页面外控制参数。</div>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Sparkles size={14} />}
+          onClick={() => setShowDescriptionRefineInput((prev) => !prev)}
+        >
+          {t('preview.refineDescription')}
+        </Button>
+      </div>
+      {showDescriptionRefineInput ? (
+        <div className="rounded-xl border border-blue-200 bg-white/90 p-2 dark:border-blue-700 dark:bg-background-secondary">
+          <AiRefineInput
+            title=""
+            placeholder={t('preview.refinePlaceholder')}
+            onSubmit={handleAiRefineDescription}
+            className="!border-0 !bg-transparent !p-0"
+            onStatusChange={setIsAiRefiningDescription}
+          />
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-400 dark:border-border-primary dark:text-foreground-tertiary">
+          点击“{t('preview.refineDescription')}”后，可直接优化右侧 PPT 容器中的页面描述。
+        </div>
+      )}
+    </div>
+  );
+
   const sharedImageControls = (
     <div className="rounded-[24px] border border-gray-200 bg-white/95 dark:bg-background-secondary dark:border-border-primary p-4 md:p-5 shadow-[0_12px_30px_rgba(15,23,42,0.06)] space-y-4">
+      <div>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">生成控制</div>
+        <div className="mt-1 text-sm text-slate-500 dark:text-foreground-tertiary">上下文图片、素材、模型和修改指令都放在页面容器外统一配置。</div>
+      </div>
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
         <div className="flex-1 space-y-4">
           <div className="bg-gray-50 dark:bg-background-primary rounded-xl border border-gray-200 dark:border-border-primary p-4 space-y-4">
@@ -2907,6 +3035,7 @@ export const SlidePreview: React.FC = () => {
     : selectedPageHasImage
       ? '图片已生成'
       : t('preview.notGenerated');
+
   return (
     <div className="h-screen bg-gray-50 dark:bg-background-primary flex flex-col overflow-hidden">
       {/* 顶栏 */}
@@ -2944,6 +3073,15 @@ export const SlidePreview: React.FC = () => {
           <span className="text-sm md:text-lg font-semibold truncate hidden sm:inline">{t('preview.title')}</span>
         </div>
         <div className="flex items-center gap-1 md:gap-3 flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsGlobalAiDrawerOpen(true)}
+            title={t('preview.globalAiOpen')}
+            aria-label={t('preview.globalAiOpen')}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#ecd67c] bg-[#fff5cf] text-[#8a6200] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#ffefb5] focus:outline-none focus:ring-2 focus:ring-banana-500 focus:ring-offset-2 dark:border-banana-700/50 dark:bg-banana-500/10 dark:text-banana"
+          >
+            <Sparkles size={18} />
+          </button>
           <Button
             variant="ghost"
             size="sm"
@@ -3476,24 +3614,286 @@ export const SlidePreview: React.FC = () => {
           )}
         </aside>
 
-        <main className="flex-1 flex flex-col bg-gradient-to-br from-banana-50 dark:from-background-primary via-white dark:via-background-primary to-gray-50 dark:to-background-primary min-w-0 overflow-hidden">
+        <main className="flex-1 flex flex-col bg-[#f6f3ea] dark:bg-background-primary min-w-0 overflow-hidden">
           <div
             data-testid="preview-secondary-toolbar"
-            className="border-b border-gray-200 dark:border-border-primary bg-white/85 dark:bg-background-secondary/90 px-4 py-4 md:px-6"
+            className="border-b border-gray-200 dark:border-border-primary bg-white/85 dark:bg-background-secondary/90 px-4 py-2 md:px-6 md:py-2.5"
           >
             <ReferenceFileList
               projectId={projectId}
               onFileClick={setPreviewFileId}
-              className="mb-3"
+              className="mb-2"
               showToast={show}
             />
             <div className="mx-auto w-full max-w-6xl">
-              <div className="min-w-0 rounded-2xl border border-banana-200/70 bg-white/90 px-4 py-3 shadow-sm dark:border-banana-700/40 dark:bg-background-primary">
-                <AiRefineInput
-                  title=""
-                  placeholder="例如：让描述更详细、删除第2页的某个要点、强调XXX的重要性... · Ctrl+Enter提交"
-                  onSubmit={handleAiRefineDescriptions}
-                  className="!border-0 !bg-transparent !p-0"
+              <div
+                data-testid="preview-editor-toolbar"
+                className="flex min-h-[40px] flex-wrap items-center gap-2 py-1"
+              >
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Sparkles size={16} />}
+                  className="h-9 rounded-xl"
+                  onClick={() => void handleGenerateDescriptions()}
+                >
+                  批量生成描述
+                </Button>
+                <div className="relative" ref={settingsRef}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-9 rounded-xl"
+                    onClick={() => setSettingsOpen((prev) => !prev)}
+                    icon={<Settings2 size={16} />}
+                  >
+                    描述设置
+                  </Button>
+                  {settingsOpen && (
+                    <div className="absolute left-0 top-full mt-2 z-30 w-80 rounded-xl border border-gray-200 bg-white p-4 shadow-lg dark:border-border-primary dark:bg-background-secondary">
+                      <div className="space-y-4">
+                        <div>
+                          <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
+                            生成模式
+                            <span className="relative group">
+                              <HelpCircle size={12} className="cursor-help text-gray-400" />
+                              <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 w-56 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] leading-relaxed text-gray-600 opacity-0 shadow-md transition-opacity group-hover:opacity-100 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
+                                流式：AI 从第一页开始逐页输出，速度慢但效果更好。并行：AI 根据大纲并行生成每页描述，速度快但可能不够细致。
+                              </span>
+                            </span>
+                          </label>
+                          <div className="flex gap-1">
+                            {(['streaming', 'parallel'] as const).map((mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                  generationMode === mode
+                                    ? 'bg-banana-500 text-white'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-background-hover dark:text-foreground-tertiary dark:hover:bg-background-primary'
+                                }`}
+                                onClick={() => {
+                                  setGenerationMode(mode);
+                                  saveSettingsDebounced({ description_generation_mode: mode });
+                                }}
+                              >
+                                {mode === 'streaming' ? '流式' : '并行'}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
+                            额外字段
+                            <span className="relative group">
+                              <HelpCircle size={12} className="cursor-help text-gray-400" />
+                              <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 w-56 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] leading-relaxed text-gray-600 opacity-0 shadow-md transition-opacity group-hover:opacity-100 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
+                                启用后，AI 生成描述时会带上这些字段。点击胶囊启用/禁用，拖拽调整顺序。
+                              </span>
+                            </span>
+                          </label>
+                          <DndContext sensors={fieldSensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd}>
+                            <SortableContext items={availableFields} strategy={rectSortingStrategy}>
+                              <div className="mb-2 flex flex-wrap gap-1.5">
+                                {availableFields.map((name) => {
+                                  const active = extraFieldNames.includes(name);
+                                  return (
+                                    <SortableFieldPill
+                                      key={name}
+                                      name={name}
+                                      active={active}
+                                      removable={!PRESET_EXTRA_FIELDS.has(name)}
+                                      onToggle={() => {
+                                        const next = active
+                                          ? extraFieldNames.filter((field) => field !== name)
+                                          : [...extraFieldNames, name];
+                                        const normalizedNext = next.length > 0 ? next : DEFAULT_EXTRA_FIELDS;
+                                        setExtraFieldNames(normalizedNext);
+                                        saveSettingsDebounced({ description_extra_fields: normalizedNext });
+                                      }}
+                                      inImagePrompt={imagePromptFields.includes(name)}
+                                      imagePromptTooltip={imagePromptFields.includes(name) ? '该字段会影响生成的图片效果，点击可关闭' : '该字段不会影响生成的图片，点击可开启'}
+                                      onToggleImagePrompt={() => {
+                                        const next = imagePromptFields.includes(name)
+                                          ? imagePromptFields.filter((field) => field !== name)
+                                          : [...imagePromptFields, name];
+                                        setImagePromptFields(next);
+                                        saveSettingsDebounced({ image_prompt_extra_fields: next });
+                                      }}
+                                      onRemove={() => {
+                                        const nextPool = availableFields.filter((field) => field !== name);
+                                        setAvailableFields(nextPool);
+                                        localStorage.setItem('banana-available-extra-fields', JSON.stringify(nextPool));
+                                      }}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            </SortableContext>
+                          </DndContext>
+                          <div className="flex gap-1">
+                            <input
+                              type="text"
+                              className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-banana-500/30 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary"
+                              placeholder="添加字段"
+                              value={newFieldName}
+                              onChange={(event) => setNewFieldName(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' && newFieldName.trim()) {
+                                  event.preventDefault();
+                                  const trimmed = newFieldName.trim();
+                                  if (!availableFields.includes(trimmed) && availableFields.length < 10) {
+                                    const nextPool = [...availableFields, trimmed];
+                                    setAvailableFields(nextPool);
+                                    localStorage.setItem('banana-available-extra-fields', JSON.stringify(nextPool));
+                                    const nextActive = [...extraFieldNames, trimmed];
+                                    setExtraFieldNames(nextActive);
+                                    saveSettingsDebounced({ description_extra_fields: nextActive });
+                                    setNewFieldName('');
+                                  }
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-banana-500 disabled:opacity-40 dark:hover:bg-background-hover"
+                              disabled={!newFieldName.trim() || availableFields.includes(newFieldName.trim()) || availableFields.length >= 10}
+                              onClick={() => {
+                                const trimmed = newFieldName.trim();
+                                if (trimmed && !availableFields.includes(trimmed) && availableFields.length < 10) {
+                                  const nextPool = [...availableFields, trimmed];
+                                  setAvailableFields(nextPool);
+                                  localStorage.setItem('banana-available-extra-fields', JSON.stringify(nextPool));
+                                  const nextActive = [...extraFieldNames, trimmed];
+                                  setExtraFieldNames(nextActive);
+                                  saveSettingsDebounced({ description_extra_fields: nextActive });
+                                  setNewFieldName('');
+                                }
+                              }}
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
+                            描述生成要求
+                          </label>
+                          <Textarea
+                            value={descriptionRequirementsDraft}
+                            onChange={(event) => setDescriptionRequirementsDraft(event.target.value)}
+                            rows={3}
+                            placeholder="例如：每页描述控制在100字以内、多使用数据和案例、强调关键指标..."
+                          />
+                          <div className="mt-2 flex justify-end">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => void handleSaveDescriptionRequirements()}
+                              loading={isSavingDescriptionRequirements}
+                            >
+                              保存要求
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="relative" ref={fileMenuRef}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<ArrowUpDown size={16} />}
+                    className="h-9 rounded-xl"
+                    onClick={() => setFileMenuOpen((prev) => !prev)}
+                  >
+                    导入/导出
+                    <ChevronDown size={14} className={`ml-1 transition-transform ${fileMenuOpen ? 'rotate-180' : ''}`} />
+                  </Button>
+                  {fileMenuOpen && (
+                    <div className="absolute left-0 top-full mt-2 z-30 min-w-[170px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg dark:border-border-primary dark:bg-background-secondary">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleExportDescriptions();
+                          setFileMenuOpen(false);
+                        }}
+                        disabled={!currentProject.pages.some((page) => page.description_content)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:text-foreground-tertiary dark:hover:bg-background-hover"
+                      >
+                        <Download size={14} />
+                        导出描述
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleExportFull();
+                          setFileMenuOpen(false);
+                        }}
+                        disabled={!currentProject.pages.some((page) => page.description_content)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:text-foreground-tertiary dark:hover:bg-background-hover"
+                      >
+                        <Download size={14} />
+                        导出大纲+描述
+                      </button>
+                      <div className="border-t border-gray-100 dark:border-border-primary" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          importFileRef.current?.click();
+                          setFileMenuOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:text-foreground-tertiary dark:hover:bg-background-hover"
+                      >
+                        <Upload size={14} />
+                        导入描述
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<BookOpen size={16} />}
+                  className="h-9 rounded-xl"
+                  onClick={() => void handleCoverEndingView()}
+                >
+                  封面/结尾信息
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  data-testid="preview-primary-save"
+                  icon={<FileText size={16} />}
+                  className="h-9 rounded-xl"
+                  onClick={() => void handleSaveCurrentPage()}
+                  disabled={isAiRefiningDescription}
+                >
+                  仅保存文本
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<ImagePlus size={16} />}
+                  className="h-9 rounded-xl"
+                  data-testid="preview-primary-generate"
+                  onClick={() => void handleOpenGenerateFlow()}
+                  disabled={isAiRefiningDescription || isCheckingCoverEnding}
+                  loading={isCheckingCoverEnding}
+                >
+                  {selectedPageHasImage ? '重新生成图片' : '生成图片'}
+                </Button>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept=".md,.txt"
+                  className="hidden"
+                  onChange={handleImportDescriptions}
                 />
               </div>
             </div>
@@ -3528,8 +3928,8 @@ export const SlidePreview: React.FC = () => {
             </div>
           ) : (
             <>
-              <div className="flex-1 min-h-0 overflow-hidden p-4 md:p-6">
-                <div className="mx-auto flex h-full w-full max-w-[1800px] flex-col gap-4">
+              <div className="flex-1 min-h-0 overflow-hidden px-2 py-3 md:px-3 md:py-4">
+                <div className="flex h-full w-full flex-col gap-4">
                   {isRenovationProcessing && (
                     <div className="rounded-2xl border border-banana-200 bg-white/90 px-4 py-4 shadow-sm">
                       <div className="mb-2 flex items-center justify-between">
@@ -3565,37 +3965,37 @@ export const SlidePreview: React.FC = () => {
                   >
                     <section
                       data-testid="preview-visual-pane"
-                      className="min-w-0 overflow-hidden rounded-[28px] border border-gray-200 bg-white/95 shadow-[0_20px_50px_rgba(15,23,42,0.08)] dark:border-border-primary dark:bg-background-secondary"
+                      className="min-w-0 overflow-hidden"
                     >
                       <div className="flex h-full flex-col">
-                        <div className="flex flex-wrap items-center justify-end gap-3 border-b border-gray-200 px-4 py-4 dark:border-border-primary">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {selectedPageHasImage && imageVersions.length > 1 && (
-                              <div className="relative">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setShowVersionMenu((prev) => !prev)}
-                                >
-                                  {t('preview.historyVersions')} ({imageVersions.length})
-                                </Button>
-                                {showVersionMenu && (
-                                  <div className="absolute right-0 top-full mt-2 z-30 max-h-96 w-56 overflow-y-auto rounded-lg border border-gray-200 bg-white py-2 shadow-lg dark:border-border-primary dark:bg-background-secondary">
-                                    {imageVersions.map((version) => (
-                                      <button
-                                        key={version.version_id}
-                                        onClick={() => handleSwitchVersion(version.version_id)}
-                                        className={`w-full px-3 py-2 text-left text-sm transition-colors hover:bg-gray-50 dark:hover:bg-background-hover ${version.is_current ? 'bg-banana-50 dark:bg-background-primary' : ''}`}
-                                      >
-                                        {t('preview.version')} {version.version_number}
-                                        {version.is_current && <span className="ml-2 text-banana-600">({t('preview.current')})</span>}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            {selectedPageHasImage && (
+                        {selectedPageHasImage && (
+                          <div className="flex flex-wrap items-center justify-end gap-3 px-4 py-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {imageVersions.length > 1 && (
+                                <div className="relative">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setShowVersionMenu((prev) => !prev)}
+                                  >
+                                    {t('preview.historyVersions')} ({imageVersions.length})
+                                  </Button>
+                                  {showVersionMenu && (
+                                    <div className="absolute right-0 top-full mt-2 z-30 max-h-96 w-56 overflow-y-auto rounded-lg border border-gray-200 bg-white py-2 shadow-lg dark:border-border-primary dark:bg-background-secondary">
+                                      {imageVersions.map((version) => (
+                                        <button
+                                          key={version.version_id}
+                                          onClick={() => handleSwitchVersion(version.version_id)}
+                                          className={`w-full px-3 py-2 text-left text-sm transition-colors hover:bg-gray-50 dark:hover:bg-background-hover ${version.is_current ? 'bg-banana-50 dark:bg-background-primary' : ''}`}
+                                        >
+                                          {t('preview.version')} {version.version_number}
+                                          {version.is_current && <span className="ml-2 text-banana-600">({t('preview.current')})</span>}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                               <Button
                                 variant={isRegionSelectionMode ? 'primary' : 'ghost'}
                                 size="sm"
@@ -3609,80 +4009,68 @@ export const SlidePreview: React.FC = () => {
                               >
                                 {isRegionSelectionMode ? t('preview.endRegionSelect') : t('preview.regionSelect')}
                               </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              icon={<RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />}
-                              onClick={handleRefresh}
-                              disabled={isRefreshing}
-                            >
-                              {t('preview.refresh')}
-                            </Button>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex-1 overflow-auto p-4 md:p-5">
-                          {selectedPageHasImage ? (
-                            <div className="flex h-full min-h-[320px] items-center justify-center">
-                              <div className={`w-full ${isFullscreen ? 'max-w-none' : 'max-w-5xl'}`}>
-                                <div
-                                  ref={previewContainerRef}
-                                  className={`relative overflow-hidden touch-manipulation ${isFullscreen
-                                    ? 'h-screen w-screen max-h-none max-w-none rounded-none bg-black shadow-none'
-                                    : 'rounded-2xl bg-white shadow-xl dark:bg-background-primary'
-                                  }`}
-                                  style={isFullscreen ? undefined : { aspectRatio: aspectRatioStyle }}
-                                  onMouseDown={handleSelectionMouseDown}
-                                  onMouseMove={handleSelectionMouseMove}
-                                  onMouseUp={handleSelectionMouseUp}
-                                  onMouseLeave={handleSelectionMouseUp}
-                                >
-                                  <img
-                                    ref={imageRef}
-                                    src={imageUrl}
-                                    alt={`Slide ${selectedIndex + 1}`}
-                                    className={`h-full w-full select-none ${isFullscreen ? 'object-contain' : 'object-contain'}`}
-                                    draggable={false}
-                                    crossOrigin="anonymous"
-                                  />
-                                  <button
-                                    type="button"
-                                    aria-label={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
-                                    title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
-                                    onMouseDown={handleFloatingFullscreenButtonMouseDown}
-                                    onClick={handleFloatingFullscreenButtonClick}
-                                    className={`absolute z-20 inline-flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-800 shadow-[0_10px_28px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.7)] transition-colors hover:border-banana-400 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 ${isDraggingFloatingFullscreenButton ? 'cursor-grabbing' : 'cursor-grab'}`}
-                                    style={{
-                                      left: `${floatingFullscreenButtonPosition.x * 100}%`,
-                                      top: `${floatingFullscreenButtonPosition.y * 100}%`,
-                                    }}
-                                  >
-                                    {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-                                  </button>
-                                  {selectionRect && (
-                                    <div
-                                      className="pointer-events-none absolute border-2 border-banana-500 bg-banana-400/10"
-                                      style={{
-                                        left: selectionRect.left,
-                                        top: selectionRect.top,
-                                        width: selectionRect.width,
-                                        height: selectionRect.height,
-                                      }}
+                        )}
+                        <div className="flex-1 overflow-auto px-2 pb-2 pt-1 md:px-3 md:pb-3 md:pt-2">
+                          <div className={`flex h-full min-h-[320px] ${selectedPageHasImage ? 'items-start justify-stretch' : 'items-center justify-center'}`}>
+                            <div className={selectedPageHasImage ? 'h-full w-full' : 'w-full'}>
+                              <div
+                                ref={previewContainerRef}
+                                className={`relative overflow-hidden touch-manipulation ${isFullscreen
+                                  ? 'h-screen w-screen max-h-none max-w-none rounded-none bg-black shadow-none'
+                                  : 'rounded-2xl border border-[#eadfbf] bg-white dark:border-border-primary dark:bg-background-primary'
+                                }`}
+                                style={isFullscreen ? undefined : { aspectRatio: aspectRatioStyle, width: '100%' }}
+                                onMouseDown={selectedPageHasImage ? handleSelectionMouseDown : undefined}
+                                onMouseMove={selectedPageHasImage ? handleSelectionMouseMove : undefined}
+                                onMouseUp={selectedPageHasImage ? handleSelectionMouseUp : undefined}
+                                onMouseLeave={selectedPageHasImage ? handleSelectionMouseUp : undefined}
+                              >
+                                {selectedPageHasImage ? (
+                                  <>
+                                    <img
+                                      ref={imageRef}
+                                      src={imageUrl}
+                                      alt={`Slide ${selectedIndex + 1}`}
+                                      className={`h-full w-full select-none ${isFullscreen ? 'object-contain' : 'object-contain'}`}
+                                      draggable={false}
+                                      crossOrigin="anonymous"
                                     />
-                                  )}
-                                </div>
+                                    <button
+                                      type="button"
+                                      aria-label={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
+                                      title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
+                                      onMouseDown={handleFloatingFullscreenButtonMouseDown}
+                                      onClick={handleFloatingFullscreenButtonClick}
+                                      className={`absolute z-20 inline-flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-800 shadow-[0_10px_28px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.7)] transition-colors hover:border-banana-400 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 ${isDraggingFloatingFullscreenButton ? 'cursor-grabbing' : 'cursor-grab'}`}
+                                      style={{
+                                        left: `${floatingFullscreenButtonPosition.x * 100}%`,
+                                        top: `${floatingFullscreenButtonPosition.y * 100}%`,
+                                      }}
+                                    >
+                                      {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                                    </button>
+                                    {selectionRect && (
+                                      <div
+                                        className="pointer-events-none absolute border-2 border-banana-500 bg-banana-400/10"
+                                        style={{
+                                          left: selectionRect.left,
+                                          top: selectionRect.top,
+                                          width: selectionRect.width,
+                                          height: selectionRect.height,
+                                        }}
+                                      />
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#f7f5ef] text-sm text-slate-400 dark:bg-background-secondary dark:text-foreground-tertiary">
+                                    尚未生成图片
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          ) : (
-                            <div className="relative mx-auto w-full max-w-5xl">
-                              {textCanvasContent}
-                              {isPageGenerating(selectedPage) && (
-                                <div className="pointer-events-none absolute right-4 top-4 rounded-full bg-banana-500 px-3 py-1 text-xs font-medium text-white shadow-sm">
-                                  {t('preview.generating')}
-                                </div>
-                              )}
-                            </div>
-                          )}
+                          </div>
                         </div>
                       </div>
                     </section>
@@ -3695,371 +4083,24 @@ export const SlidePreview: React.FC = () => {
                         className={`group relative cursor-col-resize ${isResizingPreviewSplit ? 'bg-banana-300/70' : 'bg-transparent'}`}
                         onMouseDown={handlePreviewSplitResizeStart}
                       >
-                        <div className="absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 rounded-full bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
+                        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
                       </div>
                     )}
 
                     <section
                       data-testid="preview-editor-pane"
-                      className="min-h-0 min-w-0 overflow-hidden rounded-[28px] border border-gray-200 bg-white/95 shadow-[0_20px_50px_rgba(15,23,42,0.08)] dark:border-border-primary dark:bg-background-secondary"
+                      className="min-h-0 min-w-0 overflow-hidden"
                     >
-                      <div className="flex h-full flex-col">
-                        <div
-                          data-testid="preview-editor-toolbar"
-                          className="border-b border-gray-200 px-4 py-4 dark:border-border-primary"
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              icon={<Sparkles size={16} />}
-                              onClick={() => void handleGenerateDescriptions()}
-                            >
-                              批量生成描述
-                            </Button>
-                            <div className="relative" ref={settingsRef}>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setSettingsOpen((prev) => !prev)}
-                                icon={<Settings2 size={16} />}
-                              >
-                                描述设置
-                              </Button>
-                              {settingsOpen && (
-                                <div className="absolute left-0 top-full mt-2 z-30 w-80 rounded-xl border border-gray-200 bg-white p-4 shadow-lg dark:border-border-primary dark:bg-background-secondary">
-                                  <div className="space-y-4">
-                                    <div>
-                                      <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
-                                        生成模式
-                                        <span className="relative group">
-                                          <HelpCircle size={12} className="cursor-help text-gray-400" />
-                                          <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 w-56 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] leading-relaxed text-gray-600 opacity-0 shadow-md transition-opacity group-hover:opacity-100 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
-                                            流式：AI 从第一页开始逐页输出，速度慢但效果更好。并行：AI 根据大纲并行生成每页描述，速度快但可能不够细致。
-                                          </span>
-                                        </span>
-                                      </label>
-                                      <div className="flex gap-1">
-                                        {(['streaming', 'parallel'] as const).map((mode) => (
-                                          <button
-                                            key={mode}
-                                            type="button"
-                                            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                                              generationMode === mode
-                                                ? 'bg-banana-500 text-white'
-                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-background-hover dark:text-foreground-tertiary dark:hover:bg-background-primary'
-                                            }`}
-                                            onClick={() => {
-                                              setGenerationMode(mode);
-                                              saveSettingsDebounced({ description_generation_mode: mode });
-                                            }}
-                                          >
-                                            {mode === 'streaming' ? '流式' : '并行'}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </div>
-
-                                    <div>
-                                      <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
-                                        额外字段
-                                        <span className="relative group">
-                                          <HelpCircle size={12} className="cursor-help text-gray-400" />
-                                          <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 w-56 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] leading-relaxed text-gray-600 opacity-0 shadow-md transition-opacity group-hover:opacity-100 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
-                                            启用后，AI 生成描述时会带上这些字段。点击胶囊启用/禁用，拖拽调整顺序。
-                                          </span>
-                                        </span>
-                                      </label>
-                                      <DndContext sensors={fieldSensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd}>
-                                        <SortableContext items={availableFields} strategy={rectSortingStrategy}>
-                                          <div className="mb-2 flex flex-wrap gap-1.5">
-                                            {availableFields.map((name) => {
-                                              const active = extraFieldNames.includes(name);
-                                              return (
-                                                <SortableFieldPill
-                                                  key={name}
-                                                  name={name}
-                                                  active={active}
-                                                  removable={!PRESET_EXTRA_FIELDS.has(name)}
-                                                  onToggle={() => {
-                                                    const next = active
-                                                      ? extraFieldNames.filter((field) => field !== name)
-                                                      : [...extraFieldNames, name];
-                                                    const normalizedNext = next.length > 0 ? next : DEFAULT_EXTRA_FIELDS;
-                                                    setExtraFieldNames(normalizedNext);
-                                                    saveSettingsDebounced({ description_extra_fields: normalizedNext });
-                                                  }}
-                                                  inImagePrompt={imagePromptFields.includes(name)}
-                                                  imagePromptTooltip={imagePromptFields.includes(name) ? '该字段会影响生成的图片效果，点击可关闭' : '该字段不会影响生成的图片，点击可开启'}
-                                                  onToggleImagePrompt={() => {
-                                                    const next = imagePromptFields.includes(name)
-                                                      ? imagePromptFields.filter((field) => field !== name)
-                                                      : [...imagePromptFields, name];
-                                                    setImagePromptFields(next);
-                                                    saveSettingsDebounced({ image_prompt_extra_fields: next });
-                                                  }}
-                                                  onRemove={() => {
-                                                    const nextPool = availableFields.filter((field) => field !== name);
-                                                    setAvailableFields(nextPool);
-                                                    localStorage.setItem('banana-available-extra-fields', JSON.stringify(nextPool));
-                                                  }}
-                                                />
-                                              );
-                                            })}
-                                          </div>
-                                        </SortableContext>
-                                      </DndContext>
-                                      <div className="flex gap-1">
-                                        <input
-                                          type="text"
-                                          className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-banana-500/30 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary"
-                                          placeholder="添加字段"
-                                          value={newFieldName}
-                                          onChange={(event) => setNewFieldName(event.target.value)}
-                                          onKeyDown={(event) => {
-                                            if (event.key === 'Enter' && newFieldName.trim()) {
-                                              event.preventDefault();
-                                              const trimmed = newFieldName.trim();
-                                              if (!availableFields.includes(trimmed) && availableFields.length < 10) {
-                                                const nextPool = [...availableFields, trimmed];
-                                                setAvailableFields(nextPool);
-                                                localStorage.setItem('banana-available-extra-fields', JSON.stringify(nextPool));
-                                                const nextActive = [...extraFieldNames, trimmed];
-                                                setExtraFieldNames(nextActive);
-                                                saveSettingsDebounced({ description_extra_fields: nextActive });
-                                                setNewFieldName('');
-                                              }
-                                            }
-                                          }}
-                                        />
-                                        <button
-                                          type="button"
-                                          className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-banana-500 disabled:opacity-40 dark:hover:bg-background-hover"
-                                          disabled={!newFieldName.trim() || availableFields.includes(newFieldName.trim()) || availableFields.length >= 10}
-                                          onClick={() => {
-                                            const trimmed = newFieldName.trim();
-                                            if (trimmed && !availableFields.includes(trimmed) && availableFields.length < 10) {
-                                              const nextPool = [...availableFields, trimmed];
-                                              setAvailableFields(nextPool);
-                                              localStorage.setItem('banana-available-extra-fields', JSON.stringify(nextPool));
-                                              const nextActive = [...extraFieldNames, trimmed];
-                                              setExtraFieldNames(nextActive);
-                                              saveSettingsDebounced({ description_extra_fields: nextActive });
-                                              setNewFieldName('');
-                                            }
-                                          }}
-                                        >
-                                          <Plus size={14} />
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    <div>
-                                      <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
-                                        描述生成要求
-                                      </label>
-                                      <Textarea
-                                        value={descriptionRequirementsDraft}
-                                        onChange={(event) => setDescriptionRequirementsDraft(event.target.value)}
-                                        rows={3}
-                                        placeholder="例如：每页描述控制在100字以内、多使用数据和案例、强调关键指标..."
-                                      />
-                                      <div className="mt-2 flex justify-end">
-                                        <Button
-                                          variant="secondary"
-                                          size="sm"
-                                          onClick={() => void handleSaveDescriptionRequirements()}
-                                          loading={isSavingDescriptionRequirements}
-                                        >
-                                          保存要求
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="relative" ref={fileMenuRef}>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                icon={<FileText size={16} />}
-                                onClick={() => setFileMenuOpen((prev) => !prev)}
-                              >
-                                导入/导出
-                                <ChevronDown size={14} className={`ml-1 transition-transform ${fileMenuOpen ? 'rotate-180' : ''}`} />
-                              </Button>
-                              {fileMenuOpen && (
-                                <div className="absolute left-0 top-full mt-2 z-30 min-w-[170px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg dark:border-border-primary dark:bg-background-secondary">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      handleExportDescriptions();
-                                      setFileMenuOpen(false);
-                                    }}
-                                    disabled={!currentProject.pages.some((page) => page.description_content)}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:text-foreground-tertiary dark:hover:bg-background-hover"
-                                  >
-                                    <Download size={14} />
-                                    导出描述
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      handleExportFull();
-                                      setFileMenuOpen(false);
-                                    }}
-                                    disabled={!currentProject.pages.some((page) => page.description_content)}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:text-foreground-tertiary dark:hover:bg-background-hover"
-                                  >
-                                    <Download size={14} />
-                                    导出大纲+描述
-                                  </button>
-                                  <div className="border-t border-gray-100 dark:border-border-primary" />
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      importFileRef.current?.click();
-                                      setFileMenuOpen(false);
-                                    }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:text-foreground-tertiary dark:hover:bg-background-hover"
-                                  >
-                                    <Upload size={14} />
-                                    导入描述
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              icon={<FileText size={16} />}
-                              onClick={() => void handleCoverEndingView()}
-                            >
-                              封面/结尾信息
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              icon={<ArrowRight size={16} />}
-                              onClick={() => void handleOpenGenerateFlow()}
-                              disabled={isCheckingCoverEnding}
-                              loading={isCheckingCoverEnding}
-                            >
-                              {selectedPageHasImage ? '重新生成图片' : '生成图片'}
-                            </Button>
-                          </div>
-                          <input
-                            ref={importFileRef}
-                            type="file"
-                            accept=".md,.txt"
-                            className="hidden"
-                            onChange={handleImportDescriptions}
-                          />
+                      <div className="flex h-full flex-col px-3 py-3 md:px-4 md:py-4">
+                        <div className="shrink-0">
+                          {editorCanvasContent}
                         </div>
-
-                        <div className="flex-1 overflow-y-auto p-4 md:p-5">
-                          <div className="space-y-4">
-                            <div className="rounded-2xl border border-amber-200/70 bg-white px-4 py-4 shadow-sm dark:border-amber-900/40 dark:bg-background-primary">
-                              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-amber-700/80">标题</div>
-                              <input
-                                type="text"
-                                value={editOutlineTitle}
-                                onChange={(event) => {
-                                  const value = event.target.value;
-                                  setEditOutlineTitle(value);
-                                  persistCurrentPageDraft({ title: value });
-                                }}
-                                placeholder={t('preview.enterTitle')}
-                                data-testid="preview-text-title-input"
-                                className="w-full bg-transparent text-lg font-semibold text-slate-900 outline-none dark:text-foreground-primary"
-                              />
-                            </div>
-
-                            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-border-primary dark:bg-background-primary">
-                              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('preview.pointsPerLine')}</div>
-                              <textarea
-                                value={editOutlinePoints}
-                                onChange={(event) => {
-                                  const value = event.target.value;
-                                  setEditOutlinePoints(value);
-                                  persistCurrentPageDraft({ points: value });
-                                }}
-                                placeholder={t('preview.enterPointsPerLine')}
-                                data-testid="preview-text-points-input"
-                                className="min-h-[140px] max-h-[260px] w-full resize-y rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm leading-6 text-slate-700 outline-none dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary"
-                              />
-                            </div>
-
-                            <div className="rounded-2xl border border-blue-200/80 bg-white px-4 py-4 shadow-sm dark:border-blue-900/40 dark:bg-background-primary">
-                              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700/80">
-                                  {t('preview.pageDescription')}
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  icon={<Sparkles size={14} />}
-                                  onClick={() => setShowDescriptionRefineInput((prev) => !prev)}
-                                >
-                                  {t('preview.refineDescription')}
-                                </Button>
-                              </div>
-                              {showDescriptionRefineInput && (
-                                <div className="mb-3 rounded-xl border border-blue-200 bg-white/90 p-2 dark:border-blue-700 dark:bg-background-secondary">
-                                  <AiRefineInput
-                                    title=""
-                                    placeholder={t('preview.refinePlaceholder')}
-                                    onSubmit={handleAiRefineDescription}
-                                    className="!border-0 !bg-transparent !p-0"
-                                    onStatusChange={setIsAiRefiningDescription}
-                                  />
-                                </div>
-                              )}
-                              <textarea
-                                value={editDescription}
-                                onChange={(event) => {
-                                  const value = event.target.value;
-                                  setEditDescription(value);
-                                  persistCurrentPageDraft({ description: value });
-                                }}
-                                placeholder={t('preview.enterDescription')}
-                                readOnly={isAiRefiningDescription}
-                                data-testid="preview-text-description-input"
-                                className="min-h-[220px] max-h-[420px] w-full resize-y rounded-xl border border-blue-100 bg-blue-50/40 px-4 py-3 text-sm leading-6 text-slate-700 outline-none dark:border-blue-800 dark:bg-background-secondary dark:text-foreground-secondary"
-                              />
-                            </div>
-
-                            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-border-primary dark:bg-background-primary">
-                              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">额外字段</div>
-                              <div className="space-y-3">
-                                {canvasFieldNames.length === 0 ? (
-                                  <div className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400">
-                                    暂无额外字段
-                                  </div>
-                                ) : canvasFieldNames.map((fieldName) => (
-                                  <label key={fieldName} className="block rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3 dark:border-border-primary dark:bg-background-secondary">
-                                    <div className="mb-2 text-xs font-medium text-slate-500">{fieldName}</div>
-                                    <textarea
-                                      value={editExtraFields[fieldName] || ''}
-                                      onChange={(event) => {
-                                        const value = event.target.value;
-                                        setEditExtraFields((prev) => {
-                                          const next = { ...prev, [fieldName]: value };
-                                          persistCurrentPageDraft({ extraFields: next });
-                                          return next;
-                                        });
-                                      }}
-                                      rows={3}
-                                      className="max-h-36 w-full resize-y bg-transparent text-sm leading-6 text-slate-700 outline-none dark:text-foreground-secondary"
-                                    />
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-
+                        <div className="mt-3 shrink-0">
+                          {externalFieldTags}
+                        </div>
+                        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
+                          <div className="space-y-4 pb-2">
+                            {contentAssistControls}
                             {sharedImageControls}
                           </div>
                         </div>
@@ -4104,25 +4145,6 @@ export const SlidePreview: React.FC = () => {
                     >
                       {t('preview.nextPage')}
                     </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      data-testid="preview-primary-save"
-                      onClick={() => void handleSaveCurrentPage()}
-                      disabled={isAiRefiningDescription}
-                    >
-                      仅保存文本
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      data-testid="preview-primary-generate"
-                      onClick={() => void handleOpenGenerateFlow()}
-                      disabled={isAiRefiningDescription || isCheckingCoverEnding}
-                      loading={isCheckingCoverEnding}
-                    >
-                      {selectedPageHasImage ? '重新生成图片' : '生成图片'}
-                    </Button>
                   </div>
                 </div>
               </div>
@@ -4132,6 +4154,26 @@ export const SlidePreview: React.FC = () => {
       </div>
       <ToastContainer />
       {ConfirmDialog}
+      <GlobalAiAssistantDrawer
+        isOpen={isGlobalAiDrawerOpen}
+        onClose={() => setIsGlobalAiDrawerOpen(false)}
+        title={t('preview.globalAiTitle')}
+        subtitle={t('preview.globalAiSubtitle')}
+        welcomeTitle={t('preview.globalAiWelcomeTitle')}
+        welcomeDescription={t('preview.globalAiWelcomeDescription')}
+        suggestions={[
+          t('preview.globalAiSuggestionTone'),
+          t('preview.globalAiSuggestionTrim'),
+          t('preview.globalAiSuggestionFlow'),
+        ]}
+        placeholder={t('preview.globalAiPlaceholder')}
+        loadingLabel={t('preview.globalAiLoading')}
+        responseFallback={t('preview.globalAiResponseFallback')}
+        errorFallback={t('preview.globalAiErrorFallback')}
+        submitTooltip={t('preview.globalAiSubmitTooltip')}
+        inputHint={t('preview.globalAiInputHint')}
+        onSubmit={handleAiRefineDescriptions}
+      />
       <CoverEndingInfoModal
         isOpen={isCoverEndingModalOpen}
         detectFields={detectFields}

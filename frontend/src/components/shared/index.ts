@@ -21,6 +21,7 @@ export { GithubBadge } from './GithubBadge';
 export { GithubRepoCard } from './GithubRepoCard';
 export { Markdown } from './Markdown';
 export { AiRefineInput } from './AiRefineInput';
+export { GlobalAiAssistantDrawer } from './GlobalAiAssistantDrawer';
 export { ShimmerOverlay } from './ShimmerOverlay';
 export { ImagePreviewList } from './ImagePreviewList';
 export { ProjectResourcesList } from './ProjectResourcesList';
