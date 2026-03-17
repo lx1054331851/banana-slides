@@ -5,9 +5,13 @@
 :root {
   /* 主色 - 黄色系 */
   --banana-yellow: #FFD700;
+  --banana-yellow-rgb: 255 215 0;
   --banana-yellow-light: #FFE44D;
+  --banana-yellow-light-rgb: 255 228 77;
   --banana-yellow-dark: #FFC700;
+  --banana-yellow-dark-rgb: 255 199 0;
   --banana-yellow-pale: #FFF9E6;
+  --banana-yellow-pale-rgb: 255 249 230;
 
   /* 中性色 - 黑白灰 */
   --black: #1A1A1A;
@@ -18,9 +22,13 @@
 
   /* 功能色 */
   --success: #52C41A;
+  --success-rgb: 82 196 26;
   --warning: #FAAD14;
+  --warning-rgb: 250 173 20;
   --error: #FF4D4F;
+  --error-rgb: 255 77 79;
   --info: #1890FF;
+  --info-rgb: 24 144 255;
 
   /* 过渡 */
   --transition-fast: 150ms ease-in-out;
@@ -29,28 +37,43 @@
 
   /* 背景色 */
   --bg-primary: #FFFFFF;
+  --bg-primary-rgb: 255 255 255;
   --bg-secondary: #F5F5F5;
+  --bg-secondary-rgb: 245 245 245;
   --bg-tertiary: #FAFAFA;
+  --bg-tertiary-rgb: 250 250 250;
   --bg-elevated: #FFFFFF;
+  --bg-elevated-rgb: 255 255 255;
   --bg-hover: #F5F5F5;
+  --bg-hover-rgb: 245 245 245;
 
   /* 文字色 */
   --text-primary: #1A1A1A;
+  --text-primary-rgb: 26 26 26;
   --text-secondary: #4A4A4A;
+  --text-secondary-rgb: 74 74 74;
   --text-tertiary: #757575;
+  --text-tertiary-rgb: 117 117 117;
 
   /* 边框色 */
   --border-primary: #E5E5E5;
+  --border-primary-rgb: 229 229 229;
   --border-secondary: #F0F0F0;
+  --border-secondary-rgb: 240 240 240;
   --border-hover: #D4D4D4;
+  --border-hover-rgb: 212 212 212;
 }
 
 .dark {
   /* 主色 - 黄色系（深色模式下稍微调亮） */
   --banana-yellow: #F5A623;
+  --banana-yellow-rgb: 245 166 35;
   --banana-yellow-light: #FFD700;
+  --banana-yellow-light-rgb: 255 215 0;
   --banana-yellow-dark: #E6930E;
+  --banana-yellow-dark-rgb: 230 147 14;
   --banana-yellow-pale: #2A2520;
+  --banana-yellow-pale-rgb: 42 37 32;
 
   /* 中性色 - 深色模式 */
   --black: #F5F5F5;
@@ -61,20 +84,31 @@
 
   /* 背景色 */
   --bg-primary: #13131A;
+  --bg-primary-rgb: 19 19 26;
   --bg-secondary: #1E1E24;
+  --bg-secondary-rgb: 30 30 36;
   --bg-tertiary: #17171E;
+  --bg-tertiary-rgb: 23 23 30;
   --bg-elevated: #252530;
+  --bg-elevated-rgb: 37 37 48;
   --bg-hover: #2E2E38;
+  --bg-hover-rgb: 46 46 56;
 
   /* 文字色 */
   --text-primary: #FFFFFF;
+  --text-primary-rgb: 255 255 255;
   --text-secondary: #B0B0B0;
+  --text-secondary-rgb: 176 176 176;
   --text-tertiary: #6E6E6E;
+  --text-tertiary-rgb: 110 110 110;
 
   /* 边框色 */
   --border-primary: #2E2E38;
+  --border-primary-rgb: 46 46 56;
   --border-secondary: #252530;
+  --border-secondary-rgb: 37 37 48;
   --border-hover: #3E3E48;
+  --border-hover-rgb: 62 62 72;
 }
 
 * {
@@ -169,4 +203,3 @@ body {
 .markdown-content {
   line-height: 1.6;
 }
-

@@ -253,6 +253,20 @@ test.describe('Preview four-region layout and sidebar interactions', () => {
 
     await setupCommonRoutes(page)
     await setupProjectRoutes(page, state)
+    await page.route('**/api/settings', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            image_resolution: '2K',
+            ai_provider_format: 'gemini',
+            description_generation_mode: 'parallel',
+          },
+        }),
+      })
+    })
 
     await page.route(`**/api/projects/${projectId}/generate/descriptions`, async (route) => {
       if (route.request().url().includes('/stream')) {
@@ -280,11 +294,6 @@ test.describe('Preview four-region layout and sidebar interactions', () => {
     })
 
     await page.goto(`/project/${projectId}/preview`)
-    await page.evaluate(() => {
-      sessionStorage.setItem('banana-settings', JSON.stringify({
-        description_generation_mode: 'parallel',
-      }))
-    })
     const generateDescBtn = page.getByTestId('preview-batch-generate-descriptions')
     await generateDescBtn.click()
 
@@ -292,6 +301,79 @@ test.describe('Preview four-region layout and sidebar interactions', () => {
     const progress = page.getByTestId('preview-description-progress')
     await expect(progress).toBeVisible()
     await expect(progress).toContainText(/正在生成描述\s+(0|1)\/3/)
+  })
+
+  test('preview batch generate descriptions supports missing-only vs regenerate-all', async ({ page }) => {
+    const projectId = 'mock-preview-description-scope'
+    const state: MockProjectState = {
+      projectId,
+      addPageCalls: [],
+      project: {
+        id: projectId,
+        project_id: projectId,
+        status: 'OUTLINE_GENERATED',
+        creation_type: 'idea',
+        pages: [
+          { ...makePage(0), generated_image_path: null, preview_image_path: null },
+          { ...makePage(1), description_content: null, generated_image_path: null, preview_image_path: null, status: 'DRAFT' },
+          { ...makePage(2), generated_image_path: null, preview_image_path: null },
+        ],
+      },
+    }
+
+    let receivedPageIds: string[] | null = null
+
+    await setupCommonRoutes(page)
+    await setupProjectRoutes(page, state)
+    await page.route('**/api/settings', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            image_resolution: '2K',
+            ai_provider_format: 'gemini',
+            description_generation_mode: 'parallel',
+          },
+        }),
+      })
+    })
+    await page.route(`**/api/projects/${projectId}/generate/descriptions`, async (route) => {
+      if (route.request().url().includes('/stream')) {
+        return route.continue()
+      }
+      const body = route.request().postDataJSON() as any
+      receivedPageIds = body?.page_ids || null
+      await route.fulfill({
+        status: 202,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: { task_id: 'mock-desc-scope-task', status: 'PROCESSING', total_pages: 1 },
+        }),
+      })
+    })
+    await page.route(`**/api/projects/${projectId}/tasks/mock-desc-scope-task`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: { status: 'PROCESSING', progress: { total: 1, completed: 0 } },
+        }),
+      })
+    })
+
+    await page.goto(`/project/${projectId}/preview`)
+    await page.getByTestId('preview-batch-generate-descriptions').click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toContainText('仅生成未生成描述的 1 页')
+    await expect(dialog).toContainText('重新生成全部 3 页描述')
+
+    await page.getByRole('button', { name: '仅生成未生成描述的 1 页' }).click()
+    await expect.poll(() => receivedPageIds).toEqual(['page-2'])
   })
 
   test('preview supports list+grid insert, split resize, and no edge-drag resize conflict', async ({ page }) => {
@@ -388,16 +470,27 @@ test.describe('Preview four-region layout and sidebar interactions', () => {
 
     // Scroll behavior should still work near right edge, and should not trigger width resize
     await page.locator('aside button[aria-label="列表"]').click()
-    const scrollContainer = page.locator('aside div.flex-1.overflow-y-auto').first()
-    await scrollContainer.hover()
-    await page.mouse.wheel(0, 900)
-    const scrollTopAfterWheel = await scrollContainer.evaluate((el) => el.scrollTop)
+    const scrollContainerBox = await aside.evaluate((el) => {
+      const candidates = [el as HTMLElement, ...Array.from(el.querySelectorAll<HTMLElement>('div'))]
+      const target = candidates.find((node) => node.scrollHeight > node.clientHeight + 20)
+      if (!target) return null
+      const rect = target.getBoundingClientRect()
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+    })
+    expect(scrollContainerBox).not.toBeNull()
+    if (!scrollContainerBox) return
+
+    const scrollTopAfterWheel = await aside.evaluate((el) => {
+      const candidates = [el as HTMLElement, ...Array.from(el.querySelectorAll<HTMLElement>('div'))]
+      const target = candidates.find((node) => node.scrollHeight > node.clientHeight + 20)
+      if (!target) return 0
+      target.scrollTop = 900
+      return target.scrollTop
+    })
     expect(scrollTopAfterWheel).toBeGreaterThan(0)
 
     const widthBeforeEdgeDrag = await aside.evaluate((el) => el.getBoundingClientRect().width)
-    const scrollerBox = await scrollContainer.boundingBox()
-    expect(scrollerBox).not.toBeNull()
-    if (!scrollerBox) return
+    const scrollerBox = scrollContainerBox
 
     await page.mouse.move(scrollerBox.x + scrollerBox.width - 2, scrollerBox.y + 60)
     await page.mouse.down()

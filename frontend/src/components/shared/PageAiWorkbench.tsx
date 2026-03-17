@@ -129,12 +129,12 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   return (
     <section
       data-testid="page-ai-workbench"
-      className="h-full rounded-[28px] border border-[#eadfba] bg-[linear-gradient(180deg,#fbf7ec_0%,#fffdf7_12%,#fff_100%)] shadow-[0_20px_48px_rgba(15,23,42,0.08)]"
+      className="h-full rounded-[28px] border border-slate-200 bg-white dark:border-border-primary dark:bg-[linear-gradient(180deg,rgba(30,30,36,0.96)_0%,rgba(23,23,30,0.98)_100%)]"
     >
       <div className="flex h-full flex-col px-5 pt-4 pb-2">
-        <div className="flex min-h-0 flex-1 flex-col overflow-visible rounded-[24px]">
+        <div className="flex min-h-0 flex-1 flex-col overflow-visible rounded-[24px] bg-white dark:bg-transparent">
           {references.length > 0 && (
-            <div className="border-b border-slate-100 px-4 py-2">
+            <div className="border-b border-slate-100 px-4 py-2 dark:border-border-primary">
               <div className="flex items-center gap-2 overflow-x-auto pb-1">
                 {references.map((reference) => (
                   <div
@@ -146,8 +146,10 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                       type="button"
                       onClick={() => onReferenceClick(reference)}
                       className={cn(
-                        'relative overflow-hidden rounded-2xl border bg-slate-50 transition-all hover:border-banana-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300',
-                        activeReferenceId === reference.id ? 'border-banana-400 ring-2 ring-banana-200' : 'border-slate-200'
+                        'relative overflow-hidden rounded-2xl border bg-slate-50 transition-all hover:border-banana-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 dark:bg-background-primary dark:hover:border-banana-500/60',
+                        activeReferenceId === reference.id
+                          ? 'border-banana-400 ring-2 ring-banana-200 dark:ring-banana-500/20'
+                          : 'border-slate-200 dark:border-border-primary'
                       )}
                     >
                       {reference.previewUrl ? (
@@ -157,7 +159,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                           className="h-12 w-12 object-cover"
                         />
                       ) : (
-                        <div className="flex h-12 w-12 items-center justify-center text-slate-500">
+                        <div className="flex h-12 w-12 items-center justify-center text-slate-500 dark:text-foreground-tertiary">
                           <ImageIcon size={18} />
                         </div>
                       )}
@@ -173,7 +175,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                     <button
                       type="button"
                       onClick={() => onRemoveReference(reference.id)}
-                      className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-red-500 shadow-sm ring-1 ring-red-200 opacity-0 transition-all group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-red-50 hover:text-red-600"
+                      className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-red-500 shadow-sm ring-1 ring-red-200 opacity-0 transition-all group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-red-50 hover:text-red-600 dark:bg-background-secondary dark:ring-red-900/50 dark:hover:bg-red-950/20"
                       aria-label={`remove ${reference.label}`}
                       title="移除引用"
                     >
@@ -191,11 +193,11 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
             onKeyDown={handleTextareaKeyDown}
             placeholder={inputPlaceholder}
             rows={4}
-            className="min-h-[128px] w-full flex-1 resize-none bg-transparent px-4 py-4 text-sm leading-6 text-slate-800 outline-none placeholder:text-slate-400"
+            className="mx-4 mt-1 min-h-[128px] min-w-0 flex-1 appearance-none self-stretch resize-none bg-transparent px-0 py-0 text-sm leading-6 text-slate-700 outline-none placeholder:text-[#a79b81] focus:ring-0 dark:text-[#e2e8f0] dark:placeholder:text-[#66708c]"
             disabled={isSubmitting}
             data-testid="page-ai-input"
           />
-          <div className="border-t border-slate-100 px-4 pt-2 pb-1">
+          <div className="border-t border-slate-100 px-4 pt-2 pb-1 dark:border-border-primary">
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -203,8 +205,8 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                 className={cn(
                   'inline-flex h-11 w-11 items-center justify-center rounded-2xl border shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300',
                   isRegionSelectionActive
-                    ? 'border-banana-300 bg-[#fff7d9] text-slate-900 shadow-[0_12px_24px_rgba(250,204,21,0.12)]'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-[#e6ca67] hover:bg-[#fffdf2]',
+                    ? 'border-banana-300 bg-[#fff7d9] text-slate-900 shadow-[0_12px_24px_rgba(250,204,21,0.12)] dark:border-banana-500/60 dark:bg-banana-500/10 dark:text-banana'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-[#e6ca67] hover:bg-[#fffdf2] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/40 dark:hover:bg-background-hover',
                 )}
                 data-testid="page-ai-region-select"
                 title={isRegionSelectionActive ? `${regionSelectActiveLabel}：拖拽画面选区` : regionSelectLabel}
@@ -216,7 +218,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-[#e6ca67] hover:bg-[#fffdf2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-[#e6ca67] hover:bg-[#fffdf2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/40 dark:hover:bg-background-hover"
                 title={uploadLabel}
                 aria-label={uploadLabel}
               >
@@ -227,7 +229,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                 <button
                   type="button"
                   onClick={onOpenMaterialSelector}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-[#e6ca67] hover:bg-[#fffdf2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-[#e6ca67] hover:bg-[#fffdf2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/40 dark:hover:bg-background-hover"
                   title={materialLabel}
                   aria-label={materialLabel}
                 >
@@ -242,8 +244,8 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                   className={cn(
                     'inline-flex h-11 w-11 items-center justify-center rounded-2xl border shadow-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300',
                     hasTemplateReference
-                      ? 'border-banana-300 bg-[#fff7d9] text-slate-900 shadow-[0_12px_24px_rgba(250,204,21,0.12)]'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-[#e6ca67] hover:bg-[#fffdf2]',
+                      ? 'border-banana-300 bg-[#fff7d9] text-slate-900 shadow-[0_12px_24px_rgba(250,204,21,0.12)] dark:border-banana-500/60 dark:bg-banana-500/10 dark:text-banana'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-[#e6ca67] hover:bg-[#fffdf2] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/40 dark:hover:bg-background-hover',
                   )}
                   title={templateLabel}
                   aria-label={templateLabel}
@@ -258,8 +260,8 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                     type="button"
                     onClick={() => setShowDescriptionPicker((prev) => !prev)}
                     className={cn(
-                      'inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-[#e6ca67] hover:bg-[#fffdf2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300',
-                      showDescriptionPicker && 'border-banana-300 bg-[#fff7d9] text-slate-900',
+                      'inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-[#e6ca67] hover:bg-[#fffdf2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/40 dark:hover:bg-background-hover',
+                      showDescriptionPicker && 'border-banana-300 bg-[#fff7d9] text-slate-900 dark:border-banana-500/60 dark:bg-banana-500/10 dark:text-banana',
                     )}
                     title={descriptionSourcesTitle}
                     aria-label={descriptionSourcesTitle}
@@ -267,8 +269,8 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                     <ImageIcon size={18} />
                   </button>
                   {showDescriptionPicker && (
-                    <div className="absolute bottom-full left-0 z-40 mb-2 w-64 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
-                      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                    <div className="absolute bottom-full left-0 z-40 mb-2 w-64 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_40px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated dark:shadow-[0_18px_40px_rgba(0,0,0,0.36)]">
+                      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-foreground-tertiary">
                         <Info size={12} />
                         {descriptionSourcesTitle}
                       </div>
@@ -279,13 +281,15 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                             type="button"
                             onClick={() => onToggleDescriptionImage(option.url)}
                             className={cn(
-                              'relative overflow-hidden rounded-2xl border-2 bg-slate-50 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300',
-                              option.selected ? 'border-banana-400 ring-2 ring-banana-200' : 'border-slate-200 hover:border-[#e6ca67]',
+                              'relative overflow-hidden rounded-2xl border-2 bg-slate-50 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 dark:bg-background-primary',
+                              option.selected
+                                ? 'border-banana-400 ring-2 ring-banana-200 dark:ring-banana-500/20'
+                                : 'border-slate-200 hover:border-[#e6ca67] dark:border-border-primary dark:hover:border-banana-500/40',
                             )}
                             title={option.label}
                           >
                             <img src={option.url} alt={option.label} className="h-20 w-full object-cover" />
-                            <div className="px-2 py-2 text-xs font-medium text-slate-600">{option.label}</div>
+                            <div className="px-2 py-2 text-xs font-medium text-slate-600 dark:text-foreground-secondary">{option.label}</div>
                           </button>
                         ))}
                       </div>
@@ -299,8 +303,8 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                   type="button"
                   onClick={() => setShowModelPicker((prev) => !prev)}
                   className={cn(
-                    'inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-[#e6ca67] hover:bg-[#fffdf2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300',
-                    showModelPicker && 'border-banana-300 bg-[#fff7d9] text-slate-900',
+                    'inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-[#e6ca67] hover:bg-[#fffdf2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/40 dark:hover:bg-background-hover',
+                    showModelPicker && 'border-banana-300 bg-[#fff7d9] text-slate-900 dark:border-banana-500/60 dark:bg-banana-500/10 dark:text-banana',
                   )}
                   title={`${modelLabel}：${modelValue}`}
                   aria-label={modelLabel}
@@ -308,7 +312,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                   <Settings2 size={18} />
                 </button>
                 {showModelPicker && (
-                  <div className="absolute bottom-full right-0 z-50 mb-2 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+                  <div className="absolute bottom-full right-0 z-50 mb-2 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated dark:shadow-[0_18px_40px_rgba(0,0,0,0.36)]">
                     <div className="max-h-64 overflow-y-auto">
                       {modelOptions.map((model) => {
                         const selected = model === modelValue;
@@ -323,8 +327,8 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                             className={cn(
                               'flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors',
                               selected
-                                ? 'bg-[#fff7d9] text-slate-900'
-                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                ? 'bg-[#fff7d9] text-slate-900 dark:bg-banana-500/10 dark:text-banana'
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-foreground-secondary dark:hover:bg-background-hover dark:hover:text-foreground-primary'
                             )}
                             title={model}
                           >
@@ -339,7 +343,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
               </div>
 
               <div className="ml-auto flex items-center gap-2">
-                <div className="hidden text-xs text-slate-400 md:block">{inputHint}</div>
+                <div className="hidden text-xs text-slate-500 md:block dark:text-foreground-tertiary">{inputHint}</div>
                 <button
                   type="button"
                   onClick={onSend}
@@ -347,8 +351,8 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                   title={sendTooltip}
                   className={`inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl transition-all ${
                     canSend
-                      ? 'bg-slate-900 text-[#facc15] hover:-translate-y-0.5'
-                      : 'bg-slate-100 text-slate-300'
+                      ? 'bg-banana-500 text-black shadow-yellow hover:-translate-y-0.5 dark:bg-banana-500 dark:text-black'
+                      : 'bg-slate-100 text-slate-300 dark:bg-background-hover dark:text-foreground-tertiary'
                   }`}
                   data-testid="page-ai-send"
                 >

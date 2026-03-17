@@ -10,10 +10,10 @@ export default {
       colors: {
         // 品牌色 - 使用 CSS 变量
         'banana': {
-          DEFAULT: 'var(--banana-yellow)',
-          light: 'var(--banana-yellow-light)',
-          dark: 'var(--banana-yellow-dark)',
-          pale: 'var(--banana-yellow-pale)',
+          DEFAULT: 'rgb(var(--banana-yellow-rgb) / <alpha-value>)',
+          light: 'rgb(var(--banana-yellow-light-rgb) / <alpha-value>)',
+          dark: 'rgb(var(--banana-yellow-dark-rgb) / <alpha-value>)',
+          pale: 'rgb(var(--banana-yellow-pale-rgb) / <alpha-value>)',
           // 保留静态色用于渐变等特殊场景
           50: '#FFF9E6',
           100: '#FFE44D',
@@ -25,31 +25,31 @@ export default {
         },
         // 背景色 - 语义化 token
         'background': {
-          primary: 'var(--bg-primary)',
-          secondary: 'var(--bg-secondary)',
-          tertiary: 'var(--bg-tertiary)',
-          elevated: 'var(--bg-elevated)',
-          hover: 'var(--bg-hover)',
+          primary: 'rgb(var(--bg-primary-rgb) / <alpha-value>)',
+          secondary: 'rgb(var(--bg-secondary-rgb) / <alpha-value>)',
+          tertiary: 'rgb(var(--bg-tertiary-rgb) / <alpha-value>)',
+          elevated: 'rgb(var(--bg-elevated-rgb) / <alpha-value>)',
+          hover: 'rgb(var(--bg-hover-rgb) / <alpha-value>)',
         },
         // 文字色 - 语义化 token
         'foreground': {
-          DEFAULT: 'var(--text-primary)',
-          primary: 'var(--text-primary)',
-          secondary: 'var(--text-secondary)',
-          tertiary: 'var(--text-tertiary)',
+          DEFAULT: 'rgb(var(--text-primary-rgb) / <alpha-value>)',
+          primary: 'rgb(var(--text-primary-rgb) / <alpha-value>)',
+          secondary: 'rgb(var(--text-secondary-rgb) / <alpha-value>)',
+          tertiary: 'rgb(var(--text-tertiary-rgb) / <alpha-value>)',
         },
         // 边框色 - 语义化 token
         'border': {
-          DEFAULT: 'var(--border-primary)',
-          primary: 'var(--border-primary)',
-          secondary: 'var(--border-secondary)',
-          hover: 'var(--border-hover)',
+          DEFAULT: 'rgb(var(--border-primary-rgb) / <alpha-value>)',
+          primary: 'rgb(var(--border-primary-rgb) / <alpha-value>)',
+          secondary: 'rgb(var(--border-secondary-rgb) / <alpha-value>)',
+          hover: 'rgb(var(--border-hover-rgb) / <alpha-value>)',
         },
         // 功能色
-        'success': 'var(--success)',
-        'warning': 'var(--warning)',
-        'error': 'var(--error)',
-        'info': 'var(--info)',
+        'success': 'rgb(var(--success-rgb) / <alpha-value>)',
+        'warning': 'rgb(var(--warning-rgb) / <alpha-value>)',
+        'error': 'rgb(var(--error-rgb) / <alpha-value>)',
+        'info': 'rgb(var(--info-rgb) / <alpha-value>)',
       },
       borderRadius: {
         'card': '12px',

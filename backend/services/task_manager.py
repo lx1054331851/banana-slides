@@ -285,7 +285,8 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                                project_context, outline: List[Dict],
                                max_workers: int = 5, app=None,
                                language: str = None,
-                               detail_level: str = 'default'):
+                               detail_level: str = 'default',
+                               page_ids: list = None):
     """
     Background task for generating page descriptions
     Based on demo.py gen_desc() with parallel processing
@@ -302,6 +303,7 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
         app: Flask app instance
         language: Output language (zh, en, ja, auto)
         detail_level: Description detail level (concise/default/detailed)
+        page_ids: Optional list of page IDs to generate (if not provided, generates all pages)
     """
     if app is None:
         raise ValueError("Flask app instance must be provided")
@@ -311,13 +313,14 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
         try:
             if _generation_logs_enabled():
                 logger.info(
-                    "[Descriptions Task Start] task=%s project=%s pages=%s workers=%s language=%s detail=%s",
+                    "[Descriptions Task Start] task=%s project=%s pages=%s workers=%s language=%s detail=%s page_filter=%s",
                     task_id,
                     project_id,
                     len(outline) if outline else 0,
                     max_workers,
                     language,
                     detail_level,
+                    len(page_ids) if page_ids else 'all',
                 )
             # 重要：在后台线程开始时就获取task和设置状态
             task = Task.query.get(task_id)
@@ -329,11 +332,12 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
             db.session.commit()
             logger.info(f"Task {task_id} status updated to PROCESSING")
             
-            # Flatten outline to get pages
+            # Flatten full outline then map requested pages by order_index so filtered runs still
+            # preserve original page context while only generating selected pages.
             pages_data = ai_service.flatten_outline(outline)
-            
-            # Get all pages for this project
-            pages = Page.query.filter_by(project_id=project_id).order_by(Page.order_index).all()
+
+            # Get pages for this project (filtered by page_ids if provided)
+            pages = get_filtered_pages(project_id, page_ids)
 
             if _generation_logs_enabled():
                 logger.info(
@@ -343,9 +347,18 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                     len(pages),
                     len(pages_data),
                 )
-            
-            if len(pages) != len(pages_data):
-                raise ValueError("Page count mismatch")
+
+            if not pages:
+                raise ValueError("No pages found for project")
+
+            pages_data_by_index = {i: pd for i, pd in enumerate(pages_data)}
+            page_jobs = [
+                {
+                    'page_id': page.id,
+                    'order_index': page.order_index,
+                }
+                for page in pages
+            ]
             
             # Mark all pages as GENERATING_DESCRIPTION before starting
             for page in pages:
@@ -418,11 +431,11 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                 futures = [
                     executor.submit(
                         generate_single_desc,
-                        page.id,
-                        page_data,
-                        (page.order_index + 1) if getattr(page, 'order_index', None) is not None else i,
+                        job['page_id'],
+                        pages_data_by_index.get(job['order_index'], {}),
+                        (job['order_index'] + 1) if job['order_index'] is not None else i,
                     )
-                    for i, (page, page_data) in enumerate(zip(pages, pages_data), 1)
+                    for i, job in enumerate(page_jobs, 1)
                 ]
                 
                 # Process results as they complete
@@ -470,9 +483,14 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
             from models import Project
             project = Project.query.get(project_id)
             if project and failed == 0:
-                project.status = 'DESCRIPTIONS_GENERATED'
+                all_project_pages = Page.query.filter_by(project_id=project_id).all()
+                all_have_descriptions = all(
+                    page.description_content and page.get_description_content()
+                    for page in all_project_pages
+                )
+                project.status = 'DESCRIPTIONS_GENERATED' if all_have_descriptions else 'OUTLINE_GENERATED'
                 db.session.commit()
-                logger.info(f"Project {project_id} status updated to DESCRIPTIONS_GENERATED")
+                logger.info(f"Project {project_id} status updated to {project.status}")
         
         except Exception as e:
             logger.error(f"Task {task_id} FAILED while generating descriptions: {e}", exc_info=True)

@@ -109,11 +109,17 @@ const previewI18n = {
       confirmPartialGenerateMessage: "已生成 {{generated}}/{{total}} 页图片。请选择仅生成未生成的 {{missing}} 页，或重新生成全部 {{total}} 页（历史记录将会保存）。",
       confirmPartialGenerateWithGeneratingMessage: "已生成 {{generated}}/{{total}} 页图片，另有 {{generating}} 页正在生成中。请选择仅生成未生成的 {{missing}} 页，或重新生成全部 {{total}} 页（历史记录将会保存）。",
       generatingInProgress: "已有 {{count}} 页正在生成中，请稍候...",
+      confirmPartialDescriptionGenerateTitle: "选择描述生成范围",
+      confirmPartialDescriptionGenerateMessage: "已有 {{generated}}/{{total}} 页生成过描述。请选择仅生成未生成的 {{missing}} 页，或重新生成全部 {{total}} 页。",
+      confirmPartialDescriptionGenerateWithGeneratingMessage: "已有 {{generated}}/{{total}} 页生成过描述，另有 {{generating}} 页正在生成描述。请选择仅生成未生成的 {{missing}} 页，或重新生成全部 {{total}} 页。",
+      descriptionGeneratingInProgress: "已有 {{count}} 页正在生成描述，请稍候...",
       deleteFailed: "删除页面失败",
       confirmDeletePage: "确定要删除这一页吗？",
       confirmDeleteTitle: "确认删除",
       generateMissingOnly: "仅生成未生成的 {{count}} 页",
       regenerateAllPages: "重新生成全部 {{count}} 页",
+      generateMissingDescriptionsOnly: "仅生成未生成描述的 {{count}} 页",
+      regenerateAllDescriptions: "重新生成全部 {{count}} 页描述",
       generationFailed: "生成失败",
       disabledExportTip: "还有 {{count}} 页未生成图片，请先生成所有页面图片",
       disabledEditTip: "请先生成该页图片",
@@ -233,11 +239,17 @@ const previewI18n = {
       confirmPartialGenerateMessage: "{{generated}}/{{total}} page(s) already have images. Generate only the {{missing}} missing page(s), or regenerate all {{total}} page(s) (history will be saved).",
       confirmPartialGenerateWithGeneratingMessage: "{{generated}}/{{total}} page(s) already have images, and {{generating}} page(s) are still generating. Generate only the {{missing}} missing page(s), or regenerate all {{total}} page(s) (history will be saved).",
       generatingInProgress: "{{count}} page(s) are generating. Please wait...",
+      confirmPartialDescriptionGenerateTitle: "Choose Description Scope",
+      confirmPartialDescriptionGenerateMessage: "{{generated}}/{{total}} page(s) already have descriptions. Generate only the {{missing}} missing page(s), or regenerate all {{total}} page(s).",
+      confirmPartialDescriptionGenerateWithGeneratingMessage: "{{generated}}/{{total}} page(s) already have descriptions, and {{generating}} page(s) are still generating descriptions. Generate only the {{missing}} missing page(s), or regenerate all {{total}} page(s).",
+      descriptionGeneratingInProgress: "{{count}} page(s) are generating descriptions. Please wait...",
       deleteFailed: "Failed to delete page",
       confirmDeletePage: "Are you sure you want to delete this page?",
       confirmDeleteTitle: "Confirm Delete",
       generateMissingOnly: "Generate Missing ({{count}})",
       regenerateAllPages: "Regenerate All ({{count}})",
+      generateMissingDescriptionsOnly: "Generate Missing Descriptions ({{count}})",
+      regenerateAllDescriptions: "Regenerate All Descriptions ({{count}})",
       generationFailed: "Generation failed",
       disabledExportTip: "{{count}} page(s) have no images yet. Please generate all page images first",
       disabledEditTip: "Please generate this page's image first",
@@ -930,8 +942,17 @@ export const SlidePreview: React.FC = () => {
   const [show1KWarningDialog, setShow1KWarningDialog] = useState(false);
   const [skip1KWarningChecked, setSkip1KWarningChecked] = useState(false);
   const [pending1KAction, setPending1KAction] = useState<(() => Promise<void>) | null>(null);
+  const [showBatchDescriptionGenerateDialog, setShowBatchDescriptionGenerateDialog] = useState(false);
   const [showBatchGenerateDialog, setShowBatchGenerateDialog] = useState(false);
   const [batchGenerateContext, setBatchGenerateContext] = useState<{
+    total: number;
+    generated: number;
+    generating: number;
+    missing: number;
+    targetPageIds: string[];
+    missingPageIds: string[];
+  } | null>(null);
+  const [batchDescriptionGenerateContext, setBatchDescriptionGenerateContext] = useState<{
     total: number;
     generated: number;
     generating: number;
@@ -1863,24 +1884,56 @@ export const SlidePreview: React.FC = () => {
 
   const handleGenerateDescriptions = useCallback(async () => {
     if (!currentProject) return;
-    const hasDescriptions = currentProject.pages.some((page) => page.description_content);
-    const executeGenerate = async () => {
-      await generateDescriptions();
+    const pagesToGenerate = currentProject.pages.filter((page) => page.id);
+    const generatedPages = pagesToGenerate.filter((page) => page.status !== 'GENERATING_DESCRIPTION' && Boolean(page.description_content));
+    const generatingPages = pagesToGenerate.filter((page) => page.status === 'GENERATING_DESCRIPTION');
+    const targetPageIds = pagesToGenerate.map((page) => page.id!).filter(Boolean);
+    const missingPageIds = pagesToGenerate
+      .filter((page) => page.status !== 'GENERATING_DESCRIPTION' && !page.description_content)
+      .map((page) => page.id!)
+      .filter(Boolean);
+    const totalCount = targetPageIds.length;
+    const generatedCount = generatedPages.length;
+    const generatingCount = generatingPages.length;
+    const missingCount = missingPageIds.length;
+
+    const executeGenerate = async (pageIdsOverride?: string[]) => {
+      await generateDescriptions(undefined, pageIdsOverride);
       await syncProject(projectId);
     };
 
-    if (hasDescriptions) {
-      confirm(
-        '部分页面已有描述，重新生成将覆盖，确定继续吗？',
-        () => {
-          void executeGenerate();
-        },
-        { title: '确认重新生成', variant: 'warning' }
-      );
+    if (totalCount === 0) return;
+
+    if (generatedCount === 0 && generatingCount === 0) {
+      await executeGenerate(targetPageIds);
       return;
     }
 
-    await executeGenerate();
+    if (generatingCount > 0 && missingCount === 0) {
+      show({ message: t('preview.descriptionGeneratingInProgress', { count: generatingCount }), type: 'info' });
+      return;
+    }
+
+    if (generatedCount < totalCount) {
+      setBatchDescriptionGenerateContext({
+        total: totalCount,
+        generated: generatedCount,
+        generating: generatingCount,
+        missing: missingCount,
+        targetPageIds,
+        missingPageIds,
+      });
+      setShowBatchDescriptionGenerateDialog(true);
+      return;
+    }
+
+    confirm(
+      '部分页面已有描述，重新生成将覆盖，确定继续吗？',
+      () => {
+        void executeGenerate(targetPageIds);
+      },
+      { title: '确认重新生成', variant: 'warning' }
+    );
   }, [confirm, currentProject, generateDescriptions, projectId, syncProject]);
 
   const handleAiRefineDescriptions = useCallback(async (requirement: string, previousRequirements: string[]) => {
@@ -2781,13 +2834,13 @@ export const SlidePreview: React.FC = () => {
 
   const editorCanvasContent = (
     <div
-      className="min-h-[520px] w-full min-w-0 rounded-[24px] border border-[#eadfbf] bg-[#f7f5ef] p-4 sm:min-h-[560px] sm:p-5 lg:min-h-[580px] lg:p-6 dark:border-border-primary dark:bg-background-secondary"
+      className="min-h-[520px] w-full min-w-0 rounded-[24px] border border-[#eadfbf] bg-white p-4 sm:min-h-[560px] sm:p-5 lg:min-h-[580px] lg:p-6 dark:border-border-primary dark:bg-[radial-gradient(circle_at_top,#1b2340_0%,#151a26_34%,#101521_100%)]"
       style={isMobileView ? undefined : { width: '100%', maxWidth: '100%', aspectRatio: aspectRatioStyle }}
       data-testid="preview-editor-canvas"
     >
       <div className="grid h-full min-h-0 gap-3 grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-4 lg:grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]">
-        <div className="rounded-2xl border border-amber-200/70 bg-white/90 px-5 py-3 dark:border-amber-900/40 dark:bg-background-primary">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-700/80">标题</div>
+        <div className="rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 dark:border-[#2d3447] dark:bg-[#151a26]">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">标题</div>
           <input
             type="text"
             value={editOutlineTitle}
@@ -2798,12 +2851,12 @@ export const SlidePreview: React.FC = () => {
             }}
             placeholder={t('preview.enterTitle')}
             data-testid="preview-text-title-input"
-            className="min-h-[48px] w-full bg-transparent text-xl font-semibold text-slate-900 outline-none placeholder:text-slate-300 dark:text-foreground-primary sm:text-2xl"
+            className="min-h-[48px] w-full appearance-none bg-transparent text-xl font-semibold text-slate-900 outline-none placeholder:text-[#b2a78d] dark:text-[#f5f7ff] dark:placeholder:text-[#5f6883] sm:text-2xl"
           />
         </div>
 
-        <div className="min-h-0 overflow-hidden rounded-2xl border border-slate-200 bg-white/90 px-5 py-3 dark:border-border-primary dark:bg-background-primary flex flex-col">
-          <div className="mb-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{t('preview.pointsPerLine')}</div>
+        <div className="min-h-0 overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 flex flex-col dark:border-[#2d3447] dark:bg-[#151a26]">
+          <div className="mb-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">{t('preview.pointsPerLine')}</div>
           <textarea
             value={editOutlinePoints}
             onChange={(event) => {
@@ -2813,12 +2866,12 @@ export const SlidePreview: React.FC = () => {
             }}
             placeholder={t('preview.enterPointsPerLine')}
             data-testid="preview-text-points-input"
-            className="min-h-[72px] w-full flex-1 resize-none overflow-y-auto rounded-xl border border-slate-200/80 bg-white/60 px-4 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-300 dark:border-border-primary dark:bg-background-primary/40 dark:text-foreground-secondary"
+            className="min-h-[72px] w-full flex-1 appearance-none resize-none overflow-y-auto bg-transparent px-0 py-0 text-sm leading-6 text-slate-700 outline-none placeholder:text-[#b8ae96] focus:ring-0 dark:text-[#e2e8f0] dark:placeholder:text-[#66708c]"
           />
         </div>
 
-        <div className="min-h-0 overflow-hidden rounded-2xl border border-slate-200 bg-white/90 px-5 py-3 dark:border-border-primary dark:bg-background-primary flex flex-col">
-          <div className="mb-3 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+        <div className="min-h-0 overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 flex flex-col dark:border-[#2d3447] dark:bg-[#151a26]">
+          <div className="mb-3 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
             {t('preview.pageDescription')}
           </div>
           <textarea
@@ -2830,7 +2883,7 @@ export const SlidePreview: React.FC = () => {
             }}
             placeholder={t('preview.enterDescription')}
             data-testid="preview-text-description-input"
-            className="min-h-[140px] min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-slate-200/80 bg-white/60 px-4 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-300 dark:border-border-primary dark:bg-background-primary/40 dark:text-foreground-secondary"
+            className="min-h-[140px] min-w-0 flex-1 appearance-none resize-none overflow-y-auto bg-transparent px-0 py-0 text-sm leading-6 text-slate-700 outline-none placeholder:text-[#b8ae96] focus:ring-0 dark:text-[#e2e8f0] dark:placeholder:text-[#66708c]"
           />
         </div>
       </div>
@@ -2840,13 +2893,13 @@ export const SlidePreview: React.FC = () => {
   const externalFieldTags = (
     <div className="relative" ref={externalFieldPopoverRef}>
       {activeExternalField && (
-        <div className="absolute bottom-full left-0 z-30 mb-3 w-[min(420px,100%)] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_22px_48px_rgba(15,23,42,0.18)] ring-1 ring-slate-200/80 dark:border-border-primary dark:bg-background-secondary dark:ring-border-primary">
+        <div className="absolute bottom-full left-0 z-30 mb-3 w-[min(420px,100%)] rounded-2xl border border-[#e3d8b7] bg-[#fffaf0] p-4 shadow-[0_22px_48px_rgba(15,23,42,0.12)] ring-1 ring-[#f0e8d4] dark:border-[#2d3447] dark:bg-[#151a26] dark:shadow-[0_22px_48px_rgba(8,10,18,0.38)] dark:ring-[#252b3d]">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="text-base font-semibold text-slate-900 dark:text-foreground-primary">{activeExternalField}</div>
+            <div className="text-base font-semibold text-slate-900 dark:text-[#f5f7ff]">{activeExternalField}</div>
             <button
               type="button"
               onClick={() => setActiveExternalField(null)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-700 dark:border-border-primary dark:bg-background-primary dark:text-foreground-tertiary"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#e8dec4] bg-white text-[#8f7f5b] transition-colors hover:border-[#d7c799] hover:text-slate-900 dark:border-[#343c52] dark:bg-[#0f1420] dark:text-[#8f98b3] dark:hover:border-[#46506b] dark:hover:text-[#f5f7ff]"
               aria-label="close external field popover"
             >
               <X size={14} />
@@ -2863,7 +2916,7 @@ export const SlidePreview: React.FC = () => {
               });
             }}
             rows={4}
-            className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-300 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary"
+            className="w-full appearance-none resize-none rounded-xl border border-[#e8dec4] bg-[#fffdf8] px-4 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-[#b8ae96] focus:border-banana-400/80 focus:ring-2 focus:ring-banana-400/15 dark:border-[#343c52] dark:bg-[#0f1420] dark:text-[#e2e8f0] dark:placeholder:text-[#66708c]"
             placeholder={`输入 ${activeExternalField}`}
           />
         </div>
@@ -3611,7 +3664,7 @@ export const SlidePreview: React.FC = () => {
           )}
         </aside>
 
-        <main className="flex-1 flex flex-col bg-[#f6f3ea] dark:bg-background-primary min-w-0 overflow-hidden">
+        <main className="flex-1 flex flex-col bg-white dark:bg-background-primary min-w-0 overflow-hidden">
           <div
             data-testid="preview-secondary-toolbar"
             className="border-b border-gray-200 dark:border-border-primary bg-white/85 dark:bg-background-secondary/90 px-4 py-2 md:px-6 md:py-2.5"
@@ -4287,6 +4340,76 @@ export const SlidePreview: React.FC = () => {
               onClick={() => {
                 setShowBatchGenerateDialog(false);
                 setBatchGenerateContext(null);
+              }}
+            >
+              {t('common.cancel')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showBatchDescriptionGenerateDialog}
+        onClose={() => {
+          setShowBatchDescriptionGenerateDialog(false);
+          setBatchDescriptionGenerateContext(null);
+        }}
+        title={t('preview.confirmPartialDescriptionGenerateTitle')}
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-700 dark:text-foreground-secondary">
+            {batchDescriptionGenerateContext
+              ? t(
+                batchDescriptionGenerateContext.generating > 0
+                  ? 'preview.confirmPartialDescriptionGenerateWithGeneratingMessage'
+                  : 'preview.confirmPartialDescriptionGenerateMessage',
+                {
+                  generated: batchDescriptionGenerateContext.generated,
+                  total: batchDescriptionGenerateContext.total,
+                  missing: batchDescriptionGenerateContext.missing,
+                  generating: batchDescriptionGenerateContext.generating,
+                }
+              )
+              : ''}
+          </p>
+
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="primary"
+              onClick={async () => {
+                if (!batchDescriptionGenerateContext) return;
+                setShowBatchDescriptionGenerateDialog(false);
+                const context = batchDescriptionGenerateContext;
+                setBatchDescriptionGenerateContext(null);
+                await generateDescriptions(undefined, context.missingPageIds);
+                await syncProject(projectId);
+              }}
+            >
+              {batchDescriptionGenerateContext
+                ? t('preview.generateMissingDescriptionsOnly', { count: batchDescriptionGenerateContext.missing })
+                : t('preview.generateMissingDescriptionsOnly', { count: 0 })}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                if (!batchDescriptionGenerateContext) return;
+                setShowBatchDescriptionGenerateDialog(false);
+                const context = batchDescriptionGenerateContext;
+                setBatchDescriptionGenerateContext(null);
+                await generateDescriptions(undefined, context.targetPageIds);
+                await syncProject(projectId);
+              }}
+            >
+              {batchDescriptionGenerateContext
+                ? t('preview.regenerateAllDescriptions', { count: batchDescriptionGenerateContext.total })
+                : t('preview.regenerateAllDescriptions', { count: 0 })}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setShowBatchDescriptionGenerateDialog(false);
+                setBatchDescriptionGenerateContext(null);
               }}
             >
               {t('common.cancel')}

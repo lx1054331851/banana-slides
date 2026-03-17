@@ -1116,20 +1116,23 @@ def generate_descriptions(project_id):
         # IMPORTANT: Expire cached objects to ensure fresh data
         db.session.expire_all()
         
-        # Get pages
-        pages = Page.query.filter_by(project_id=project_id).order_by(Page.order_index).all()
-        
-        if not pages:
+        # Get all pages for context, and selected pages for actual generation if provided
+        all_pages = Page.query.filter_by(project_id=project_id).order_by(Page.order_index).all()
+        if not all_pages:
             return bad_request("No pages found for project")
-        
-        # Reconstruct outline from pages with part structure
-        outline = _reconstruct_outline_from_pages(pages)
-        
+
         data = request.get_json() or {}
         # 从配置中读取默认并发数，如果请求中提供了则使用请求的值
         max_workers = data.get('max_workers', current_app.config.get('MAX_DESCRIPTION_WORKERS', 5))
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
         detail_level = data.get('detail_level', 'default')
+        selected_page_ids = parse_page_ids_from_body(data)
+        pages = get_filtered_pages(project_id, selected_page_ids if selected_page_ids else None)
+        if not pages:
+            return bad_request("No pages found for selected page_ids")
+
+        # Reconstruct outline from all pages so selected-page generation still has full deck context.
+        outline = _reconstruct_outline_from_pages(all_pages)
         
         # Create task
         task = Task(
@@ -1167,7 +1170,8 @@ def generate_descriptions(project_id):
             max_workers,
             app,
             language,
-            detail_level
+            detail_level,
+            selected_page_ids if selected_page_ids else None,
         )
         
         # Update project status
@@ -1208,6 +1212,7 @@ def generate_descriptions_stream(project_id):
     data = request.get_json() or {}
     language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
     detail_level = data.get('detail_level', 'default')
+    selected_page_ids = parse_page_ids_from_body(data)
 
     app = current_app._get_current_object()
 
@@ -1219,15 +1224,25 @@ def generate_descriptions_stream(project_id):
                 reference_files_content = _get_project_reference_files_content(project_id)
                 project_context = ProjectContext(proj, reference_files_content)
 
-                pages = Page.query.filter_by(project_id=project_id).order_by(Page.order_index).all()
-                if not pages:
+                all_pages = Page.query.filter_by(project_id=project_id).order_by(Page.order_index).all()
+                if not all_pages:
                     yield _sse_event('error', {'message': 'No pages found for project'})
                     return
 
-                outline = _reconstruct_outline_from_pages(pages)
-                flat_pages = ai_service.flatten_outline(outline)
+                pages = get_filtered_pages(project_id, selected_page_ids if selected_page_ids else None)
+                if not pages:
+                    yield _sse_event('error', {'message': 'No pages found for selected page_ids'})
+                    return
 
-                # Set all pages to GENERATING_DESCRIPTION
+                outline = _reconstruct_outline_from_pages(all_pages)
+                flat_pages_all = ai_service.flatten_outline(outline)
+                flat_pages_by_index = {i: pd for i, pd in enumerate(flat_pages_all)}
+                flat_pages = [
+                    flat_pages_by_index.get(page.order_index, {})
+                    for page in pages
+                ]
+
+                # Set selected pages to GENERATING_DESCRIPTION
                 for page in pages:
                     page.status = 'GENERATING_DESCRIPTION'
                 proj.status = 'GENERATING_DESCRIPTIONS'
@@ -1275,6 +1290,9 @@ def generate_descriptions_stream(project_id):
                     logger.warning(f"流式描述生成不完整: {len(missing)}/{len(pages)} 页未生成")
 
                 proj.status = 'DESCRIPTIONS_GENERATED'
+                all_project_pages = Page.query.filter_by(project_id=project_id).all()
+                if not all(page.description_content for page in all_project_pages):
+                    proj.status = 'OUTLINE_GENERATED'
                 proj.updated_at = datetime.utcnow()
                 db.session.commit()
 

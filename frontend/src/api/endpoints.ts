@@ -329,11 +329,20 @@ export const splitReportToPptJson = async (
  * @param projectId 项目ID
  * @param language 输出语言（可选，默认从 sessionStorage 获取）
  */
-export const generateDescriptions = async (projectId: string, language?: OutputLanguage, detailLevel?: string): Promise<ApiResponse> => {
+export const generateDescriptions = async (
+  projectId: string,
+  language?: OutputLanguage,
+  detailLevel?: string,
+  pageIds?: string[],
+): Promise<ApiResponse> => {
   const lang = language || await getStoredOutputLanguage();
   const response = await apiClient.post<ApiResponse>(
     `/api/projects/${projectId}/generate/descriptions`,
-    { language: lang, detail_level: detailLevel || 'default' }
+    {
+      language: lang,
+      detail_level: detailLevel || 'default',
+      ...(pageIds && pageIds.length > 0 ? { page_ids: pageIds } : {}),
+    }
   );
   return response.data;
 };
@@ -359,6 +368,7 @@ export const generateDescriptionsStream = async (
   callbacks: DescriptionStreamCallbacks,
   language?: OutputLanguage,
   detailLevel?: string,
+  pageIds?: string[],
 ): Promise<void> => {
   const lang = language || await getStoredOutputLanguage();
   const accessCode = localStorage.getItem('banana-access-code');
@@ -369,7 +379,11 @@ export const generateDescriptionsStream = async (
       'Content-Type': 'application/json',
       ...(accessCode ? { 'X-Access-Code': accessCode } : {}),
     },
-    body: JSON.stringify({ language: lang, detail_level: detailLevel || 'default' }),
+    body: JSON.stringify({
+      language: lang,
+      detail_level: detailLevel || 'default',
+      ...(pageIds && pageIds.length > 0 ? { page_ids: pageIds } : {}),
+    }),
   });
 
   if (!response.ok || !response.body) {
