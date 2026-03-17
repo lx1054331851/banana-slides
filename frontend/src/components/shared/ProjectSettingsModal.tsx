@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, FileText, Download, Sparkles, AlertTriangle, HelpCircle } from 'lucide-react';
+import { X, FileText, Download, Sparkles, AlertTriangle, HelpCircle, Image as ImageIcon, Plus } from 'lucide-react';
 import { Button, Textarea, Input } from '@/components/shared';
 import { useT } from '@/hooks/useT';
 import type { ExportExtractorMethod, ExportInpaintMethod } from '@/types';
@@ -12,6 +12,21 @@ import {
   PROJECT_SUPPORTED_IMAGE_MODELS,
   type ProjectSupportedImageModel,
 } from '@/config/projectAiDefaults';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  rectSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // ProjectSettings 组件自包含翻译
 const projectSettingsI18n = {
@@ -149,6 +164,19 @@ interface ProjectSettingsModalProps {
   onGenerationDefaultImageResolutionChange?: (value: string) => void;
   onSaveGenerationDefaults?: () => void;
   isSavingGenerationDefaults?: boolean;
+  descriptionGenerationMode?: 'streaming' | 'parallel';
+  descriptionExtraFields?: string[];
+  availableDescriptionFields?: string[];
+  descriptionImagePromptFields?: string[];
+  descriptionRequirements?: string;
+  presetDescriptionFields?: string[];
+  onDescriptionGenerationModeChange?: (value: 'streaming' | 'parallel') => void;
+  onDescriptionExtraFieldsChange?: (value: string[]) => void;
+  onAvailableDescriptionFieldsChange?: (value: string[]) => void;
+  onDescriptionImagePromptFieldsChange?: (value: string[]) => void;
+  onDescriptionRequirementsChange?: (value: string) => void;
+  onSaveDescriptionRequirements?: () => void;
+  isSavingDescriptionRequirements?: boolean;
 }
 
 type SettingsTab = 'project' | 'export';
@@ -165,6 +193,74 @@ const GEMINI_PRO_SUPPORTED_ASPECT_RATIOS = new Set([
   '16:9',
   '21:9',
 ]);
+
+const FALLBACK_DESCRIPTION_FIELDS = ['视觉元素', '视觉焦点', '排版布局', '演讲者备注'];
+
+const SortableFieldPill: React.FC<{
+  name: string;
+  active: boolean;
+  removable?: boolean;
+  inImagePrompt?: boolean;
+  imagePromptTooltip?: string;
+  onToggle: () => void;
+  onRemove: () => void;
+  onToggleImagePrompt?: () => void;
+}> = ({ name, active, onToggle, onRemove, removable = true, inImagePrompt, imagePromptTooltip, onToggleImagePrompt }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: name });
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition: isDragging ? undefined : transition,
+    opacity: isDragging ? 0.5 : undefined,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <button
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      type="button"
+      className={`group inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border cursor-grab active:cursor-grabbing ${
+        active
+          ? 'bg-banana-50 dark:bg-banana-900/20 border-banana-300 dark:border-banana-700 text-banana-700 dark:text-banana-400'
+          : 'bg-gray-50 dark:bg-background-hover border-gray-200 dark:border-border-primary text-gray-400 dark:text-foreground-tertiary line-through'
+      }`}
+      onClick={onToggle}
+    >
+      {name}
+      {active && onToggleImagePrompt && (
+        <span
+          role="button"
+          className={`relative group/img ml-0.5 transition-colors ${inImagePrompt ? 'text-banana-500' : 'text-gray-300 dark:text-gray-600'}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleImagePrompt();
+          }}
+        >
+          <ImageIcon size={10} />
+          {imagePromptTooltip && (
+            <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-40 px-2 py-1 text-[10px] leading-snug text-gray-600 dark:text-foreground-secondary bg-white dark:bg-background-primary border border-gray-200 dark:border-border-primary rounded-md shadow-md opacity-0 pointer-events-none group-hover/img:opacity-100 transition-opacity z-50">
+              {imagePromptTooltip}
+            </span>
+          )}
+        </span>
+      )}
+      {!active && removable && (
+        <span
+          role="button"
+          className="opacity-0 group-hover:opacity-100 ml-0.5 text-gray-400 hover:text-red-500 transition-all"
+          onClick={(event) => {
+            event.stopPropagation();
+            onRemove();
+          }}
+        >
+          <X size={10} />
+        </span>
+      )}
+    </button>
+  );
+};
 
 export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   isOpen,
@@ -206,14 +302,33 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   onGenerationDefaultImageResolutionChange,
   onSaveGenerationDefaults,
   isSavingGenerationDefaults = false,
+  descriptionGenerationMode = 'streaming',
+  descriptionExtraFields = FALLBACK_DESCRIPTION_FIELDS,
+  availableDescriptionFields = FALLBACK_DESCRIPTION_FIELDS,
+  descriptionImagePromptFields = [],
+  descriptionRequirements = '',
+  presetDescriptionFields = FALLBACK_DESCRIPTION_FIELDS,
+  onDescriptionGenerationModeChange,
+  onDescriptionExtraFieldsChange,
+  onAvailableDescriptionFieldsChange,
+  onDescriptionImagePromptFieldsChange,
+  onDescriptionRequirementsChange,
+  onSaveDescriptionRequirements,
+  isSavingDescriptionRequirements = false,
 }) => {
   const t = useT(projectSettingsI18n);
   const [activeTab, setActiveTab] = useState<SettingsTab>('project');
+  const [newDescriptionFieldName, setNewDescriptionFieldName] = useState('');
+  const descriptionFieldSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const selectedImageModel = useMemo(
     () => (PROJECT_SUPPORTED_IMAGE_MODELS.includes(generationDefaultImageModel as ProjectSupportedImageModel)
       ? (generationDefaultImageModel as ProjectSupportedImageModel)
       : PROJECT_DEFAULT_IMAGE_MODEL),
     [generationDefaultImageModel]
+  );
+  const presetDescriptionFieldSet = useMemo(
+    () => new Set(presetDescriptionFields.length > 0 ? presetDescriptionFields : FALLBACK_DESCRIPTION_FIELDS),
+    [presetDescriptionFields]
   );
   const visibleAspectRatioOptions = useMemo(() => {
     if (selectedImageModel !== 'gemini-3-pro-image-preview') {
@@ -277,6 +392,54 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
     { value: 'generative', labelKey: 'projectSettings.backgroundGenerative', descKey: 'projectSettings.backgroundGenerativeDesc', usesAI: true },
     { value: 'baidu', labelKey: 'projectSettings.backgroundBaidu', descKey: 'projectSettings.backgroundBaiduDesc', usesAI: false },
   ];
+
+  const normalizeDescriptionFields = (fields: string[]) => (
+    fields.length > 0
+      ? fields
+      : (presetDescriptionFields.length > 0 ? presetDescriptionFields : FALLBACK_DESCRIPTION_FIELDS)
+  );
+
+  const handleDescriptionFieldDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = availableDescriptionFields.indexOf(active.id as string);
+    const newIndex = availableDescriptionFields.indexOf(over.id as string);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const nextPool = arrayMove(availableDescriptionFields, oldIndex, newIndex);
+    onAvailableDescriptionFieldsChange?.(nextPool);
+    const activeSet = new Set(descriptionExtraFields);
+    const nextActive = nextPool.filter((field) => activeSet.has(field));
+    onDescriptionExtraFieldsChange?.(normalizeDescriptionFields(nextActive));
+  };
+
+  const handleDescriptionFieldToggle = (name: string) => {
+    const active = descriptionExtraFields.includes(name);
+    const next = active
+      ? descriptionExtraFields.filter((field) => field !== name)
+      : [...descriptionExtraFields, name];
+    onDescriptionExtraFieldsChange?.(normalizeDescriptionFields(next));
+  };
+
+  const handleDescriptionFieldRemove = (name: string) => {
+    const nextPool = availableDescriptionFields.filter((field) => field !== name);
+    onAvailableDescriptionFieldsChange?.(nextPool);
+    if (descriptionImagePromptFields.includes(name)) {
+      onDescriptionImagePromptFieldsChange?.(descriptionImagePromptFields.filter((field) => field !== name));
+    }
+    if (descriptionExtraFields.includes(name)) {
+      onDescriptionExtraFieldsChange?.(normalizeDescriptionFields(descriptionExtraFields.filter((field) => field !== name)));
+    }
+  };
+
+  const handleDescriptionFieldAdd = () => {
+    const trimmed = newDescriptionFieldName.trim();
+    if (!trimmed || availableDescriptionFields.includes(trimmed) || availableDescriptionFields.length >= 10) return;
+    const nextPool = [...availableDescriptionFields, trimmed];
+    onAvailableDescriptionFieldsChange?.(nextPool);
+    onDescriptionExtraFieldsChange?.([...descriptionExtraFields, trimmed]);
+    setNewDescriptionFieldName('');
+  };
 
   if (!isOpen) return null;
 
@@ -447,6 +610,133 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                       {isSavingGenerationDefaults ? t('shared.saving') : '保存 AI 默认'}
                     </Button>
                   )}
+                </div>
+
+                <div
+                  className="bg-gray-50 dark:bg-background-primary rounded-lg p-6 space-y-4"
+                  data-testid="project-settings-description-generation"
+                >
+                  <div>
+                    <h4 className="text-base font-semibold text-gray-900 dark:text-foreground-primary mb-2">描述生成</h4>
+                    <p className="text-sm text-gray-600 dark:text-foreground-tertiary">
+                      配置当前项目的描述生成方式、字段结构和生成要求。
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
+                      生成模式
+                      <span className="relative group">
+                        <HelpCircle size={12} className="cursor-help text-gray-400" />
+                        <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 w-56 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] leading-relaxed text-gray-600 opacity-0 shadow-md transition-opacity group-hover:opacity-100 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
+                          流式：AI 从第一页开始逐页输出，速度慢但效果更好。并行：AI 根据大纲并行生成每页描述，速度快但可能不够细致。
+                        </span>
+                      </span>
+                    </label>
+                    <div className="flex gap-2">
+                      {(['streaming', 'parallel'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                            descriptionGenerationMode === mode
+                              ? 'bg-banana-500 text-white'
+                              : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-background-secondary dark:text-foreground-tertiary dark:hover:bg-background-hover'
+                          }`}
+                          onClick={() => onDescriptionGenerationModeChange?.(mode)}
+                        >
+                          {mode === 'streaming' ? '流式' : '并行'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
+                      额外字段
+                      <span className="relative group">
+                        <HelpCircle size={12} className="cursor-help text-gray-400" />
+                        <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 w-56 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] leading-relaxed text-gray-600 opacity-0 shadow-md transition-opacity group-hover:opacity-100 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
+                          启用后，AI 生成描述时会带上这些字段。点击胶囊启用或禁用，拖拽调整顺序。
+                        </span>
+                      </span>
+                    </label>
+                    <DndContext sensors={descriptionFieldSensors} collisionDetection={closestCenter} onDragEnd={handleDescriptionFieldDragEnd}>
+                      <SortableContext items={availableDescriptionFields} strategy={rectSortingStrategy}>
+                        <div className="mb-2 flex flex-wrap gap-1.5">
+                          {availableDescriptionFields.map((name) => {
+                            const active = descriptionExtraFields.includes(name);
+                            return (
+                              <SortableFieldPill
+                                key={name}
+                                name={name}
+                                active={active}
+                                removable={!presetDescriptionFieldSet.has(name)}
+                                onToggle={() => handleDescriptionFieldToggle(name)}
+                                inImagePrompt={descriptionImagePromptFields.includes(name)}
+                                imagePromptTooltip={descriptionImagePromptFields.includes(name) ? '该字段会影响生成的图片效果，点击可关闭' : '该字段不会影响生成的图片，点击可开启'}
+                                onToggleImagePrompt={() => {
+                                  const next = descriptionImagePromptFields.includes(name)
+                                    ? descriptionImagePromptFields.filter((field) => field !== name)
+                                    : [...descriptionImagePromptFields, name];
+                                  onDescriptionImagePromptFieldsChange?.(next);
+                                }}
+                                onRemove={() => handleDescriptionFieldRemove(name)}
+                              />
+                            );
+                          })}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                    <div className="flex gap-1">
+                      <input
+                        type="text"
+                        className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-banana-500/30 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary"
+                        placeholder="添加字段"
+                        value={newDescriptionFieldName}
+                        onChange={(event) => setNewDescriptionFieldName(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            handleDescriptionFieldAdd();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-banana-500 disabled:opacity-40 dark:hover:bg-background-hover"
+                        disabled={!newDescriptionFieldName.trim() || availableDescriptionFields.includes(newDescriptionFieldName.trim()) || availableDescriptionFields.length >= 10}
+                        onClick={handleDescriptionFieldAdd}
+                        aria-label="添加字段"
+                        title="添加字段"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
+                      描述生成要求
+                    </label>
+                    <Textarea
+                      value={descriptionRequirements}
+                      onChange={(event) => onDescriptionRequirementsChange?.(event.target.value)}
+                      rows={3}
+                      placeholder="例如：每页描述控制在100字以内、多使用数据和案例、强调关键指标..."
+                    />
+                    <div className="mt-2 flex justify-end">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={onSaveDescriptionRequirements}
+                        loading={isSavingDescriptionRequirements}
+                        disabled={!onSaveDescriptionRequirements}
+                      >
+                        保存要求
+                      </Button>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="bg-gray-50 dark:bg-background-primary rounded-lg p-6 space-y-4">

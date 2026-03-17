@@ -189,6 +189,15 @@ test.describe('Preview four-region layout and sidebar interactions', () => {
     await expect(page.getByTestId('preview-mode-image')).toHaveCount(0)
     await expect(page.getByTestId('preview-editor-canvas')).toBeVisible()
     await expect(page.getByText('图片预览区')).toHaveCount(0)
+    await expect(page.getByTestId('preview-batch-generate-descriptions')).toBeVisible()
+    await expect(page.getByTestId('preview-batch-generate-images')).toBeVisible()
+    await expect(page.getByTestId('preview-editor-toolbar').getByRole('button', { name: '描述设置' })).toHaveCount(0)
+    await expect(page.locator('aside').getByRole('button', { name: /批量生成图片/ })).toHaveCount(0)
+
+    await page.getByRole('button', { name: '项目设置' }).click()
+    await expect(page.getByTestId('project-settings-description-generation')).toBeVisible()
+    await expect(page.getByRole('heading', { name: '描述生成' })).toBeVisible()
+    await page.getByLabel('关闭').click()
 
     await page.goto(`/project/${imageProjectId}/preview`)
     await expect(page.getByTestId('preview-text-canvas')).toHaveCount(0)
@@ -334,6 +343,53 @@ test.describe('Preview four-region layout and sidebar interactions', () => {
 
     const widthAfterEdgeDrag = await aside.evaluate((el) => el.getBoundingClientRect().width)
     expect(Math.abs(widthAfterEdgeDrag - widthBeforeEdgeDrag)).toBeLessThan(4)
+  })
+
+  test('preview editor pane stays scrollable on shorter desktop heights', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 820 })
+
+    const projectId = 'mock-preview-short-height'
+    const state: MockProjectState = {
+      projectId,
+      addPageCalls: [],
+      project: {
+        id: projectId,
+        project_id: projectId,
+        status: 'COMPLETED',
+        creation_type: 'idea',
+        pages: Array.from({ length: 8 }, (_, i) => makePage(i)),
+      },
+    }
+
+    await setupCommonRoutes(page)
+    await setupProjectRoutes(page, state)
+
+    await page.goto(`/project/${projectId}/preview`)
+    await expect(page.getByTestId('preview-editor-pane')).toBeVisible()
+    await expect(page.getByTestId('preview-status-bar')).toBeVisible()
+    await expect(page.getByTestId('page-ai-send')).toBeVisible()
+
+    const editorPane = page.getByTestId('preview-editor-pane')
+    const metrics = await editorPane.evaluate((el) => ({
+      clientHeight: el.clientHeight,
+      scrollHeight: el.scrollHeight,
+    }))
+    expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight)
+
+    await editorPane.evaluate((el) => {
+      el.scrollTop = el.scrollHeight
+    })
+
+    const sendButton = page.getByTestId('page-ai-send')
+    await expect(sendButton).toBeVisible()
+
+    const sendBox = await sendButton.boundingBox()
+    const statusBarBox = await page.getByTestId('preview-status-bar').boundingBox()
+    expect(sendBox).not.toBeNull()
+    expect(statusBarBox).not.toBeNull()
+    if (!sendBox || !statusBarBox) return
+
+    expect(sendBox.y + sendBox.height).toBeLessThanOrEqual(statusBarBox.y + 1)
   })
 
   test('detail redirects to preview and still supports add-first-page and insert-after-card', async ({ page }) => {

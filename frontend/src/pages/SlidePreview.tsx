@@ -263,7 +263,6 @@ import {
   X,
   Trash2,
   Upload,
-  Image as ImageIcon,
   ImagePlus,
   Settings,
   CheckSquare,
@@ -276,8 +275,6 @@ import {
   List,
   LayoutGrid,
   FileText,
-  Settings2,
-  HelpCircle,
   ArrowUpDown,
   BookOpen,
 } from 'lucide-react';
@@ -285,7 +282,6 @@ import {
   Button,
   Loading,
   Modal,
-  Textarea,
   useToast,
   useConfirm,
   MaterialSelector,
@@ -359,24 +355,7 @@ import {
   normalizeProjectDefaultImageModel,
   normalizeProjectDefaultImageResolution,
 } from '@/config/projectAiDefaults';
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  rectSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-
 const DEFAULT_EXTRA_FIELDS = ['视觉元素', '视觉焦点', '排版布局', '演讲者备注'];
-const PRESET_EXTRA_FIELDS = new Set(DEFAULT_EXTRA_FIELDS);
 const PREVIEW_SPLIT_STORAGE_KEY = 'previewSplitRatio';
 const PREVIEW_SPLIT_DEFAULT_RATIO = 0.45;
 const PREVIEW_SPLIT_DIVIDER_PX = 12;
@@ -468,72 +447,6 @@ const areStringRecordsEqual = (left: Record<string, string>, right: Record<strin
   const rightKeys = Object.keys(right).filter((key) => right[key]?.trim());
   if (leftKeys.length !== rightKeys.length) return false;
   return leftKeys.every((key) => (left[key] || '').trim() === (right[key] || '').trim());
-};
-
-const SortableFieldPill: React.FC<{
-  name: string;
-  active: boolean;
-  removable?: boolean;
-  inImagePrompt?: boolean;
-  imagePromptTooltip?: string;
-  onToggle: () => void;
-  onRemove: () => void;
-  onToggleImagePrompt?: () => void;
-}> = ({ name, active, onToggle, onRemove, removable = true, inImagePrompt, imagePromptTooltip, onToggleImagePrompt }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: name });
-  const style: React.CSSProperties = {
-    transform: CSS.Translate.toString(transform),
-    transition: isDragging ? undefined : transition,
-    opacity: isDragging ? 0.5 : undefined,
-    zIndex: isDragging ? 10 : undefined,
-  };
-
-  return (
-    <button
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      type="button"
-      className={`group inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border cursor-grab active:cursor-grabbing ${
-        active
-          ? 'bg-banana-50 dark:bg-banana-900/20 border-banana-300 dark:border-banana-700 text-banana-700 dark:text-banana-400'
-          : 'bg-gray-50 dark:bg-background-hover border-gray-200 dark:border-border-primary text-gray-400 dark:text-foreground-tertiary line-through'
-      }`}
-      onClick={onToggle}
-    >
-      {name}
-      {active && onToggleImagePrompt && (
-        <span
-          role="button"
-          className={`relative group/img ml-0.5 transition-colors ${inImagePrompt ? 'text-banana-500' : 'text-gray-300 dark:text-gray-600'}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleImagePrompt();
-          }}
-        >
-          <ImageIcon size={10} />
-          {imagePromptTooltip && (
-            <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-40 px-2 py-1 text-[10px] leading-snug text-gray-600 dark:text-foreground-secondary bg-white dark:bg-background-primary border border-gray-200 dark:border-border-primary rounded-md shadow-md opacity-0 pointer-events-none group-hover/img:opacity-100 transition-opacity z-50">
-              {imagePromptTooltip}
-            </span>
-          )}
-        </span>
-      )}
-      {!active && removable && (
-        <span
-          role="button"
-          className="opacity-0 group-hover:opacity-100 ml-0.5 text-gray-400 hover:text-red-500 transition-all"
-          onClick={(event) => {
-            event.stopPropagation();
-            onRemove();
-          }}
-        >
-          <X size={10} />
-        </span>
-      )}
-    </button>
-  );
 };
 
 export const SlidePreview: React.FC = () => {
@@ -650,9 +563,6 @@ export const SlidePreview: React.FC = () => {
       return DEFAULT_EXTRA_FIELDS;
     }
   });
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const settingsRef = useRef<HTMLDivElement>(null);
-  const [newFieldName, setNewFieldName] = useState('');
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const settingsSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -1068,27 +978,28 @@ export const SlidePreview: React.FC = () => {
     }, 800);
   }, []);
 
-  const fieldSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-  const handleFieldDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = availableFields.indexOf(active.id as string);
-    const newIndex = availableFields.indexOf(over.id as string);
-    if (oldIndex === -1 || newIndex === -1) return;
-    const nextPool = arrayMove(availableFields, oldIndex, newIndex);
+  const handleDescriptionGenerationModeChange = useCallback((mode: 'streaming' | 'parallel') => {
+    setGenerationMode(mode);
+    saveSettingsDebounced({ description_generation_mode: mode });
+  }, [saveSettingsDebounced]);
+
+  const handleDescriptionExtraFieldsChange = useCallback((nextFields: string[]) => {
+    setExtraFieldNames(nextFields);
+    saveSettingsDebounced({ description_extra_fields: nextFields });
+  }, [saveSettingsDebounced]);
+
+  const handleAvailableDescriptionFieldsChange = useCallback((nextPool: string[]) => {
     setAvailableFields(nextPool);
     localStorage.setItem('banana-available-extra-fields', JSON.stringify(nextPool));
-    const activeSet = new Set(extraFieldNames);
-    const nextActive = nextPool.filter((field) => activeSet.has(field));
-    setExtraFieldNames(nextActive);
-    saveSettingsDebounced({ description_extra_fields: nextActive });
-  }, [availableFields, extraFieldNames, saveSettingsDebounced]);
+  }, []);
+
+  const handleDescriptionImagePromptFieldsChange = useCallback((nextFields: string[]) => {
+    setImagePromptFields(nextFields);
+    saveSettingsDebounced({ image_prompt_extra_fields: nextFields });
+  }, [saveSettingsDebounced]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
-        setSettingsOpen(false);
-      }
       if (fileMenuRef.current && !fileMenuRef.current.contains(event.target as Node)) {
         setFileMenuOpen(false);
       }
@@ -1096,11 +1007,11 @@ export const SlidePreview: React.FC = () => {
         setActiveExternalField(null);
       }
     };
-    if (settingsOpen || fileMenuOpen || activeExternalField) {
+    if (fileMenuOpen || activeExternalField) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [settingsOpen, fileMenuOpen, activeExternalField]);
+  }, [fileMenuOpen, activeExternalField]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -3045,7 +2956,7 @@ export const SlidePreview: React.FC = () => {
     removeUploadedReference(referenceId);
   };
 
-  const handlePreviewReferenceFocus = useCallback((reference: PageAiReference) => {
+  const handlePreviewReferenceFocus = (reference: PageAiReference) => {
     setActivePreviewReferenceId(reference.id);
     if (reference.sourceType !== 'region' || !reference.regionBounds || !imageRef.current) {
       return;
@@ -3062,7 +2973,7 @@ export const SlidePreview: React.FC = () => {
     setIsSelectingRegion(false);
     setSelectionStart(null);
     img.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-  }, []);
+  };
 
   const handlePageAiSend = async () => {
     if (!currentProject) return;
@@ -3357,27 +3268,6 @@ export const SlidePreview: React.FC = () => {
                 </button>
               )}
             </div>
-            {(isSidebarCollapsed || isSidebarCompact) && !isMobileView ? (
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<Sparkles size={16} />}
-                onClick={handleGenerateAll}
-                className="w-10 h-10 p-0"
-                disabled={isGenerateDisabled}
-                title={generateButtonText}
-              />
-            ) : (
-              <Button
-                variant="primary"
-                icon={<Sparkles size={16} className="md:w-[18px] md:h-[18px]" />}
-                onClick={handleGenerateAll}
-                className="w-full text-sm md:text-base"
-                disabled={isGenerateDisabled}
-              >
-                {generateButtonText}
-              </Button>
-            )}
             {!isSidebarCollapsed && !isSidebarCompact && !isMobileView && (
               <div className="space-y-2">
                 <div className="inline-flex w-full rounded-lg border border-gray-200 dark:border-border-primary overflow-hidden">
@@ -3728,173 +3618,22 @@ export const SlidePreview: React.FC = () => {
                   size="sm"
                   icon={<Sparkles size={16} />}
                   className="h-9 rounded-xl"
+                  data-testid="preview-batch-generate-descriptions"
                   onClick={() => void handleGenerateDescriptions()}
                 >
                   批量生成描述
                 </Button>
-                <div className="relative" ref={settingsRef}>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="h-9 rounded-xl"
-                    onClick={() => setSettingsOpen((prev) => !prev)}
-                    icon={<Settings2 size={16} />}
-                  >
-                    描述设置
-                  </Button>
-                  {settingsOpen && (
-                    <div className="absolute left-0 top-full mt-2 z-30 w-80 rounded-xl border border-gray-200 bg-white p-4 shadow-lg dark:border-border-primary dark:bg-background-secondary">
-                      <div className="space-y-4">
-                        <div>
-                          <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
-                            生成模式
-                            <span className="relative group">
-                              <HelpCircle size={12} className="cursor-help text-gray-400" />
-                              <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 w-56 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] leading-relaxed text-gray-600 opacity-0 shadow-md transition-opacity group-hover:opacity-100 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
-                                流式：AI 从第一页开始逐页输出，速度慢但效果更好。并行：AI 根据大纲并行生成每页描述，速度快但可能不够细致。
-                              </span>
-                            </span>
-                          </label>
-                          <div className="flex gap-1">
-                            {(['streaming', 'parallel'] as const).map((mode) => (
-                              <button
-                                key={mode}
-                                type="button"
-                                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                                  generationMode === mode
-                                    ? 'bg-banana-500 text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-background-hover dark:text-foreground-tertiary dark:hover:bg-background-primary'
-                                }`}
-                                onClick={() => {
-                                  setGenerationMode(mode);
-                                  saveSettingsDebounced({ description_generation_mode: mode });
-                                }}
-                              >
-                                {mode === 'streaming' ? '流式' : '并行'}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="mb-1.5 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
-                            额外字段
-                            <span className="relative group">
-                              <HelpCircle size={12} className="cursor-help text-gray-400" />
-                              <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 w-56 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] leading-relaxed text-gray-600 opacity-0 shadow-md transition-opacity group-hover:opacity-100 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary">
-                                启用后，AI 生成描述时会带上这些字段。点击胶囊启用/禁用，拖拽调整顺序。
-                              </span>
-                            </span>
-                          </label>
-                          <DndContext sensors={fieldSensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd}>
-                            <SortableContext items={availableFields} strategy={rectSortingStrategy}>
-                              <div className="mb-2 flex flex-wrap gap-1.5">
-                                {availableFields.map((name) => {
-                                  const active = extraFieldNames.includes(name);
-                                  return (
-                                    <SortableFieldPill
-                                      key={name}
-                                      name={name}
-                                      active={active}
-                                      removable={!PRESET_EXTRA_FIELDS.has(name)}
-                                      onToggle={() => {
-                                        const next = active
-                                          ? extraFieldNames.filter((field) => field !== name)
-                                          : [...extraFieldNames, name];
-                                        const normalizedNext = next.length > 0 ? next : DEFAULT_EXTRA_FIELDS;
-                                        setExtraFieldNames(normalizedNext);
-                                        saveSettingsDebounced({ description_extra_fields: normalizedNext });
-                                      }}
-                                      inImagePrompt={imagePromptFields.includes(name)}
-                                      imagePromptTooltip={imagePromptFields.includes(name) ? '该字段会影响生成的图片效果，点击可关闭' : '该字段不会影响生成的图片，点击可开启'}
-                                      onToggleImagePrompt={() => {
-                                        const next = imagePromptFields.includes(name)
-                                          ? imagePromptFields.filter((field) => field !== name)
-                                          : [...imagePromptFields, name];
-                                        setImagePromptFields(next);
-                                        saveSettingsDebounced({ image_prompt_extra_fields: next });
-                                      }}
-                                      onRemove={() => {
-                                        const nextPool = availableFields.filter((field) => field !== name);
-                                        setAvailableFields(nextPool);
-                                        localStorage.setItem('banana-available-extra-fields', JSON.stringify(nextPool));
-                                      }}
-                                    />
-                                  );
-                                })}
-                              </div>
-                            </SortableContext>
-                          </DndContext>
-                          <div className="flex gap-1">
-                            <input
-                              type="text"
-                              className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-banana-500/30 dark:border-border-primary dark:bg-background-primary dark:text-foreground-secondary"
-                              placeholder="添加字段"
-                              value={newFieldName}
-                              onChange={(event) => setNewFieldName(event.target.value)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter' && newFieldName.trim()) {
-                                  event.preventDefault();
-                                  const trimmed = newFieldName.trim();
-                                  if (!availableFields.includes(trimmed) && availableFields.length < 10) {
-                                    const nextPool = [...availableFields, trimmed];
-                                    setAvailableFields(nextPool);
-                                    localStorage.setItem('banana-available-extra-fields', JSON.stringify(nextPool));
-                                    const nextActive = [...extraFieldNames, trimmed];
-                                    setExtraFieldNames(nextActive);
-                                    saveSettingsDebounced({ description_extra_fields: nextActive });
-                                    setNewFieldName('');
-                                  }
-                                }
-                              }}
-                            />
-                            <button
-                              type="button"
-                              className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-banana-500 disabled:opacity-40 dark:hover:bg-background-hover"
-                              disabled={!newFieldName.trim() || availableFields.includes(newFieldName.trim()) || availableFields.length >= 10}
-                              onClick={() => {
-                                const trimmed = newFieldName.trim();
-                                if (trimmed && !availableFields.includes(trimmed) && availableFields.length < 10) {
-                                  const nextPool = [...availableFields, trimmed];
-                                  setAvailableFields(nextPool);
-                                  localStorage.setItem('banana-available-extra-fields', JSON.stringify(nextPool));
-                                  const nextActive = [...extraFieldNames, trimmed];
-                                  setExtraFieldNames(nextActive);
-                                  saveSettingsDebounced({ description_extra_fields: nextActive });
-                                  setNewFieldName('');
-                                }
-                              }}
-                            >
-                              <Plus size={14} />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-foreground-tertiary">
-                            描述生成要求
-                          </label>
-                          <Textarea
-                            value={descriptionRequirementsDraft}
-                            onChange={(event) => setDescriptionRequirementsDraft(event.target.value)}
-                            rows={3}
-                            placeholder="例如：每页描述控制在100字以内、多使用数据和案例、强调关键指标..."
-                          />
-                          <div className="mt-2 flex justify-end">
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => void handleSaveDescriptionRequirements()}
-                              loading={isSavingDescriptionRequirements}
-                            >
-                              保存要求
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<ImagePlus size={16} />}
+                  className="h-9 rounded-xl"
+                  data-testid="preview-batch-generate-images"
+                  onClick={handleGenerateAll}
+                  disabled={isGenerateDisabled}
+                >
+                  {generateButtonText}
+                </Button>
 
                 <div className="relative" ref={fileMenuRef}>
                   <Button
@@ -4168,9 +3907,9 @@ export const SlidePreview: React.FC = () => {
 
                     <section
                       data-testid="preview-editor-pane"
-                      className="min-h-0 min-w-0 overflow-visible"
+                      className={`min-h-0 min-w-0 ${isMobileView ? 'overflow-visible' : 'overflow-y-auto overscroll-contain'}`}
                     >
-                      <div className="flex h-full flex-col px-3 pt-3 md:px-4 md:pt-4">
+                      <div className="flex min-h-full flex-col px-3 pt-3 pb-3 md:px-4 md:pt-4 md:pb-4">
                         <div className="shrink-0">
                           {editorCanvasContent}
                         </div>
@@ -4178,7 +3917,7 @@ export const SlidePreview: React.FC = () => {
                           {externalFieldTags}
                         </div>
                         <div className="mt-2 min-h-0 flex-1 overflow-visible">
-                          <div className="h-full">
+                          <div className="min-h-full">
                             <PageAiWorkbench
                               title={t('preview.pageAiTitle')}
                               subtitle={t('preview.pageAiSubtitle')}
@@ -4362,6 +4101,19 @@ export const SlidePreview: React.FC = () => {
             onSaveTemplateStyle={handleSaveTemplateStyle}
             isSavingRequirements={isSavingRequirements}
             isSavingTemplateStyle={isSavingTemplateStyle}
+            descriptionGenerationMode={generationMode}
+            descriptionExtraFields={extraFieldNames}
+            availableDescriptionFields={availableFields}
+            descriptionImagePromptFields={imagePromptFields}
+            descriptionRequirements={descriptionRequirementsDraft}
+            presetDescriptionFields={DEFAULT_EXTRA_FIELDS}
+            onDescriptionGenerationModeChange={handleDescriptionGenerationModeChange}
+            onDescriptionExtraFieldsChange={handleDescriptionExtraFieldsChange}
+            onAvailableDescriptionFieldsChange={handleAvailableDescriptionFieldsChange}
+            onDescriptionImagePromptFieldsChange={handleDescriptionImagePromptFieldsChange}
+            onDescriptionRequirementsChange={setDescriptionRequirementsDraft}
+            onSaveDescriptionRequirements={() => void handleSaveDescriptionRequirements()}
+            isSavingDescriptionRequirements={isSavingDescriptionRequirements}
             // 导出设置
             exportExtractorMethod={exportExtractorMethod}
             exportInpaintMethod={exportInpaintMethod}

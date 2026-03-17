@@ -47,7 +47,7 @@ interface PageAiWorkbenchProps {
   activeReferenceId?: string | null;
   inputValue: string;
   modelValue: string;
-  modelOptions: string[];
+  modelOptions: readonly string[];
   isSubmitting: boolean;
   isRegionSelectionActive: boolean;
   onInputChange: (value: string) => void;
@@ -70,12 +70,9 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   templateLabel,
   materialLabel,
   uploadLabel,
-  loadingLabel,
   regionSelectLabel,
   regionSelectActiveLabel,
   modelLabel,
-  modelHint,
-  messages,
   references,
   descriptionImageOptions,
   hasTemplateReference,
