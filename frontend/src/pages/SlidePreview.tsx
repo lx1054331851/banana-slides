@@ -851,6 +851,7 @@ export const SlidePreview: React.FC = () => {
   const exportMenuRef = useRef<HTMLDivElement | null>(null);
   const exportTasksPanelRef = useRef<HTMLDivElement | null>(null);
   const externalFieldPopoverRef = useRef<HTMLDivElement | null>(null);
+  const generateFlowLockRef = useRef(false);
   // 多选导出相关状态
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
@@ -1546,22 +1547,21 @@ export const SlidePreview: React.FC = () => {
       return;
     }
 
+    let resolution: string | undefined;
     try {
       const response = await getSettings();
-      const resolution = response.data?.image_resolution;
-
-      // 如果是1K分辨率，显示警告对话框
-      if (resolution === '1K') {
-        setPending1KAction(() => action);
-        setSkip1KWarningChecked(false);
-        setShow1KWarningDialog(true);
-      } else {
-        // 不是1K分辨率，直接执行
-        await action();
-      }
+      resolution = response.data?.image_resolution;
     } catch (error) {
       console.error('获取设置失败:', error);
-      // 获取设置失败时，直接执行（不阻塞用户）
+    }
+
+    // 如果是1K分辨率，显示警告对话框
+    if (resolution === '1K') {
+      setPending1KAction(() => action);
+      setSkip1KWarningChecked(false);
+      setShow1KWarningDialog(true);
+    } else {
+      // 未配置/获取失败/非1K时都直接执行
       await action();
     }
   }, []);
@@ -1799,50 +1799,59 @@ export const SlidePreview: React.FC = () => {
 
     const page = currentProject.pages[selectedIndex];
     if (!page.id) return;
-
-    handleSaveOutlineAndDescription();
-    await saveAllPages();
-    const normalizedEditModel = normalizeProjectDefaultImageModel(editRunImageModel || projectDefaultImageModel);
-    const editGenerationOverride: GenerationOverride = {
-      image: { model: normalizedEditModel },
-    };
-    const hasExistingImage = Boolean(page.generated_image_path || page.preview_image_path);
-    const hasContextInputs = Boolean(
-      editPrompt.trim() ||
-      selectedContextImages.useTemplate ||
-      selectedContextImages.descImageUrls.length > 0 ||
-      selectedContextImages.uploadedFiles.length > 0
-    );
-
-    if (hasExistingImage || hasContextInputs) {
-      await editPageImage(
-        page.id,
-        editPrompt,
-        {
-          useTemplate: selectedContextImages.useTemplate,
-          descImageUrls: selectedContextImages.descImageUrls,
-          uploadedFiles: selectedContextImages.uploadedFiles.length > 0
-            ? selectedContextImages.uploadedFiles
-            : undefined,
-        },
-        editGenerationOverride
+    try {
+      handleSaveOutlineAndDescription();
+      await saveAllPages();
+      const normalizedEditModel = normalizeProjectDefaultImageModel(editRunImageModel || projectDefaultImageModel);
+      const editGenerationOverride: GenerationOverride = {
+        image: { model: normalizedEditModel },
+      };
+      const hasExistingImage = Boolean(page.generated_image_path || page.preview_image_path);
+      const hasContextInputs = Boolean(
+        editPrompt.trim() ||
+        selectedContextImages.useTemplate ||
+        selectedContextImages.descImageUrls.length > 0 ||
+        selectedContextImages.uploadedFiles.length > 0
       );
-    } else {
-      await generateImages([page.id], editGenerationOverride);
-    }
 
-    setEditContextByPage((prev) => ({
-      ...prev,
-      [page.id!]: {
-        prompt: editPrompt,
-        contextImages: {
-          useTemplate: selectedContextImages.useTemplate,
-          descImageUrls: [...selectedContextImages.descImageUrls],
-          uploadedFiles: [...selectedContextImages.uploadedFiles],
+      if (hasExistingImage || hasContextInputs) {
+        await editPageImage(
+          page.id,
+          editPrompt,
+          {
+            useTemplate: selectedContextImages.useTemplate,
+            descImageUrls: selectedContextImages.descImageUrls,
+            uploadedFiles: selectedContextImages.uploadedFiles.length > 0
+              ? selectedContextImages.uploadedFiles
+              : undefined,
+          },
+          editGenerationOverride
+        );
+      } else {
+        await generateImages([page.id], editGenerationOverride);
+      }
+
+      setEditContextByPage((prev) => ({
+        ...prev,
+        [page.id!]: {
+          prompt: editPrompt,
+          contextImages: {
+            useTemplate: selectedContextImages.useTemplate,
+            descImageUrls: [...selectedContextImages.descImageUrls],
+            uploadedFiles: [...selectedContextImages.uploadedFiles],
+          },
         },
-      },
-    }));
-    setEditRunImageModel(projectDefaultImageModel);
+      }));
+      setEditRunImageModel(projectDefaultImageModel);
+    } catch (error: any) {
+      const errorMessage =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        error?.message ||
+        t('preview.generationFailed');
+      show({ message: errorMessage, type: 'error' });
+      throw error;
+    }
   }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, handleSaveOutlineAndDescription, saveAllPages, generateImages]);
 
   const handleSaveCurrentPage = useCallback(async () => {
@@ -2095,40 +2104,56 @@ export const SlidePreview: React.FC = () => {
 
   const handleOpenGenerateFlow = useCallback(async () => {
     if (!currentProject || !projectId) return;
-    const sortedPages = getSortedPages();
-    if (sortedPages.length === 0) return;
-    const coverPage = sortedPages[0];
-    const endingPage = sortedPages[sortedPages.length - 1];
-    const coverText = getDescriptionText(coverPage.description_content);
-    const endingText = getDescriptionText(endingPage.description_content);
-
+    if (generateFlowLockRef.current) return;
+    generateFlowLockRef.current = true;
     try {
-      const meta = parsePresentationMeta(currentProject.presentation_meta);
-      if (meta._cover_ending_checked) {
-        await checkResolutionAndExecute(handleGenerateImageFromControls);
+      const hasTemplateSource = Boolean(
+        currentProject.template_image_path ||
+        currentProject.template_style?.trim() ||
+        currentProject.template_style_json?.trim()
+      );
+      if (!hasTemplateSource) {
+        show({ message: '请先上传模板图片或添加风格描述。', type: 'error' });
         return;
       }
-      setIsCheckingCoverEnding(true);
-      show({ message: '正在检查封面/结尾信息...', type: 'info' });
-      const response = await detectCoverEndingFields(projectId, {
-        cover: { page_id: coverPage.id || coverPage.page_id, description: coverText },
-        ending: { page_id: endingPage.id || endingPage.page_id, description: endingText },
-      });
-      const fields = response.data?.fields || [];
-      const missing = fields.filter((field) => !field.present || field.is_placeholder);
-      if (missing.length > 0) {
-        setDetectFields(fields);
-        setCoverEndingModalMode('missing');
-        setIsCoverEndingModalOpen(true);
-        return;
-      }
-    } catch (error) {
-      console.warn('封面/结尾检测失败，跳过检测流程', error);
-    } finally {
-      setIsCheckingCoverEnding(false);
-    }
 
-    await checkResolutionAndExecute(handleGenerateImageFromControls);
+      const sortedPages = getSortedPages();
+      if (sortedPages.length === 0) return;
+      const coverPage = sortedPages[0];
+      const endingPage = sortedPages[sortedPages.length - 1];
+      const coverText = getDescriptionText(coverPage.description_content);
+      const endingText = getDescriptionText(endingPage.description_content);
+
+      try {
+        const meta = parsePresentationMeta(currentProject.presentation_meta);
+        if (meta._cover_ending_checked) {
+          await checkResolutionAndExecute(handleGenerateImageFromControls);
+          return;
+        }
+        setIsCheckingCoverEnding(true);
+        show({ message: '正在检查封面/结尾信息...', type: 'info' });
+        const response = await detectCoverEndingFields(projectId, {
+          cover: { page_id: coverPage.id || coverPage.page_id, description: coverText },
+          ending: { page_id: endingPage.id || endingPage.page_id, description: endingText },
+        });
+        const fields = response.data?.fields || [];
+        const missing = fields.filter((field) => !field.present || field.is_placeholder);
+        if (missing.length > 0) {
+          setDetectFields(fields);
+          setCoverEndingModalMode('missing');
+          setIsCoverEndingModalOpen(true);
+          return;
+        }
+      } catch (error) {
+        console.warn('封面/结尾检测失败，跳过检测流程', error);
+      } finally {
+        setIsCheckingCoverEnding(false);
+      }
+
+      await checkResolutionAndExecute(handleGenerateImageFromControls);
+    } finally {
+      generateFlowLockRef.current = false;
+    }
   }, [currentProject, projectId, getSortedPages, show, checkResolutionAndExecute, handleGenerateImageFromControls]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
