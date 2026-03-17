@@ -904,7 +904,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       }
     } else {
       // 并行模式（原有逻辑）
-      set({ error: null });
+      set({ error: null, isDescriptionStreaming: true, taskProgress: null });
 
       const updatedPages = currentProject.pages.map((page) =>
         page.id ? { ...page, status: 'GENERATING_DESCRIPTION' as const } : page
@@ -938,12 +938,13 @@ export const useProjectStore = create<ProjectState>((set, get) => {
               await get().syncProject();
 
               if (task.status === 'COMPLETED') {
-                set({ taskProgress: null, activeTaskId: null });
+                set({ taskProgress: null, activeTaskId: null, isDescriptionStreaming: false });
                 await get().syncProject();
               } else if (task.status === 'FAILED') {
                 set({
                   taskProgress: null,
                   activeTaskId: null,
+                  isDescriptionStreaming: false,
                   error: normalizeErrorMessage(task.error_message || task.error || t('store.generateDescFailed'))
                 });
                 await get().syncProject();
@@ -959,6 +960,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
               set({
                 taskProgress: null,
                 activeTaskId: null,
+                isDescriptionStreaming: false,
                 error: normalizeErrorMessage(error.message || t('store.generateDescTimeout'))
               });
               await get().syncProject();
@@ -974,7 +976,11 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       } catch (error: any) {
         console.error('[生成描述] 启动任务失败:', error);
         await get().syncProject();
-        set({ error: normalizeErrorMessage(error.message || t('store.startGenerationFailed')) });
+        set({
+          error: normalizeErrorMessage(error.message || t('store.startGenerationFailed')),
+          isDescriptionStreaming: false,
+          taskProgress: null,
+        });
         throw error;
       }
     }

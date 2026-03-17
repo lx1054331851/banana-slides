@@ -42,6 +42,8 @@ const previewI18n = {
       globalAiLoading: "正在更新整个项目的页面描述...",
       globalAiResponseFallback: "已根据你的要求更新整套文档描述，你可以继续追加修改。",
       globalAiErrorFallback: "修改失败，请稍后重试。",
+      descriptionGenerating: "正在生成描述...",
+      descriptionGeneratingProgress: "正在生成描述 {{completed}}/{{total}}",
       globalAiSubmitTooltip: "发送指令",
       globalAiInputHint: "Enter 发送，Shift+Enter 换行",
       batchGenerate: "批量生成图片 ({{count}})", generateSelected: "生成选中页面 ({{count}})",
@@ -164,6 +166,8 @@ const previewI18n = {
       globalAiLoading: "Updating descriptions across the whole project...",
       globalAiResponseFallback: "The deck descriptions have been updated based on your request. You can keep refining.",
       globalAiErrorFallback: "Update failed. Please try again.",
+      descriptionGenerating: "Generating descriptions...",
+      descriptionGeneratingProgress: "Generating descriptions {{completed}}/{{total}}",
       globalAiSubmitTooltip: "Send instruction",
       globalAiInputHint: "Enter to send, Shift+Enter for newline",
       batchGenerate: "Batch Generate Images ({{count}})", generateSelected: "Generate Selected ({{count}})",
@@ -470,6 +474,7 @@ export const SlidePreview: React.FC = () => {
     updatePageLocal,
     insertPageAt,
     isGlobalLoading,
+    isDescriptionStreaming,
     taskProgress,
     pageGeneratingTasks,
     warningMessage,
@@ -2764,6 +2769,15 @@ export const SlidePreview: React.FC = () => {
   const isGenerateDisabled = isMultiSelectMode && selectedPageIds.size === 0;
   const missingImageCount = currentProject.pages.filter(p => !p.generated_image_path).length;
   const selectedPageHasImage = Boolean(selectedPage?.generated_image_path || selectedPage?.preview_image_path);
+  const descriptionGenerationTotal = taskProgress?.total && taskProgress.total > 0
+    ? taskProgress.total
+    : currentProject.pages.filter((page) => page.id).length;
+  const descriptionGenerationCompleted = taskProgress?.total && taskProgress.total > 0
+    ? Math.min(taskProgress.completed, descriptionGenerationTotal)
+    : currentProject.pages.filter((page) => page.id && page.status !== 'GENERATING_DESCRIPTION').length;
+  const descriptionGenerationProgressPercent = descriptionGenerationTotal > 0
+    ? Math.max(0, Math.min(100, Math.round((descriptionGenerationCompleted / descriptionGenerationTotal) * 100)))
+    : 0;
 
   const editorCanvasContent = (
     <div
@@ -3619,6 +3633,7 @@ export const SlidePreview: React.FC = () => {
                   icon={<Sparkles size={16} />}
                   className="h-9 rounded-xl"
                   data-testid="preview-batch-generate-descriptions"
+                  loading={isDescriptionStreaming}
                   onClick={() => void handleGenerateDescriptions()}
                 >
                   批量生成描述
@@ -3728,6 +3743,30 @@ export const SlidePreview: React.FC = () => {
                   onChange={handleImportDescriptions}
                 />
               </div>
+              {isDescriptionStreaming && descriptionGenerationTotal > 0 && (
+                <div
+                  data-testid="preview-description-progress"
+                  className="mt-3 rounded-2xl border border-banana-200/80 bg-white/90 px-4 py-3 shadow-sm dark:border-banana-700/40 dark:bg-background-primary/90"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-slate-700 dark:text-foreground-secondary">
+                      {t('preview.descriptionGeneratingProgress', {
+                        completed: descriptionGenerationCompleted,
+                        total: descriptionGenerationTotal,
+                      })}
+                    </span>
+                    <span className="text-xs font-semibold text-banana-700 dark:text-banana">
+                      {descriptionGenerationProgressPercent}%
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-[#efe7cf] dark:bg-background-hover">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-banana-400 to-banana-500 transition-all duration-300"
+                      style={{ width: `${descriptionGenerationProgressPercent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

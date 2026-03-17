@@ -231,6 +231,69 @@ test.describe('Preview four-region layout and sidebar interactions', () => {
     await expect(page).toHaveURL(new RegExp(`/project/${projectId}/preview`))
   })
 
+  test('preview shows progress while batch generating descriptions', async ({ page }) => {
+    const projectId = 'mock-preview-description-progress'
+    const state: MockProjectState = {
+      projectId,
+      addPageCalls: [],
+      project: {
+        id: projectId,
+        project_id: projectId,
+        status: 'OUTLINE_GENERATED',
+        creation_type: 'idea',
+        pages: Array.from({ length: 3 }, (_, i) => ({
+          ...makePage(i),
+          status: 'DRAFT',
+          description_content: null,
+          generated_image_path: null,
+          preview_image_path: null,
+        })),
+      },
+    }
+
+    await setupCommonRoutes(page)
+    await setupProjectRoutes(page, state)
+
+    await page.route(`**/api/projects/${projectId}/generate/descriptions`, async (route) => {
+      if (route.request().url().includes('/stream')) {
+        return route.continue()
+      }
+      await route.fulfill({
+        status: 202,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: { task_id: 'mock-desc-task', status: 'PROCESSING', total_pages: 3 },
+        }),
+      })
+    })
+
+    await page.route(`**/api/projects/${projectId}/tasks/mock-desc-task`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: { status: 'PROCESSING', progress: { total: 3, completed: 1 } },
+        }),
+      })
+    })
+
+    await page.goto(`/project/${projectId}/preview`)
+    await page.evaluate(() => {
+      sessionStorage.setItem('banana-settings', JSON.stringify({
+        description_generation_mode: 'parallel',
+      }))
+    })
+    const generateDescBtn = page.getByTestId('preview-batch-generate-descriptions')
+    await generateDescBtn.click()
+
+    await expect(generateDescBtn).toBeDisabled()
+    const progress = page.getByTestId('preview-description-progress')
+    await expect(progress).toBeVisible()
+    await expect(progress).toContainText(/正在生成描述\s+(0|1)\/3/)
+  })
+
   test('preview supports list+grid insert, split resize, and no edge-drag resize conflict', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1100 })
 
