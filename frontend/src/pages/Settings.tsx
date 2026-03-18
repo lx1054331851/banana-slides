@@ -408,22 +408,6 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
   const { show, ToastContainer } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
 
-  const copyToClipboard = (text: string) => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text);
-    } else {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-    }
-    show({ message: '链接已复制到剪贴板', type: 'success' });
-  };
-
   const [settings, setSettings] = useState<SettingsType | null>(null);
   const [providerProfiles, setProviderProfiles] = useState<ProviderProfileSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);

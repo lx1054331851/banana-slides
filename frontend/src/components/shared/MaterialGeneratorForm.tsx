@@ -267,7 +267,7 @@ export const MaterialGeneratorForm: React.FC<MaterialGeneratorFormProps> = ({
       if (taskId) {
         onTaskCreated?.({
           taskId,
-          projectId,
+          projectId: projectId ?? null,
           prompt: prompt.trim(),
           aspectRatio,
         });

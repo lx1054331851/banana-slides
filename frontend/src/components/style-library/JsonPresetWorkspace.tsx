@@ -52,7 +52,7 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
     if (!presetId) return false;
     const preset = presets.find((item) => item.id === presetId);
     if (!preset) return false;
-    const previewImages = preset.preview_images || {};
+    const previewImages: Partial<StylePresetPreviewImages> = preset.preview_images || {};
 
     if (task.task_type === 'STYLE_PRESET_IMAGE_REGENERATE') {
       const previewKey = getTaskPreviewKey(task);
@@ -245,7 +245,7 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
     }
 
     if (presetId) {
-      const progressPreviewImages = task.progress?.preview_images || {};
+      const progressPreviewImages: Partial<StylePresetPreviewImages> = task.progress?.preview_images || {};
       const missingKey = (Object.entries(progressPreviewImages).find(([, value]) => !value)?.[0] as PreviewKey | undefined)
         || (Object.keys(task.progress?.preview_errors || {})[0] as PreviewKey | undefined);
       if (missingKey) {
