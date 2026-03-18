@@ -484,11 +484,12 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
     <>
       <div
         data-testid="template-selector-layout"
-        className="flex h-[72vh] min-h-[560px] max-h-[760px] flex-col gap-5 lg:flex-row"
+        className="grid h-[78vh] min-h-[620px] max-h-[820px] gap-5 lg:grid-cols-[minmax(0,1.55fr)_360px] xl:grid-cols-[minmax(0,1.65fr)_392px]"
       >
-        <div className="min-w-0 flex-1 rounded-3xl border border-gray-200 dark:border-border-primary bg-gray-50/75 dark:bg-background-tertiary/25 overflow-hidden flex flex-col min-h-0">
-          <div className="sticky top-0 z-10 rounded-t-3xl border-b border-gray-200 dark:border-border-primary bg-white/90 dark:bg-background-secondary/90 backdrop-blur">
-            <div className="flex gap-1 p-2">
+        <div className="min-w-0 rounded-[28px] border border-[#e8ddbf] bg-[#fbf8ef] shadow-[0_14px_32px_rgba(15,23,42,0.06)] dark:border-border-primary dark:bg-background-tertiary/25 overflow-hidden flex flex-col min-h-0">
+          <div className="sticky top-0 z-10 border-b border-[#eadfbf] bg-white/92 backdrop-blur dark:border-border-primary dark:bg-background-secondary/92">
+            <div className="px-4 pt-4 pb-3">
+              <div className="flex max-w-[760px] gap-1 rounded-2xl border border-[#eadfbf] bg-[#f7f4ea] p-1 dark:border-border-primary dark:bg-background-primary/70">
               {([
                 ['image', t('template.tabs.image')],
                 ['json', t('template.tabs.json')],
@@ -499,26 +500,27 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                   type="button"
                   onClick={() => onActiveTabChange(tab)}
                   data-testid={`template-selector-tab-${tab}`}
-                  className={`flex-1 rounded-2xl px-4 py-3 text-sm font-medium transition-colors ${
-                    activeTab === tab
-                      ? 'bg-gradient-to-r from-banana-500 to-banana-600 text-black shadow-md shadow-banana-200/70'
-                      : 'text-gray-600 dark:text-foreground-tertiary hover:bg-banana-50 dark:hover:bg-background-hover'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+                    className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
+                      activeTab === tab
+                        ? 'bg-banana-500 text-black shadow-sm'
+                        : 'text-gray-600 dark:text-foreground-tertiary hover:bg-white/80 dark:hover:bg-background-hover'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="flex-1 min-h-0 p-4">
+          <div className="flex-1 min-h-0 px-4 pb-4">
             <div className={`${activeTab === 'image' ? 'flex' : 'hidden'} h-full min-h-0 flex-col`}>
-              <div className="flex items-center gap-3 mb-4">
+              <div className="mb-4 flex items-center gap-3 pt-4">
                 <input
                   value={imageSearch}
                   onChange={(e) => setImageSearch(e.target.value)}
                   placeholder={t('template.imageSearch')}
-                  className="flex-1 px-4 py-2.5 text-sm rounded-2xl border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500"
+                  className="flex-1 rounded-2xl border border-[#eadfbf] bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-banana-500 dark:border-border-primary dark:bg-background-secondary"
                 />
                 <Button
                   variant="ghost"
@@ -540,18 +542,30 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                 </Button>
               </div>
 
-              <div ref={imageScrollRef} onScroll={handleImageScroll} className="min-h-0 flex-1 overflow-y-auto px-1 py-1 pr-2 space-y-6">
+              <div ref={imageScrollRef} onScroll={handleImageScroll} className="min-h-0 flex-1 overflow-y-auto pr-1">
                 <section>
-                  <div className="mb-3">
+                  <div className="mb-3 px-1">
                     <div className="text-sm font-semibold text-gray-900 dark:text-white">{t('template.imageTemplates')}</div>
                   </div>
                   {filteredImageTemplates.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary px-4 py-10 text-center">
-                      <div className="text-sm text-gray-500 dark:text-foreground-tertiary">{t('template.emptyImage')}</div>
-                      <div className="mt-1 text-xs text-gray-400 dark:text-foreground-tertiary">{t('template.emptyImageHint')}</div>
+                    <div className="flex min-h-[420px] items-center justify-center rounded-[24px] border border-dashed border-[#eadfbf] bg-white/75 px-6 text-center dark:border-border-primary dark:bg-background-secondary">
+                      <div className="max-w-md">
+                        <div className="text-base font-semibold text-slate-700 dark:text-foreground-secondary">{t('template.emptyImage')}</div>
+                        <div className="mt-2 text-sm text-gray-500 dark:text-foreground-tertiary">{t('template.emptyImageHint')}</div>
+                        <div className="mt-5 flex justify-center">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            icon={<ArrowUpRight size={16} />}
+                            onClick={() => openExternalPage('/style-library?tab=presetTemplates')}
+                          >
+                            {t('template.goToStyleLibrary')}
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 gap-4 xl:grid-cols-3 2xl:grid-cols-4">
                       {filteredImageTemplates.slice(0, imageVisible).map(({ key, selection, testId }) => {
                         return (
                           <TemplateCard
@@ -572,12 +586,12 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
             </div>
 
             <div className={`${activeTab === 'json' ? 'flex' : 'hidden'} h-full min-h-0 flex-col`}>
-              <div className="flex items-center gap-3 mb-4">
+              <div className="mb-4 flex items-center gap-3 pt-4">
                 <input
                   value={jsonSearch}
                   onChange={(e) => setJsonSearch(e.target.value)}
                   placeholder={t('template.jsonSearch')}
-                  className="flex-1 px-4 py-2.5 text-sm rounded-2xl border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500"
+                  className="flex-1 rounded-2xl border border-[#eadfbf] bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-banana-500 dark:border-border-primary dark:bg-background-secondary"
                 />
                 <Button
                   variant="ghost"
@@ -599,14 +613,26 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                 </Button>
               </div>
 
-              <div ref={jsonScrollRef} onScroll={handleJsonScroll} className="min-h-0 flex-1 overflow-y-auto px-1 py-1 pr-2">
+              <div ref={jsonScrollRef} onScroll={handleJsonScroll} className="min-h-0 flex-1 overflow-y-auto pr-1">
                 {filteredStylePresets.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary px-4 py-10 text-center">
-                    <div className="text-sm text-gray-500 dark:text-foreground-tertiary">{t('template.emptyJson')}</div>
-                    <div className="mt-1 text-xs text-gray-400 dark:text-foreground-tertiary">{t('template.emptyJsonHint')}</div>
+                  <div className="flex min-h-[420px] items-center justify-center rounded-[24px] border border-dashed border-[#eadfbf] bg-white/75 px-6 text-center dark:border-border-primary dark:bg-background-secondary">
+                    <div className="max-w-md">
+                      <div className="text-base font-semibold text-slate-700 dark:text-foreground-secondary">{t('template.emptyJson')}</div>
+                      <div className="mt-2 text-sm text-gray-500 dark:text-foreground-tertiary">{t('template.emptyJsonHint')}</div>
+                      <div className="mt-5 flex justify-center">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={<ArrowUpRight size={16} />}
+                          onClick={() => openExternalPage('/style-library?tab=presets')}
+                        >
+                          {t('template.goToStyleLibrary')}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 gap-4 xl:grid-cols-3 2xl:grid-cols-4">
                     {filteredStylePresets.slice(0, jsonVisible).map((preset) => {
                       const selection = buildStyleSelection(preset);
                       return (
@@ -627,7 +653,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
             </div>
 
             <div className={`${activeTab === 'material' ? 'flex' : 'hidden'} h-full min-h-0 flex-col`}>
-              <div className="flex items-center justify-between gap-3 mb-4">
+              <div className="mb-4 flex items-center justify-between gap-3 pt-4">
                 <p className="text-sm text-gray-500 dark:text-foreground-tertiary">{t('template.materialHint')}</p>
                 <Button
                   variant="ghost"
@@ -671,13 +697,13 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
 
         <aside
           data-testid="template-selector-sidebar"
-          className="w-full lg:w-[360px] xl:w-[400px] shrink-0 rounded-3xl border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary p-5 flex flex-col h-full min-h-0 overflow-y-auto"
+          className="w-full shrink-0 rounded-[28px] border border-[#eadfbf] bg-white p-5 shadow-[0_14px_32px_rgba(15,23,42,0.06)] dark:border-border-primary dark:bg-background-secondary flex flex-col h-full min-h-0 overflow-y-auto"
         >
           <div className="shrink-0">
             <div className="text-xs uppercase tracking-[0.14em] text-gray-400 dark:text-foreground-tertiary">
               {displaySelection ? t('template.selectionTitle') : t('template.currentTitle')}
             </div>
-            <div className="mt-3 inline-flex rounded-full border border-gray-200 dark:border-border-primary px-3 py-1 text-xs text-gray-600 dark:text-foreground-tertiary">
+            <div className="mt-3 inline-flex rounded-full border border-[#eadfbf] px-3 py-1 text-xs text-gray-600 dark:border-border-primary dark:text-foreground-tertiary">
               {renderSelectionStatus()}
             </div>
             <p className="mt-3 text-sm text-gray-500 dark:text-foreground-tertiary">
@@ -685,7 +711,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
             </p>
           </div>
 
-          <div className="mt-5 rounded-3xl overflow-hidden border border-gray-200 dark:border-border-primary bg-gray-100 dark:bg-background-tertiary aspect-[4/3] flex items-center justify-center">
+          <div className="mt-5 rounded-[24px] overflow-hidden border border-[#eadfbf] bg-[#fbf8ef] dark:border-border-primary dark:bg-background-tertiary aspect-[4/3] flex items-center justify-center">
             {activePreviewUrl ? (
               <img
                 src={getImageUrl(activePreviewUrl)}

@@ -117,7 +117,7 @@ interface ProjectState {
   generateOutline: () => Promise<void>;
   generateOutlineStream: () => Promise<{ complete: boolean } | undefined>;
   generateFromDescription: () => Promise<void>;
-  generateDescriptions: (detailLevel?: string) => Promise<void>;
+  generateDescriptions: (detailLevel?: string, pageIds?: string[]) => Promise<void>;
   generatePageDescription: (pageId: string, detailLevel?: string) => Promise<void>;
   regenerateRenovationPage: (pageId: string, keepLayout?: boolean) => Promise<void>;
   generateImages: (pageIds?: string[], generationOverride?: GenerationOverride) => Promise<void>;
@@ -796,11 +796,12 @@ export const useProjectStore = create<ProjectState>((set, get) => {
   },
 
   // 生成描述（根据设置选择流式或并行模式）
-  generateDescriptions: async (detailLevel?: string) => {
+  generateDescriptions: async (detailLevel?: string, pageIds?: string[]) => {
     const { currentProject } = get();
     if (!currentProject || !currentProject.id) return;
 
-    const pages = currentProject.pages.filter((p) => p.id);
+    const targetPageIdSet = pageIds && pageIds.length > 0 ? new Set(pageIds) : null;
+    const pages = currentProject.pages.filter((p) => p.id && (!targetPageIdSet || targetPageIdSet.has(p.id)));
     if (pages.length === 0) return;
 
     // 检查描述生成模式，优先从 sessionStorage 缓存读取以避免额外 API 调用
@@ -817,10 +818,12 @@ export const useProjectStore = create<ProjectState>((set, get) => {
 
     if (mode === 'streaming') {
       // 流式模式
-      set({ isDescriptionStreaming: true, error: null });
+      set({ isDescriptionStreaming: true, error: null, taskProgress: null });
 
       const updatedPages = currentProject.pages.map((page) =>
-        page.id ? { ...page, status: 'GENERATING_DESCRIPTION' as const } : page
+        page.id && (!targetPageIdSet || targetPageIdSet.has(page.id))
+          ? { ...page, status: 'GENERATING_DESCRIPTION' as const }
+          : page
       );
       set({ currentProject: { ...currentProject, pages: updatedPages } });
 
@@ -870,7 +873,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
             set({ error: normalizeErrorMessage(message) });
             streamDone = true;
           },
-        }, undefined, detailLevel);
+        }, undefined, detailLevel, pageIds);
 
         streamDone = true;
         await renderPromise;
@@ -904,7 +907,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       }
     } else {
       // 并行模式（原有逻辑）
-      set({ error: null });
+      set({ error: null, isDescriptionStreaming: true, taskProgress: null });
 
       const updatedPages = currentProject.pages.map((page) =>
         page.id ? { ...page, status: 'GENERATING_DESCRIPTION' as const } : page
@@ -917,7 +920,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
           throw new Error(t('store.projectIdMissing'));
         }
 
-        const response = await api.generateDescriptions(projectId, undefined, detailLevel);
+        const response = await api.generateDescriptions(projectId, undefined, detailLevel, pageIds);
         const taskId = response.data?.task_id;
 
         if (!taskId) {
@@ -938,12 +941,13 @@ export const useProjectStore = create<ProjectState>((set, get) => {
               await get().syncProject();
 
               if (task.status === 'COMPLETED') {
-                set({ taskProgress: null, activeTaskId: null });
+                set({ taskProgress: null, activeTaskId: null, isDescriptionStreaming: false });
                 await get().syncProject();
               } else if (task.status === 'FAILED') {
                 set({
                   taskProgress: null,
                   activeTaskId: null,
+                  isDescriptionStreaming: false,
                   error: normalizeErrorMessage(task.error_message || task.error || t('store.generateDescFailed'))
                 });
                 await get().syncProject();
@@ -959,6 +963,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
               set({
                 taskProgress: null,
                 activeTaskId: null,
+                isDescriptionStreaming: false,
                 error: normalizeErrorMessage(error.message || t('store.generateDescTimeout'))
               });
               await get().syncProject();
@@ -974,7 +979,11 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       } catch (error: any) {
         console.error('[生成描述] 启动任务失败:', error);
         await get().syncProject();
-        set({ error: normalizeErrorMessage(error.message || t('store.startGenerationFailed')) });
+        set({
+          error: normalizeErrorMessage(error.message || t('store.startGenerationFailed')),
+          isDescriptionStreaming: false,
+          taskProgress: null,
+        });
         throw error;
       }
     }

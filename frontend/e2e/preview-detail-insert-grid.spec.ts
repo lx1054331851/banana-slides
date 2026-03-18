@@ -142,8 +142,243 @@ const setupProjectRoutes = async (page: PlaywrightPage, state: MockProjectState)
   })
 }
 
-test.describe('Detail/Preview dynamic insert and preview sidebar modes', () => {
-  test('preview supports list+grid insert, 2/3 max resize, and no edge-drag resize conflict', async ({ page }) => {
+test.describe('Preview four-region layout and sidebar interactions', () => {
+  test('preview uses fixed four-region layout and ignores legacy mode query differences', async ({ page }) => {
+    const textProjectId = 'mock-preview-text-mode'
+    const imageProjectId = 'mock-preview-image-mode'
+    const textState: MockProjectState = {
+      projectId: textProjectId,
+      addPageCalls: [],
+      project: {
+        id: textProjectId,
+        project_id: textProjectId,
+        status: 'DESCRIPTIONS_GENERATED',
+        creation_type: 'idea',
+        pages: [
+          {
+            ...makePage(0),
+            generated_image_path: null,
+            preview_image_path: null,
+          },
+        ],
+      },
+    }
+    const imageState: MockProjectState = {
+      projectId: imageProjectId,
+      addPageCalls: [],
+      project: {
+        id: imageProjectId,
+        project_id: imageProjectId,
+        status: 'COMPLETED',
+        creation_type: 'idea',
+        pages: [makePage(0)],
+      },
+    }
+
+    await setupCommonRoutes(page)
+    await setupProjectRoutes(page, textState)
+    await setupProjectRoutes(page, imageState)
+
+    await page.goto(`/project/${textProjectId}/preview`)
+    await expect(page.getByTestId('preview-secondary-toolbar')).toBeVisible()
+    await expect(page.getByTestId('preview-visual-pane')).toBeVisible()
+    await expect(page.getByTestId('preview-editor-pane')).toBeVisible()
+    await expect(page.getByTestId('preview-status-bar')).toBeVisible()
+    await expect(page.getByTestId('page-ai-workbench')).toBeVisible()
+    await expect(page.getByTestId('preview-mode-text')).toHaveCount(0)
+    await expect(page.getByTestId('preview-mode-image')).toHaveCount(0)
+    await expect(page.getByTestId('preview-editor-canvas')).toBeVisible()
+    await expect(page.getByText('图片预览区')).toHaveCount(0)
+    await expect(page.getByTestId('preview-batch-generate-descriptions')).toBeVisible()
+    await expect(page.getByTestId('preview-batch-generate-images')).toBeVisible()
+    await expect(page.getByTestId('preview-editor-toolbar').getByRole('button', { name: '描述设置' })).toHaveCount(0)
+    await expect(page.locator('aside').getByRole('button', { name: /批量生成图片/ })).toHaveCount(0)
+
+    await page.getByRole('button', { name: '项目设置' }).click()
+    await expect(page.getByTestId('project-settings-description-generation')).toBeVisible()
+    await expect(page.getByRole('heading', { name: '描述生成' })).toBeVisible()
+    await page.getByLabel('关闭').click()
+
+    await page.goto(`/project/${imageProjectId}/preview`)
+    await expect(page.getByTestId('preview-text-canvas')).toHaveCount(0)
+    await expect(page.getByTestId('preview-visual-pane').getByAltText('Slide 1')).toBeVisible()
+
+    await page.goto(`/project/${imageProjectId}/preview?mode=text`)
+    await expect(page.getByTestId('preview-mode-text')).toHaveCount(0)
+    await expect(page.getByTestId('preview-visual-pane').getByAltText('Slide 1')).toBeVisible()
+  })
+
+  test('outline next goes directly to preview', async ({ page }) => {
+    const projectId = 'mock-outline-next-preview'
+    const state: MockProjectState = {
+      projectId,
+      addPageCalls: [],
+      project: {
+        id: projectId,
+        project_id: projectId,
+        status: 'OUTLINE_GENERATED',
+        creation_type: 'idea',
+        pages: [makePage(0)],
+      },
+    }
+
+    await setupCommonRoutes(page)
+    await setupProjectRoutes(page, state)
+
+    await page.goto(`/project/${projectId}/outline`)
+    await expect(page.locator('text=共 1 页')).toBeVisible({ timeout: 10000 })
+    await page.getByRole('button', { name: /下一步|Next/i }).click()
+    await expect(page).toHaveURL(new RegExp(`/project/${projectId}/preview`))
+  })
+
+  test('preview shows progress while batch generating descriptions', async ({ page }) => {
+    const projectId = 'mock-preview-description-progress'
+    const state: MockProjectState = {
+      projectId,
+      addPageCalls: [],
+      project: {
+        id: projectId,
+        project_id: projectId,
+        status: 'OUTLINE_GENERATED',
+        creation_type: 'idea',
+        pages: Array.from({ length: 3 }, (_, i) => ({
+          ...makePage(i),
+          status: 'DRAFT',
+          description_content: null,
+          generated_image_path: null,
+          preview_image_path: null,
+        })),
+      },
+    }
+
+    await setupCommonRoutes(page)
+    await setupProjectRoutes(page, state)
+    await page.route('**/api/settings', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            image_resolution: '2K',
+            ai_provider_format: 'gemini',
+            description_generation_mode: 'parallel',
+          },
+        }),
+      })
+    })
+
+    await page.route(`**/api/projects/${projectId}/generate/descriptions`, async (route) => {
+      if (route.request().url().includes('/stream')) {
+        return route.continue()
+      }
+      await route.fulfill({
+        status: 202,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: { task_id: 'mock-desc-task', status: 'PROCESSING', total_pages: 3 },
+        }),
+      })
+    })
+
+    await page.route(`**/api/projects/${projectId}/tasks/mock-desc-task`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: { status: 'PROCESSING', progress: { total: 3, completed: 1 } },
+        }),
+      })
+    })
+
+    await page.goto(`/project/${projectId}/preview`)
+    const generateDescBtn = page.getByTestId('preview-batch-generate-descriptions')
+    await generateDescBtn.click()
+
+    await expect(generateDescBtn).toBeDisabled()
+    const progress = page.getByTestId('preview-description-progress')
+    await expect(progress).toBeVisible()
+    await expect(progress).toContainText(/正在生成描述\s+(0|1)\/3/)
+  })
+
+  test('preview batch generate descriptions supports missing-only vs regenerate-all', async ({ page }) => {
+    const projectId = 'mock-preview-description-scope'
+    const state: MockProjectState = {
+      projectId,
+      addPageCalls: [],
+      project: {
+        id: projectId,
+        project_id: projectId,
+        status: 'OUTLINE_GENERATED',
+        creation_type: 'idea',
+        pages: [
+          { ...makePage(0), generated_image_path: null, preview_image_path: null },
+          { ...makePage(1), description_content: null, generated_image_path: null, preview_image_path: null, status: 'DRAFT' },
+          { ...makePage(2), generated_image_path: null, preview_image_path: null },
+        ],
+      },
+    }
+
+    let receivedPageIds: string[] | null = null
+
+    await setupCommonRoutes(page)
+    await setupProjectRoutes(page, state)
+    await page.route('**/api/settings', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            image_resolution: '2K',
+            ai_provider_format: 'gemini',
+            description_generation_mode: 'parallel',
+          },
+        }),
+      })
+    })
+    await page.route(`**/api/projects/${projectId}/generate/descriptions`, async (route) => {
+      if (route.request().url().includes('/stream')) {
+        return route.continue()
+      }
+      const body = route.request().postDataJSON() as any
+      receivedPageIds = body?.page_ids || null
+      await route.fulfill({
+        status: 202,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: { task_id: 'mock-desc-scope-task', status: 'PROCESSING', total_pages: 1 },
+        }),
+      })
+    })
+    await page.route(`**/api/projects/${projectId}/tasks/mock-desc-scope-task`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: { status: 'PROCESSING', progress: { total: 1, completed: 0 } },
+        }),
+      })
+    })
+
+    await page.goto(`/project/${projectId}/preview`)
+    await page.getByTestId('preview-batch-generate-descriptions').click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toContainText('仅生成未生成描述的 1 页')
+    await expect(dialog).toContainText('重新生成全部 3 页描述')
+
+    await page.getByRole('button', { name: '仅生成未生成描述的 1 页' }).click()
+    await expect.poll(() => receivedPageIds).toEqual(['page-2'])
+  })
+
+  test('preview supports list+grid insert, split resize, and no edge-drag resize conflict', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1100 })
+
     const projectId = 'mock-preview-insert-grid'
     const state: MockProjectState = {
       projectId,
@@ -162,6 +397,13 @@ test.describe('Detail/Preview dynamic insert and preview sidebar modes', () => {
 
     await page.goto(`/project/${projectId}/preview`)
     await expect(page.locator('text=共 18 页')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByTestId('preview-secondary-toolbar')).toBeVisible()
+    await expect(page.getByTestId('preview-visual-pane')).toBeVisible()
+    await expect(page.getByTestId('preview-editor-pane')).toBeVisible()
+    await expect(page.getByTestId('preview-status-bar')).toBeVisible()
+    await expect(page.getByTestId('page-ai-workbench')).toBeVisible()
+    await expect(page.getByTestId('preview-mode-text')).toHaveCount(0)
+    await expect(page.getByTestId('preview-mode-image')).toHaveCount(0)
 
     // List mode insert: click the first insert-after button (appears below card in list mode)
     const insertButtons = page.locator('aside button[aria-label="在此页后新增页面"]')
@@ -195,18 +437,60 @@ test.describe('Detail/Preview dynamic insert and preview sidebar modes', () => {
     const previousMax = Math.min(520, Math.round(viewport.width * 0.5))
     expect(sidebarWidth).toBeGreaterThan(previousMax + 8)
 
+    const handleBoxAfterExpand = await resizeHandle.boundingBox()
+    expect(handleBoxAfterExpand).not.toBeNull()
+    if (!handleBoxAfterExpand) return
+
+    await page.mouse.move(handleBoxAfterExpand.x + handleBoxAfterExpand.width / 2, handleBoxAfterExpand.y + handleBoxAfterExpand.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(Math.max(340, viewport.width * 0.28), handleBoxAfterExpand.y + handleBoxAfterExpand.height / 2, { steps: 12 })
+    await page.mouse.up()
+
+    const splitDivider = page.getByTestId('preview-split-divider')
+    const splitHandleBox = await splitDivider.boundingBox()
+    const visualPane = page.getByTestId('preview-visual-pane')
+    const editorPane = page.getByTestId('preview-editor-pane')
+    expect(splitHandleBox).not.toBeNull()
+    if (!splitHandleBox) return
+
+    const visualWidthBefore = await visualPane.evaluate((el) => el.getBoundingClientRect().width)
+    const editorWidthBefore = await editorPane.evaluate((el) => el.getBoundingClientRect().width)
+
+    await page.mouse.move(splitHandleBox.x + splitHandleBox.width / 2, splitHandleBox.y + splitHandleBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(splitHandleBox.x + splitHandleBox.width / 2 + 120, splitHandleBox.y + splitHandleBox.height / 2, { steps: 12 })
+    await page.mouse.up()
+
+    const visualWidthAfter = await visualPane.evaluate((el) => el.getBoundingClientRect().width)
+    const editorWidthAfter = await editorPane.evaluate((el) => el.getBoundingClientRect().width)
+    expect(visualWidthAfter).toBeGreaterThan(visualWidthBefore + 20)
+    expect(editorWidthAfter).toBeLessThan(editorWidthBefore - 20)
+    expect(visualWidthAfter).toBeGreaterThanOrEqual(360)
+    expect(editorWidthAfter).toBeGreaterThanOrEqual(420)
+
     // Scroll behavior should still work near right edge, and should not trigger width resize
     await page.locator('aside button[aria-label="列表"]').click()
-    const scrollContainer = page.locator('aside div.flex-1.overflow-y-auto').first()
-    await scrollContainer.hover()
-    await page.mouse.wheel(0, 900)
-    const scrollTopAfterWheel = await scrollContainer.evaluate((el) => el.scrollTop)
+    const scrollContainerBox = await aside.evaluate((el) => {
+      const candidates = [el as HTMLElement, ...Array.from(el.querySelectorAll<HTMLElement>('div'))]
+      const target = candidates.find((node) => node.scrollHeight > node.clientHeight + 20)
+      if (!target) return null
+      const rect = target.getBoundingClientRect()
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+    })
+    expect(scrollContainerBox).not.toBeNull()
+    if (!scrollContainerBox) return
+
+    const scrollTopAfterWheel = await aside.evaluate((el) => {
+      const candidates = [el as HTMLElement, ...Array.from(el.querySelectorAll<HTMLElement>('div'))]
+      const target = candidates.find((node) => node.scrollHeight > node.clientHeight + 20)
+      if (!target) return 0
+      target.scrollTop = 900
+      return target.scrollTop
+    })
     expect(scrollTopAfterWheel).toBeGreaterThan(0)
 
     const widthBeforeEdgeDrag = await aside.evaluate((el) => el.getBoundingClientRect().width)
-    const scrollerBox = await scrollContainer.boundingBox()
-    expect(scrollerBox).not.toBeNull()
-    if (!scrollerBox) return
+    const scrollerBox = scrollContainerBox
 
     await page.mouse.move(scrollerBox.x + scrollerBox.width - 2, scrollerBox.y + 60)
     await page.mouse.down()
@@ -217,7 +501,54 @@ test.describe('Detail/Preview dynamic insert and preview sidebar modes', () => {
     expect(Math.abs(widthAfterEdgeDrag - widthBeforeEdgeDrag)).toBeLessThan(4)
   })
 
-  test('detail supports add-first-page and insert-after-card', async ({ page }) => {
+  test('preview editor pane stays scrollable on shorter desktop heights', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 820 })
+
+    const projectId = 'mock-preview-short-height'
+    const state: MockProjectState = {
+      projectId,
+      addPageCalls: [],
+      project: {
+        id: projectId,
+        project_id: projectId,
+        status: 'COMPLETED',
+        creation_type: 'idea',
+        pages: Array.from({ length: 8 }, (_, i) => makePage(i)),
+      },
+    }
+
+    await setupCommonRoutes(page)
+    await setupProjectRoutes(page, state)
+
+    await page.goto(`/project/${projectId}/preview`)
+    await expect(page.getByTestId('preview-editor-pane')).toBeVisible()
+    await expect(page.getByTestId('preview-status-bar')).toBeVisible()
+    await expect(page.getByTestId('page-ai-send')).toBeVisible()
+
+    const editorPane = page.getByTestId('preview-editor-pane')
+    const metrics = await editorPane.evaluate((el) => ({
+      clientHeight: el.clientHeight,
+      scrollHeight: el.scrollHeight,
+    }))
+    expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight)
+
+    await editorPane.evaluate((el) => {
+      el.scrollTop = el.scrollHeight
+    })
+
+    const sendButton = page.getByTestId('page-ai-send')
+    await expect(sendButton).toBeVisible()
+
+    const sendBox = await sendButton.boundingBox()
+    const statusBarBox = await page.getByTestId('preview-status-bar').boundingBox()
+    expect(sendBox).not.toBeNull()
+    expect(statusBarBox).not.toBeNull()
+    if (!sendBox || !statusBarBox) return
+
+    expect(sendBox.y + sendBox.height).toBeLessThanOrEqual(statusBarBox.y + 1)
+  })
+
+  test('detail redirects to preview and still supports add-first-page and insert-after-card', async ({ page }) => {
     const projectId = 'mock-detail-insert'
     const state: MockProjectState = {
       projectId,
@@ -235,17 +566,18 @@ test.describe('Detail/Preview dynamic insert and preview sidebar modes', () => {
     await setupProjectRoutes(page, state)
 
     await page.goto(`/project/${projectId}/detail`)
+    await expect(page).toHaveURL(new RegExp(`/project/${projectId}/preview$`))
+    await expect(page.getByTestId('preview-secondary-toolbar')).toBeVisible()
     await expect(page.locator('button:has-text("添加第一页")')).toBeVisible({ timeout: 10000 })
     await page.locator('button:has-text("添加第一页")').click()
 
-    await expect(page.locator('text=第 1 页')).toBeVisible({ timeout: 10000 })
+    await expect(page.locator('text=共 1 页')).toBeVisible({ timeout: 10000 })
     expect(state.addPageCalls[0]?.order_index).toBe(0)
 
-    await page.locator('[data-testid="description-card-content"]').first().hover()
     const detailInsertButtons = page.locator('button[aria-label="在此页后新增页面"]')
     await detailInsertButtons.first().click({ force: true })
 
-    await expect(page.locator('text=第 2 页')).toBeVisible({ timeout: 10000 })
+    await expect(page.locator('text=共 2 页')).toBeVisible({ timeout: 10000 })
     expect(state.addPageCalls[1]?.order_index).toBe(1)
   })
 })

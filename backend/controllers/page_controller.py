@@ -13,7 +13,12 @@ from utils.text_normalization import normalize_user_text, normalize_user_text_li
 from services import FileService, ProjectContext
 from services.ai_service_manager import get_ai_service
 from services.provider_routing import resolve_routing_bundle
-from services.task_manager import task_manager, generate_single_page_image_task, edit_page_image_task
+from services.task_manager import (
+    task_manager,
+    generate_single_page_image_task,
+    edit_page_image_task,
+    get_renovation_page_sources,
+)
 from datetime import datetime
 from pathlib import Path
 from werkzeug.utils import secure_filename
@@ -1004,13 +1009,14 @@ def regenerate_renovation_page(project_id, page_id):
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
         keep_layout = data.get('keep_layout', False)
 
-        # Find the split PDF for this page
         project_dir = Path(current_app.config['UPLOAD_FOLDER']) / project_id
-        split_dir = project_dir / "split_pages"
-        page_pdf_path = split_dir / f"page_{page.order_index + 1}.pdf"
-
-        if not page_pdf_path.exists():
-            return bad_request(f"Split PDF not found for page {page.order_index + 1}")
+        page_sources = get_renovation_page_sources(project_dir)
+        if page.order_index >= len(page_sources):
+            return bad_request(
+                f"Renovation source not found for page {page.order_index + 1}. "
+                "Expected split_pages PDFs, a source PDF in the template folder, or existing page images."
+            )
+        page_pdf_path = Path(page_sources[page.order_index])
 
         # Initialize services
         ai_service = get_ai_service()
@@ -1030,7 +1036,7 @@ def regenerate_renovation_page(project_id, page_id):
 
         # Step 1: Parse page PDF → markdown
         logger.info(f"Regenerating renovation page {page.order_index + 1}: parsing PDF...")
-        filename = f"page_{page.order_index + 1}.pdf"
+        filename = page_pdf_path.name
         _batch_id, md_text, extract_id, error_msg, _failed = file_parser_service.parse_file(
             str(page_pdf_path), filename
         )

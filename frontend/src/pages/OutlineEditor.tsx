@@ -591,7 +591,7 @@ export const OutlineEditor: React.FC = () => {
                     console.error('自动保存失败:', e);
                   }
                 }
-                navigate(`/project/${projectId}/detail`);
+                navigate(`/project/${projectId}/preview`);
               }}
               className="text-xs md:text-sm"
             >

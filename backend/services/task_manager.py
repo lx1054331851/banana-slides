@@ -56,6 +56,101 @@ def _get_existing_page_image_path(page: Page) -> Optional[str]:
     )
 
 
+def _remove_scoped_session() -> None:
+    """Release the current scoped session so worker threads do not pin pooled connections."""
+    try:
+        db.session.remove()
+    except Exception:
+        logger.debug("Failed to remove scoped db session", exc_info=True)
+
+
+def _load_page_generation_snapshot(page_id: str, project_id: str | None = None) -> dict[str, Any]:
+    """Load only the plain page fields needed by long-running image tasks."""
+    page = db.session.get(Page, page_id)
+    if not page:
+        raise ValueError(f"Page {page_id} not found")
+    if project_id is not None and page.project_id != project_id:
+        raise ValueError(f"Page {page_id} not found")
+
+    page_data = page.get_outline_content() or {}
+    if page.part:
+        page_data['part'] = page.part
+
+    return {
+        'description_content': page.get_description_content(),
+        'page_data': page_data,
+        'order_index': page.order_index,
+        'current_image_rel_path': _get_existing_page_image_path(page),
+    }
+
+
+def _split_pdf_sort_key(path: Path) -> tuple[int, str]:
+    stem = path.stem
+    if stem.startswith("page_"):
+        suffix = stem[5:]
+        if suffix.isdigit():
+            return (int(suffix), path.name)
+    return (10**9, path.name)
+
+
+def _original_page_image_sort_key(path: Path) -> tuple[int, str]:
+    stem = path.stem
+    if stem.startswith("page_") and stem.endswith("_original"):
+        middle = stem[5:-9]
+        if middle.isdigit():
+            return (int(middle), path.name)
+    return (10**9, path.name)
+
+
+def get_renovation_page_sources(project_dir: Path) -> list[str]:
+    """Return per-page source files for renovation.
+
+    Preferred order:
+    1. Existing split page PDFs
+    2. Re-split from the original template PDF
+    3. Existing per-page original images rendered during project creation
+    """
+    split_dir = project_dir / "split_pages"
+    if split_dir.exists():
+        split_pdfs = sorted(
+            (
+                path for path in split_dir.iterdir()
+                if path.is_file() and path.suffix.lower() == '.pdf'
+            ),
+            key=_split_pdf_sort_key,
+        )
+        if split_pdfs:
+            return [str(path) for path in split_pdfs]
+
+    template_dir = project_dir / "template"
+    source_pdf = None
+    if template_dir.exists():
+        source_pdf = next(
+            (
+                path for path in sorted(template_dir.iterdir())
+                if path.is_file() and path.suffix.lower() == '.pdf'
+            ),
+            None,
+        )
+    if not source_pdf:
+        pages_dir = project_dir / "pages"
+        if not pages_dir.exists():
+            return []
+        original_images = sorted(
+            (
+                path for path in pages_dir.iterdir()
+                if path.is_file()
+                and path.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}
+                and path.stem.startswith("page_")
+                and path.stem.endswith("_original")
+            ),
+            key=_original_page_image_sort_key,
+        )
+        return [str(path) for path in original_images]
+
+    return split_pdf_to_pages(str(source_pdf), str(split_dir))
+
+
 def _generation_logs_enabled() -> bool:
     try:
         from flask import current_app, has_app_context
@@ -190,7 +285,8 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                                project_context, outline: List[Dict],
                                max_workers: int = 5, app=None,
                                language: str = None,
-                               detail_level: str = 'default'):
+                               detail_level: str = 'default',
+                               page_ids: list = None):
     """
     Background task for generating page descriptions
     Based on demo.py gen_desc() with parallel processing
@@ -207,6 +303,7 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
         app: Flask app instance
         language: Output language (zh, en, ja, auto)
         detail_level: Description detail level (concise/default/detailed)
+        page_ids: Optional list of page IDs to generate (if not provided, generates all pages)
     """
     if app is None:
         raise ValueError("Flask app instance must be provided")
@@ -216,13 +313,14 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
         try:
             if _generation_logs_enabled():
                 logger.info(
-                    "[Descriptions Task Start] task=%s project=%s pages=%s workers=%s language=%s detail=%s",
+                    "[Descriptions Task Start] task=%s project=%s pages=%s workers=%s language=%s detail=%s page_filter=%s",
                     task_id,
                     project_id,
                     len(outline) if outline else 0,
                     max_workers,
                     language,
                     detail_level,
+                    len(page_ids) if page_ids else 'all',
                 )
             # 重要：在后台线程开始时就获取task和设置状态
             task = Task.query.get(task_id)
@@ -234,11 +332,12 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
             db.session.commit()
             logger.info(f"Task {task_id} status updated to PROCESSING")
             
-            # Flatten outline to get pages
+            # Flatten full outline then map requested pages by order_index so filtered runs still
+            # preserve original page context while only generating selected pages.
             pages_data = ai_service.flatten_outline(outline)
-            
-            # Get all pages for this project
-            pages = Page.query.filter_by(project_id=project_id).order_by(Page.order_index).all()
+
+            # Get pages for this project (filtered by page_ids if provided)
+            pages = get_filtered_pages(project_id, page_ids)
 
             if _generation_logs_enabled():
                 logger.info(
@@ -248,9 +347,18 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                     len(pages),
                     len(pages_data),
                 )
-            
-            if len(pages) != len(pages_data):
-                raise ValueError("Page count mismatch")
+
+            if not pages:
+                raise ValueError("No pages found for project")
+
+            pages_data_by_index = {i: pd for i, pd in enumerate(pages_data)}
+            page_jobs = [
+                {
+                    'page_id': page.id,
+                    'order_index': page.order_index,
+                }
+                for page in pages
+            ]
             
             # Mark all pages as GENERATING_DESCRIPTION before starting
             for page in pages:
@@ -323,11 +431,11 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                 futures = [
                     executor.submit(
                         generate_single_desc,
-                        page.id,
-                        page_data,
-                        (page.order_index + 1) if getattr(page, 'order_index', None) is not None else i,
+                        job['page_id'],
+                        pages_data_by_index.get(job['order_index'], {}),
+                        (job['order_index'] + 1) if job['order_index'] is not None else i,
                     )
-                    for i, (page, page_data) in enumerate(zip(pages, pages_data), 1)
+                    for i, job in enumerate(page_jobs, 1)
                 ]
                 
                 # Process results as they complete
@@ -375,9 +483,14 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
             from models import Project
             project = Project.query.get(project_id)
             if project and failed == 0:
-                project.status = 'DESCRIPTIONS_GENERATED'
+                all_project_pages = Page.query.filter_by(project_id=project_id).all()
+                all_have_descriptions = all(
+                    page.description_content and page.get_description_content()
+                    for page in all_project_pages
+                )
+                project.status = 'DESCRIPTIONS_GENERATED' if all_have_descriptions else 'OUTLINE_GENERATED'
                 db.session.commit()
-                logger.info(f"Project {project_id} status updated to DESCRIPTIONS_GENERATED")
+                logger.info(f"Project {project_id} status updated to {project.status}")
         
         except Exception as e:
             logger.error(f"Task {task_id} FAILED while generating descriptions: {e}", exc_info=True)
@@ -434,6 +547,13 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
             # Get pages for this project (filtered by page_ids if provided)
             pages = get_filtered_pages(project_id, page_ids)
             all_pages_data = ai_service.flatten_outline(outline)
+            page_jobs = [
+                {
+                    'page_id': page.id,
+                    'order_index': page.order_index,
+                }
+                for page in pages
+            ]
 
             if _generation_logs_enabled():
                 logger.info(
@@ -481,21 +601,18 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                                 page_index,
                             )
                         logger.debug(f"Starting image generation for page {page_id}, index {page_index}")
-                        # Get page from database in this thread
-                        page_obj = Page.query.get(page_id)
-                        if not page_obj:
-                            raise ValueError(f"Page {page_id} not found")
-                        
-                        # Update page status
-                        page_obj.status = 'GENERATING'
-                        db.session.commit()
-                        logger.debug(f"Page {page_id} status updated to GENERATING")
-                        
-                        # Get description content
-                        desc_content = page_obj.get_description_content()
+                        page_snapshot = _load_page_generation_snapshot(page_id)
+                        desc_content = page_snapshot['description_content']
                         if not desc_content:
                             raise ValueError("No description content for page")
-                        
+
+                        # Update page status in a short transaction, then release the session
+                        page_obj = db.session.get(Page, page_id)
+                        page_obj.status = 'GENERATING'
+                        db.session.commit()
+                        _remove_scoped_session()
+                        logger.debug(f"Page {page_id} status updated to GENERATING")
+
                         # 获取描述文本（可能是 text 字段或 text_content 数组）
                         desc_text = desc_content.get('text', '')
                         if not desc_text and desc_content.get('text_content'):
@@ -559,6 +676,9 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                         
                         # 优化：直接在子线程中计算版本号并保存到最终位置
                         # 每个页面独立，使用数据库事务保证版本号原子性，避免临时文件
+                        page_obj = db.session.get(Page, page_id)
+                        if not page_obj:
+                            raise ValueError(f"Page {page_id} not found")
                         image_path, next_version = save_image_with_version(
                             image, project_id, page_id, file_service, page_obj=page_obj
                         )
@@ -579,17 +699,21 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                         error_detail = traceback.format_exc()
                         logger.error(f"Failed to generate image for page {page_id}: {error_detail}")
                         return (page_id, None, str(e), None)
-            
+                    finally:
+                        _remove_scoped_session()
+
             # Use ThreadPoolExecutor for parallel generation
             # 关键：提前提取 page.id，不要传递 ORM 对象到子线程
+            _remove_scoped_session()
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = [
                     executor.submit(
-                        generate_single_image, page.id,
-                        pages_data_by_index.get(page.order_index, {}),
-                        (page.order_index + 1) if getattr(page, 'order_index', None) is not None else i,
+                        generate_single_image,
+                        job['page_id'],
+                        pages_data_by_index.get(job['order_index'], {}),
+                        (job['order_index'] + 1) if job['order_index'] is not None else i,
                     )
-                    for i, page in enumerate(pages, 1)
+                    for i, job in enumerate(page_jobs, 1)
                 ]
                 
                 # Process results as they complete
@@ -661,6 +785,8 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                 task.error_message = str(e)
                 task.completed_at = datetime.utcnow()
                 db.session.commit()
+        finally:
+            _remove_scoped_session()
 
 
 def generate_single_page_image_task(task_id: str, project_id: str, page_id: str, 
@@ -688,16 +814,16 @@ def generate_single_page_image_task(task_id: str, project_id: str, page_id: str,
             db.session.commit()
             
             # Get page from database
-            page = Page.query.get(page_id)
-            if not page or page.project_id != project_id:
-                raise ValueError(f"Page {page_id} not found")
-            
-            # Update page status
+            page_snapshot = _load_page_generation_snapshot(page_id, project_id)
+
+            # Update page status in a short transaction, then release the session
+            page = db.session.get(Page, page_id)
             page.status = 'GENERATING'
             db.session.commit()
-            
+            _remove_scoped_session()
+
             # Get description content
-            desc_content = page.get_description_content()
+            desc_content = page_snapshot['description_content']
             if not desc_content:
                 raise ValueError("No saved description content for page")
             
@@ -732,12 +858,10 @@ def generate_single_page_image_task(task_id: str, project_id: str, page_id: str,
                 # 这个检查已经在 controller 层完成，这里不再检查
             
             # Generate image prompt
-            page_data = page.get_outline_content() or {}
-            if page.part:
-                page_data['part'] = page.part
+            page_data = page_snapshot['page_data']
             
             prompt = ai_service.generate_image_prompt(
-                outline, page_data, desc_text, page.order_index + 1,
+                outline, page_data, desc_text, page_snapshot['order_index'] + 1,
                 has_material_images=has_material_images,
                 extra_requirements=extra_requirements,
                 language=language,
@@ -756,19 +880,24 @@ def generate_single_page_image_task(task_id: str, project_id: str, page_id: str,
                 raise ValueError("Failed to generate image")
             
             # 保存图片并创建历史版本记录
+            page = db.session.get(Page, page_id)
+            if not page:
+                raise ValueError(f"Page {page_id} not found")
             image_path, next_version = save_image_with_version(
                 image, project_id, page_id, file_service, page_obj=page
             )
             
             # Mark task as completed
-            task.status = 'COMPLETED'
-            task.completed_at = datetime.utcnow()
-            task.set_progress({
-                "total": 1,
-                "completed": 1,
-                "failed": 0
-            })
-            db.session.commit()
+            task = Task.query.get(task_id)
+            if task:
+                task.status = 'COMPLETED'
+                task.completed_at = datetime.utcnow()
+                task.set_progress({
+                    "total": 1,
+                    "completed": 1,
+                    "failed": 0
+                })
+                db.session.commit()
             
             logger.info(f"✅ Task {task_id} COMPLETED - Page {page_id} image generated")
         
@@ -790,6 +919,8 @@ def generate_single_page_image_task(task_id: str, project_id: str, page_id: str,
             if page:
                 page.status = 'FAILED'
                 db.session.commit()
+        finally:
+            _remove_scoped_session()
 
 
 def edit_page_image_task(task_id: str, project_id: str, page_id: str,
@@ -821,16 +952,16 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
             db.session.commit()
             
             # Get page from database
-            page = Page.query.get(page_id)
-            if not page or page.project_id != project_id:
-                raise ValueError(f"Page {page_id} not found")
+            page_snapshot = _load_page_generation_snapshot(page_id, project_id)
 
-            # Update page status
+            # Update page status in a short transaction, then release the session
+            page = db.session.get(Page, page_id)
             page.status = 'GENERATING'
             db.session.commit()
+            _remove_scoped_session()
 
             edit_instruction_text = normalize_user_text(edit_instruction)
-            current_image_rel_path = _get_existing_page_image_path(page)
+            current_image_rel_path = page_snapshot['current_image_rel_path']
             template_path = file_service.get_template_path(project_id) if use_template else None
 
             # 有原图且输入了修改指令时走图像编辑；否则走文生图重绘模式
@@ -855,7 +986,7 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                         additional_ref_images=merged_edit_refs if merged_edit_refs else None
                     )
                 else:
-                    desc_content = page.get_description_content()
+                    desc_content = page_snapshot['description_content']
                     desc_text = ''
                     if isinstance(desc_content, dict):
                         desc_text = (desc_content.get('text', '') or '').strip()
@@ -899,9 +1030,7 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                         seen.add(img)
                         dedup_ref_images.append(img)
 
-                    page_data = page.get_outline_content() or {}
-                    if page.part:
-                        page_data['part'] = page.part
+                    page_data = page_snapshot['page_data']
 
                     generation_outline = outline if outline else [page_data]
 
@@ -917,7 +1046,7 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                         generation_outline,
                         page_data,
                         desc_text or edit_instruction_text,
-                        page.order_index + 1,
+                        page_snapshot['order_index'] + 1,
                         has_material_images=bool(desc_image_urls or dedup_ref_images),
                         extra_requirements=merged_requirements if merged_requirements else None,
                         language=language,
@@ -945,19 +1074,24 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                 raise ValueError("Failed to edit image")
             
             # 保存编辑后的图片并创建历史版本记录
+            page = db.session.get(Page, page_id)
+            if not page:
+                raise ValueError(f"Page {page_id} not found")
             image_path, next_version = save_image_with_version(
                 image, project_id, page_id, file_service, page_obj=page
             )
             
             # Mark task as completed
-            task.status = 'COMPLETED'
-            task.completed_at = datetime.utcnow()
-            task.set_progress({
-                "total": 1,
-                "completed": 1,
-                "failed": 0
-            })
-            db.session.commit()
+            task = Task.query.get(task_id)
+            if task:
+                task.status = 'COMPLETED'
+                task.completed_at = datetime.utcnow()
+                task.set_progress({
+                    "total": 1,
+                    "completed": 1,
+                    "failed": 0
+                })
+                db.session.commit()
             
             logger.info(f"✅ Task {task_id} COMPLETED - Page {page_id} image edited")
         
@@ -987,6 +1121,8 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
             if page:
                 page.status = 'FAILED'
                 db.session.commit()
+        finally:
+            _remove_scoped_session()
 
 
 def generate_material_image_task(task_id: str, project_id: str, prompt: str,
@@ -1132,30 +1268,23 @@ def process_ppt_renovation_task(task_id: str, project_id: str, ai_service,
             if not project:
                 raise ValueError(f"Project {project_id} not found")
 
-            # Get the PDF path from project
-            pdf_path = None
             project_dir = Path(app.config['UPLOAD_FOLDER']) / project_id
-            # Look for the uploaded PDF file
-            for f in (project_dir / "template").iterdir() if (project_dir / "template").exists() else []:
-                if f.suffix.lower() == '.pdf':
-                    pdf_path = str(f)
-                    break
-
-            if not pdf_path:
-                raise ValueError("No PDF file found for renovation project")
-
-            # Step 1: Split PDF into per-page PDFs
-            split_dir = str(project_dir / "split_pages")
-            page_pdfs = split_pdf_to_pages(pdf_path, split_dir)
-            logger.info(f"Split PDF into {len(page_pdfs)} pages")
+            page_sources = get_renovation_page_sources(project_dir)
+            if not page_sources:
+                raise ValueError(
+                    "No source file found for renovation project. "
+                    "Expected split_pages PDFs, a source PDF in the template folder, "
+                    "or existing page_*_original images."
+                )
+            logger.info(f"Loaded {len(page_sources)} renovation page source files")
 
             # Get existing pages
             pages = Page.query.filter_by(project_id=project_id).order_by(Page.order_index).all()
 
             # Ensure page count matches
-            if len(pages) != len(page_pdfs):
-                logger.warning(f"Page count mismatch: {len(pages)} pages vs {len(page_pdfs)} PDFs. Using min.")
-            page_count = min(len(pages), len(page_pdfs))
+            if len(pages) != len(page_sources):
+                logger.warning(f"Page count mismatch: {len(pages)} pages vs {len(page_sources)} source files. Using min.")
+            page_count = min(len(pages), len(page_sources))
             if page_count == 0:
                 raise ValueError("No pages to process")
 
@@ -1263,7 +1392,7 @@ def process_ppt_renovation_task(task_id: str, project_id: str, ai_service,
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = [
-                    executor.submit(process_single_page, i, page_pdfs[i])
+                    executor.submit(process_single_page, i, page_sources[i])
                     for i in range(page_count)
                 ]
                 for future in as_completed(futures):

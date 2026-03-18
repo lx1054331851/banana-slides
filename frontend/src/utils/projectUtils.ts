@@ -148,7 +148,7 @@ export const getProjectRoute = (project: Project): string => {
     }
     const hasDescriptions = project.pages.some(p => p.description_content);
     if (hasDescriptions) {
-      return `/project/${projectId}/detail`;
+      return `/project/${projectId}/preview`;
     }
     return `/project/${projectId}/outline`;
   }

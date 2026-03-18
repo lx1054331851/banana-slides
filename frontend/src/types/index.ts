@@ -60,6 +60,36 @@ export interface GenerationOverride {
   image_caption?: OverrideRoute;
 }
 
+export type PageAiReferenceSourceType = 'region' | 'upload' | 'material' | 'template' | 'description';
+
+export interface PageAiRegionBounds {
+  leftRatio: number;
+  topRatio: number;
+  widthRatio: number;
+  heightRatio: number;
+}
+
+export interface PageAiReference {
+  id: string;
+  sourceType: PageAiReferenceSourceType;
+  label: string;
+  previewUrl?: string;
+  regionBounds?: PageAiRegionBounds;
+}
+
+export type PageAiMessageRole = 'assistant' | 'user';
+export type PageAiMessageTone = 'default' | 'error';
+
+export interface PageAiMessage {
+  id: string;
+  role: PageAiMessageRole;
+  content: string;
+  tone?: PageAiMessageTone;
+  attachments?: PageAiReference[];
+}
+
+export type PreviewMode = 'text' | 'image';
+
 export interface CoverEndingFieldDetect {
   key: string;
   page_role: 'cover' | 'ending';

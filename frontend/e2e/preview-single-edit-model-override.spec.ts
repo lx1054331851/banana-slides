@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.use({ baseURL: process.env.BASE_URL || 'http://localhost:3000' });
 
 test.describe('Preview single edit model override', () => {
-  test('uses per-edit model override only for current submit and removes top run override UI', async ({ page }) => {
+  test('uses per-edit model override only for page-ai send and resets after submit', async ({ page }) => {
     const projectId = 'mock-single-edit-model';
     const pageId = 'page-1';
     const projectDefaultModel = 'gemini-3-pro-image-preview';
@@ -81,6 +81,14 @@ test.describe('Preview single edit model override', () => {
       });
     });
 
+    await page.route(`**/api/projects/${projectId}/detect/cover-ending-fields`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: { fields: [] } }),
+      });
+    });
+
     await page.route(`**/api/projects/${projectId}/pages/${pageId}/edit/image`, async (route) => {
       capturedEditPayload = route.request().postDataJSON();
       await route.fulfill({
@@ -128,24 +136,22 @@ test.describe('Preview single edit model override', () => {
     await expect(page.locator('text=共 1 页')).toBeVisible({ timeout: 10000 });
 
     await expect(page.locator('text=This Run Override')).toHaveCount(0);
+    await expect(page.getByTestId('preview-mode-text')).toHaveCount(0);
+    await expect(page.getByTestId('preview-mode-image')).toHaveCount(0);
+    await expect(page.getByTestId('preview-editor-pane')).toBeVisible();
+    await expect(page.getByTestId('page-ai-workbench')).toBeVisible();
 
-    const openEdit = page.getByRole('button', { name: /编辑|Edit/i }).first();
-    await openEdit.click();
-
-    const modelSelect = page
-      .locator('div:has-text("本次生成模型"), div:has-text("Model For This Run")')
-      .locator('select')
-      .first();
+    const modelSelect = page.getByTestId('preview-edit-run-image-model');
     await expect(modelSelect).toBeVisible();
     await expect(modelSelect).toHaveValue(projectDefaultModel);
 
     await modelSelect.selectOption(pickedModel);
-    await page.getByRole('button', { name: /生成图片|Generate Image/i }).click();
+    await page.getByTestId('page-ai-input').fill('把标题改成更亮的蓝色');
+    await page.getByTestId('page-ai-send').click();
 
     await expect.poll(() => capturedEditPayload).not.toBeNull();
+    expect(capturedEditPayload.edit_instruction).toContain('把标题改成更亮的蓝色');
     expect(capturedEditPayload.generation_override?.image?.model).toBe(pickedModel);
-
-    await openEdit.click();
     await expect(modelSelect).toHaveValue(projectDefaultModel);
   });
 });
