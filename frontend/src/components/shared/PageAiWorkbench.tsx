@@ -17,6 +17,7 @@ type DescriptionImageOption = {
   id: string;
   label: string;
   url: string;
+  previewUrl?: string;
   selected: boolean;
 };
 
@@ -288,7 +289,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                             )}
                             title={option.label}
                           >
-                            <img src={option.url} alt={option.label} className="h-20 w-full object-cover" />
+                            <img src={option.previewUrl || option.url} alt={option.label} className="h-20 w-full object-cover" />
                             <div className="px-2 py-2 text-xs font-medium text-slate-600 dark:text-foreground-secondary">{option.label}</div>
                           </button>
                         ))}

@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useCallback, useState, useMemo, forwardRef, useImperativeHandle } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/utils';
 import { useT } from '@/hooks/useT';
 import { isUploadingUrl, getUploadingPreviewUrl } from '@/hooks/useImagePaste';
@@ -59,6 +60,13 @@ interface MarkdownTextareaProps {
   showImagePreview?: boolean;
   /** Allow manual vertical resize. Default: true */
   resizable?: boolean;
+  slashActions?: Array<{
+    id: string;
+    label: string;
+    description?: string;
+    onSelect: () => void;
+  }>;
+  'data-testid'?: string;
 }
 
 /** Ref handle for MarkdownTextarea */
@@ -151,22 +159,35 @@ const SPINNER_ICON = '<span class="inline-block w-3 h-3 border-2 border-gray-500
 
 function applyChipContent(chip: HTMLElement, seg: { alt: string; url: string; raw: string }, tooltips?: { edit: string; uploading: string }) {
   const uploading = isUploadingUrl(seg.url);
+  const previewUrl = uploading ? getUploadingPreviewUrl(seg.url) : seg.url;
   chip.dataset.markdown = seg.raw;
   chip.dataset.alt = seg.alt;
   chip.dataset.url = seg.url;
+  chip.dataset.preview = previewUrl;
   chip.title = uploading
     ? (tooltips?.uploading || '')
     : (tooltips?.edit || '');
   chip.className = [
     CHIP_CLASS,
-    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium',
-    'cursor-default select-none align-middle mx-0.5 transition-colors',
+    'mx-0.5 my-0.5 inline-flex h-8 max-w-full items-center overflow-hidden rounded-md border shadow-sm',
+    'cursor-default select-none align-middle transition-colors',
     uploading
-      ? 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700'
-      : 'bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600',
+      ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
+      : 'border-gray-200 bg-white text-gray-700 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200',
   ].join(' ');
   const displayName = getDisplayName(seg.alt, seg.url);
-  chip.innerHTML = `${uploading ? SPINNER_ICON : IMAGE_ICON}<span style="max-width:150px" class="truncate">${escapeHtml(displayName)}</span>`;
+  chip.innerHTML = [
+    `<div class="relative h-8 w-8 flex-shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-900/50">`,
+    `<img src="${escapeHtml(previewUrl)}" alt="${escapeHtml(seg.alt || displayName)}" class="block h-8 w-8 object-contain bg-white/80 dark:bg-transparent" />`,
+    uploading
+      ? `<div class="absolute inset-0 flex items-center justify-center bg-white/55 dark:bg-slate-900/40">${SPINNER_ICON}</div>`
+      : '',
+    `</div>`,
+    `<div class="flex h-8 items-center gap-1 px-1.5 text-[10px] font-medium">`,
+    uploading ? SPINNER_ICON : IMAGE_ICON,
+    `<span class="max-w-[42px] truncate">${escapeHtml(displayName)}</span>`,
+    `</div>`,
+  ].join('');
 }
 
 function buildDOM(container: HTMLElement, segments: Segment[], tooltips?: { edit: string; uploading: string }) {
@@ -284,12 +305,17 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   toolbarLeft,
   toolbarCenter,
   toolbarRight,
-  showImagePreview = true,
+  showImagePreview = false,
   resizable = true,
+  slashActions,
+  'data-testid': dataTestId,
 }, ref) => {
   const t = useT(markdownTextareaI18n);
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const slashMenuRef = useRef<HTMLDivElement>(null);
+  const savedSelectionRangeRef = useRef<Range | null>(null);
+  const skipNextSlashRef = useRef(false);
   const lastValueRef = useRef(value);
   const isInternalRef = useRef(false);
   const isComposingRef = useRef(false);
@@ -297,6 +323,8 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   const prevCollapsedRef = useRef(collapsed);
   const [isDragging, setIsDragging] = useState(false);
   const [editingChip, setEditingChip] = useState<{ chip: HTMLElement; rect: DOMRect } | null>(null);
+  const [slashMenuPosition, setSlashMenuPosition] = useState<{ left: number; top: number } | null>(null);
+  const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const [editAlt, setEditAlt] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
   const dragCountRef = useRef(0);
@@ -362,6 +390,70 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     }
   }, [editingChip]);
 
+  useEffect(() => {
+    if (!slashMenuPosition) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (slashMenuRef.current?.contains(target) || editorRef.current?.contains(target)) return;
+      setSlashMenuPosition(null);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [slashMenuPosition]);
+
+  const saveSelectionRange = useCallback(() => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !editorRef.current) return;
+    const range = sel.getRangeAt(0);
+    if (!editorRef.current.contains(range.startContainer)) return;
+    savedSelectionRangeRef.current = range.cloneRange();
+  }, []);
+
+  const restoreSavedSelectionRange = useCallback(() => {
+    if (!editorRef.current || !savedSelectionRangeRef.current) return false;
+    const sel = window.getSelection();
+    if (!sel) return false;
+    const range = savedSelectionRangeRef.current.cloneRange();
+    editorRef.current.focus();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    return true;
+  }, []);
+
+  const openSlashMenu = useCallback(() => {
+    if (!editorRef.current || !slashActions?.length) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    if (!range.collapsed || !editorRef.current.contains(range.startContainer)) return;
+    savedSelectionRangeRef.current = range.cloneRange();
+
+    const caretRect = range.getBoundingClientRect();
+    const menuWidth = 176;
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
+    const fallbackLeft = 16;
+    const fallbackTop = 16;
+    const rawLeft = caretRect.left;
+    const rawTop = caretRect.bottom + 8;
+    const left = Number.isFinite(rawLeft)
+      ? Math.min(Math.max(rawLeft, 12), Math.max(12, viewportWidth - menuWidth - 12))
+      : fallbackLeft;
+    const top = Number.isFinite(rawTop)
+      ? Math.min(Math.max(rawTop, 12), Math.max(12, viewportHeight - 120))
+      : fallbackTop;
+    setActiveSlashIndex(0);
+    setSlashMenuPosition({ left, top });
+  }, [slashActions]);
+
+  const runSlashAction = useCallback((index: number) => {
+    const action = slashActions?.[index];
+    if (!action) return;
+    restoreSavedSelectionRange();
+    setSlashMenuPosition(null);
+    action.onSelect();
+  }, [restoreSavedSelectionRange, slashActions]);
+
   const emitChange = useCallback(() => {
     if (!editorRef.current) return;
     if (isComposingRef.current) {
@@ -380,13 +472,17 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
 
     // Parse the text to find image markdown and insert chips directly
     const segments = parseSegments(text);
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) {
-      // Fallback: just insert as text
-      document.execCommand('insertText', false, text);
-      emitChange();
-      return;
+    let sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !editorRef.current.contains(sel.getRangeAt(0).startContainer)) {
+      const restored = restoreSavedSelectionRange();
+      if (!restored) {
+        document.execCommand('insertText', false, text);
+        emitChange();
+        return;
+      }
+      sel = window.getSelection();
     }
+    if (!sel || sel.rangeCount === 0) return;
 
     const range = sel.getRangeAt(0);
     range.deleteContents();
@@ -422,9 +518,10 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     // Update selection to after inserted content
     sel.removeAllRanges();
     sel.addRange(range);
+    savedSelectionRangeRef.current = range.cloneRange();
 
     emitChange();
-  }, [emitChange]);
+  }, [emitChange, restoreSavedSelectionRange]);
 
   // Expose insertAtCursor method via ref for external use (e.g., useImagePaste)
   useImperativeHandle(ref, () => ({
@@ -464,6 +561,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     const newMarkdown = `![${newAlt}](${url})`;
     chip.dataset.markdown = newMarkdown;
     chip.dataset.alt = newAlt;
+    chip.title = newAlt;
     const nameSpan = chip.querySelector('.truncate');
     if (nameSpan) nameSpan.textContent = newAlt;
     setEditingChip(null);
@@ -478,6 +576,43 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (isComposingRef.current || (e.nativeEvent as KeyboardEvent).isComposing || (e.key as any) === 'Process' || (e as any).keyCode === 229) return;
     if (!editorRef.current) return;
+
+    if (slashMenuPosition && slashActions?.length) {
+      if (e.key === 'ArrowDown' || (e.key === 'Tab' && !e.shiftKey)) {
+        e.preventDefault();
+        setActiveSlashIndex((prev) => (prev + 1) % slashActions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey)) {
+        e.preventDefault();
+        setActiveSlashIndex((prev) => (prev - 1 + slashActions.length) % slashActions.length);
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        runSlashAction(activeSlashIndex);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSlashMenuPosition(null);
+        skipNextSlashRef.current = true;
+        return;
+      }
+      if (e.key.length === 1 && e.key !== '/') {
+        setSlashMenuPosition(null);
+      }
+    }
+
+    if (slashActions?.length && e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (skipNextSlashRef.current) {
+        skipNextSlashRef.current = false;
+      } else {
+        e.preventDefault();
+        openSlashMenu();
+        return;
+      }
+    }
 
     if (e.key === 'Backspace') {
       const selected = editorRef.current.querySelector('.' + CHIP_SELECTED_CLASS) as HTMLElement | null;
@@ -510,7 +645,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     } else {
       clearChipSelection(editorRef.current);
     }
-  }, [emitChange]);
+  }, [activeSlashIndex, emitChange, openSlashMenu, runSlashAction, slashActions, slashMenuPosition]);
 
   const handleInput = useCallback((e?: React.FormEvent<HTMLDivElement>) => {
     const native = e?.nativeEvent as InputEvent | undefined;
@@ -589,10 +724,19 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     emitChange();
   }, [emitChange]);
 
-  const handleClick = useCallback(() => {
-    if (editorRef.current) clearChipSelection(editorRef.current);
+  const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!editorRef.current) return;
+    clearChipSelection(editorRef.current);
+    saveSelectionRange();
+    const targetChip = (e.target as HTMLElement).closest('.' + CHIP_CLASS) as HTMLElement | null;
+    if (targetChip?.dataset?.markdown) {
+      setEditingChip(null);
+      selectChip(targetChip);
+      return;
+    }
     setEditingChip(null);
-  }, []);
+    setSlashMenuPosition(null);
+  }, [saveSelectionRange]);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const target = (e.target as HTMLElement).closest('.' + CHIP_CLASS) as HTMLElement | null;
@@ -645,8 +789,9 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     if (e.target === e.currentTarget || !(e.target as HTMLElement).closest('button, a, input, [role="button"]')) {
       e.preventDefault(); // prevent editor blur
       editorRef.current?.focus();
+      restoreSavedSelectionRange();
     }
-  }, []);
+  }, [restoreSavedSelectionRange]);
 
   // --- Image preview ---
   const images = useMemo(() =>
@@ -680,7 +825,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   }
 
   return (
-    <div className="w-full">
+    <div className="flex w-full min-h-0 flex-col">
       {label && (
         <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
           {label}
@@ -688,6 +833,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
       )}
       {/* Outer container — owns the border, focus ring, and toolbar */}
       <div className={cn(
+        'flex min-h-0 flex-1 flex-col',
         'rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary',
         'focus-within:ring-2 focus-within:ring-banana-500 focus-within:border-transparent',
         'transition-all',
@@ -696,13 +842,14 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
         className
       )}>
         {!collapsed && (
-          <div className="relative">
+          <div className="relative flex min-h-0 flex-1 flex-col">
             <div
               ref={editorRef}
               contentEditable
               role="textbox"
               aria-multiline="true"
               dir={direction}
+              data-testid={dataTestId}
               onKeyDown={handleKeyDown}
               onCompositionStart={handleCompositionStart}
               onCompositionUpdate={handleCompositionUpdate}
@@ -721,7 +868,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
               onFocus={onFocus}
               style={editorStyle}
               className={cn(
-                "w-full px-4 py-3 outline-none overflow-y-auto whitespace-pre-wrap break-words text-gray-900 dark:text-foreground-primary",
+                "h-full min-h-0 w-full flex-1 overflow-y-auto whitespace-pre-wrap break-words px-4 py-3 outline-none text-gray-900 dark:text-foreground-primary",
                 resizable ? 'resize-y' : 'resize-none'
               )}
             />
@@ -769,6 +916,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
                 />
               </div>
             )}
+
           </div>
         )}
 
@@ -861,6 +1009,34 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
 
       {error && (
         <p className="mt-1 text-sm text-red-500">{error}</p>
+      )}
+
+      {slashMenuPosition && slashActions && slashActions.length > 0 && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={slashMenuRef}
+          className="fixed z-[1000] w-44 overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-[0_16px_32px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated"
+          style={{ left: slashMenuPosition.left, top: slashMenuPosition.top }}
+        >
+          <div className="space-y-1">
+            {slashActions.map((action, index) => (
+              <button
+                key={action.id}
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => runSlashAction(index)}
+                className={cn(
+                  'flex w-full items-center rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors',
+                  index === activeSlashIndex
+                    ? 'bg-[#fff7d9] text-slate-900 dark:bg-banana-500/10 dark:text-banana'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-foreground-secondary dark:hover:bg-background-hover dark:hover:text-foreground-primary'
+                )}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

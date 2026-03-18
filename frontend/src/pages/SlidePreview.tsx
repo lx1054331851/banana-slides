@@ -67,6 +67,10 @@ const previewI18n = {
       editRunImageModelHint: "仅对本次生成生效，不会保存到项目设置",
       editPromptLabel: "输入修改指令(将自动添加页面描述)",
       editPromptPlaceholder: "例如：将框选区域内的素材移除、把背景改成蓝色、增大标题字号、更改文本框样式为虚线...",
+      descriptionSlashUpload: "从本地上传",
+      descriptionSlashUploadDesc: "选择本地图片并插入到当前光标位置",
+      descriptionSlashMaterials: "从素材库选择",
+      descriptionSlashMaterialsDesc: "从已有素材中选择并插入到当前光标位置",
       pageAiTitle: "页面级 AI 优化",
       pageAiSubtitle: "仅作用于当前页图片编辑/重生成，自动带入当前页描述上下文。",
       pageAiEmptyTitle: "先补充修改意图，再让 AI 处理当前页",
@@ -197,6 +201,10 @@ const previewI18n = {
       editRunImageModelHint: "Only applies to this generation and will not be saved to project settings.",
       editPromptLabel: "Enter edit instructions (page description will be auto-added)",
       editPromptPlaceholder: "e.g., Remove elements in selected area, change background to blue, increase title font size, change text box style to dashed...",
+      descriptionSlashUpload: "Upload From Device",
+      descriptionSlashUploadDesc: "Choose a local image and insert it at the current cursor position",
+      descriptionSlashMaterials: "Insert From Materials",
+      descriptionSlashMaterialsDesc: "Choose existing materials and insert them at the current cursor position",
       pageAiTitle: "Page AI Optimize",
       pageAiSubtitle: "Only affects the current page image and automatically uses the current page description as context.",
       pageAiEmptyTitle: "Add intent, then let AI work on this page",
@@ -297,6 +305,7 @@ import {
 import {
   Button,
   Loading,
+  MarkdownTextarea,
   Modal,
   useToast,
   useConfirm,
@@ -309,6 +318,7 @@ import {
   GlobalAiAssistantDrawer,
   PageAiWorkbench,
 } from '@/components/shared';
+import type { MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
 import { MaterialGeneratorModal } from '@/components/shared/MaterialGeneratorModal';
 import {
   TemplateSelector,
@@ -325,6 +335,7 @@ import { SlideCard } from '@/components/preview/SlideCard';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useExportTasksStore, type ExportTaskType } from '@/store/useExportTasksStore';
 import { getImageUrl } from '@/api/client';
+import { useImagePaste } from '@/hooks/useImagePaste';
 import {
   getPageImageVersions,
   setCurrentImageVersion,
@@ -404,6 +415,26 @@ type PageAiContextState = {
     descImageUrls: string[];
     uploadedReferences: PageAiUploadedReference[];
   };
+};
+
+type MaterialSelectorMode = 'pageAi' | 'description';
+
+const isSupportedDescriptionImageUrl = (url: string): boolean => {
+  return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/files/');
+};
+
+const escapeMarkdownText = (text: string): string => text.replace(/[[\]()]/g, '\\$&');
+const DESCRIPTION_UPLOAD_ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg';
+
+const getMaterialMarkdownLabel = (material: Material): string => {
+  return (
+    material.prompt?.trim() ||
+    material.name?.trim() ||
+    material.original_filename?.trim() ||
+    material.source_filename?.trim() ||
+    material.filename?.trim() ||
+    'image'
+  );
 };
 
 const createPageAiMessage = (
@@ -852,8 +883,21 @@ export const SlidePreview: React.FC = () => {
   const [editOutlineTitle, setEditOutlineTitle] = useState('');
   const [editOutlinePoints, setEditOutlinePoints] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const descriptionTextareaRef = useRef<MarkdownTextareaRef | null>(null);
+  const activeDescriptionSetContent = useRef<(updater: (prev: string) => string) => void>(setEditDescription);
+  const activeDescriptionInsertAtCursor = useRef<((markdown: string) => void) | undefined>(undefined);
   const [editExtraFields, setEditExtraFields] = useState<Record<string, string>>({});
   const [activeExternalField, setActiveExternalField] = useState<string | null>(null);
+  const { handlePaste: handleDescriptionPaste, handleFiles: handleDescriptionFiles } = useImagePaste({
+    projectId,
+    setContent: (updater) => activeDescriptionSetContent.current(updater),
+    showToast: show,
+    insertAtCursor: (markdown) => activeDescriptionInsertAtCursor.current?.(markdown),
+  });
+  const focusMainDescriptionField = useCallback(() => {
+    activeDescriptionSetContent.current = setEditDescription;
+    activeDescriptionInsertAtCursor.current = (markdown: string) => descriptionTextareaRef.current?.insertAtCursor(markdown);
+  }, []);
   const [isGlobalAiDrawerOpen, setIsGlobalAiDrawerOpen] = useState(false);
   const lastSelectedPageKeyRef = useRef<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -886,6 +930,10 @@ export const SlidePreview: React.FC = () => {
   const [isSavingRequirements, setIsSavingRequirements] = useState(false);
   const isEditingRequirements = useRef(false); // 跟踪用户是否正在编辑额外要求
   const [templateStyle, setTemplateStyle] = useState<string>('');
+
+  useEffect(() => {
+    focusMainDescriptionField();
+  }, [focusMainDescriptionField, selectedIndex]);
   const [isSavingTemplateStyle, setIsSavingTemplateStyle] = useState(false);
   const isEditingTemplateStyle = useRef(false); // 跟踪用户是否正在编辑风格描述
   const lastProjectId = useRef<string | null>(null); // 跟踪上一次的项目ID
@@ -895,6 +943,7 @@ export const SlidePreview: React.FC = () => {
   // 素材选择器模态开关
   const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([]);
   const [isMaterialSelectorOpen, setIsMaterialSelectorOpen] = useState(false);
+  const [materialSelectorMode, setMaterialSelectorMode] = useState<MaterialSelectorMode>('pageAi');
   // 导出设置
   const [exportExtractorMethod, setExportExtractorMethod] = useState<ExportExtractorMethod>(
     (currentProject?.export_extractor_method as ExportExtractorMethod) || 'hybrid'
@@ -1735,8 +1784,7 @@ export const SlidePreview: React.FC = () => {
 
     while ((match = pattern.exec(text)) !== null) {
       const url = match[1]?.trim();
-      // 只保留有效的HTTP/HTTPS URL
-      if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+      if (url && isSupportedDescriptionImageUrl(url)) {
         matches.push(url);
       }
     }
@@ -2223,6 +2271,17 @@ export const SlidePreview: React.FC = () => {
   }, []);
 
   const handleSelectMaterials = async (materials: Material[]) => {
+    if (materialSelectorMode === 'description') {
+      const markdown = materials
+        .map((material) => `![${escapeMarkdownText(getMaterialMarkdownLabel(material))}](${material.url})`)
+        .join('\n');
+      if (markdown) {
+        descriptionTextareaRef.current?.insertAtCursor(`${markdown}\n`);
+        show({ message: t('slidePreview.materialsAdded', { count: materials.length }), type: 'success' });
+      }
+      return;
+    }
+
     try {
       const files = await Promise.all(
         materials.map((material) => materialUrlToFile(material))
@@ -2243,6 +2302,51 @@ export const SlidePreview: React.FC = () => {
       });
     }
   };
+
+  const descriptionSlashActions = useMemo(() => {
+    const actions = [
+      {
+        id: 'upload-local',
+        label: t('preview.descriptionSlashUpload'),
+        description: t('preview.descriptionSlashUploadDesc'),
+        onSelect: () => {
+          descriptionTextareaRef.current?.focus();
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = DESCRIPTION_UPLOAD_ACCEPT;
+          input.multiple = true;
+          input.style.position = 'fixed';
+          input.style.left = '-9999px';
+          document.body.appendChild(input);
+          input.oncancel = () => {
+            input.remove();
+          };
+          input.onchange = () => {
+            const files = Array.from(input.files || []);
+            input.remove();
+            if (files.length > 0) {
+              void handleDescriptionFiles(files);
+            }
+          };
+          input.click();
+        },
+      },
+    ];
+
+    if (projectId) {
+      actions.push({
+        id: 'select-material',
+        label: t('preview.descriptionSlashMaterials'),
+        description: t('preview.descriptionSlashMaterialsDesc'),
+        onSelect: () => {
+          setMaterialSelectorMode('description');
+          setIsMaterialSelectorOpen(true);
+        },
+      });
+    }
+
+    return actions;
+  }, [handleDescriptionFiles, projectId, t]);
 
   useEffect(() => {
     if (!currentProject) return;
@@ -2874,16 +2978,24 @@ export const SlidePreview: React.FC = () => {
           <div className="mb-3 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
             {t('preview.pageDescription')}
           </div>
-          <textarea
+          <MarkdownTextarea
+            ref={descriptionTextareaRef}
             value={editDescription}
-            onChange={(event) => {
-              const value = event.target.value;
+            onChange={(value: string) => {
               setEditDescription(value);
               persistCurrentPageDraft({ description: value });
             }}
+            onPaste={handleDescriptionPaste}
+            onFiles={handleDescriptionFiles}
+            onFocus={focusMainDescriptionField}
             placeholder={t('preview.enterDescription')}
             data-testid="preview-text-description-input"
-            className="min-h-[140px] min-w-0 flex-1 appearance-none resize-none overflow-y-auto bg-transparent px-0 py-0 text-sm leading-6 text-slate-700 outline-none placeholder:text-[#b8ae96] focus:ring-0 dark:text-[#e2e8f0] dark:placeholder:text-[#66708c]"
+            rows={8}
+            maxHeight="100%"
+            showUploadButton={false}
+            showImagePreview={false}
+            slashActions={descriptionSlashActions}
+            className="min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent"
           />
         </div>
       </div>
@@ -2963,7 +3075,7 @@ export const SlidePreview: React.FC = () => {
         id: `description-reference:${url}`,
         sourceType: 'description',
         label: `${t('preview.imagesInDescription')} ${index + 1}`,
-        previewUrl: url,
+        previewUrl: getImageUrl(url),
       });
     });
     selectedContextImages.uploadedReferences.forEach((reference) => {
@@ -2982,6 +3094,7 @@ export const SlidePreview: React.FC = () => {
     id: `description-option:${url}`,
     label: `${t('preview.imagesInDescription')} ${index + 1}`,
     url,
+    previewUrl: getImageUrl(url),
     selected: selectedContextImages.descImageUrls.includes(url),
   }));
 
@@ -4053,7 +4166,10 @@ export const SlidePreview: React.FC = () => {
                               onToggleDescriptionImage={handleToggleDescriptionImage}
                               onReferenceClick={handlePreviewReferenceFocus}
                               onRemoveReference={handleRemovePageAiReference}
-                              onOpenMaterialSelector={projectId ? () => setIsMaterialSelectorOpen(true) : undefined}
+                              onOpenMaterialSelector={projectId ? () => {
+                                setMaterialSelectorMode('pageAi');
+                                setIsMaterialSelectorOpen(true);
+                              } : undefined}
                               onUploadFiles={handleFileUpload}
                             />
                           </div>

@@ -20,6 +20,7 @@ export { Footer } from './Footer';
 export { GithubBadge } from './GithubBadge';
 export { GithubRepoCard } from './GithubRepoCard';
 export { Markdown } from './Markdown';
+export { MarkdownTextarea } from './MarkdownTextarea';
 export { AiRefineInput } from './AiRefineInput';
 export { GlobalAiAssistantDrawer } from './GlobalAiAssistantDrawer';
 export { PageAiWorkbench } from './PageAiWorkbench';
