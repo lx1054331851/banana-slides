@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowUp,
   Check,
@@ -19,6 +20,14 @@ type DescriptionImageOption = {
   url: string;
   previewUrl?: string;
   selected: boolean;
+};
+
+type FloatingMenuPosition = {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+  transform?: string;
 };
 
 interface PageAiWorkbenchProps {
@@ -99,18 +108,60 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const descriptionPickerRef = useRef<HTMLDivElement | null>(null);
+  const descriptionPickerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const descriptionPickerMenuRef = useRef<HTMLDivElement | null>(null);
   const modelPickerRef = useRef<HTMLDivElement | null>(null);
+  const modelPickerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const modelPickerMenuRef = useRef<HTMLDivElement | null>(null);
   const canSend = !isSubmitting && (inputValue.trim().length > 0 || references.length > 0);
   const [showDescriptionPicker, setShowDescriptionPicker] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const [descriptionPickerPosition, setDescriptionPickerPosition] = useState<FloatingMenuPosition | null>(null);
+  const [modelPickerPosition, setModelPickerPosition] = useState<FloatingMenuPosition | null>(null);
+
+  const resolveFloatingMenuPosition = (
+    trigger: HTMLElement,
+    menuWidth: number,
+    preferredHeight: number,
+    align: 'left' | 'right'
+  ): FloatingMenuPosition => {
+    const rect = trigger.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const horizontalPadding = 12;
+    const verticalPadding = 12;
+    const gap = 8;
+    const idealLeft = align === 'left' ? rect.left : rect.right - menuWidth;
+    const left = Math.min(
+      Math.max(horizontalPadding, idealLeft),
+      Math.max(horizontalPadding, viewportWidth - menuWidth - horizontalPadding)
+    );
+    const spaceAbove = Math.max(0, rect.top - verticalPadding);
+    const spaceBelow = Math.max(0, viewportHeight - rect.bottom - verticalPadding);
+    const shouldOpenUpward = spaceAbove >= preferredHeight || spaceAbove > spaceBelow;
+    const availableHeight = shouldOpenUpward ? spaceAbove : spaceBelow;
+
+    return {
+      top: shouldOpenUpward ? rect.top - gap : rect.bottom + gap,
+      left,
+      width: menuWidth,
+      maxHeight: Math.max(0, Math.min(preferredHeight, availableHeight - gap)),
+      transform: shouldOpenUpward ? 'translateY(-100%)' : undefined,
+    };
+  };
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (showDescriptionPicker && descriptionPickerRef.current && !descriptionPickerRef.current.contains(target)) {
+      const clickedDescriptionPicker = descriptionPickerRef.current?.contains(target)
+        || descriptionPickerMenuRef.current?.contains(target);
+      const clickedModelPicker = modelPickerRef.current?.contains(target)
+        || modelPickerMenuRef.current?.contains(target);
+
+      if (showDescriptionPicker && !clickedDescriptionPicker) {
         setShowDescriptionPicker(false);
       }
-      if (showModelPicker && modelPickerRef.current && !modelPickerRef.current.contains(target)) {
+      if (showModelPicker && !clickedModelPicker) {
         setShowModelPicker(false);
       }
     };
@@ -119,6 +170,30 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
       document.addEventListener('mousedown', handleOutsideClick);
       return () => document.removeEventListener('mousedown', handleOutsideClick);
     }
+  }, [showDescriptionPicker, showModelPicker]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || (!showDescriptionPicker && !showModelPicker)) {
+      return;
+    }
+
+    const updateFloatingMenuPositions = () => {
+      if (showDescriptionPicker && descriptionPickerButtonRef.current) {
+        setDescriptionPickerPosition(resolveFloatingMenuPosition(descriptionPickerButtonRef.current, 256, 320, 'left'));
+      }
+      if (showModelPicker && modelPickerButtonRef.current) {
+        setModelPickerPosition(resolveFloatingMenuPosition(modelPickerButtonRef.current, 288, 320, 'right'));
+      }
+    };
+
+    updateFloatingMenuPositions();
+    window.addEventListener('resize', updateFloatingMenuPositions);
+    window.addEventListener('scroll', updateFloatingMenuPositions, true);
+
+    return () => {
+      window.removeEventListener('resize', updateFloatingMenuPositions);
+      window.removeEventListener('scroll', updateFloatingMenuPositions, true);
+    };
   }, [showDescriptionPicker, showModelPicker]);
 
   const handleTextareaKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -265,6 +340,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
               {descriptionImageOptions.length > 0 && (
                 <div className="relative" ref={descriptionPickerRef}>
                   <button
+                    ref={descriptionPickerButtonRef}
                     type="button"
                     onClick={() => setShowDescriptionPicker((prev) => !prev)}
                     className={cn(
@@ -276,38 +352,12 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                   >
                     <ImageIcon size={18} />
                   </button>
-                  {showDescriptionPicker && (
-                    <div className="absolute bottom-full left-0 z-40 mb-2 w-64 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_40px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated dark:shadow-[0_18px_40px_rgba(0,0,0,0.36)]">
-                      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-foreground-tertiary">
-                        <Info size={12} />
-                        {descriptionSourcesTitle}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {descriptionImageOptions.map((option) => (
-                          <button
-                            key={option.id}
-                            type="button"
-                            onClick={() => onToggleDescriptionImage(option.url)}
-                            className={cn(
-                              'relative overflow-hidden rounded-2xl border-2 bg-slate-50 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 dark:bg-background-primary',
-                              option.selected
-                                ? 'border-banana-400 ring-2 ring-banana-200 dark:ring-banana-500/20'
-                                : 'border-slate-200 hover:border-[#e6ca67] dark:border-border-primary dark:hover:border-banana-500/40',
-                            )}
-                            title={option.label}
-                          >
-                            <img src={option.previewUrl || option.url} alt={option.label} className="h-20 w-full object-cover" />
-                            <div className="px-2 py-2 text-xs font-medium text-slate-600 dark:text-foreground-secondary">{option.label}</div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
               <div className="relative" ref={modelPickerRef}>
                 <button
+                  ref={modelPickerButtonRef}
                   type="button"
                   onClick={() => setShowModelPicker((prev) => !prev)}
                   className={cn(
@@ -319,35 +369,6 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                 >
                   <Settings2 size={18} />
                 </button>
-                {showModelPicker && (
-                  <div className="absolute bottom-full right-0 z-50 mb-2 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated dark:shadow-[0_18px_40px_rgba(0,0,0,0.36)]">
-                    <div className="max-h-64 overflow-y-auto">
-                      {modelOptions.map((model) => {
-                        const selected = model === modelValue;
-                        return (
-                          <button
-                            key={model}
-                            type="button"
-                            onClick={() => {
-                              onModelChange(model);
-                              setShowModelPicker(false);
-                            }}
-                            className={cn(
-                              'flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors',
-                              selected
-                                ? 'bg-[#fff7d9] text-slate-900 dark:bg-banana-500/10 dark:text-banana'
-                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-foreground-secondary dark:hover:bg-background-hover dark:hover:text-foreground-primary'
-                            )}
-                            title={model}
-                          >
-                            <span className="min-w-0 truncate">{model}</span>
-                            {selected && <Check size={16} className="flex-shrink-0 text-banana-600" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="ml-auto flex items-center gap-2">
@@ -384,6 +405,84 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
           }}
         />
       </div>
+      {showDescriptionPicker && descriptionPickerPosition && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={descriptionPickerMenuRef}
+          className="fixed z-[120] rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_40px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated dark:shadow-[0_18px_40px_rgba(0,0,0,0.36)]"
+          style={{
+            top: descriptionPickerPosition.top,
+            left: descriptionPickerPosition.left,
+            width: descriptionPickerPosition.width,
+            maxHeight: descriptionPickerPosition.maxHeight,
+            transform: descriptionPickerPosition.transform,
+          }}
+        >
+          <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-foreground-tertiary">
+            <Info size={12} />
+            {descriptionSourcesTitle}
+          </div>
+          <div className="grid max-h-full grid-cols-2 gap-2 overflow-y-auto">
+            {descriptionImageOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => onToggleDescriptionImage(option.url)}
+                className={cn(
+                  'relative overflow-hidden rounded-2xl border-2 bg-slate-50 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 dark:bg-background-primary',
+                  option.selected
+                    ? 'border-banana-400 ring-2 ring-banana-200 dark:ring-banana-500/20'
+                    : 'border-slate-200 hover:border-[#e6ca67] dark:border-border-primary dark:hover:border-banana-500/40',
+                )}
+                title={option.label}
+              >
+                <img src={option.previewUrl || option.url} alt={option.label} className="h-20 w-full object-cover" />
+                <div className="px-2 py-2 text-xs font-medium text-slate-600 dark:text-foreground-secondary">{option.label}</div>
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body
+      )}
+      {showModelPicker && modelPickerPosition && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={modelPickerMenuRef}
+          className="fixed z-[120] overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated dark:shadow-[0_18px_40px_rgba(0,0,0,0.36)]"
+          style={{
+            top: modelPickerPosition.top,
+            left: modelPickerPosition.left,
+            width: modelPickerPosition.width,
+            maxHeight: modelPickerPosition.maxHeight,
+            transform: modelPickerPosition.transform,
+          }}
+        >
+          <div className="max-h-full overflow-y-auto">
+            {modelOptions.map((model) => {
+              const selected = model === modelValue;
+              return (
+                <button
+                  key={model}
+                  type="button"
+                  onClick={() => {
+                    onModelChange(model);
+                    setShowModelPicker(false);
+                  }}
+                  className={cn(
+                    'flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors',
+                    selected
+                      ? 'bg-[#fff7d9] text-slate-900 dark:bg-banana-500/10 dark:text-banana'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-foreground-secondary dark:hover:bg-background-hover dark:hover:text-foreground-primary'
+                  )}
+                  title={model}
+                >
+                  <span className="min-w-0 truncate">{model}</span>
+                  {selected && <Check size={16} className="flex-shrink-0 text-banana-600" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>,
+        document.body
+      )}
     </section>
   );
 };
