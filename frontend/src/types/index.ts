@@ -107,6 +107,8 @@ export interface ImageVersion {
   image_path: string;
   image_url?: string;
   version_number: number;
+  operation_type?: 'generate' | 'regenerate' | 'edit' | string;
+  prompt_text?: string;
   is_current: boolean;
   created_at?: string;
 }

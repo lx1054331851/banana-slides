@@ -6,12 +6,14 @@ import logging
 import os
 import json
 import threading
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, List, Dict, Any, Optional
 from datetime import datetime
 from sqlalchemy import func
 from PIL import Image
 from models import db, Task, Page, Material, PageImageVersion
+from services.prompts import get_image_edit_prompt
 from utils import get_filtered_pages
 from utils.image_utils import check_image_resolution
 from utils.text_normalization import normalize_user_text
@@ -40,7 +42,6 @@ def _append_extra_fields(desc_text: str, desc_content: dict) -> str:
         if value and (allowed is None or name in allowed):
             parts.append(f"\n{name}：{value}")
     return ''.join(parts)
-from pathlib import Path
 from services.pdf_service import split_pdf_to_pages
 from services.export_helpers import maybe_compress_export_images
 
@@ -62,6 +63,94 @@ def _remove_scoped_session() -> None:
         db.session.remove()
     except Exception:
         logger.debug("Failed to remove scoped db session", exc_info=True)
+
+
+def _normalize_history_reference(ref: Optional[str], upload_root: Optional[Path] = None) -> Optional[str]:
+    """Normalize a reference image/material path into a readable history value."""
+    if not ref or not isinstance(ref, str):
+        return None
+    if ref.startswith('http://') or ref.startswith('https://') or ref.startswith('/files/'):
+        return ref
+    normalized = ref.replace('\\', '/')
+    if normalized.startswith('uploads/'):
+        return f"/files/{normalized[len('uploads/'):]}"
+    if upload_root:
+        try:
+            abs_ref = os.path.abspath(ref)
+            upload_root_abs = os.path.abspath(str(upload_root))
+            rel = os.path.relpath(abs_ref, upload_root_abs)
+            if not rel.startswith('..'):
+                return f"/files/{rel.replace(os.sep, '/')}"
+        except Exception:
+            pass
+    return ref
+
+
+def _format_multiline_section(title: str, value: Optional[str]) -> str:
+    text = (value or '').strip()
+    return f"{title}：\n{text if text else '无'}"
+
+
+def _format_list_section(title: str, values: Optional[List[str]]) -> str:
+    items = [item for item in (values or []) if item]
+    if not items:
+        return f"{title}：\n无"
+    joined = '\n'.join(f"- {item}" for item in items)
+    return f"{title}：\n{joined}"
+
+
+def _build_image_request_snapshot(
+    *,
+    operation_type: str,
+    aspect_ratio: str,
+    resolution: str,
+    prompt_text: str,
+    primary_reference: Optional[str] = None,
+    additional_references: Optional[List[str]] = None,
+    description_text: Optional[str] = None,
+    edit_instruction: Optional[str] = None,
+    original_description: Optional[str] = None,
+    extra_requirements: Optional[str] = None,
+    extra_requirements_in_prompt: bool = True,
+    upload_root: Optional[Path] = None,
+) -> str:
+    primary_ref_display = _normalize_history_reference(primary_reference, upload_root)
+    extra_ref_displays = [
+        normalized
+        for normalized in (
+            _normalize_history_reference(ref, upload_root)
+            for ref in (additional_references or [])
+        )
+        if normalized
+    ]
+
+    operation_label_map = {
+        'generate': '首次生成',
+        'regenerate': '重新生成',
+        'edit': '图片编辑',
+    }
+    operation_label = operation_label_map.get(operation_type, operation_type)
+
+    sections = [
+        f"操作类型：{operation_label}",
+        f"画面比例：{aspect_ratio or '未记录'}",
+        f"分辨率：{resolution or '未记录'}",
+        _format_multiline_section("主参考图", primary_ref_display),
+        _format_list_section("附加参考图 / 素材", extra_ref_displays),
+    ]
+
+    if description_text is not None:
+        sections.append(_format_multiline_section("页面描述（用于构建 prompt）", description_text))
+    if original_description is not None:
+        sections.append(_format_multiline_section("原始页面描述", original_description))
+    if edit_instruction is not None:
+        sections.append(_format_multiline_section("用户修改指令", edit_instruction))
+    if extra_requirements is not None:
+        title = "后端追加要求（已拼入 prompt）" if extra_requirements_in_prompt else "项目上下文附加要求（本次未直接拼入 prompt）"
+        sections.append(_format_multiline_section(title, extra_requirements))
+
+    sections.append(_format_multiline_section("最终发送给 nano banana 的 prompt", prompt_text))
+    return '\n\n'.join(sections)
 
 
 def _load_page_generation_snapshot(page_id: str, project_id: str | None = None) -> dict[str, Any]:
@@ -213,7 +302,9 @@ task_manager = TaskManager(max_workers=4)
 
 
 def save_image_with_version(image, project_id: str, page_id: str, file_service,
-                            page_obj=None, image_format: str = 'PNG') -> tuple[str, int]:
+                            page_obj=None, image_format: str = 'PNG',
+                            prompt_text: Optional[str] = None,
+                            operation_type: Optional[str] = None) -> tuple[str, int]:
     """
     保存图片并创建历史版本记录的公共函数
 
@@ -262,6 +353,8 @@ def save_image_with_version(image, project_id: str, page_id: str, file_service,
         page_id=page_id,
         image_path=image_path,
         version_number=next_version,
+        operation_type=operation_type,
+        prompt_text=prompt_text,
         is_current=True
     )
     db.session.add(new_version)
@@ -679,8 +772,26 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                         page_obj = db.session.get(Page, page_id)
                         if not page_obj:
                             raise ValueError(f"Page {page_id} not found")
+                        request_snapshot = _build_image_request_snapshot(
+                            operation_type='regenerate' if page_snapshot['current_image_rel_path'] else 'generate',
+                            aspect_ratio=aspect_ratio,
+                            resolution=resolution,
+                            prompt_text=prompt,
+                            primary_reference=page_ref_image_path,
+                            additional_references=page_additional_ref_images,
+                            description_text=desc_text,
+                            extra_requirements=extra_requirements,
+                            extra_requirements_in_prompt=True,
+                            upload_root=file_service.upload_folder,
+                        )
                         image_path, next_version = save_image_with_version(
-                            image, project_id, page_id, file_service, page_obj=page_obj
+                            image,
+                            project_id,
+                            page_id,
+                            file_service,
+                            page_obj=page_obj,
+                            prompt_text=request_snapshot,
+                            operation_type='regenerate' if page_snapshot['current_image_rel_path'] else 'generate',
                         )
                         if _generation_logs_enabled():
                             logger.info(
@@ -883,8 +994,26 @@ def generate_single_page_image_task(task_id: str, project_id: str, page_id: str,
             page = db.session.get(Page, page_id)
             if not page:
                 raise ValueError(f"Page {page_id} not found")
+            request_snapshot = _build_image_request_snapshot(
+                operation_type='regenerate' if page_snapshot['current_image_rel_path'] else 'generate',
+                aspect_ratio=aspect_ratio,
+                resolution=resolution,
+                prompt_text=prompt,
+                primary_reference=ref_image_path,
+                additional_references=additional_ref_images,
+                description_text=desc_text,
+                extra_requirements=extra_requirements,
+                extra_requirements_in_prompt=True,
+                upload_root=file_service.upload_folder,
+            )
             image_path, next_version = save_image_with_version(
-                image, project_id, page_id, file_service, page_obj=page
+                image,
+                project_id,
+                page_id,
+                file_service,
+                page_obj=page,
+                prompt_text=request_snapshot,
+                operation_type='regenerate' if page_snapshot['current_image_rel_path'] else 'generate',
             )
             
             # Mark task as completed
@@ -963,6 +1092,9 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
             edit_instruction_text = normalize_user_text(edit_instruction)
             current_image_rel_path = page_snapshot['current_image_rel_path']
             template_path = file_service.get_template_path(project_id) if use_template else None
+            prompt_text: Optional[str] = None
+            request_snapshot: Optional[str] = None
+            operation_type = 'regenerate' if current_image_rel_path else 'generate'
 
             # 有原图且输入了修改指令时走图像编辑；否则走文生图重绘模式
             should_edit_existing_image = bool(current_image_rel_path and edit_instruction_text)
@@ -977,12 +1109,29 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                         merged_edit_refs.extend(additional_ref_images)
 
                     logger.info(f"🎨 Editing image for page {page_id}...")
-                    image = ai_service.edit_image(
-                        edit_instruction_text,
+                    prompt_text = get_image_edit_prompt(
+                        edit_instruction=edit_instruction_text,
+                        original_description=original_description,
+                    )
+                    operation_type = 'edit'
+                    request_snapshot = _build_image_request_snapshot(
+                        operation_type=operation_type,
+                        aspect_ratio=aspect_ratio,
+                        resolution=resolution,
+                        prompt_text=prompt_text,
+                        primary_reference=current_image_path,
+                        additional_references=merged_edit_refs,
+                        original_description=original_description,
+                        edit_instruction=edit_instruction_text,
+                        extra_requirements=extra_requirements,
+                        extra_requirements_in_prompt=False,
+                        upload_root=file_service.upload_folder,
+                    )
+                    image = ai_service.generate_image(
+                        prompt_text,
                         current_image_path,
                         aspect_ratio,
                         resolution,
-                        original_description=original_description,
                         additional_ref_images=merged_edit_refs if merged_edit_refs else None
                     )
                 else:
@@ -1042,7 +1191,7 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                             if merged_requirements else edit_requirement
                         )
 
-                    prompt = ai_service.generate_image_prompt(
+                    prompt_text = ai_service.generate_image_prompt(
                         generation_outline,
                         page_data,
                         desc_text or edit_instruction_text,
@@ -1052,10 +1201,23 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                         language=language,
                         has_template=bool(template_path)
                     )
+                    request_snapshot = _build_image_request_snapshot(
+                        operation_type=operation_type,
+                        aspect_ratio=aspect_ratio,
+                        resolution=resolution,
+                        prompt_text=prompt_text,
+                        primary_reference=template_path,
+                        additional_references=dedup_ref_images,
+                        description_text=desc_text or edit_instruction_text,
+                        edit_instruction=edit_instruction_text or None,
+                        extra_requirements=merged_requirements if merged_requirements else None,
+                        extra_requirements_in_prompt=True,
+                        upload_root=file_service.upload_folder,
+                    )
 
                     logger.info(f"🎨 Regenerating image for page {page_id} (text-to-image mode)...")
                     image = ai_service.generate_image(
-                        prompt,
+                        prompt_text,
                         template_path,
                         aspect_ratio,
                         resolution,
@@ -1078,7 +1240,13 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
             if not page:
                 raise ValueError(f"Page {page_id} not found")
             image_path, next_version = save_image_with_version(
-                image, project_id, page_id, file_service, page_obj=page
+                image,
+                project_id,
+                page_id,
+                file_service,
+                page_obj=page,
+                prompt_text=request_snapshot or prompt_text,
+                operation_type=operation_type,
             )
             
             # Mark task as completed

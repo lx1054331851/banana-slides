@@ -51,6 +51,18 @@ const previewI18n = {
       noPages: "还没有页面", noPagesHint: "可直接在本页添加页面，或返回编辑页继续完善内容", backToEdit: "返回编辑",
       generating: "正在生成中...", notGenerated: "尚未生成图片", generateThisPage: "生成此页",
       prevPage: "上一页", nextPage: "下一页", historyVersions: "历史版本",
+      historyButton: "历史",
+      historyModalTitle: "历史记录",
+      historyModalEmpty: "当前页面还没有历史记录",
+      historyPromptTitle: "发送给 nano banana 的完整提示词",
+      historyPromptMissing: "这个历史版本生成于旧数据结构，未记录完整提示词。",
+      historyCopyPrompt: "复制提示词",
+      historyPromptCopied: "提示词已复制",
+      historyCreatedAt: "修改时间",
+      historySwitchToVersion: "切换到此版本",
+      historyActionGenerate: "首次生成",
+      historyActionRegenerate: "重新生成",
+      historyActionEdit: "修改图片",
       fullscreen: "全屏查看", exitFullscreen: "退出全屏",
       versions: "版本", version: "版本", current: "当前", editPage: "编辑页面",
       regionSelect: "区域选图", endRegionSelect: "结束区域选图",
@@ -185,6 +197,18 @@ const previewI18n = {
       noPages: "No pages yet", noPagesHint: "You can add pages directly here, or go back to editor", backToEdit: "Back to Editor",
       generating: "Generating...", notGenerated: "Image not generated yet", generateThisPage: "Generate This Page",
       prevPage: "Previous", nextPage: "Next", historyVersions: "History Versions",
+      historyButton: "History",
+      historyModalTitle: "History",
+      historyModalEmpty: "No history for this page yet",
+      historyPromptTitle: "Full prompt sent to nano banana",
+      historyPromptMissing: "This older version was created before prompt history was recorded.",
+      historyCopyPrompt: "Copy Prompt",
+      historyPromptCopied: "Prompt copied",
+      historyCreatedAt: "Edited at",
+      historySwitchToVersion: "Switch to this version",
+      historyActionGenerate: "Initial Generate",
+      historyActionRegenerate: "Regenerate",
+      historyActionEdit: "Edit Image",
       fullscreen: "Fullscreen", exitFullscreen: "Exit Fullscreen",
       versions: "Versions", version: "Version", current: "Current", editPage: "Edit Page",
       regionSelect: "Region Select", endRegionSelect: "End Region Select",
@@ -301,6 +325,9 @@ import {
   FileText,
   ArrowUpDown,
   BookOpen,
+  History,
+  Clock3,
+  Copy,
 } from 'lucide-react';
 import {
   Button,
@@ -467,6 +494,20 @@ const createUploadedReference = (
 const getPageDraftKey = (page?: Page | null, index = 0): string | null => {
   if (!page) return null;
   return page.id || page.page_id || `index-${index}`;
+};
+
+const formatImageVersionTimestamp = (createdAt?: string): string => {
+  if (!createdAt) return '-';
+  const parsed = new Date(createdAt);
+  if (Number.isNaN(parsed.getTime())) return createdAt;
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(parsed);
 };
 
 const getDescriptionExtraFields = (
@@ -913,6 +954,10 @@ export const SlidePreview: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [floatingFullscreenButtonPosition, setFloatingFullscreenButtonPosition] = useState({ x: 0.92, y: 0.1 });
   const [imageVersions, setImageVersions] = useState<ImageVersion[]>([]);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [selectedHistoryVersionId, setSelectedHistoryVersionId] = useState<string | null>(null);
+  const [copiedHistoryVersionId, setCopiedHistoryVersionId] = useState<string | null>(null);
+  const historyCopyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isUploadingTemplate, setIsUploadingTemplate] = useState(false);
   const [selectedContextImages, setSelectedContextImages] = useState<{
     useTemplate: boolean;
@@ -1599,6 +1644,28 @@ export const SlidePreview: React.FC = () => {
 
     loadVersions();
   }, [currentProject, selectedIndex, projectId]);
+
+  useEffect(() => {
+    if (imageVersions.length === 0) {
+      setSelectedHistoryVersionId(null);
+      return;
+    }
+
+    setSelectedHistoryVersionId((prev) => {
+      if (prev && imageVersions.some((version) => version.version_id === prev)) {
+        return prev;
+      }
+      const currentVersion = imageVersions.find((version) => version.is_current);
+      if (currentVersion) return currentVersion.version_id;
+      return [...imageVersions].sort((a, b) => b.version_number - a.version_number)[0]?.version_id || null;
+    });
+  }, [imageVersions]);
+
+  useEffect(() => () => {
+    if (historyCopyResetTimerRef.current) {
+      clearTimeout(historyCopyResetTimerRef.current);
+    }
+  }, []);
 
   // 检查是否需要显示1K分辨率警告
   const checkResolutionAndExecute = useCallback(async (action: () => Promise<void>) => {
@@ -2926,6 +2993,50 @@ export const SlidePreview: React.FC = () => {
   const isGenerateDisabled = isMultiSelectMode && selectedPageIds.size === 0;
   const missingImageCount = currentProject.pages.filter(p => !p.generated_image_path).length;
   const selectedPageHasImage = Boolean(selectedPage?.generated_image_path || selectedPage?.preview_image_path);
+  const historyVersionsDescending = [...imageVersions].sort((a, b) => b.version_number - a.version_number);
+  const selectedHistoryVersion = historyVersionsDescending.find(
+    (version) => version.version_id === selectedHistoryVersionId
+  ) || historyVersionsDescending[0] || null;
+  const getHistoryOperationLabel = (version: ImageVersion): string => {
+    switch (version.operation_type) {
+      case 'edit':
+        return t('preview.historyActionEdit');
+      case 'regenerate':
+        return t('preview.historyActionRegenerate');
+      case 'generate':
+        return t('preview.historyActionGenerate');
+      default:
+        return version.version_number > 1 ? t('preview.historyActionRegenerate') : t('preview.historyActionGenerate');
+    }
+  };
+  const handleOpenHistory = () => {
+    if (historyVersionsDescending.length === 0) return;
+    setSelectedHistoryVersionId(
+      imageVersions.find((version) => version.is_current)?.version_id || historyVersionsDescending[0]?.version_id || null
+    );
+    setIsHistoryModalOpen(true);
+  };
+  const handleCopyHistoryPrompt = async () => {
+    if (!selectedHistoryVersion?.prompt_text) return;
+    try {
+      await navigator.clipboard.writeText(selectedHistoryVersion.prompt_text);
+      setCopiedHistoryVersionId(selectedHistoryVersion.version_id);
+      if (historyCopyResetTimerRef.current) {
+        clearTimeout(historyCopyResetTimerRef.current);
+      }
+      historyCopyResetTimerRef.current = setTimeout(() => {
+        setCopiedHistoryVersionId(null);
+      }, 2000);
+      show({ message: t('preview.historyPromptCopied'), type: 'success' });
+    } catch (error) {
+      show({
+        message: normalizeErrorMessage(
+          error instanceof Error ? error.message : t('slidePreview.unknownError')
+        ),
+        type: 'error',
+      });
+    }
+  };
   const descriptionGenerationTotal = taskProgress?.total && taskProgress.total > 0
     ? taskProgress.total
     : currentProject.pages.filter((page) => page.id).length;
@@ -4153,6 +4264,26 @@ export const SlidePreview: React.FC = () => {
                               modelOptions={PROJECT_SUPPORTED_IMAGE_MODELS}
                               isSubmitting={isPageAiSubmitting}
                               isRegionSelectionActive={isRegionSelectionMode}
+                              headerActions={(
+                                <div className="relative">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    icon={<History size={16} />}
+                                    onClick={handleOpenHistory}
+                                    disabled={historyVersionsDescending.length === 0}
+                                    aria-label={t('preview.historyButton')}
+                                    title={t('preview.historyButton')}
+                                    className="h-10 w-10 rounded-full border border-[#d9c99d] bg-[#f9f2df] p-0 text-[#7c6840] shadow-sm hover:bg-[#f6ebcf] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:bg-background-hover"
+                                  />
+                                  {historyVersionsDescending.length > 0 && (
+                                    <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-banana-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-black shadow-sm">
+                                      {historyVersionsDescending.length}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                               onInputChange={setEditPrompt}
                               onModelChange={setEditRunImageModel}
                               onSend={() => void handlePageAiSend()}
@@ -4356,6 +4487,142 @@ export const SlidePreview: React.FC = () => {
           />
         </>
       )}
+
+      <Modal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        title={`${t('preview.historyModalTitle')} · ${t('preview.page', { num: selectedIndex + 1 })}`}
+        size="wide"
+      >
+        {historyVersionsDescending.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[#eadfbf] bg-[#fffaf0] px-4 py-10 text-center text-sm text-[#8a7a57] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-tertiary">
+            {t('preview.historyModalEmpty')}
+          </div>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+            <div className="min-h-0 max-h-[70vh] overflow-y-auto pr-1">
+              <div className="space-y-3">
+                {historyVersionsDescending.map((version) => {
+                  const isSelected = version.version_id === selectedHistoryVersion?.version_id;
+                  const previewUrl = version.image_url
+                    ? getImageUrl(version.image_url, version.created_at || version.version_number)
+                    : '';
+                  return (
+                    <button
+                      key={version.version_id}
+                      type="button"
+                      onClick={() => setSelectedHistoryVersionId(version.version_id)}
+                      className={`w-full overflow-hidden rounded-2xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 ${
+                        isSelected
+                          ? 'border-banana-400 bg-[#fff7df] shadow-[0_14px_30px_rgba(245,181,0,0.16)] dark:border-banana-500/60 dark:bg-banana-500/10'
+                          : 'border-[#eadfbf] bg-white hover:border-banana-300 hover:bg-[#fffaf0] dark:border-border-primary dark:bg-background-secondary dark:hover:bg-background-hover'
+                      }`}
+                    >
+                      {previewUrl ? (
+                        <img
+                          src={previewUrl}
+                          alt={`${t('preview.version')} ${version.version_number}`}
+                          className="h-32 w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-32 w-full items-center justify-center bg-[#f7f5ef] text-sm text-slate-400 dark:bg-background-hover dark:text-foreground-tertiary">
+                          {t('preview.notGenerated')}
+                        </div>
+                      )}
+                      <div className="space-y-2 px-4 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-semibold text-slate-800 dark:text-foreground-primary">
+                            {t('preview.version')} {version.version_number}
+                          </div>
+                          {version.is_current && (
+                            <span className="rounded-full bg-banana-500 px-2 py-0.5 text-xs font-semibold text-black">
+                              {t('preview.current')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-foreground-tertiary">
+                          <span className="rounded-full bg-slate-100 px-2 py-1 dark:bg-background-hover">
+                            {getHistoryOperationLabel(version)}
+                          </span>
+                          <span>{formatImageVersionTimestamp(version.created_at)}</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="min-w-0 space-y-4">
+              {selectedHistoryVersion && (
+                <div className="rounded-2xl border border-[#eadfbf] bg-white p-4 dark:border-border-primary dark:bg-background-secondary">
+                  <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-base font-semibold text-slate-900 dark:text-foreground-primary">
+                        {t('preview.version')} {selectedHistoryVersion.version_number}
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-foreground-secondary">
+                        <span className="rounded-full bg-[#f8f5eb] px-2 py-1 dark:bg-background-hover">
+                          {getHistoryOperationLabel(selectedHistoryVersion)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#f8f5eb] px-2 py-1 dark:bg-background-hover">
+                          <Clock3 size={12} />
+                          {t('preview.historyCreatedAt')}：{formatImageVersionTimestamp(selectedHistoryVersion.created_at)}
+                        </span>
+                        {selectedHistoryVersion.is_current && (
+                          <span className="rounded-full bg-banana-500 px-2 py-1 font-semibold text-black">
+                            {t('preview.current')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {!selectedHistoryVersion.is_current && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => void handleSwitchVersion(selectedHistoryVersion.version_id)}
+                          className="h-9 rounded-xl"
+                        >
+                          {t('preview.historySwitchToVersion')}
+                        </Button>
+                      )}
+                      {selectedHistoryVersion.prompt_text && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          icon={copiedHistoryVersionId === selectedHistoryVersion.version_id ? <Check size={15} /> : <Copy size={15} />}
+                          onClick={() => void handleCopyHistoryPrompt()}
+                          className="h-9 rounded-xl border border-[#eadfbf] bg-[#fffaf0] px-3 text-[#6f5f3d] hover:bg-[#fff3cf] dark:border-border-primary dark:bg-background-hover dark:text-foreground-secondary dark:hover:bg-background-primary"
+                        >
+                          {copiedHistoryVersionId === selectedHistoryVersion.version_id
+                            ? t('preview.historyPromptCopied')
+                            : t('preview.historyCopyPrompt')}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mb-3 text-sm font-semibold text-slate-900 dark:text-foreground-primary">
+                    {t('preview.historyPromptTitle')}
+                  </div>
+                  {selectedHistoryVersion.prompt_text ? (
+                    <pre className="max-h-[62vh] overflow-auto whitespace-pre-wrap break-words rounded-2xl bg-[#f8f5eb] px-4 py-4 text-xs leading-6 text-slate-700 dark:bg-[#111827] dark:text-[#dbe4f3]">
+                      {selectedHistoryVersion.prompt_text}
+                    </pre>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-[#eadfbf] bg-[#fffaf0] px-4 py-10 text-sm text-[#8a7a57] dark:border-border-primary dark:bg-background-hover dark:text-foreground-tertiary">
+                      {t('preview.historyPromptMissing')}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* 1K分辨率警告对话框 */}
       <Modal

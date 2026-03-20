@@ -51,6 +51,7 @@ interface PageAiWorkbenchProps {
   modelOptions: readonly string[];
   isSubmitting: boolean;
   isRegionSelectionActive: boolean;
+  headerActions?: React.ReactNode;
   onInputChange: (value: string) => void;
   onModelChange: (value: string) => void;
   onSend: () => void;
@@ -84,6 +85,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   modelOptions,
   isSubmitting,
   isRegionSelectionActive,
+  headerActions,
   onInputChange,
   onModelChange,
   onSend,
@@ -130,9 +132,14 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   return (
     <section
       data-testid="page-ai-workbench"
-      className="h-full rounded-[28px] border border-slate-200 bg-white dark:border-border-primary dark:bg-[linear-gradient(180deg,rgba(30,30,36,0.96)_0%,rgba(23,23,30,0.98)_100%)]"
+      className="relative h-full rounded-[28px] border border-slate-200 bg-white dark:border-border-primary dark:bg-[linear-gradient(180deg,rgba(30,30,36,0.96)_0%,rgba(23,23,30,0.98)_100%)]"
     >
       <div className="flex h-full flex-col px-5 pt-4 pb-2">
+        {headerActions && (
+          <div className="absolute right-4 top-3 z-20">
+            {headerActions}
+          </div>
+        )}
         <div className="flex min-h-0 flex-1 flex-col overflow-visible rounded-[24px] bg-white dark:bg-transparent">
           {references.length > 0 && (
             <div className="border-b border-slate-100 px-4 py-2 dark:border-border-primary">

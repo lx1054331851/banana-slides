@@ -5,6 +5,7 @@ import type {
   ApiResponse,
   CreateProjectRequest,
   Page,
+  ImageVersion,
   CoverEndingFieldDetect,
   GenerationOverride,
 } from '@/types';
@@ -621,8 +622,8 @@ export const editPageImage = async (
 export const getPageImageVersions = async (
   projectId: string,
   pageId: string
-): Promise<ApiResponse<{ versions: any[] }>> => {
-  const response = await apiClient.get<ApiResponse<{ versions: any[] }>>(
+): Promise<ApiResponse<{ versions: ImageVersion[] }>> => {
+  const response = await apiClient.get<ApiResponse<{ versions: ImageVersion[] }>>(
     `/api/projects/${projectId}/pages/${pageId}/image-versions`
   );
   return response.data;

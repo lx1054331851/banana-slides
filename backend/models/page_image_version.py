@@ -16,6 +16,8 @@ class PageImageVersion(db.Model):
     page_id = db.Column(db.String(36), db.ForeignKey('pages.id'), nullable=False, index=True)
     image_path = db.Column(db.String(500), nullable=False)
     version_number = db.Column(db.Integer, nullable=False)  # 版本号，从1开始递增
+    operation_type = db.Column(db.String(32), nullable=True)  # generate / regenerate / edit
+    prompt_text = db.Column(db.Text, nullable=True)  # 发送给图像模型的完整提示词
     is_current = db.Column(db.Boolean, nullable=False, default=False)  # 是否为当前使用的版本
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     
@@ -37,10 +39,11 @@ class PageImageVersion(db.Model):
             'image_path': self.image_path,
             'image_url': f'/files/{project_id}/pages/{self.image_path.split("/")[-1]}' if self.image_path and project_id else None,
             'version_number': self.version_number,
+            'operation_type': self.operation_type,
+            'prompt_text': self.prompt_text,
             'is_current': self.is_current,
             'created_at': created_at_str,
         }
     
     def __repr__(self):
         return f'<PageImageVersion {self.id}: page={self.page_id}, version={self.version_number}, current={self.is_current}>'
-
