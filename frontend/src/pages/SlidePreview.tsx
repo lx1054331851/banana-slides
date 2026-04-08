@@ -382,6 +382,7 @@ import type {
   ExportExtractorMethod,
   ExportInpaintMethod,
   Page,
+  Project,
   GenerationOverride,
   PageAiMessage,
   PageAiReference,
