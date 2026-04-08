@@ -129,7 +129,7 @@ cd frontend && npm run dev
 这是最简单的方式，无需安装docker或下载项目，创建后可直接进入应用
 
 
-1. 通过雨云一键部署和启动本应用 (新用户有15天免费使用+首充双倍政策)
+1. 通过雨云一键部署和启动本应用 (带宽大，适合高清图片生成和下载。新用户有15天免费试用)
 
 [![通过雨云一键部署](https://rainyun-apps.cn-nb1.rains3.com/materials/deploy-on-rainyun-cn.svg)](https://app.rainyun.com/apps/rca/store/7549/anionex_)
 
@@ -422,8 +422,10 @@ docker compose -f docker-compose.prod.yml up -d
 
 **使用本地构建（docker-compose.yml）**
 
+注：若手动修改了代码，该方法不适用，需要先将代码还原到拉取时的版本。
+
 ```bash
-git pull
+git pull 
 docker compose down
 docker compose build --no-cache
 docker compose up -d
@@ -669,8 +671,10 @@ banana-slides/
 
 
 
+<img width="302" alt="image" src="https://github.com/user-attachments/assets/3699efad-eb5d-4ab2-bc68-20f44c8b1b5b" />
 
-<img width="302" src="https://private-user-images.githubusercontent.com/123177548/563407714-01f84824-a8f5-4858-97c2-a7e65d70755e.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NzM0NjQ5MTksIm5iZiI6MTc3MzQ2NDYxOSwicGF0aCI6Ii8xMjMxNzc1NDgvNTYzNDA3NzE0LTAxZjg0ODI0LWE4ZjUtNDg1OC05N2MyLWE3ZTY1ZDcwNzU1ZS5wbmc_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjYwMzE0JTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI2MDMxNFQwNTAzMzlaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT1jYjQxMzQ4ZjIxNjQ2MjIwMTI2NGUzMDFmMDQ2M2Q1Y2MwNDE4OGVkMTdmYTlmMzk1NzcxYmZkMDEzMTBhNzY2JlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.RMmYdJClH6y7tdMuET73o7UzJ-bCONxmF6IjpvUBmLw">
+
+
 
 
 

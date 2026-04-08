@@ -10,24 +10,25 @@ Configuration priority (highest → lowest):
     3. Hard-coded defaults
 
 Supported provider formats:
-    gemini  — Google AI Studio (API key auth)
-    openai  — OpenAI-compatible endpoints
-    vertex  — Google Cloud Vertex AI (service-account auth)
-    lazyllm — LazyLLM multi-vendor framework
+    gemini    — Google AI Studio (API key auth)
+    openai    — OpenAI-compatible endpoints
+    anthropic — Anthropic (Claude) API
+    vertex    — Google Cloud Vertex AI (service-account auth)
+    lazyllm   — LazyLLM multi-vendor framework
 """
 import os
 import logging
 from typing import Any, Dict, Optional
 
-from .text import TextProvider, GenAITextProvider, OpenAITextProvider, LazyLLMTextProvider
-from .image import ImageProvider, GenAIImageProvider, OpenAIImageProvider, LazyLLMImageProvider
+from .text import TextProvider, GenAITextProvider, OpenAITextProvider, AnthropicTextProvider, LazyLLMTextProvider
+from .image import ImageProvider, GenAIImageProvider, OpenAIImageProvider, AnthropicImageProvider, LazyLLMImageProvider
 from services.provider_routing.types import ResolvedProviderRoute
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    'TextProvider', 'GenAITextProvider', 'OpenAITextProvider', 'LazyLLMTextProvider',
-    'ImageProvider', 'GenAIImageProvider', 'OpenAIImageProvider', 'LazyLLMImageProvider',
+    'TextProvider', 'GenAITextProvider', 'OpenAITextProvider', 'AnthropicTextProvider', 'LazyLLMTextProvider',
+    'ImageProvider', 'GenAIImageProvider', 'OpenAIImageProvider', 'AnthropicImageProvider', 'LazyLLMImageProvider',
     'get_text_provider', 'get_image_provider', 'get_provider_format',
     'get_caption_provider', 'get_image_caption_provider_config', 'LAZYLLM_VENDORS',
 ]
@@ -99,7 +100,7 @@ def _build_provider_config() -> Dict[str, Any]:
     """Assemble provider-specific configuration dict.
 
     Returns a dict always containing ``'format'`` plus format-specific keys:
-        - gemini / openai → ``api_key``, ``api_base``
+        - gemini / openai / anthropic → ``api_key``, ``api_base``
         - vertex          → ``project_id``, ``location``
         - lazyllm         → ``text_source``, ``image_source``
 
@@ -130,6 +131,16 @@ def _build_provider_config() -> Dict[str, Any]:
             )
         else:
             logger.info("Provider config — format: openai, api_base: %s", cfg['api_base'])
+
+    elif fmt == 'anthropic':
+        cfg['api_key'] = _resolve_setting('ANTHROPIC_API_KEY') or _resolve_setting('OPENAI_API_KEY')
+        cfg['api_base'] = _resolve_setting('ANTHROPIC_API_BASE', 'https://api.anthropic.com')
+        if not cfg['api_key']:
+            raise ValueError(
+                "ANTHROPIC_API_KEY (from database settings or environment) "
+                "is required when AI_PROVIDER_FORMAT=anthropic."
+            )
+        logger.info("Provider config — format: anthropic, api_base: %s", cfg['api_base'])
 
     elif fmt == 'vertex':
         cfg['project_id'] = _resolve_setting('VERTEX_PROJECT_ID')
@@ -174,6 +185,7 @@ def _get_model_type_provider_config(model_type: str) -> Dict[str, Any]:
     via {MODEL_TYPE}_MODEL_SOURCE. The source can be:
       - 'gemini': uses {MODEL_TYPE}_API_KEY + {MODEL_TYPE}_API_BASE, fallback to global
       - 'openai': uses {MODEL_TYPE}_API_KEY + {MODEL_TYPE}_API_BASE, fallback to global
+      - 'anthropic': uses {MODEL_TYPE}_API_KEY + {MODEL_TYPE}_API_BASE, fallback to global
       - A LazyLLM vendor name (qwen, doubao, etc.): uses lazyllm with that vendor
       - None/empty: falls back to global _build_provider_config()
 
@@ -261,6 +273,20 @@ def _get_model_type_provider_config(model_type: str) -> Dict[str, Any]:
             'azure_api_version': azure_api_version,
         }
 
+    elif source_lower == 'anthropic':
+        api_key = (_resolve_setting(f'{prefix}_API_KEY')
+                   or _resolve_setting('ANTHROPIC_API_KEY')
+                   or _resolve_setting('OPENAI_API_KEY'))
+        api_base = (_resolve_setting(f'{prefix}_API_BASE')
+                    or _resolve_setting('ANTHROPIC_API_BASE', 'https://api.anthropic.com'))
+        if not api_key:
+            raise ValueError(
+                f"API key is required for {model_type} model with Anthropic provider. "
+                f"Set {prefix}_API_KEY or ANTHROPIC_API_KEY."
+            )
+        logger.info("Per-model config — %s: anthropic, api_base: %s", model_type, api_base)
+        return {'format': 'anthropic', 'api_key': api_key, 'api_base': api_base}
+
     else:
         # Assume it's a LazyLLM vendor name
         logger.info("Per-model config — %s: lazyllm, source: %s", model_type, source_lower)
@@ -302,7 +328,10 @@ def get_caption_provider(model: str = "gemini-3-flash-preview", route: Optional[
     config = _get_model_type_provider_config('image_caption')
     fmt = config['format']
 
-    if fmt == 'openai':
+    if fmt == 'anthropic':
+        logger.info("Caption provider: Anthropic, model=%s", model)
+        return AnthropicTextProvider(api_key=config['api_key'], api_base=config['api_base'], model=model)
+    elif fmt == 'openai':
         logger.info("Caption provider: OpenAI, model=%s", model)
         return OpenAITextProvider(
             api_key=config['api_key'],
@@ -355,7 +384,10 @@ def get_text_provider(model: str = "gemini-3-flash-preview", route: Optional[Res
     config = _get_model_type_provider_config('text')
     fmt = config['format']
 
-    if fmt == 'openai':
+    if fmt == 'anthropic':
+        logger.info("Text provider: Anthropic, model=%s", model)
+        return AnthropicTextProvider(api_key=config['api_key'], api_base=config['api_base'], model=model)
+    elif fmt == 'openai':
         logger.info("Text provider: OpenAI, model=%s", model)
         return OpenAITextProvider(
             api_key=config['api_key'],
@@ -364,19 +396,16 @@ def get_text_provider(model: str = "gemini-3-flash-preview", route: Optional[Res
             azure_endpoint=config.get('azure_endpoint'),
             azure_api_version=config.get('azure_api_version'),
         )
-
     elif fmt == 'vertex':
         logger.info("Text provider: Vertex AI, model=%s, project=%s", model, config['project_id'])
         return GenAITextProvider(
             model=model, vertexai=True,
             project_id=config['project_id'], location=config['location'],
         )
-
     elif fmt == 'lazyllm':
         source = config.get('source') or config.get('text_source', 'deepseek')
         logger.info("Text provider: LazyLLM, model=%s, source=%s", model, source)
         return LazyLLMTextProvider(source=source, model=model)
-
     else:
         # gemini (default)
         logger.info("Text provider: Gemini, model=%s", model)
@@ -388,6 +417,9 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
 
     Note: OpenAI format does NOT support 4K resolution — only 1K is available.
     Use Gemini or Vertex AI for higher resolution output.
+
+    Note: Anthropic format doesn't natively support image generation yet.
+    This is intended for use with third-party Anthropic-compatible endpoints.
     """
     if route:
         effective_model = route.model or model
@@ -428,7 +460,11 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
     config = _get_model_type_provider_config('image')
     fmt = config['format']
 
-    if fmt == 'openai':
+    if fmt == 'anthropic':
+        logger.info("Image provider: Anthropic, model=%s", model)
+        logger.warning("Anthropic format is for compatible endpoints only (official API doesn't support image generation)")
+        return AnthropicImageProvider(api_key=config['api_key'], api_base=config['api_base'], model=model)
+    elif fmt == 'openai':
         logger.info("Image provider: OpenAI, model=%s", model)
         logger.warning("OpenAI format only supports 1K resolution, 4K is not available")
         return OpenAIImageProvider(
@@ -438,19 +474,16 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
             azure_endpoint=config.get('azure_endpoint'),
             azure_api_version=config.get('azure_api_version'),
         )
-
     elif fmt == 'vertex':
         logger.info("Image provider: Vertex AI, model=%s, project=%s", model, config['project_id'])
         return GenAIImageProvider(
             model=model, vertexai=True,
             project_id=config['project_id'], location=config['location'],
         )
-
     elif fmt == 'lazyllm':
         source = config.get('source') or config.get('image_source', 'doubao')
         logger.info("Image provider: LazyLLM, model=%s, source=%s", model, source)
         return LazyLLMImageProvider(source=source, model=model)
-
     else:
         # gemini (default)
         logger.info("Image provider: Gemini, model=%s", model)
