@@ -324,7 +324,6 @@ import {
   LayoutGrid,
   FileText,
   ArrowUpDown,
-  BookOpen,
   History,
   Clock3,
   Copy,
@@ -341,7 +340,6 @@ import {
   ExportTasksPanel,
   FilePreviewModal,
   ReferenceFileList,
-  CoverEndingInfoModal,
   GlobalAiAssistantDrawer,
   PageAiWorkbench,
 } from '@/components/shared';
@@ -374,9 +372,7 @@ import {
   exportEditablePPTX as apiExportEditablePPTX,
   getSettings,
   refineDescriptions,
-  detectCoverEndingFields,
   addPage,
-  updatePageDescription,
   getTaskStatus,
   updateSettings,
 } from '@/api/endpoints';
@@ -387,8 +383,6 @@ import type {
   ExportInpaintMethod,
   Page,
   GenerationOverride,
-  CoverEndingFieldDetect,
-  PresentationMeta,
   PageAiMessage,
   PageAiReference,
   PageAiRegionBounds,
@@ -398,8 +392,6 @@ import {
   exportProjectToMarkdown,
   parseMarkdownPages,
   getDescriptionText,
-  applyPresentationMetaToDescription,
-  parsePresentationMeta,
 } from '@/utils/projectUtils';
 import {
   PROJECT_DEFAULT_IMAGE_MODEL,
@@ -637,10 +629,6 @@ export const SlidePreview: React.FC = () => {
   const importFileRef = useRef<HTMLInputElement>(null);
   const [isRenovationProcessing, setIsRenovationProcessing] = useState(false);
   const [renovationProgress, setRenovationProgress] = useState<{ total: number; completed: number } | null>(null);
-  const [detectFields, setDetectFields] = useState<CoverEndingFieldDetect[]>([]);
-  const [isCoverEndingModalOpen, setIsCoverEndingModalOpen] = useState(false);
-  const [coverEndingModalMode, setCoverEndingModalMode] = useState<'missing' | 'all'>('missing');
-  const [isCheckingCoverEnding, setIsCheckingCoverEnding] = useState(false);
   const [generationMode, setGenerationMode] = useState<'streaming' | 'parallel'>('streaming');
   const [extraFieldNames, setExtraFieldNames] = useState<string[]>(DEFAULT_EXTRA_FIELDS);
   const [imagePromptFields, setImagePromptFields] = useState<string[]>(['视觉元素', '视觉焦点', '排版布局']);
@@ -1290,6 +1278,24 @@ export const SlidePreview: React.FC = () => {
       };
     });
   }, [currentProject, selectedIndex]);
+
+  const hydrateSelectedPageEditor = useCallback((project?: Project | null) => {
+    const page = project?.pages?.[selectedIndex];
+    if (!page) {
+      lastSelectedPageKeyRef.current = null;
+      setEditOutlineTitle('');
+      setEditOutlinePoints('');
+      setEditDescription('');
+      setEditExtraFields({});
+      return;
+    }
+
+    lastSelectedPageKeyRef.current = getPageDraftKey(page, selectedIndex);
+    setEditOutlineTitle(page.outline_content?.title || '');
+    setEditOutlinePoints(page.outline_content?.points?.join('\n') || '');
+    setEditDescription(getDescriptionText(page.description_content));
+    setEditExtraFields(getDescriptionExtraFields(page.description_content));
+  }, [selectedIndex]);
 
   // Memoize pages with generated images to avoid re-computing in multiple places
   const pagesWithImages = useMemo(() => {
@@ -2056,8 +2062,13 @@ export const SlidePreview: React.FC = () => {
   const handleAiRefineDescriptions = useCallback(async (requirement: string, previousRequirements: string[]) => {
     if (!currentProject || !projectId) return;
     try {
+      handleSaveOutlineAndDescription();
+      await saveAllPages();
       const response = await refineDescriptions(projectId, requirement, previousRequirements);
+      setPageDrafts({});
+      lastSelectedPageKeyRef.current = null;
       await syncProject(projectId);
+      hydrateSelectedPageEditor(useProjectStore.getState().currentProject);
       const successMessage = response.data?.message || '页面描述修改成功';
       show({
         message: successMessage,
@@ -2072,7 +2083,7 @@ export const SlidePreview: React.FC = () => {
       show({ message: errorMessage, type: 'error' });
       throw new Error(errorMessage);
     }
-  }, [currentProject, projectId, show, syncProject]);
+  }, [currentProject, projectId, handleSaveOutlineAndDescription, saveAllPages, show, syncProject, hydrateSelectedPageEditor]);
 
   const handleExportDescriptions = useCallback(() => {
     if (!currentProject) return;
@@ -2118,130 +2129,8 @@ export const SlidePreview: React.FC = () => {
     }
   }, [currentProject, projectId, show, syncProject]);
 
-  const getSortedPages = useCallback(() => {
-    if (!currentProject) return [];
-    return [...currentProject.pages].sort((left, right) => (left.order_index ?? 0) - (right.order_index ?? 0));
-  }, [currentProject]);
-
-  const handleCoverEndingSave = useCallback(async (meta: PresentationMeta) => {
-    if (!currentProject || !projectId) return;
-    const sortedPages = getSortedPages();
-    if (sortedPages.length === 0) return;
-    const coverPage = sortedPages[0];
-    const endingPage = sortedPages[sortedPages.length - 1];
-    const coverId = coverPage.id || coverPage.page_id;
-    const endingId = endingPage.id || endingPage.page_id;
-
-    try {
-      const baseMeta = parsePresentationMeta(currentProject.presentation_meta);
-      const mergedMeta: PresentationMeta = {
-        ...baseMeta,
-        ...meta,
-        _cover_ending_checked: true,
-        _cover_ending_skipped: false,
-        _cover_ending_completed: true,
-      };
-      await updateProject(projectId, { presentation_meta: JSON.stringify(mergedMeta || {}) } as any);
-
-      const coverText = getDescriptionText(coverPage.description_content);
-      const endingText = getDescriptionText(endingPage.description_content);
-      const updatedCover = applyPresentationMetaToDescription(coverText, mergedMeta, {
-        pageRole: 'cover',
-        detectFields,
-      });
-      const updatedEnding = applyPresentationMetaToDescription(endingText, mergedMeta, {
-        pageRole: 'ending',
-        detectFields,
-      });
-
-      const saveRequests: Promise<any>[] = [];
-      if (coverId) {
-        saveRequests.push(updatePageDescription(projectId, coverId, { text: updatedCover }));
-      }
-      if (endingId && endingId !== coverId) {
-        saveRequests.push(updatePageDescription(projectId, endingId, { text: updatedEnding }));
-      }
-      if (saveRequests.length > 0) {
-        await Promise.all(saveRequests);
-      }
-
-      await syncProject(projectId);
-      setIsCoverEndingModalOpen(false);
-      setCoverEndingModalMode('missing');
-    } catch (error: any) {
-      show({ message: error.message || '保存失败，请重试', type: 'error' });
-    }
-  }, [currentProject, projectId, getSortedPages, detectFields, syncProject, show]);
-
-  const handleCoverEndingSkip = useCallback(async () => {
-    if (!currentProject || !projectId) {
-      setIsCoverEndingModalOpen(false);
-      return;
-    }
-
-    try {
-      const baseMeta = parsePresentationMeta(currentProject.presentation_meta);
-      const mergedMeta: PresentationMeta = {
-        ...baseMeta,
-        _cover_ending_checked: true,
-        _cover_ending_skipped: true,
-        _cover_ending_completed: false,
-      };
-      await updateProject(projectId, { presentation_meta: JSON.stringify(mergedMeta) } as any);
-      await syncProject(projectId);
-    } catch (error) {
-      console.warn('保存跳过状态失败:', error);
-    } finally {
-      setIsCoverEndingModalOpen(false);
-      setCoverEndingModalMode('missing');
-    }
-  }, [currentProject, projectId, syncProject]);
-
-  const handleCoverEndingView = useCallback(async () => {
-    if (!currentProject || !projectId) {
-      setDetectFields([]);
-      setCoverEndingModalMode('all');
-      setIsCoverEndingModalOpen(true);
-      return;
-    }
-
-    const sortedPages = getSortedPages();
-    if (sortedPages.length === 0) {
-      setDetectFields([]);
-      setCoverEndingModalMode('all');
-      setIsCoverEndingModalOpen(true);
-      return;
-    }
-
-    const coverPage = sortedPages[0];
-    const endingPage = sortedPages[sortedPages.length - 1];
-    const coverText = getDescriptionText(coverPage.description_content);
-    const endingText = getDescriptionText(endingPage.description_content);
-
-    try {
-      setIsCheckingCoverEnding(true);
-      const response = await detectCoverEndingFields(projectId, {
-        cover: { page_id: coverPage.id || coverPage.page_id, description: coverText },
-        ending: { page_id: endingPage.id || endingPage.page_id, description: endingText },
-      });
-      setDetectFields(response.data?.fields || []);
-    } catch (error) {
-      console.warn('查看封面/结尾信息时检测失败，继续打开编辑框', error);
-      setDetectFields([]);
-    } finally {
-      setIsCheckingCoverEnding(false);
-      setCoverEndingModalMode('all');
-      setIsCoverEndingModalOpen(true);
-    }
-  }, [currentProject, projectId, getSortedPages]);
-
-  const handleCoverEndingClose = useCallback(() => {
-    setIsCoverEndingModalOpen(false);
-    setCoverEndingModalMode('missing');
-  }, []);
-
   const runGenerateFlow = useCallback(async (action: () => Promise<void>) => {
-    if (!currentProject || !projectId) return false;
+    if (!currentProject) return false;
     if (generateFlowLockRef.current) return false;
     generateFlowLockRef.current = true;
     try {
@@ -2255,126 +2144,11 @@ export const SlidePreview: React.FC = () => {
         return false;
       }
 
-      const sortedPages = getSortedPages();
-      if (sortedPages.length === 0) return false;
-      const coverPage = sortedPages[0];
-      const endingPage = sortedPages[sortedPages.length - 1];
-      const coverText = getDescriptionText(coverPage.description_content);
-      const endingText = getDescriptionText(endingPage.description_content);
-
-      try {
-        const meta = parsePresentationMeta(currentProject.presentation_meta);
-        if (meta._cover_ending_checked) {
-          return await checkResolutionAndExecute(action);
-        }
-        setIsCheckingCoverEnding(true);
-        show({ message: '正在检查封面/结尾信息...', type: 'info' });
-        const response = await detectCoverEndingFields(projectId, {
-          cover: { page_id: coverPage.id || coverPage.page_id, description: coverText },
-          ending: { page_id: endingPage.id || endingPage.page_id, description: endingText },
-        });
-        const fields = response.data?.fields || [];
-        const missing = fields.filter((field) => !field.present || field.is_placeholder);
-        if (missing.length > 0) {
-          setDetectFields(fields);
-          setCoverEndingModalMode('missing');
-          setIsCoverEndingModalOpen(true);
-          return false;
-        }
-      } catch (error) {
-        console.warn('封面/结尾检测失败，跳过检测流程', error);
-      } finally {
-        setIsCheckingCoverEnding(false);
-      }
-
       return await checkResolutionAndExecute(action);
     } finally {
       generateFlowLockRef.current = false;
     }
-  }, [currentProject, projectId, getSortedPages, show, checkResolutionAndExecute]);
-
-  const resetPageAiComposer = useCallback(() => {
-    setEditPrompt('');
-    setEditRunImageModel(projectDefaultImageModel);
-    setActivePreviewReferenceId(null);
-    setSelectedContextImages({
-      useTemplate: false,
-      descImageUrls: [],
-      uploadedReferences: [],
-    });
-  }, [projectDefaultImageModel]);
-
-  const handleSubmitCurrentPageGeneration = useCallback(async (options?: {
-    appendPageAiMessages?: boolean;
-  }) => {
-    if (!currentProject) return;
-
-    const draftText = editPrompt.trim();
-    const referenceSnapshot = selectedPageAiReferences.map((reference) => ({ ...reference }));
-    const shouldAppendPageAiMessages = Boolean(
-      options?.appendPageAiMessages && (draftText || referenceSnapshot.length > 0)
-    );
-
-    if (shouldAppendPageAiMessages) {
-      setPageAiMessages((prev) => [
-        ...prev,
-        createPageAiMessage(
-          'user',
-          draftText || t('preview.pageAiReferenceOnlyFallback'),
-          referenceSnapshot,
-        ),
-      ]);
-    }
-
-    setIsPageAiSubmitting(true);
-    try {
-      const didStartGeneration = await runGenerateFlow(async () => {
-        await executePageImageGeneration({
-          prompt: draftText,
-          contextImages: selectedContextImages,
-          model: editRunImageModel,
-        });
-      });
-
-      if (!didStartGeneration) {
-        return;
-      }
-
-      if (shouldAppendPageAiMessages) {
-        setPageAiMessages((prev) => [
-          ...prev,
-          createPageAiMessage('assistant', t('preview.pageAiResponseFallback')),
-        ]);
-      }
-
-      resetPageAiComposer();
-    } catch (error: any) {
-      const errorMessage =
-        error?.response?.data?.error?.message ||
-        error?.response?.data?.message ||
-        error?.message ||
-        t('preview.generationFailed');
-
-      if (shouldAppendPageAiMessages) {
-        setPageAiMessages((prev) => [
-          ...prev,
-          createPageAiMessage('assistant', errorMessage, [], 'error'),
-        ]);
-      }
-    } finally {
-      setIsPageAiSubmitting(false);
-    }
-  }, [
-    currentProject,
-    editPrompt,
-    selectedPageAiReferences,
-    t,
-    runGenerateFlow,
-    executePageImageGeneration,
-    selectedContextImages,
-    editRunImageModel,
-    resetPageAiComposer,
-  ]);
+  }, [currentProject, show, checkResolutionAndExecute]);
 
   const handleFileUpload = useCallback((files: File[]) => {
     setSelectedContextImages((prev) => ({
@@ -3274,6 +3048,89 @@ export const SlidePreview: React.FC = () => {
     return references;
   })();
 
+  const resetPageAiComposer = useCallback(() => {
+    setEditPrompt('');
+    setEditRunImageModel(projectDefaultImageModel);
+    setActivePreviewReferenceId(null);
+    setSelectedContextImages({
+      useTemplate: false,
+      descImageUrls: [],
+      uploadedReferences: [],
+    });
+  }, [projectDefaultImageModel]);
+
+  const handleSubmitCurrentPageGeneration = useCallback(async (options?: {
+    appendPageAiMessages?: boolean;
+  }) => {
+    if (!currentProject) return;
+
+    const draftText = editPrompt.trim();
+    const referenceSnapshot = selectedPageAiReferences.map((reference) => ({ ...reference }));
+    const shouldAppendPageAiMessages = Boolean(
+      options?.appendPageAiMessages && (draftText || referenceSnapshot.length > 0)
+    );
+
+    if (shouldAppendPageAiMessages) {
+      setPageAiMessages((prev) => [
+        ...prev,
+        createPageAiMessage(
+          'user',
+          draftText || t('preview.pageAiReferenceOnlyFallback'),
+          referenceSnapshot,
+        ),
+      ]);
+    }
+
+    setIsPageAiSubmitting(true);
+    try {
+      const didStartGeneration = await runGenerateFlow(async () => {
+        await executePageImageGeneration({
+          prompt: draftText,
+          contextImages: selectedContextImages,
+          model: editRunImageModel,
+        });
+      });
+
+      if (!didStartGeneration) {
+        return;
+      }
+
+      if (shouldAppendPageAiMessages) {
+        setPageAiMessages((prev) => [
+          ...prev,
+          createPageAiMessage('assistant', t('preview.pageAiResponseFallback')),
+        ]);
+      }
+
+      resetPageAiComposer();
+    } catch (error: any) {
+      const errorMessage =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        error?.message ||
+        t('preview.generationFailed');
+
+      if (shouldAppendPageAiMessages) {
+        setPageAiMessages((prev) => [
+          ...prev,
+          createPageAiMessage('assistant', errorMessage, [], 'error'),
+        ]);
+      }
+    } finally {
+      setIsPageAiSubmitting(false);
+    }
+  }, [
+    currentProject,
+    editPrompt,
+    selectedPageAiReferences,
+    t,
+    runGenerateFlow,
+    executePageImageGeneration,
+    selectedContextImages,
+    editRunImageModel,
+    resetPageAiComposer,
+  ]);
+
   const descriptionImageOptions = draftDescImageUrls.map((url, index) => ({
     id: `description-option:${url}`,
     label: `${t('preview.imagesInDescription')} ${index + 1}`,
@@ -4012,15 +3869,6 @@ export const SlidePreview: React.FC = () => {
                 <Button
                   variant="secondary"
                   size="sm"
-                  icon={<BookOpen size={16} />}
-                  className="h-9 rounded-xl"
-                  onClick={() => void handleCoverEndingView()}
-                >
-                  封面/结尾信息
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
                   data-testid="preview-primary-save"
                   icon={<FileText size={16} />}
                   className="h-9 rounded-xl"
@@ -4392,16 +4240,6 @@ export const SlidePreview: React.FC = () => {
         submitTooltip={t('preview.globalAiSubmitTooltip')}
         inputHint={t('preview.globalAiInputHint')}
         onSubmit={handleAiRefineDescriptions}
-      />
-      <CoverEndingInfoModal
-        isOpen={isCoverEndingModalOpen}
-        detectFields={detectFields}
-        initialMeta={parsePresentationMeta(currentProject.presentation_meta)}
-        onSave={handleCoverEndingSave}
-        onSkip={handleCoverEndingSkip}
-        onClose={handleCoverEndingClose}
-        mode={coverEndingModalMode}
-        showSkip={coverEndingModalMode === 'missing'}
       />
       <FilePreviewModal fileId={previewFileId} onClose={() => setPreviewFileId(null)} />
 
