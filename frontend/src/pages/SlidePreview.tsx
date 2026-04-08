@@ -94,8 +94,8 @@ const previewI18n = {
       pageAiMaterialReference: "素材库",
       pageAiUploadReference: "上传图片",
       pageAiLoading: "正在处理当前页图片...",
-      pageAiSendTooltip: "发送到页面级 AI",
-      pageAiInputHint: "Enter 发送，Shift+Enter 换行",
+      pageAiSendTooltip: "生成当前页",
+      pageAiInputHint: "Enter 生成，Shift+Enter 换行",
       pageAiResponseFallback: "已开始处理当前页图片，请稍候查看最新结果。",
       pageAiReferenceOnlyFallback: "请参考这些引用修改当前页图片。",
       saveOutlineOnly: "仅保存大纲/描述", generateImage: "生成图片",
@@ -240,8 +240,8 @@ const previewI18n = {
       pageAiMaterialReference: "Materials",
       pageAiUploadReference: "Upload Image",
       pageAiLoading: "Processing the current page image...",
-      pageAiSendTooltip: "Send to page AI",
-      pageAiInputHint: "Enter to send, Shift+Enter for newline",
+      pageAiSendTooltip: "Generate current page",
+      pageAiInputHint: "Enter to generate, Shift+Enter for newline",
       pageAiResponseFallback: "Started processing the current page image. Please check back shortly.",
       pageAiReferenceOnlyFallback: "Please update the current page image using these references.",
       saveOutlineOnly: "Save Outline/Description Only", generateImage: "Generate Image",
@@ -1673,7 +1673,7 @@ export const SlidePreview: React.FC = () => {
     const skipWarning = localStorage.getItem('skip1KResolutionWarning') === 'true';
     if (skipWarning) {
       await action();
-      return;
+      return true;
     }
 
     let resolution: string | undefined;
@@ -1689,9 +1689,11 @@ export const SlidePreview: React.FC = () => {
       setPending1KAction(() => action);
       setSkip1KWarningChecked(false);
       setShow1KWarningDialog(true);
+      return false;
     } else {
       // 未配置/获取失败/非1K时都直接执行
       await action();
+      return true;
     }
   }, []);
 
@@ -2239,8 +2241,8 @@ export const SlidePreview: React.FC = () => {
   }, []);
 
   const runGenerateFlow = useCallback(async (action: () => Promise<void>) => {
-    if (!currentProject || !projectId) return;
-    if (generateFlowLockRef.current) return;
+    if (!currentProject || !projectId) return false;
+    if (generateFlowLockRef.current) return false;
     generateFlowLockRef.current = true;
     try {
       const hasTemplateSource = Boolean(
@@ -2250,11 +2252,11 @@ export const SlidePreview: React.FC = () => {
       );
       if (!hasTemplateSource) {
         show({ message: '请先上传模板图片或添加风格描述。', type: 'error' });
-        return;
+        return false;
       }
 
       const sortedPages = getSortedPages();
-      if (sortedPages.length === 0) return;
+      if (sortedPages.length === 0) return false;
       const coverPage = sortedPages[0];
       const endingPage = sortedPages[sortedPages.length - 1];
       const coverText = getDescriptionText(coverPage.description_content);
@@ -2263,8 +2265,7 @@ export const SlidePreview: React.FC = () => {
       try {
         const meta = parsePresentationMeta(currentProject.presentation_meta);
         if (meta._cover_ending_checked) {
-          await checkResolutionAndExecute(action);
-          return;
+          return await checkResolutionAndExecute(action);
         }
         setIsCheckingCoverEnding(true);
         show({ message: '正在检查封面/结尾信息...', type: 'info' });
@@ -2278,7 +2279,7 @@ export const SlidePreview: React.FC = () => {
           setDetectFields(fields);
           setCoverEndingModalMode('missing');
           setIsCoverEndingModalOpen(true);
-          return;
+          return false;
         }
       } catch (error) {
         console.warn('封面/结尾检测失败，跳过检测流程', error);
@@ -2286,22 +2287,94 @@ export const SlidePreview: React.FC = () => {
         setIsCheckingCoverEnding(false);
       }
 
-      await checkResolutionAndExecute(action);
+      return await checkResolutionAndExecute(action);
     } finally {
       generateFlowLockRef.current = false;
     }
   }, [currentProject, projectId, getSortedPages, show, checkResolutionAndExecute]);
 
-  const handleQuickGenerateImage = useCallback(async () => {
-    await runGenerateFlow(async () => {
-      if (!currentProject) return;
-      const page = currentProject.pages[selectedIndex];
-      if (!page?.id) return;
-      handleSaveOutlineAndDescription();
-      await saveAllPages();
-      await generateImages([page.id]);
+  const resetPageAiComposer = useCallback(() => {
+    setEditPrompt('');
+    setEditRunImageModel(projectDefaultImageModel);
+    setActivePreviewReferenceId(null);
+    setSelectedContextImages({
+      useTemplate: false,
+      descImageUrls: [],
+      uploadedReferences: [],
     });
-  }, [runGenerateFlow, currentProject, selectedIndex, handleSaveOutlineAndDescription, saveAllPages, generateImages]);
+  }, [projectDefaultImageModel]);
+
+  const handleSubmitCurrentPageGeneration = useCallback(async (options?: {
+    appendPageAiMessages?: boolean;
+  }) => {
+    if (!currentProject) return;
+
+    const draftText = editPrompt.trim();
+    const referenceSnapshot = selectedPageAiReferences.map((reference) => ({ ...reference }));
+    const shouldAppendPageAiMessages = Boolean(
+      options?.appendPageAiMessages && (draftText || referenceSnapshot.length > 0)
+    );
+
+    if (shouldAppendPageAiMessages) {
+      setPageAiMessages((prev) => [
+        ...prev,
+        createPageAiMessage(
+          'user',
+          draftText || t('preview.pageAiReferenceOnlyFallback'),
+          referenceSnapshot,
+        ),
+      ]);
+    }
+
+    setIsPageAiSubmitting(true);
+    try {
+      const didStartGeneration = await runGenerateFlow(async () => {
+        await executePageImageGeneration({
+          prompt: draftText,
+          contextImages: selectedContextImages,
+          model: editRunImageModel,
+        });
+      });
+
+      if (!didStartGeneration) {
+        return;
+      }
+
+      if (shouldAppendPageAiMessages) {
+        setPageAiMessages((prev) => [
+          ...prev,
+          createPageAiMessage('assistant', t('preview.pageAiResponseFallback')),
+        ]);
+      }
+
+      resetPageAiComposer();
+    } catch (error: any) {
+      const errorMessage =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        error?.message ||
+        t('preview.generationFailed');
+
+      if (shouldAppendPageAiMessages) {
+        setPageAiMessages((prev) => [
+          ...prev,
+          createPageAiMessage('assistant', errorMessage, [], 'error'),
+        ]);
+      }
+    } finally {
+      setIsPageAiSubmitting(false);
+    }
+  }, [
+    currentProject,
+    editPrompt,
+    selectedPageAiReferences,
+    t,
+    runGenerateFlow,
+    executePageImageGeneration,
+    selectedContextImages,
+    editRunImageModel,
+    resetPageAiComposer,
+  ]);
 
   const handleFileUpload = useCallback((files: File[]) => {
     setSelectedContextImages((prev) => ({
@@ -3266,53 +3339,9 @@ export const SlidePreview: React.FC = () => {
     img.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
   };
 
-  const handlePageAiSend = async () => {
-    if (!currentProject) return;
-    const draftText = editPrompt.trim();
-    if (!draftText && selectedPageAiReferences.length === 0) return;
-
-    const userMessage = createPageAiMessage(
-      'user',
-      draftText || t('preview.pageAiReferenceOnlyFallback'),
-      selectedPageAiReferences.map((reference) => ({ ...reference })),
-    );
-    setPageAiMessages((prev) => [...prev, userMessage]);
-    setIsPageAiSubmitting(true);
-
-    try {
-      await checkResolutionAndExecute(async () => {
-        await executePageImageGeneration({
-          prompt: draftText,
-          contextImages: selectedContextImages,
-          model: editRunImageModel,
-        });
-      });
-      setPageAiMessages((prev) => [
-        ...prev,
-        createPageAiMessage('assistant', t('preview.pageAiResponseFallback')),
-      ]);
-      setEditPrompt('');
-      setEditRunImageModel(projectDefaultImageModel);
-      setActivePreviewReferenceId(null);
-      setSelectedContextImages({
-        useTemplate: false,
-        descImageUrls: [],
-        uploadedReferences: [],
-      });
-    } catch (error: any) {
-      const errorMessage =
-        error?.response?.data?.error?.message ||
-        error?.response?.data?.message ||
-        error?.message ||
-        t('preview.generationFailed');
-      setPageAiMessages((prev) => [
-        ...prev,
-        createPageAiMessage('assistant', errorMessage, [], 'error'),
-      ]);
-    } finally {
-      setIsPageAiSubmitting(false);
-    }
-  };
+  const handlePageAiSend = useCallback(async () => {
+    await handleSubmitCurrentPageGeneration({ appendPageAiMessages: true });
+  }, [handleSubmitCurrentPageGeneration]);
 
   const currentPageDescriptionText = getDescriptionText(selectedPage?.description_content);
   const currentPageExtraFields = getDescriptionExtraFields(selectedPage?.description_content);
@@ -4000,18 +4029,6 @@ export const SlidePreview: React.FC = () => {
                 >
                   仅保存文本
                 </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<ImagePlus size={16} />}
-                  className="h-9 rounded-xl"
-                  data-testid="preview-primary-generate"
-                  onClick={() => void handleQuickGenerateImage()}
-                  disabled={isPageAiSubmitting || isCheckingCoverEnding}
-                  loading={isCheckingCoverEnding}
-                >
-                  {selectedPageHasImage ? '重新生成图片' : '生成图片'}
-                </Button>
                 <input
                   ref={importFileRef}
                   type="file"
@@ -4260,6 +4277,7 @@ export const SlidePreview: React.FC = () => {
                               templatePreviewUrl={templatePreviewUrl}
                               activeReferenceId={activePreviewReferenceId}
                               inputValue={editPrompt}
+                              sendLabel={selectedPageHasImage ? t('preview.regenerate') : t('preview.generateImage')}
                               modelValue={editRunImageModel}
                               modelOptions={PROJECT_SUPPORTED_IMAGE_MODELS}
                               isSubmitting={isPageAiSubmitting}

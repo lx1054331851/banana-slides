@@ -37,6 +37,7 @@ interface PageAiWorkbenchProps {
   emptyDescription: string;
   inputPlaceholder: string;
   inputHint: string;
+  sendLabel: string;
   sendTooltip: string;
   referencesTitle: string;
   referencesEmpty: string;
@@ -76,6 +77,7 @@ interface PageAiWorkbenchProps {
 export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   inputPlaceholder,
   inputHint,
+  sendLabel,
   sendTooltip,
   descriptionSourcesTitle,
   templateLabel,
@@ -113,7 +115,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   const modelPickerRef = useRef<HTMLDivElement | null>(null);
   const modelPickerButtonRef = useRef<HTMLButtonElement | null>(null);
   const modelPickerMenuRef = useRef<HTMLDivElement | null>(null);
-  const canSend = !isSubmitting && (inputValue.trim().length > 0 || references.length > 0);
+  const canSend = !isSubmitting;
   const [showDescriptionPicker, setShowDescriptionPicker] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [descriptionPickerPosition, setDescriptionPickerPosition] = useState<FloatingMenuPosition | null>(null);
@@ -378,7 +380,8 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                   onClick={onSend}
                   disabled={!canSend}
                   title={sendTooltip}
-                  className={`inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl transition-all ${
+                  aria-label={sendLabel}
+                  className={`inline-flex h-11 min-w-[112px] flex-shrink-0 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-medium transition-all ${
                     canSend
                       ? 'bg-banana-500 text-black shadow-yellow hover:-translate-y-0.5 dark:bg-banana-500 dark:text-black'
                       : 'bg-slate-100 text-slate-300 dark:bg-background-hover dark:text-foreground-tertiary'
@@ -386,6 +389,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                   data-testid="page-ai-send"
                 >
                   <ArrowUp size={18} />
+                  <span>{sendLabel}</span>
                 </button>
               </div>
             </div>
