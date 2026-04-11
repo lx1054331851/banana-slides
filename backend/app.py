@@ -108,7 +108,11 @@ def create_app(load_settings_from_db=None):
         handlers=[logging.StreamHandler(sys.stdout)],
         force=True,
     )
-    
+    # Ensure Flask app logger also goes to console via root handlers.
+    app.logger.handlers.clear()
+    app.logger.propagate = True
+    app.logger.setLevel(log_level)
+
     # 设置第三方库的日志级别，避免过多的DEBUG日志
     logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
     logging.getLogger('httpcore').setLevel(logging.WARNING)
