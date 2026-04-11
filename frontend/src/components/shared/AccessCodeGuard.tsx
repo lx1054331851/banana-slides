@@ -8,6 +8,7 @@ const STORAGE_KEY = 'banana-access-code';
 
 const translations = {
   zh: {
+    checking: '正在检查访问状态...',
     title: '请输入访问口令',
     placeholder: '输入口令',
     submit: '确认',
@@ -18,6 +19,7 @@ const translations = {
     retry: '重试',
   },
   en: {
+    checking: 'Checking access status...',
     title: 'Enter Access Code',
     placeholder: 'Enter code',
     submit: 'Submit',
@@ -76,7 +78,16 @@ export function AccessCodeGuard({ children }: { children: ReactNode }) {
     }
   };
 
-  if (status === 'loading') return null;
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background-primary">
+        <div className="w-80 p-6 rounded-2xl bg-white dark:bg-background-secondary shadow-lg border border-gray-200 dark:border-border-primary text-center">
+          <div className="mx-auto mb-3 h-8 w-8 rounded-full border-2 border-banana-500 border-t-transparent animate-spin" />
+          <p className="text-sm text-gray-600 dark:text-foreground-secondary">{t('checking')}</p>
+        </div>
+      </div>
+    );
+  }
   if (status === 'pass') return <>{children}</>;
 
   if (status === 'connectError') {

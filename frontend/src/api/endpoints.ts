@@ -14,12 +14,16 @@ import type { Settings } from '../types/index';
 // ===== 访问口令 API =====
 
 export const checkAccessCode = async (): Promise<ApiResponse<{ enabled: boolean }>> => {
-  const response = await apiClient.get<ApiResponse<{ enabled: boolean }>>('/api/access-code/check');
+  const response = await apiClient.get<ApiResponse<{ enabled: boolean }>>('/api/access-code/check', {
+    timeout: 10000,
+  });
   return response.data;
 };
 
 export const verifyAccessCode = async (code: string): Promise<ApiResponse<{ valid: boolean }>> => {
-  const response = await apiClient.post<ApiResponse<{ valid: boolean }>>('/api/access-code/verify', { code });
+  const response = await apiClient.post<ApiResponse<{ valid: boolean }>>('/api/access-code/verify', { code }, {
+    timeout: 10000,
+  });
   return response.data;
 };
 
