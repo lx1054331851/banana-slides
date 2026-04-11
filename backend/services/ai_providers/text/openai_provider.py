@@ -3,12 +3,32 @@ OpenAI SDK implementation for text generation
 """
 import base64
 import logging
+import os
+import time
 from typing import Generator
+from openai import APIConnectionError, APITimeoutError, APIStatusError, RateLimitError
 from .base import TextProvider, strip_think_tags
 from config import get_config
 from ..openai_client import make_openai_client
 
 logger = logging.getLogger(__name__)
+
+_RETRYABLE_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
+
+
+def _is_retryable_openai_error(exc: Exception) -> bool:
+    if isinstance(exc, (APIConnectionError, APITimeoutError, RateLimitError)):
+        return True
+    if isinstance(exc, APIStatusError):
+        status_code = getattr(exc, "status_code", None)
+        if isinstance(status_code, int):
+            return status_code in _RETRYABLE_STATUS_CODES or status_code >= 500
+    return False
+
+
+def _compute_backoff_seconds(attempt_number: int) -> float:
+    # 0.5s, 1s, 2s, 4s ... capped at 8s
+    return min(8.0, 0.5 * (2 ** max(attempt_number - 1, 0)))
 
 
 def _rewrite_openai_text_error(exc: Exception, *, azure_endpoint: str | None, model: str) -> Exception:
@@ -19,6 +39,13 @@ def _rewrite_openai_text_error(exc: Exception, *, azure_endpoint: str | None, mo
             "Azure OpenAI 文本生成失败：当前 deployment 在 chat.completions 调用下返回了上游异常，"
             "这不是业务 prompt 特有问题；我们已确认连极短 prompt 也会同样失败。"
             f" 当前 TEXT_MODEL={model}，endpoint={azure_endpoint}。请检查该 deployment 的健康状态、API 兼容性，以及是否允许 chat.completions 调用。原始错误: {text}"
+        )
+    if isinstance(exc, APIConnectionError):
+        has_proxy = bool(os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY"))
+        proxy_hint = "" if has_proxy else " 可尝试配置 HTTP_PROXY/HTTPS_PROXY 代理后重试。"
+        return RuntimeError(
+            f"OpenAI 文本请求连接失败（TEXT_MODEL={model}）。请检查网络连通性或上游网关可用性。"
+            f"{proxy_hint} 原始错误: {text}"
         )
     return exc
 
@@ -56,6 +83,7 @@ class OpenAITextProvider(TextProvider):
         )
         self.model = model
         self.azure_endpoint = azure_endpoint
+        self.max_attempts = max(int(getattr(cfg, "OPENAI_MAX_RETRIES", 0)) + 1, 1)
     
     def generate_text(self, prompt: str, thinking_budget: int = 0) -> str:
         """
@@ -68,31 +96,66 @@ class OpenAITextProvider(TextProvider):
         Returns:
             Generated text
         """
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            return strip_think_tags(response.choices[0].message.content)
-        except Exception as exc:
-            raise _rewrite_openai_text_error(exc, azure_endpoint=self.azure_endpoint, model=self.model) from exc
+        for attempt in range(1, self.max_attempts + 1):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                return strip_think_tags(response.choices[0].message.content)
+            except Exception as exc:
+                if _is_retryable_openai_error(exc) and attempt < self.max_attempts:
+                    delay = _compute_backoff_seconds(attempt)
+                    logger.warning(
+                        "OpenAI 文本请求失败，准备重试 (%s/%s)，等待 %.1fs，model=%s，error=%s",
+                        attempt,
+                        self.max_attempts,
+                        delay,
+                        self.model,
+                        exc,
+                    )
+                    time.sleep(delay)
+                    continue
+                raise _rewrite_openai_text_error(exc, azure_endpoint=self.azure_endpoint, model=self.model) from exc
 
     def generate_text_stream(self, prompt: str, thinking_budget: int = 0) -> Generator[str, None, None]:
         """Stream text using OpenAI SDK with stream=True."""
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                stream=True,
-            )
-            for chunk in response:
-                delta = chunk.choices[0].delta if chunk.choices else None
-                if delta and delta.content:
-                    yield delta.content
-        except Exception as exc:
-            raise _rewrite_openai_text_error(exc, azure_endpoint=self.azure_endpoint, model=self.model) from exc
+        for attempt in range(1, self.max_attempts + 1):
+            emitted_any_chunk = False
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    stream=True,
+                )
+                for chunk in response:
+                    delta = chunk.choices[0].delta if chunk.choices else None
+                    if delta and delta.content:
+                        emitted_any_chunk = True
+                        yield delta.content
+                return
+            except Exception as exc:
+                # Streaming only retries when request fails before any content is emitted.
+                # Retrying after partial output would risk duplicated text for callers.
+                if (
+                    not emitted_any_chunk
+                    and _is_retryable_openai_error(exc)
+                    and attempt < self.max_attempts
+                ):
+                    delay = _compute_backoff_seconds(attempt)
+                    logger.warning(
+                        "OpenAI 流式文本请求启动失败，准备重试 (%s/%s)，等待 %.1fs，model=%s，error=%s",
+                        attempt,
+                        self.max_attempts,
+                        delay,
+                        self.model,
+                        exc,
+                    )
+                    time.sleep(delay)
+                    continue
+                raise _rewrite_openai_text_error(exc, azure_endpoint=self.azure_endpoint, model=self.model) from exc
 
     def stream_text(self, prompt: str, thinking_budget: int = 0) -> Generator[str, None, None]:
         """Backward-compatible alias for legacy call sites."""
