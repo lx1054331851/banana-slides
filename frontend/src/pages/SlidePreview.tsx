@@ -688,7 +688,6 @@ export const SlidePreview: React.FC = () => {
 
     const pageKey = getPageDraftKey(page, selectedIndex);
     if (!pageKey) return;
-    if (pageKey === lastSelectedPageKeyRef.current) return;
     lastSelectedPageKeyRef.current = pageKey;
 
     const pageDraft = pageDrafts[pageKey];
@@ -2526,7 +2525,11 @@ export const SlidePreview: React.FC = () => {
 
     setIsRefreshing(true);
     try {
+      // 强制刷新：丢弃本地草稿缓存，避免覆盖后端最新内容
+      setPageDrafts({});
+      lastSelectedPageKeyRef.current = null;
       await syncProject(targetProjectId);
+      hydrateSelectedPageEditor(useProjectStore.getState().currentProject);
       show({ message: t('slidePreview.refreshSuccess'), type: 'success' });
     } catch (error: any) {
       show({
@@ -2536,7 +2539,7 @@ export const SlidePreview: React.FC = () => {
     } finally {
       setIsRefreshing(false);
     }
-  }, [projectId, currentProject?.id, syncProject, show]);
+  }, [projectId, currentProject?.id, syncProject, show, hydrateSelectedPageEditor]);
 
   const handleSaveExtraRequirements = useCallback(async () => {
     if (!currentProject || !projectId) return;
