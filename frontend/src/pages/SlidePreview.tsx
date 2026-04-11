@@ -1029,6 +1029,21 @@ export const SlidePreview: React.FC = () => {
   const [projectDefaultImageModel, setProjectDefaultImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   const [projectDefaultImageResolution, setProjectDefaultImageResolution] = useState<string>(PROJECT_DEFAULT_IMAGE_RESOLUTION);
   const [editRunImageModel, setEditRunImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
+  const normalizedProjectImageModel = useMemo(
+    () => normalizeProjectDefaultImageModel(projectDefaultImageModel),
+    [projectDefaultImageModel]
+  );
+  const normalizedProjectImageResolution = useMemo(
+    () => normalizeProjectDefaultImageResolution(projectDefaultImageResolution, normalizedProjectImageModel),
+    [projectDefaultImageResolution, normalizedProjectImageModel]
+  );
+  const currentImageGenerationOverride = useMemo<GenerationOverride>(() => ({
+    image: {
+      source: (projectDefaultImageSource || PROJECT_DEFAULT_IMAGE_SOURCE).trim() || PROJECT_DEFAULT_IMAGE_SOURCE,
+      model: normalizedProjectImageModel,
+      resolution: normalizedProjectImageResolution,
+    },
+  }), [projectDefaultImageSource, normalizedProjectImageModel, normalizedProjectImageResolution]);
   // 根据画面比例计算 CSS aspect-ratio
   const aspectRatioStyle = useMemo(() => {
     const parts = aspectRatio.split(':');
@@ -1701,13 +1716,7 @@ export const SlidePreview: React.FC = () => {
       return true;
     }
 
-    let resolution: string | undefined;
-    try {
-      const response = await getSettings();
-      resolution = response.data?.image_resolution;
-    } catch (error) {
-      console.error('获取设置失败:', error);
-    }
+    const resolution = currentImageGenerationOverride.image?.resolution;
 
     // 如果是1K分辨率，显示警告对话框
     if (resolution === '1K') {
@@ -1720,7 +1729,7 @@ export const SlidePreview: React.FC = () => {
       await action();
       return true;
     }
-  }, []);
+  }, [currentImageGenerationOverride]);
 
   // 确认1K分辨率警告后执行
   const handleConfirm1KWarning = useCallback(async () => {
@@ -1746,7 +1755,7 @@ export const SlidePreview: React.FC = () => {
 
   const handleBatchGenerate = useCallback(async (pageIds?: string[]) => {
     try {
-      await generateImages(pageIds);
+      await generateImages(pageIds, currentImageGenerationOverride);
     } catch (error: any) {
       console.error('批量生成错误:', error);
       console.error('错误响应:', error?.response?.data);
@@ -1782,7 +1791,7 @@ export const SlidePreview: React.FC = () => {
         type: 'error',
       });
     }
-  }, [generateImages, show, t]);
+  }, [generateImages, currentImageGenerationOverride, show, t]);
 
   const handleGenerateAll = async () => {
     // 先检查分辨率，如果是1K则显示警告
@@ -1967,8 +1976,18 @@ export const SlidePreview: React.FC = () => {
       const nextContextImages = options?.contextImages ?? selectedContextImages;
       const nextModel = options?.model ?? editRunImageModel;
       const normalizedEditModel = normalizeProjectDefaultImageModel(nextModel || projectDefaultImageModel);
+      const normalizedEditResolution = normalizeProjectDefaultImageResolution(
+        projectDefaultImageResolution,
+        normalizedEditModel
+      );
       const editGenerationOverride: GenerationOverride | undefined = normalizedEditModel
-        ? { image: { model: normalizedEditModel } }
+        ? {
+          image: {
+            source: (projectDefaultImageSource || PROJECT_DEFAULT_IMAGE_SOURCE).trim() || PROJECT_DEFAULT_IMAGE_SOURCE,
+            model: normalizedEditModel,
+            resolution: normalizedEditResolution,
+          },
+        }
         : undefined;
       const hasExistingImage = Boolean(page.generated_image_path || page.preview_image_path);
       const hasContextInputs = Boolean(
@@ -2017,7 +2036,7 @@ export const SlidePreview: React.FC = () => {
       show({ message: errorMessage, type: 'error' });
       throw error;
     }
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, handleSaveOutlineAndDescription, saveAllPages, generateImages, pageAiMessages, show, t]);
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, projectDefaultImageResolution, projectDefaultImageSource, handleSaveOutlineAndDescription, saveAllPages, generateImages, pageAiMessages, show, t]);
 
   const handleSaveCurrentPage = useCallback(async () => {
     handleSaveOutlineAndDescription();
