@@ -3089,11 +3089,11 @@ export const SlidePreview: React.FC = () => {
                   loading={isJsonRefining}
                   disabled={!jsonRefineRequirement.trim()}
                   onClick={() => void handleSubmitJsonRefine()}
+                  title={t('preview.refineJson')}
+                  aria-label={t('preview.refineJson')}
                   icon={!isJsonRefining ? <Send size={14} /> : undefined}
-                  className="h-10 min-w-[88px] rounded-lg shadow-[0_8px_18px_rgba(250,204,21,0.24)]"
-                >
-                  {t('preview.refineJson')}
-                </Button>
+                  className="h-10 w-10 rounded-lg px-0 shadow-[0_8px_18px_rgba(250,204,21,0.24)]"
+                />
                 <Button
                   type="button"
                   variant="ghost"
@@ -3137,11 +3137,10 @@ export const SlidePreview: React.FC = () => {
                 size="sm"
                 icon={<Sparkles size={14} />}
                 title={t('preview.refineJsonTooltip')}
+                aria-label={t('preview.refineJsonTooltip')}
                 onClick={() => setShowJsonRefineDialog((prev) => !prev)}
-                className="h-8 rounded-lg border border-[#e6dab8] bg-[#fbf7eb] px-2.5 text-xs font-medium text-[#7c6740] hover:bg-[#f7edd2] dark:border-[#3f4962] dark:bg-[#1a2232] dark:text-[#c4d2f3] dark:hover:bg-[#222d44]"
-              >
-                {t('preview.refineJson')}
-              </Button>
+                className="h-8 w-8 rounded-lg border border-[#e6dab8] bg-[#fbf7eb] px-0 text-[#7c6740] hover:bg-[#f7edd2] dark:border-[#3f4962] dark:bg-[#1a2232] dark:text-[#c4d2f3] dark:hover:bg-[#222d44]"
+              />
             </div>
           )}
         </div>
