@@ -1181,41 +1181,85 @@ def get_batch_text_attribute_extraction_prompt(text_elements_json: str) -> str:
 
 
 def get_ppt_page_content_extraction_prompt(markdown_text: str, language: str = None) -> str:
-    """从 fileparser 解析出的 markdown 文本中提取页面内容（title, points, description）"""
+    """从 fileparser 解析出的 markdown 文本中提取翻新页结构（outline + slide JSON）"""
     prompt = f"""\
-You are a helpful assistant that extracts structured PPT page content from parsed document text.
+# Role
+你是一位麦肯锡/BCG风格的高级商业分析师兼PPT翻新架构师。你的任务是把单页解析文本转成“主张驱动（Assertion-Driven）”的结构化页面 JSON，用于 PPT 翻新。
 
-The following markdown text was extracted from a single PPT slide:
-
+# Input
+下面是从单页 PPT/PDF 提取的 Markdown 内容：
 <slide_content>
 {markdown_text}
 </slide_content>
 
-Your task is to extract the following structured information from this slide:
+# Core Objective (PPT翻新场景)
+1. 输出一个可直接落库、可直接渲染的单页 JSON，不要输出多页结构。
+2. 标题必须是“有结论的动作句”，不能是标签式名词。
+3. 如果原文有趋势/对比/占比数据，优先输出 `detail_chart`，并补全 `labels + datasets`。
+4. 如果原文主要是观点和论据，使用 `detail_text_split`，并给出分块论据。
 
-1. **title**: The main title/heading of the slide
-2. **points**: A list of key bullet points or content items on the slide
-3. **description**: A complete page description suitable for regenerating this slide, following this format:
+# MCK-Style Rules（翻新版）
+1. 结论先行：标题要回答 “So what?”，让管理层一眼看懂本页结论。
+2. 内容纯净：删除引用标记、脚注符号、学术引用格式；专业术语/品牌名/法规名必须 1:1 保留。
+3. 高亮映射：提取关键数字、核心动词、关键名词到 `highlight_phrases`。
+4. 可执行表达：用短句表达业务动作与结果，避免空话套话。
+5. 不追问用户：禁止要求“补充材料/上传文件/提供更多信息”，缺失信息用审慎默认值继续输出。
 
-页面标题：[title]
+# Type Decision
+只允许以下 `type`：
+- cover
+- catalog
+- section_header
+- detail_chart
+- detail_text_split
+- closing
 
-页面文字：
-- [point 1]
-- [point 2]
-...
+若无法明确判断，默认使用 `detail_text_split`。
 
-其他页面素材（如果有图表、表格、公式等描述，保留原文中的markdown图片完整形式）
+# Output Schema（严格遵守）
+返回一个 JSON 对象，且只能有两个顶层键：`outline` 和 `slide`。
 
-Rules:
-- Extract the title faithfully from the first heading in the markdown. Do NOT invent or rephrase it
-- Points must be extracted verbatim from the slide content, in their original order
-- In the description, 页面标题 and 页面文字 must be copied verbatim from the original text (punctuation may be normalized, but wording must be identical)
-- The description should capture ALL content on the slide including text, data, and visual element descriptions
-- If there are tables, charts, or formulas, describe them in the description under "其他页面素材"
-- Preserve the original language of the content
+```json
+{{
+  "outline": {{
+    "title": "动作标题（可作为侧边栏页名）",
+    "points": ["要点1", "要点2", "要点3"]
+  }},
+  "slide": {{
+    "source_ref": "原始页信息（如 第6页）",
+    "type": "detail_text_split",
+    "title": "动作标题",
+    "content": {{
+      "headline_summary": "20字内核心论点",
+      "detailed_items": [
+        {{
+          "sub_title": "分论点标题",
+          "body": "业务动作 + 证据/数据 + 结果",
+          "highlight_phrases": ["关键短语1", "关键短语2"]
+        }}
+      ]
+    }},
+    "note": "来源与假设说明"
+  }}
+}}
+```
 
-Return a JSON object with exactly these three fields: "title", "points" (array of strings), "description" (string).
-Return only the JSON, no other text.
+# Content Requirements by Type
+- `detail_chart` 必须包含：
+  - `chart_type`
+  - `chart_data.labels`
+  - `chart_data.datasets[]`（含 `label` 与 `data`）
+  - `key_takeaway`
+  - `highlight_phrases`
+- `detail_text_split` 必须包含：
+  - `headline_summary`
+  - `detailed_items[]`（每项含 `sub_title`、`body`、`highlight_phrases`）
+- 其他类型按语义填充合理字段（如 cover 的 headline/sub_headline，closing 的 final_conclusion/vision）。
+
+# Hard Constraints
+- 只返回 JSON，不要 Markdown 代码块，不要解释文字。
+- 不得输出多余顶层字段。
+- 所有字段值尽量基于输入内容，不臆造具体数据。
 {get_language_instruction(language)}
 """
     logger.debug(f"[get_ppt_page_content_extraction_prompt] Final prompt:\n{prompt}")

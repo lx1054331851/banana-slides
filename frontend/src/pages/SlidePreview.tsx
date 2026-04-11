@@ -67,11 +67,13 @@ const previewI18n = {
       versions: "版本", version: "版本", current: "当前", editPage: "编辑页面",
       regionSelect: "区域选图", endRegionSelect: "结束区域选图",
       pageOutline: "页面大纲（可编辑）", pageDescription: "页面描述（可编辑）",
+      pageJson: "页面 JSON（可编辑）",
       refineDescription: "AI 优化", refineDescriptionTooltip: "AI 优化当前页描述",
       refinePlaceholder: "例如：让描述更具体，突出核心结论，改成更适合商务汇报的语气... · Enter 提交，Shift+Enter 换行",
       refineApplied: "AI 优化已应用到当前描述草稿", refineFailed: "页面描述优化失败，请稍后重试",
       enterTitle: "输入页面标题", pointsPerLine: "要点（每行一个）",
       enterPointsPerLine: "每行输入一个要点", enterDescription: "输入页面的详细描述内容",
+      enterPageJson: "输入页面结构化 JSON 内容",
       selectContextImages: "选择上下文图片（可选）", useTemplateImage: "使用模板图片",
       imagesInDescription: "描述中的图片", uploadImages: "上传图片",
       selectFromMaterials: "从素材库选择", upload: "上传",
@@ -213,11 +215,13 @@ const previewI18n = {
       versions: "Versions", version: "Version", current: "Current", editPage: "Edit Page",
       regionSelect: "Region Select", endRegionSelect: "End Region Select",
       pageOutline: "Page Outline (Editable)", pageDescription: "Page Description (Editable)",
+      pageJson: "Page JSON (Editable)",
       refineDescription: "AI Refine", refineDescriptionTooltip: "Refine current page description with AI",
       refinePlaceholder: "e.g., Make the description more specific, highlight the key conclusion, and use a business presentation tone... · Enter to submit, Shift+Enter for newline",
       refineApplied: "AI refinement applied to the current draft", refineFailed: "Failed to refine page description",
       enterTitle: "Enter page title", pointsPerLine: "Key Points (one per line)",
       enterPointsPerLine: "Enter one key point per line", enterDescription: "Enter detailed page description",
+      enterPageJson: "Enter structured page JSON",
       selectContextImages: "Select Context Images (Optional)", useTemplateImage: "Use Template Image",
       imagesInDescription: "Images in Description", uploadImages: "Upload Images",
       selectFromMaterials: "Select from Materials", upload: "Upload",
@@ -2894,6 +2898,10 @@ export const SlidePreview: React.FC = () => {
   const descriptionGenerationProgressPercent = descriptionGenerationTotal > 0
     ? Math.max(0, Math.min(100, Math.round((descriptionGenerationCompleted / descriptionGenerationTotal) * 100)))
     : 0;
+  const isPptRenovationProject = currentProject?.creation_type === 'ppt_renovation';
+  const editorGridClasses = isPptRenovationProject
+    ? 'grid h-full min-h-0 gap-3 grid-rows-[minmax(0,1fr)] lg:gap-4 lg:grid-rows-[minmax(0,1fr)]'
+    : 'grid h-full min-h-0 gap-3 grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-4 lg:grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]';
 
   const editorCanvasContent = (
     <div
@@ -2901,41 +2909,45 @@ export const SlidePreview: React.FC = () => {
       style={isMobileView ? undefined : { width: '100%', maxWidth: '100%', aspectRatio: aspectRatioStyle }}
       data-testid="preview-editor-canvas"
     >
-      <div className="grid h-full min-h-0 gap-3 grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-4 lg:grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]">
-        <div className="rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 dark:border-[#2d3447] dark:bg-[#151a26]">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">标题</div>
-          <input
-            type="text"
-            value={editOutlineTitle}
-            onChange={(event) => {
-              const value = event.target.value;
-              setEditOutlineTitle(value);
-              persistCurrentPageDraft({ title: value });
-            }}
-            placeholder={t('preview.enterTitle')}
-            data-testid="preview-text-title-input"
-            className="min-h-[48px] w-full appearance-none bg-transparent text-xl font-semibold text-slate-900 outline-none placeholder:text-[#b2a78d] dark:text-[#f5f7ff] dark:placeholder:text-[#5f6883] sm:text-2xl"
-          />
-        </div>
+      <div className={editorGridClasses}>
+        {!isPptRenovationProject && (
+          <div className="rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 dark:border-[#2d3447] dark:bg-[#151a26]">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">标题</div>
+            <input
+              type="text"
+              value={editOutlineTitle}
+              onChange={(event) => {
+                const value = event.target.value;
+                setEditOutlineTitle(value);
+                persistCurrentPageDraft({ title: value });
+              }}
+              placeholder={t('preview.enterTitle')}
+              data-testid="preview-text-title-input"
+              className="min-h-[48px] w-full appearance-none bg-transparent text-xl font-semibold text-slate-900 outline-none placeholder:text-[#b2a78d] dark:text-[#f5f7ff] dark:placeholder:text-[#5f6883] sm:text-2xl"
+            />
+          </div>
+        )}
 
-        <div className="min-h-0 overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 flex flex-col dark:border-[#2d3447] dark:bg-[#151a26]">
-          <div className="mb-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">{t('preview.pointsPerLine')}</div>
-          <textarea
-            value={editOutlinePoints}
-            onChange={(event) => {
-              const value = event.target.value;
-              setEditOutlinePoints(value);
-              persistCurrentPageDraft({ points: value });
-            }}
-            placeholder={t('preview.enterPointsPerLine')}
-            data-testid="preview-text-points-input"
-            className="min-h-[72px] w-full flex-1 appearance-none resize-none overflow-y-auto bg-transparent px-0 py-0 text-sm leading-6 text-slate-700 outline-none placeholder:text-[#b8ae96] focus:ring-0 dark:text-[#e2e8f0] dark:placeholder:text-[#66708c]"
-          />
-        </div>
+        {!isPptRenovationProject && (
+          <div className="min-h-0 overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 flex flex-col dark:border-[#2d3447] dark:bg-[#151a26]">
+            <div className="mb-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">{t('preview.pointsPerLine')}</div>
+            <textarea
+              value={editOutlinePoints}
+              onChange={(event) => {
+                const value = event.target.value;
+                setEditOutlinePoints(value);
+                persistCurrentPageDraft({ points: value });
+              }}
+              placeholder={t('preview.enterPointsPerLine')}
+              data-testid="preview-text-points-input"
+              className="min-h-[72px] w-full flex-1 appearance-none resize-none overflow-y-auto bg-transparent px-0 py-0 text-sm leading-6 text-slate-700 outline-none placeholder:text-[#b8ae96] focus:ring-0 dark:text-[#e2e8f0] dark:placeholder:text-[#66708c]"
+            />
+          </div>
+        )}
 
         <div className="min-h-0 overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 flex flex-col dark:border-[#2d3447] dark:bg-[#151a26]">
           <div className="mb-3 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
-            {t('preview.pageDescription')}
+            {isPptRenovationProject ? t('preview.pageJson') : t('preview.pageDescription')}
           </div>
           <MarkdownTextarea
             ref={descriptionTextareaRef}
@@ -2947,7 +2959,7 @@ export const SlidePreview: React.FC = () => {
             onPaste={handleDescriptionPaste}
             onFiles={handleDescriptionFiles}
             onFocus={focusMainDescriptionField}
-            placeholder={t('preview.enterDescription')}
+            placeholder={isPptRenovationProject ? t('preview.enterPageJson') : t('preview.enterDescription')}
             data-testid="preview-text-description-input"
             rows={8}
             maxHeight="100%"

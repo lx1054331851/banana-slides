@@ -1516,7 +1516,14 @@ def process_ppt_renovation_task(task_id: str, project_id: str, ai_service,
                                     if image_path and Path(image_path).exists():
                                         caption = ai_service.generate_layout_caption(image_path)
                                         if caption:
-                                            content['description'] += f"\n\n{caption}"
+                                            slide_obj = content.get('slide') if isinstance(content.get('slide'), dict) else None
+                                            if slide_obj:
+                                                slide_obj = {**slide_obj, 'layout_guidance': caption}
+                                                content['slide'] = slide_obj
+                                                content['description'] = json.dumps(slide_obj, ensure_ascii=False, indent=2)
+                                            else:
+                                                desc_text = content.get('description', '')
+                                                content['description'] = f"{desc_text}\n\n{caption}" if desc_text else caption
                             except Exception as e:
                                 logger.error(f"Layout caption failed for page {idx}: {e}")
 

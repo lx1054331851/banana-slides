@@ -1373,20 +1373,80 @@ class AIService:
             language: 输出语言
 
         Returns:
-            Dict with keys: title, points, description
+            Dict with keys: title, points, description, slide(optional)
         """
         prompt = get_ppt_page_content_extraction_prompt(markdown_text, language=language)
         result = self.generate_json(prompt, thinking_budget=1000)
 
-        # Ensure required fields exist
         if not isinstance(result, dict):
             raise ValueError(f"Expected dict, got {type(result)}")
 
-        result.setdefault('title', '')
-        result.setdefault('points', [])
-        result.setdefault('description', '')
+        # New preferred format: {"outline": {...}, "slide": {...}}
+        outline_obj = result.get('outline') if isinstance(result.get('outline'), dict) else {}
+        slide_obj = result.get('slide') if isinstance(result.get('slide'), dict) else None
 
-        return result
+        # Compatibility: allow direct single-slide object as top-level payload
+        if slide_obj is None and isinstance(result.get('content'), dict) and result.get('type'):
+            slide_obj = result
+
+        if slide_obj is not None:
+            title = (
+                self._normalize_text(outline_obj.get('title'))
+                or self._normalize_text(slide_obj.get('title'))
+            )
+            if not title:
+                content = slide_obj.get('content') if isinstance(slide_obj.get('content'), dict) else {}
+                title = (
+                    self._normalize_text(content.get('headline'))
+                    or self._normalize_text(content.get('headline_summary'))
+                    or "未命名页面"
+                )
+
+            points: List[str] = []
+            raw_points = outline_obj.get('points')
+            if isinstance(raw_points, list):
+                for item in raw_points:
+                    text = self._normalize_text(item)
+                    if text:
+                        points.append(text)
+            if not points:
+                points = self._extract_slide_points(slide_obj)
+            if not points and title:
+                points = [title]
+
+            return {
+                'title': title,
+                'points': points,
+                'description': json.dumps(slide_obj, ensure_ascii=False, indent=2),
+                'slide': slide_obj,
+            }
+
+        # Legacy fallback format: {"title": "...", "points": [...], "description": "..."}
+        title = self._normalize_text(result.get('title'))
+        raw_points = result.get('points')
+        points: List[str] = []
+        if isinstance(raw_points, list):
+            for item in raw_points:
+                text = self._normalize_text(item)
+                if text:
+                    points.append(text)
+
+        description_value = result.get('description', '')
+        if isinstance(description_value, (dict, list)):
+            description = json.dumps(description_value, ensure_ascii=False, indent=2)
+        elif isinstance(description_value, str):
+            description = description_value
+        else:
+            description = ''
+
+        if not title and points:
+            title = points[0]
+
+        return {
+            'title': title,
+            'points': points,
+            'description': description,
+        }
 
     def _generate_text_from_image(self, prompt: str, image_path: str) -> str:
         """Helper to generate text from a prompt and an image, using caption_provider."""
