@@ -1522,6 +1522,18 @@ export const SlidePreview: React.FC = () => {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [goNextPage, goPrevPage, isFullscreen]);
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+    };
+  }, []);
+
   // 加载项目数据 & 用户模板
   useEffect(() => {
     if (projectId && (!currentProject || currentProject.id !== projectId)) {
@@ -3406,7 +3418,7 @@ export const SlidePreview: React.FC = () => {
     : '正在渲染';
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-background-primary flex flex-col overflow-hidden">
+    <div className="h-dvh bg-gray-50 dark:bg-background-primary flex flex-col overflow-hidden">
       {/* 顶栏 */}
       <header className="h-14 md:h-16 bg-white dark:bg-background-secondary shadow-sm dark:shadow-background-primary/30 border-b border-gray-200 dark:border-border-primary flex items-center justify-between px-3 md:px-6 flex-shrink-0">
         <div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1">
