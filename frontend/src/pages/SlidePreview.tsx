@@ -3060,7 +3060,7 @@ export const SlidePreview: React.FC = () => {
           </div>
         )}
 
-        <div className="min-h-0 overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 flex flex-col dark:border-[#2d3447] dark:bg-[#151a26]">
+        <div className="relative min-h-0 overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 flex flex-col dark:border-[#2d3447] dark:bg-[#151a26]">
           <div className="mb-3 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
             {isPptRenovationProject ? t('preview.pageJson') : t('preview.pageDescription')}
           </div>
@@ -3083,54 +3083,51 @@ export const SlidePreview: React.FC = () => {
             slashActions={descriptionSlashActions}
             className="min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent"
           />
-          {isPptRenovationProject && showJsonRefineDialog && (
-            <div className="mt-3 rounded-xl border border-[#ead6a2] bg-[linear-gradient(120deg,#fff9e8_0%,#fff3d6_54%,#ffefbf_100%)] p-2 shadow-[0_10px_20px_rgba(250,204,21,0.12)] transition-all duration-300 dark:border-[#4a3f2a] dark:bg-[linear-gradient(120deg,#1e1a12_0%,#2a2215_56%,#322816_100%)]">
-              <div className="flex items-center gap-2">
-                <input
-                  ref={jsonRefineInputRef}
-                  value={jsonRefineRequirement}
-                  onChange={(event) => setJsonRefineRequirement(event.target.value)}
-                  onKeyDown={(event) => {
-                    if ((event.nativeEvent as KeyboardEvent).isComposing) return;
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      void handleSubmitJsonRefine();
-                    }
-                  }}
-                  disabled={isJsonRefining}
-                  placeholder={t('preview.refineJsonPlaceholder')}
-                  className="h-10 flex-1 rounded-lg border border-[#e8d9b4] bg-white/95 px-3 text-sm text-slate-700 outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-[#b8aa86] focus:border-[#d4b35c] focus:ring-2 focus:ring-[#f2cf76]/35 dark:border-[#5a4e37] dark:bg-[#0f1420] dark:text-[#e2e8f0] dark:placeholder:text-[#66708c] dark:focus:border-[#e6c677] dark:focus:ring-[#d8b259]/30"
-                />
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  loading={isJsonRefining}
-                  disabled={!jsonRefineRequirement.trim()}
-                  onClick={() => void handleSubmitJsonRefine()}
-                  title={t('preview.refineJson')}
-                  aria-label={t('preview.refineJson')}
-                  icon={!isJsonRefining ? <Send size={14} /> : undefined}
-                  className="h-10 w-10 rounded-lg px-0 shadow-[0_8px_18px_rgba(250,204,21,0.24)]"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={isJsonRefining}
-                  onClick={() => setShowJsonRefineDialog(false)}
-                  className="h-10 rounded-lg border border-[#e6dab8] bg-white/60 px-3 text-[#7c6740] hover:bg-white dark:border-[#5a4e37] dark:bg-[#1c2333] dark:text-[#c4d2f3] dark:hover:bg-[#263148]"
-                >
-                  <X size={14} />
-                </Button>
-              </div>
-              <div className="mt-1 text-[11px] text-[#8b6f2d] dark:text-[#d5ba7d]">
-                {t('preview.refineJsonInlineHint')}
-              </div>
-            </div>
-          )}
           {isPptRenovationProject && (
-            <div className="mt-3 flex justify-end">
+            <div className="absolute bottom-3 right-5 z-20 flex max-w-[calc(100%-2.5rem)] items-center gap-2">
+              {showJsonRefineDialog && (
+                <div className="w-[min(520px,calc(100%-2.5rem))] max-w-[calc(100%-2.5rem)] rounded-xl border border-[#ead6a2] bg-[linear-gradient(120deg,#fff9e8_0%,#fff3d6_54%,#ffefbf_100%)] p-2 shadow-[0_10px_20px_rgba(250,204,21,0.12)] transition-all duration-300 dark:border-[#4a3f2a] dark:bg-[linear-gradient(120deg,#1e1a12_0%,#2a2215_56%,#322816_100%)]">
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={jsonRefineInputRef}
+                      value={jsonRefineRequirement}
+                      onChange={(event) => setJsonRefineRequirement(event.target.value)}
+                      onKeyDown={(event) => {
+                        if ((event.nativeEvent as KeyboardEvent).isComposing) return;
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault();
+                          void handleSubmitJsonRefine();
+                        }
+                      }}
+                      disabled={isJsonRefining}
+                      placeholder={t('preview.refineJsonPlaceholder')}
+                      className="h-10 flex-1 rounded-lg border border-[#e8d9b4] bg-white/95 px-3 text-sm text-slate-700 outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-[#b8aa86] focus:border-[#d4b35c] focus:ring-2 focus:ring-[#f2cf76]/35 dark:border-[#5a4e37] dark:bg-[#0f1420] dark:text-[#e2e8f0] dark:placeholder:text-[#66708c] dark:focus:border-[#e6c677] dark:focus:ring-[#d8b259]/30"
+                    />
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      loading={isJsonRefining}
+                      disabled={!jsonRefineRequirement.trim()}
+                      onClick={() => void handleSubmitJsonRefine()}
+                      title={t('preview.refineJson')}
+                      aria-label={t('preview.refineJson')}
+                      icon={!isJsonRefining ? <Send size={14} /> : undefined}
+                      className="h-10 w-10 rounded-lg px-0 shadow-[0_8px_18px_rgba(250,204,21,0.24)]"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={isJsonRefining}
+                      onClick={() => setShowJsonRefineDialog(false)}
+                      className="h-10 rounded-lg border border-[#e6dab8] bg-white/60 px-3 text-[#7c6740] hover:bg-white dark:border-[#5a4e37] dark:bg-[#1c2333] dark:text-[#c4d2f3] dark:hover:bg-[#263148]"
+                    >
+                      <X size={14} />
+                    </Button>
+                  </div>
+                </div>
+              )}
               <Button
                 type="button"
                 variant="ghost"
