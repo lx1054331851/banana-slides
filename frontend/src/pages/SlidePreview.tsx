@@ -534,6 +534,17 @@ const areStringRecordsEqual = (left: Record<string, string>, right: Record<strin
   return leftKeys.every((key) => (left[key] || '').trim() === (right[key] || '').trim());
 };
 
+const formatJsonForEditor = (text: string, indent = 4): string => {
+  const raw = (text || '').trim();
+  if (!raw) return text || '';
+  try {
+    const parsed = JSON.parse(raw);
+    return JSON.stringify(parsed, null, indent);
+  } catch {
+    return text || '';
+  }
+};
+
 export const SlidePreview: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -651,6 +662,10 @@ export const SlidePreview: React.FC = () => {
   const [descriptionRequirementsDraft, setDescriptionRequirementsDraft] = useState('');
   const [isSavingDescriptionRequirements, setIsSavingDescriptionRequirements] = useState(false);
   const [pageDrafts, setPageDrafts] = useState<Record<string, PageDraft>>({});
+  const formatDescriptionForEditor = useCallback((descriptionText: string, project?: Project | null) => {
+    if ((project || currentProject)?.creation_type !== 'ppt_renovation') return descriptionText;
+    return formatJsonForEditor(descriptionText, 4);
+  }, [currentProject]);
   // 页面挂载时恢复正在进行的导出任务（页面刷新后）
   useEffect(() => {
     restoreActiveTasks();
@@ -701,9 +716,9 @@ export const SlidePreview: React.FC = () => {
 
     setEditOutlineTitle(page.outline_content?.title || '');
     setEditOutlinePoints(page.outline_content?.points?.join('\n') || '');
-    setEditDescription(getDescriptionText(page.description_content));
+    setEditDescription(formatDescriptionForEditor(getDescriptionText(page.description_content), currentProject));
     setEditExtraFields(getDescriptionExtraFields(page.description_content));
-  }, [currentProject, selectedIndex, pageDrafts]);
+  }, [currentProject, selectedIndex, pageDrafts, formatDescriptionForEditor]);
 
   useEffect(() => {
     if (!currentProject) return;
@@ -1270,7 +1285,7 @@ export const SlidePreview: React.FC = () => {
       const baseDraft = prev[pageKey] || {
         title: page?.outline_content?.title || '',
         points: page?.outline_content?.points?.join('\n') || '',
-        description: getDescriptionText(page?.description_content),
+        description: formatDescriptionForEditor(getDescriptionText(page?.description_content), currentProject),
         extraFields: getDescriptionExtraFields(page?.description_content),
       };
       return {
@@ -1297,9 +1312,9 @@ export const SlidePreview: React.FC = () => {
     lastSelectedPageKeyRef.current = getPageDraftKey(page, selectedIndex);
     setEditOutlineTitle(page.outline_content?.title || '');
     setEditOutlinePoints(page.outline_content?.points?.join('\n') || '');
-    setEditDescription(getDescriptionText(page.description_content));
+    setEditDescription(formatDescriptionForEditor(getDescriptionText(page.description_content), project));
     setEditExtraFields(getDescriptionExtraFields(page.description_content));
-  }, [selectedIndex]);
+  }, [selectedIndex, formatDescriptionForEditor]);
 
   // Memoize pages with generated images to avoid re-computing in multiple places
   const pagesWithImages = useMemo(() => {
