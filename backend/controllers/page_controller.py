@@ -446,7 +446,6 @@ def generate_page_description(project_id, page_id):
             extracted = ai_service.extract_page_content_from_image(
                 source_image,
                 language=language,
-                page_outline=page_data,
             )
             desc_result = {'text': extracted.get('description', '')}
         else:

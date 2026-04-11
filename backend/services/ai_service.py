@@ -1624,15 +1624,12 @@ class AIService:
         Args:
             image_path: 页面原图路径
             language: 输出语言
-            page_outline: 当前页大纲（可选，仅作弱约束）
+            page_outline: 保留参数（当前不参与 prompt，避免混入 OCR/大纲文本）
 
         Returns:
             Dict with keys: title, points, description, slide(optional)
         """
-        prompt = get_ppt_page_content_extraction_from_image_prompt(
-            page_outline=page_outline or {},
-            language=language
-        )
+        prompt = get_ppt_page_content_extraction_from_image_prompt(language=language)
         result = self.generate_json_with_image(prompt, image_path=image_path, thinking_budget=1000)
         return self._normalize_extracted_page_content_result(result)
 

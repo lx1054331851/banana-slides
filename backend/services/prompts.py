@@ -1287,24 +1287,12 @@ def get_ppt_page_content_extraction_prompt(markdown_text: str, language: str = N
 
 def get_ppt_page_content_extraction_from_image_prompt(page_outline: Optional[Dict] = None, language: str = None) -> str:
     """从单页原始图片提取翻新页结构（outline + slide JSON）"""
-    page_outline = page_outline or {}
-    outline_title = page_outline.get('title') if isinstance(page_outline.get('title'), str) else ''
-    outline_points = page_outline.get('points') if isinstance(page_outline.get('points'), list) else []
-    outline_hint = "\n".join([f"- {str(p).strip()}" for p in outline_points if str(p).strip()])
-    if not outline_hint:
-        outline_hint = "- 无"
-
     prompt = f"""\
 # Role
 你是一位麦肯锡/BCG风格的高级商业分析师兼PPT翻新架构师。你会直接阅读输入的“原始PPT页面图片”，并输出结构化单页 JSON。
 
 # Input
 你将收到 1 张页面原图（不是 OCR 文本）。请基于图中真实视觉与语义信息完成提取。
-
-以下是页面大纲提示（仅供辅助，不可覆盖图片事实）：
-- 参考标题：{outline_title or '无'}
-- 参考要点：
-{outline_hint}
 
 # Core Objective
 1. 不依赖 OCR 文本，完全以图片内容为主进行语义理解。
@@ -1366,7 +1354,7 @@ def get_ppt_page_content_extraction_from_image_prompt(page_outline: Optional[Dic
 # Hard Constraints
 - 只返回 JSON，不要 Markdown 代码块，不要解释文字。
 - 不得输出多余顶层字段。
-- 以图片信息为准；大纲提示仅作弱约束。
+- 仅基于图片内容生成，不要引入任何外部文本提示信息（含 OCR 文本/大纲文本）。
 {get_language_instruction(language)}
 """
     logger.debug(f"[get_ppt_page_content_extraction_from_image_prompt] Final prompt:\n{prompt}")

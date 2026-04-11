@@ -549,7 +549,6 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                             extracted = ai_service.extract_page_content_from_image(
                                 source_image,
                                 language=language,
-                                page_outline=page_outline,
                             )
                             desc_result = {
                                 'text': extracted.get('description', ''),
