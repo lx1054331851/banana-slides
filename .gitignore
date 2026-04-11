@@ -36,7 +36,9 @@
 *.md
 !docs/api.md
 !README.md
+!skills/**/*.md
 # !docs/**/*.md
+!docs/specs/cli-spec.md
 !.github/**/*.md
 *.pyc
 .env
