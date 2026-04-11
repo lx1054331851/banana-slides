@@ -3084,9 +3084,9 @@ export const SlidePreview: React.FC = () => {
             className="min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent"
           />
           {isPptRenovationProject && (
-            <div className="absolute bottom-3 right-5 z-20 flex max-w-[calc(100%-2.5rem)] items-center gap-2">
+            <div className="absolute bottom-3 left-5 right-5 z-20 flex items-center justify-end gap-2">
               {showJsonRefineDialog && (
-                <div className="w-[min(520px,calc(100%-2.5rem))] max-w-[calc(100%-2.5rem)] rounded-xl border border-[#ead6a2] bg-[linear-gradient(120deg,#fff9e8_0%,#fff3d6_54%,#ffefbf_100%)] p-2 shadow-[0_10px_20px_rgba(250,204,21,0.12)] transition-all duration-300 dark:border-[#4a3f2a] dark:bg-[linear-gradient(120deg,#1e1a12_0%,#2a2215_56%,#322816_100%)]">
+                <div className="min-w-0 flex-1 rounded-xl border border-[#ead6a2] bg-[linear-gradient(120deg,#fff9e8_0%,#fff3d6_54%,#ffefbf_100%)] p-2 shadow-[0_10px_20px_rgba(250,204,21,0.12)] transition-all duration-300 dark:border-[#4a3f2a] dark:bg-[linear-gradient(120deg,#1e1a12_0%,#2a2215_56%,#322816_100%)]">
                   <div className="flex items-center gap-2">
                     <input
                       ref={jsonRefineInputRef}
