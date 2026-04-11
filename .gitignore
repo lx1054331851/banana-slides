@@ -31,7 +31,6 @@
 
 # 保留项目模板图片
 !template*.png
-!project*.png
 
 # 忽略临时文档，但保留项目文档
 *.md
