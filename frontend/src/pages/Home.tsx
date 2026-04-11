@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Sparkles, FileText, FileEdit, Paperclip, Palette, Lightbulb, Settings, FolderOpen, HelpCircle, History, Sun, Moon, Globe, Monitor, ChevronDown, Upload, RefreshCw } from 'lucide-react';
-import { Button, Card, useToast, ReferenceFileList, ReferenceFileSelector, FilePreviewModal, HelpModal } from '@/components/shared';
+import { Button, Card, useToast, MaterialSelector, ReferenceFileList, ReferenceFileSelector, FilePreviewModal, HelpModal } from '@/components/shared';
 import { MarkdownTextarea, type MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
-import { uploadReferenceFile, type ReferenceFile, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject } from '@/api/endpoints';
+import { uploadReferenceFile, type ReferenceFile, type Material, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject } from '@/api/endpoints';
 import { useProjectStore } from '@/store/useProjectStore';
 import { devLog } from '@/utils/logger';
 import { useTheme } from '@/hooks/useTheme';
-import { useImagePaste } from '@/hooks/useImagePaste';
+import { useImagePaste, buildMaterialsMarkdown } from '@/hooks/useImagePaste';
 import { useT } from '@/hooks/useT';
 import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
 import mammoth from 'mammoth/mammoth.browser';
@@ -432,11 +432,17 @@ export const Home: React.FC = () => {
   }, [isThemeMenuOpen]);
 
   const textareaRef = useRef<MarkdownTextareaRef>(null);
+  const [isMaterialSelectorOpen, setIsMaterialSelectorOpen] = useState(false);
 
   // Callback to insert at cursor position in the textarea
   const insertAtCursor = useCallback((markdown: string) => {
     textareaRef.current?.insertAtCursor(markdown);
   }, []);
+
+  const handleMaterialSelect = useCallback((materials: Material[]) => {
+    const markdown = buildMaterialsMarkdown(materials, setCurrentTextDraft);
+    textareaRef.current?.insertAtCursor(markdown + '\n');
+  }, [setCurrentTextDraft]);
 
   // 图片粘贴使用统一 hook（批量支持，不对非图片文件发出警告，由下方 handlePaste 处理文档）
   const { handlePaste: handleImagePaste, handleFiles: handleImageFiles, isUploading: isUploadingImage } = useImagePaste({
@@ -1299,6 +1305,7 @@ export const Home: React.FC = () => {
                 onChange={setContentOptimized}
                 onPaste={handlePaste}
                 onFiles={handleImageFiles}
+                onSelectFromLibrary={() => setIsMaterialSelectorOpen(true)}
                 rows={activeTextMode === 'idea' ? 4 : 8}
                 maxHeight={360}
                 collapsed={activeTextMode === 'description' && isContentCollapsed}
@@ -1439,6 +1446,12 @@ export const Home: React.FC = () => {
         onSelect={handleFilesSelected}
         multiple={true}
         initialSelectedIds={selectedFileIds}
+      />
+      <MaterialSelector
+        isOpen={isMaterialSelectorOpen}
+        onClose={() => setIsMaterialSelectorOpen(false)}
+        onSelect={handleMaterialSelect}
+        multiple
       />
       
       <FilePreviewModal fileId={previewFileId} onClose={() => setPreviewFileId(null)} />

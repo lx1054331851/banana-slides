@@ -9,6 +9,8 @@ const markdownTextareaI18n = {
     markdownTextarea: {
       dropImages: '拖放图片到此处',
       uploadImage: '上传图片',
+      localUpload: '本地上传',
+      selectFromLibrary: '从素材库选择',
       imageDescription: '图片描述',
       doubleClickToEdit: '双击编辑描述',
       uploading: '上传中...',
@@ -18,6 +20,8 @@ const markdownTextareaI18n = {
     markdownTextarea: {
       dropImages: 'Drop images here',
       uploadImage: 'Upload image',
+      localUpload: 'Local upload',
+      selectFromLibrary: 'Select from library',
       imageDescription: 'Image description',
       doubleClickToEdit: 'Double-click to edit description',
       uploading: 'Uploading...',
@@ -58,6 +62,8 @@ interface MarkdownTextareaProps {
   toolbarRight?: React.ReactNode;
   /** Show compact image preview strip. Default: true */
   showImagePreview?: boolean;
+  /** Called when user chooses "Select from library". */
+  onSelectFromLibrary?: () => void;
   /** Allow manual vertical resize. Default: true */
   resizable?: boolean;
   slashActions?: Array<{
@@ -306,6 +312,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   toolbarCenter,
   toolbarRight,
   showImagePreview = false,
+  onSelectFromLibrary,
   resizable = true,
   slashActions,
   'data-testid': dataTestId,
@@ -326,6 +333,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   const [slashMenuPosition, setSlashMenuPosition] = useState<{ left: number; top: number } | null>(null);
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const [editAlt, setEditAlt] = useState('');
+  const [showUploadMenu, setShowUploadMenu] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
   const dragCountRef = useRef(0);
 
@@ -928,16 +936,51 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
           >
             <div className="flex items-center gap-0.5">
               {shouldShowUpload && (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:text-foreground-secondary dark:hover:bg-background-hover rounded transition-colors cursor-pointer"
-                  title={t('markdownTextarea.uploadImage')}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
-                  </svg>
-                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onSelectFromLibrary) {
+                        setShowUploadMenu(prev => !prev);
+                      } else {
+                        fileInputRef.current?.click();
+                      }
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:text-foreground-secondary dark:hover:bg-background-hover rounded transition-colors cursor-pointer"
+                    title={t('markdownTextarea.uploadImage')}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
+                    </svg>
+                  </button>
+                  {showUploadMenu && onSelectFromLibrary && (
+                    <>
+                      <div className="fixed inset-0 z-30" onClick={() => setShowUploadMenu(false)} />
+                      <div className="absolute left-0 bottom-full mb-1 z-40 bg-white dark:bg-background-elevated border border-gray-200 dark:border-border-primary rounded-lg shadow-lg dark:shadow-none py-1 min-w-[140px]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowUploadMenu(false);
+                            fileInputRef.current?.click();
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover transition-colors"
+                        >
+                          {t('markdownTextarea.localUpload')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowUploadMenu(false);
+                            onSelectFromLibrary();
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover transition-colors"
+                        >
+                          {t('markdownTextarea.selectFromLibrary')}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
               {toolbarLeft}
             </div>

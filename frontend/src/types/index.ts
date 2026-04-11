@@ -113,6 +113,20 @@ export interface ImageVersion {
   created_at?: string;
 }
 
+export interface Material {
+  id: string;
+  project_id?: string | null;
+  filename: string;
+  url: string;
+  relative_path: string;
+  caption?: string | null;
+  created_at: string;
+  prompt?: string;
+  original_filename?: string;
+  source_filename?: string;
+  name?: string;
+}
+
 // 页面
 export interface Page {
   page_id: string;  // 后端返回 page_id

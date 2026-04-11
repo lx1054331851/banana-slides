@@ -257,7 +257,7 @@ export const MaterialLibraryPanel: React.FC<MaterialLibraryPanelProps> = ({
     setIsUploading(true);
     try {
       const targetProjectId = (filterProjectId === 'all' || filterProjectId === 'none') ? null : filterProjectId;
-      await uploadMaterial(file, targetProjectId);
+      await uploadMaterial(file, targetProjectId, true);
       show({ message: t('material.messages.uploadSuccess'), type: 'success' });
       await loadMaterials();
     } catch (error: any) {

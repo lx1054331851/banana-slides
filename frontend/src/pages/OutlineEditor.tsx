@@ -109,12 +109,12 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Button, Loading, useConfirm, useToast, AiRefineInput, FilePreviewModal, ReferenceFileList } from '@/components/shared';
+import { Button, Loading, useConfirm, useToast, AiRefineInput, FilePreviewModal, ReferenceFileList, MaterialSelector } from '@/components/shared';
 import { MarkdownTextarea, type MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
 import { OutlineCard } from '@/components/outline/OutlineCard';
 import { useProjectStore } from '@/store/useProjectStore';
-import { refineOutline, updateProject, addPage, parseDescriptionToPages } from '@/api/endpoints';
-import { useImagePaste } from '@/hooks/useImagePaste';
+import { refineOutline, updateProject, addPage, parseDescriptionToPages, type Material } from '@/api/endpoints';
+import { useImagePaste, buildMaterialsMarkdown } from '@/hooks/useImagePaste';
 import { exportProjectToMarkdown, parseMarkdownPages } from '@/utils/projectUtils';
 import type { Page } from '@/types';
 
@@ -228,6 +228,7 @@ export const OutlineEditor: React.FC = () => {
   const [sourceText, setSourceText] = useState('');
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [isParsingSource, setIsParsingSource] = useState(false);
+  const [isMaterialSelectorOpen, setIsMaterialSelectorOpen] = useState(false);
 
   // 项目切换时：强制加载文本
   useEffect(() => {
@@ -279,6 +280,13 @@ export const OutlineEditor: React.FC = () => {
     // Prefer the desktop ref (visible at md+), fall back to mobile
     const ref = desktopTextareaRef.current || mobileTextareaRef.current;
     ref?.insertAtCursor(markdown);
+  }, []);
+
+  const handleMaterialSelect = useCallback((materials: Material[]) => {
+    const markdown = buildMaterialsMarkdown(materials, setInputText);
+    const ref = desktopTextareaRef.current || mobileTextareaRef.current;
+    ref?.insertAtCursor(markdown + '\n');
+    setIsInputDirty(true);
   }, []);
 
   const { handlePaste: handleImagePaste, handleFiles: handleImageFiles, isUploading: _isUploadingImage } = useImagePaste({
@@ -795,6 +803,7 @@ export const OutlineEditor: React.FC = () => {
                 onBlur={handleSaveInputText}
                 onPaste={handleImagePaste}
                 onFiles={handleImageFiles}
+                onSelectFromLibrary={() => setIsMaterialSelectorOpen(true)}
                 placeholder={inputPlaceholder}
                 rows={12}
                 className="border-0 rounded-none shadow-none"
@@ -880,6 +889,7 @@ export const OutlineEditor: React.FC = () => {
               onBlur={handleSaveInputText}
               onPaste={handleImagePaste}
               onFiles={handleImageFiles}
+              onSelectFromLibrary={() => setIsMaterialSelectorOpen(true)}
               placeholder={inputPlaceholder}
               rows={6}
               className="border-0 rounded-none shadow-none"
@@ -959,6 +969,13 @@ export const OutlineEditor: React.FC = () => {
       {ConfirmDialog}
       <ToastContainer />
       <FilePreviewModal fileId={previewFileId} onClose={() => setPreviewFileId(null)} />
+      <MaterialSelector
+        projectId={projectId}
+        isOpen={isMaterialSelectorOpen}
+        onClose={() => setIsMaterialSelectorOpen(false)}
+        onSelect={handleMaterialSelect}
+        multiple
+      />
     </div>
   );
 };

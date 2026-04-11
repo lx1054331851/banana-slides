@@ -77,7 +77,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* 遮罩 */}
       <div
         className={cn(
-          'fixed inset-0 transition-all duration-300',
+          'fixed inset-0 z-0 transition-all duration-300',
           'bg-gradient-to-br from-black/50 via-black/40 to-black/50',
           'backdrop-blur-md',
           isAnimating ? 'opacity-100' : 'opacity-0'
@@ -88,7 +88,7 @@ export const Modal: React.FC<ModalProps> = ({
 
       {/* 容器 */}
       <div
-        className="relative flex min-h-full items-center justify-center p-4 sm:p-6"
+        className="relative z-10 flex min-h-full items-center justify-center p-4 sm:p-6"
         onClick={handleBackdropClick}
       >
         <div
@@ -116,15 +116,6 @@ export const Modal: React.FC<ModalProps> = ({
           )}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* 顶部光晕效果 */}
-          <div className="absolute -top-px left-8 right-8 h-px bg-gradient-to-r from-transparent via-banana-400/50 to-transparent" />
-
-          {/* 内部光晕 */}
-          <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
-            <div className="absolute -top-32 -left-32 w-64 h-64 bg-banana-400/10 dark:bg-banana-400/5 rounded-full blur-3xl" />
-            <div className="absolute -bottom-32 -right-32 w-64 h-64 bg-banana-300/10 dark:bg-banana-300/5 rounded-full blur-3xl" />
-          </div>
-
           {/* 标题栏 */}
           {title && (
             <div className="relative flex-shrink-0 px-7 pt-7 pb-5">
@@ -174,8 +165,6 @@ export const Modal: React.FC<ModalProps> = ({
             {children}
           </div>
 
-          {/* 底部边框光晕 */}
-          <div className="absolute -bottom-px left-8 right-8 h-px bg-gradient-to-r from-transparent via-white/20 dark:via-white/10 to-transparent" />
         </div>
       </div>
     </div>

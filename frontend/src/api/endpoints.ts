@@ -945,6 +945,7 @@ export interface Material {
   filename: string;
   url: string;
   relative_path: string;
+  caption?: string | null;
   created_at: string;
   // 可选的附加信息：用于展示友好名称
   prompt?: string;

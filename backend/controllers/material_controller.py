@@ -125,7 +125,10 @@ def _handle_material_upload(default_project_id: Optional[str] = None):
             result = material.to_dict()
             if generate_caption and file_service:
                 filepath = file_service.get_absolute_path(material.relative_path)
-                result['caption'] = _generate_image_caption(filepath)
+                caption = _generate_image_caption(filepath)
+                material.caption = caption
+                db.session.commit()
+                result['caption'] = caption
             saved_materials.append(result)
 
         if len(saved_materials) == 1:
@@ -194,7 +197,8 @@ def _save_material_file(file, target_project_id: Optional[str]):
         project_id=target_project_id,
         filename=unique_filename,
         relative_path=relative_path,
-        url=image_url
+        url=image_url,
+        original_filename=filename
     )
 
     try:
@@ -582,3 +586,48 @@ def download_materials_zip():
         tmp.close()
         current_app.logger.exception("Failed to build materials zip")
         return error_response('SERVER_ERROR', 'Failed to create zip archive', 500)
+
+
+@material_global_bp.route('/<material_id>/caption', methods=['GET'])
+def get_material_caption(material_id):
+    """Get or lazily generate caption for an existing material."""
+    material = Material.query.get(material_id)
+    if not material:
+        return not_found('Material')
+
+    if material.caption is not None:
+        return success_response({'caption': material.caption})
+
+    try:
+        file_service = FileService(current_app.config['UPLOAD_FOLDER'])
+        filepath = file_service.get_absolute_path(material.relative_path)
+        caption = _generate_image_caption(filepath)
+        material.caption = caption
+        db.session.commit()
+        return success_response({'caption': caption})
+    except Exception as e:
+        db.session.rollback()
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
+@material_global_bp.route('/by-url', methods=['GET'])
+def get_material_by_url():
+    """Get material record by URL and ensure caption is available."""
+    url = (request.args.get('url') or '').strip()
+    if not url:
+        return bad_request('url parameter is required')
+
+    material = Material.query.filter_by(url=url).first()
+    if not material:
+        return not_found('Material')
+
+    try:
+        if material.caption is None:
+            file_service = FileService(current_app.config['UPLOAD_FOLDER'])
+            filepath = file_service.get_absolute_path(material.relative_path)
+            material.caption = _generate_image_caption(filepath)
+            db.session.commit()
+        return success_response(material.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return error_response('SERVER_ERROR', str(e), 500)
