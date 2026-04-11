@@ -3020,7 +3020,7 @@ export const SlidePreview: React.FC = () => {
 
   const editorCanvasContent = (
     <div
-      className="min-h-[520px] w-full min-w-0 rounded-[24px] border border-[#eadfbf] bg-white p-4 sm:min-h-[560px] sm:p-5 lg:min-h-[580px] lg:p-6 dark:border-border-primary dark:bg-[radial-gradient(circle_at_top,#1b2340_0%,#151a26_34%,#101521_100%)]"
+      className={`${isPptRenovationProject ? 'min-h-[620px] sm:min-h-[680px] lg:min-h-[760px]' : 'min-h-[520px] sm:min-h-[560px] lg:min-h-[580px]'} w-full min-w-0 rounded-[24px] border border-[#eadfbf] bg-white p-4 sm:p-5 lg:p-6 dark:border-border-primary dark:bg-[radial-gradient(circle_at_top,#1b2340_0%,#151a26_34%,#101521_100%)]`}
       style={isMobileView ? undefined : { width: '100%', maxWidth: '100%', aspectRatio: aspectRatioStyle }}
       data-testid="preview-editor-canvas"
     >
@@ -4285,10 +4285,12 @@ export const SlidePreview: React.FC = () => {
                         <div className="shrink-0">
                           {editorCanvasContent}
                         </div>
-                        <div className="mt-3 shrink-0">
-                          {externalFieldTags}
-                        </div>
-                        <div className="mt-2 min-h-0 flex-1 overflow-visible flex flex-col justify-end">
+                        {!isPptRenovationProject && (
+                          <div className="mt-3 shrink-0">
+                            {externalFieldTags}
+                          </div>
+                        )}
+                        <div className={`${isPptRenovationProject ? 'mt-0' : 'mt-2'} min-h-0 flex-1 overflow-visible flex flex-col justify-end`}>
                           <div className="min-h-0">
                             <PageAiWorkbench
                               title={t('preview.pageAiTitle')}
