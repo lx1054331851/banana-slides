@@ -2882,6 +2882,12 @@ export const SlidePreview: React.FC = () => {
   const isGenerateDisabled = isMultiSelectMode && selectedPageIds.size === 0;
   const missingImageCount = currentProject.pages.filter(p => !p.generated_image_path).length;
   const selectedPageHasImage = Boolean(selectedPage?.generated_image_path || selectedPage?.preview_image_path);
+  const generatedImageCount = currentProject.pages.filter((page) => Boolean(page.generated_image_path || page.preview_image_path)).length;
+  const generatingImageCount = currentProject.pages.filter((page) => isPageGenerating(page)).length;
+  const imageGenerationProgressPercent = currentProject.pages.length > 0
+    ? Math.max(0, Math.min(100, Math.round((generatedImageCount / currentProject.pages.length) * 100)))
+    : 0;
+  const isSelectedPageGenerating = isPageGenerating(selectedPage);
   const historyVersionsDescending = [...imageVersions].sort((a, b) => b.version_number - a.version_number);
   const selectedHistoryVersion = historyVersionsDescending.find(
     (version) => version.version_id === selectedHistoryVersionId
@@ -3261,11 +3267,14 @@ export const SlidePreview: React.FC = () => {
     )
   );
   const textStatusLabel = isCurrentPageDirty ? '文本未保存' : '文本已保存';
-  const imageStatusLabel = isPageGenerating(selectedPage)
+  const imageStatusLabel = isSelectedPageGenerating
     ? t('preview.generating')
     : selectedPageHasImage
       ? '图片已生成'
       : t('preview.notGenerated');
+  const generationStatusDetail = selectedPage?.status === 'QUEUED'
+    ? '排队等待'
+    : '正在渲染';
 
   return (
     <div className="h-screen bg-gray-50 dark:bg-background-primary flex flex-col overflow-hidden">
@@ -4239,9 +4248,37 @@ export const SlidePreview: React.FC = () => {
                     <span className={`rounded-full px-3 py-1 ${isCurrentPageDirty ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                       {textStatusLabel}
                     </span>
-                    <span className={`rounded-full px-3 py-1 ${selectedPageHasImage ? 'bg-sky-100 text-sky-700' : 'bg-gray-100 text-gray-600 dark:bg-background-hover dark:text-foreground-tertiary'}`}>
-                      {imageStatusLabel}
-                    </span>
+                    {isSelectedPageGenerating ? (
+                      <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+                        <Loader2 size={14} className="animate-spin" />
+                        <span className="inline-flex items-center">
+                          {generationStatusDetail}
+                          <span className="ml-1 inline-flex items-end gap-0.5 text-[12px] leading-none">
+                            <span className="animate-pulse">.</span>
+                            <span className="animate-pulse" style={{ animationDelay: '150ms' }}>.</span>
+                            <span className="animate-pulse" style={{ animationDelay: '300ms' }}>.</span>
+                          </span>
+                        </span>
+                        <span className="text-amber-800/85 dark:text-amber-100/85">
+                          {generatedImageCount}/{currentProject.pages.length}
+                        </span>
+                        <span className="h-1.5 w-16 overflow-hidden rounded-full bg-amber-200/90 dark:bg-amber-300/20">
+                          <span
+                            className="block h-full rounded-full bg-amber-500 transition-all duration-500"
+                            style={{ width: `${imageGenerationProgressPercent}%` }}
+                          />
+                        </span>
+                        {generatingImageCount > 1 && (
+                          <span className="text-[11px] text-amber-800/80 dark:text-amber-100/80">
+                            进行中 {generatingImageCount} 页
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className={`rounded-full px-3 py-1 ${selectedPageHasImage ? 'bg-sky-100 text-sky-700' : 'bg-gray-100 text-gray-600 dark:bg-background-hover dark:text-foreground-tertiary'}`}>
+                        {imageStatusLabel}
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     <Button
