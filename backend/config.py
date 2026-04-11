@@ -188,6 +188,8 @@ class Config:
     STYLE_PREVIEW_WORKERS = int(os.getenv('STYLE_PREVIEW_WORKERS', '2'))
     # 单页预览在网络瞬断时的额外重试次数（不含 provider 内部重试）
     STYLE_PREVIEW_SLIDE_RETRIES = int(os.getenv('STYLE_PREVIEW_SLIDE_RETRIES', '1'))
+    # 风格推荐（文本 JSON）重试次数（不含 provider 内部重试）
+    STYLE_PREVIEW_RECOMMENDATION_RETRIES = int(os.getenv('STYLE_PREVIEW_RECOMMENDATION_RETRIES', '5'))
     
     # 日志配置
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()

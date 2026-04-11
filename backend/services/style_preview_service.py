@@ -3,11 +3,14 @@ Style preview service - recommend style_json and generate preview images.
 """
 import json
 import logging
+import os
+import socket
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 from models import db, Task, Project, ReferenceFile, StylePreset
 from services.ai_service_manager import get_ai_service
@@ -71,10 +74,40 @@ def _is_transient_image_network_error(exc: Exception) -> bool:
     return any(marker in text for marker in markers)
 
 
+def _has_proxy_env() -> bool:
+    return bool(os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY"))
+
+
+def _enable_local_proxy_if_available(proxy_url: str = "http://127.0.0.1:7897") -> bool:
+    """
+    Best-effort local proxy fallback for unstable upstream network.
+    """
+    if _has_proxy_env():
+        return False
+
+    try:
+        parsed = urlparse(proxy_url)
+        host = parsed.hostname
+        port = parsed.port
+        if not host or not port:
+            return False
+
+        with socket.create_connection((host, port), timeout=0.5):
+            pass
+
+        os.environ["HTTP_PROXY"] = proxy_url
+        os.environ["HTTPS_PROXY"] = proxy_url
+        logger.info("Enabled local proxy for style preview upstream calls: %s", proxy_url)
+        return True
+    except Exception:
+        return False
+
+
 def _call_with_transient_retry(*, fn, description: str, max_attempts: int = 3):
     """Retry transient upstream model/network errors with exponential backoff."""
     attempts = max(1, int(max_attempts))
     last_error = None
+    auto_proxy_enabled = False
 
     for attempt in range(1, attempts + 1):
         try:
@@ -82,6 +115,8 @@ def _call_with_transient_retry(*, fn, description: str, max_attempts: int = 3):
         except Exception as exc:
             last_error = exc
             transient = _is_transient_image_network_error(exc)
+            if transient and not _has_proxy_env() and not auto_proxy_enabled:
+                auto_proxy_enabled = _enable_local_proxy_if_available()
             if transient and attempt < attempts:
                 sleep_s = min(2 ** (attempt - 1), 8)
                 logger.warning(
@@ -91,8 +126,14 @@ def _call_with_transient_retry(*, fn, description: str, max_attempts: int = 3):
                 time.sleep(sleep_s)
                 continue
             if transient:
+                if auto_proxy_enabled:
+                    hint = "已自动启用本地代理后仍失败，请检查代理可用性或上游服务状态。"
+                elif not _has_proxy_env():
+                    hint = "建议配置 HTTP_PROXY/HTTPS_PROXY（例如 http://127.0.0.1:7897）后重试。"
+                else:
+                    hint = "请检查当前代理和网络可用性。"
                 raise RuntimeError(
-                    "上游模型连接失败，请稍后重试。原始错误: %s" % str(exc)
+                    "上游模型连接失败，请稍后重试。%s 原始错误: %s" % (hint, str(exc))
                 ) from exc
             raise
 
