@@ -4281,15 +4281,15 @@ export const SlidePreview: React.FC = () => {
                       data-testid="preview-editor-pane"
                       className={`min-h-0 min-w-0 ${isMobileView ? 'overflow-visible' : 'overflow-y-auto overscroll-contain'}`}
                     >
-                      <div className="flex min-h-full flex-col px-3 pt-3 pb-3 md:px-4 md:pt-4 md:pb-4">
+                      <div className="flex min-h-full flex-col px-3 pt-3 pb-0 md:px-4 md:pt-4 md:pb-0">
                         <div className="shrink-0">
                           {editorCanvasContent}
                         </div>
                         <div className="mt-3 shrink-0">
                           {externalFieldTags}
                         </div>
-                        <div className="mt-2 min-h-0 flex-1 overflow-visible">
-                          <div className="min-h-full">
+                        <div className="mt-2 min-h-0 flex-1 overflow-visible flex flex-col justify-end">
+                          <div className="min-h-0">
                             <PageAiWorkbench
                               title={t('preview.pageAiTitle')}
                               subtitle={t('preview.pageAiSubtitle')}
