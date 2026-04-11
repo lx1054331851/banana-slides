@@ -146,8 +146,12 @@ def _build_image_request_snapshot(
     if edit_instruction is not None:
         sections.append(_format_multiline_section("用户修改指令", edit_instruction))
     if extra_requirements is not None:
-        title = "后端追加要求（已拼入 prompt）" if extra_requirements_in_prompt else "项目上下文附加要求（本次未直接拼入 prompt）"
-        sections.append(_format_multiline_section(title, extra_requirements))
+        if extra_requirements_in_prompt:
+            # 避免在历史快照里把同一段要求展示两次：
+            # 这段内容已经包含在下方“最终发送给 nano banana 的 prompt”中。
+            sections.append(_format_multiline_section("后端追加要求", "已拼入最终 prompt（为避免重复，此处不再展开）。"))
+        else:
+            sections.append(_format_multiline_section("项目上下文附加要求（本次未直接拼入 prompt）", extra_requirements))
 
     sections.append(_format_multiline_section("最终发送给 nano banana 的 prompt", prompt_text))
     return '\n\n'.join(sections)
