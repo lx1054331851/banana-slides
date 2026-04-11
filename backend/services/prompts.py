@@ -1261,7 +1261,7 @@ Focus on:
 
 Output a concise style description in Chinese that can be directly used as a style prompt for PPT generation. Write it as a single paragraph, not a list. Example:
 
-"采用深蓝色渐变背景，搭配白色和金色文字。整体风格简约商务，使用无衬线字体，标题加粗突出。页面装饰以几何线条和半透明色块为主，配色统一协调。内容区域留白充足，视觉层次分明。"
+"采用浅灰与钴蓝的高可读配色，标题使用深色粗体，正文以中灰文字呈现。整体风格简约商务，网格清晰、留白充足，局部以低饱和强调色点亮关键数据，视觉层次分明。"
 
 Only output the style description text, no other content.
 """
@@ -1371,6 +1371,9 @@ description_text:
 强约束：
 - recommendations 必须刚好 3 个。
 - 每个 style_json 必须是合法 JSON 对象，且结构必须与模板骨架完全一致（字段不能少，不能多，不能改名）。
+- 模板骨架中的“示例值/演示值”（如“示例”“example”“Tech_Performance_Dark”等）仅用于说明字段含义，禁止机械照抄；必须结合当前内容与风格要求重新生成字段值。
+- 禁止 3 组推荐出现同质化配色：在未被用户明确要求“统一暗色”时，至少 1 组为浅色或高亮背景，且至少 2 组在主色相与明度上显著不同。
+- 若 style_requirements 为空或含糊，不要默认落入“黑金/暗色科技发布会”风格，应优先生成“中性商务亮色 + 信息可读性优先”的方案作为其中一组。
 - sample_pages 必须包含 cover/toc/detail/ending 四个键，值为中文页面描述文本，且要能直接用于生成 PPT 页面。
 - 只输出 JSON。
 {get_language_instruction(language)}
