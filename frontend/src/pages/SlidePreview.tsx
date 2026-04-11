@@ -3064,8 +3064,27 @@ export const SlidePreview: React.FC = () => {
           <div className="mb-3 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
             {isPptRenovationProject ? t('preview.pageJson') : t('preview.pageDescription')}
           </div>
+          <MarkdownTextarea
+            ref={descriptionTextareaRef}
+            value={editDescription}
+            onChange={(value: string) => {
+              setEditDescription(value);
+              persistCurrentPageDraft({ description: value });
+            }}
+            onPaste={handleDescriptionPaste}
+            onFiles={handleDescriptionFiles}
+            onFocus={focusMainDescriptionField}
+            placeholder={isPptRenovationProject ? t('preview.enterPageJson') : t('preview.enterDescription')}
+            data-testid="preview-text-description-input"
+            rows={8}
+            maxHeight="100%"
+            showUploadButton={false}
+            showImagePreview={false}
+            slashActions={descriptionSlashActions}
+            className="min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent"
+          />
           {isPptRenovationProject && showJsonRefineDialog && (
-            <div className="mb-3 rounded-xl border border-[#ead6a2] bg-[linear-gradient(120deg,#fff9e8_0%,#fff3d6_54%,#ffefbf_100%)] p-2 shadow-[0_10px_20px_rgba(250,204,21,0.12)] transition-all duration-300 dark:border-[#4a3f2a] dark:bg-[linear-gradient(120deg,#1e1a12_0%,#2a2215_56%,#322816_100%)]">
+            <div className="mt-3 rounded-xl border border-[#ead6a2] bg-[linear-gradient(120deg,#fff9e8_0%,#fff3d6_54%,#ffefbf_100%)] p-2 shadow-[0_10px_20px_rgba(250,204,21,0.12)] transition-all duration-300 dark:border-[#4a3f2a] dark:bg-[linear-gradient(120deg,#1e1a12_0%,#2a2215_56%,#322816_100%)]">
               <div className="flex items-center gap-2">
                 <input
                   ref={jsonRefineInputRef}
@@ -3110,25 +3129,6 @@ export const SlidePreview: React.FC = () => {
               </div>
             </div>
           )}
-          <MarkdownTextarea
-            ref={descriptionTextareaRef}
-            value={editDescription}
-            onChange={(value: string) => {
-              setEditDescription(value);
-              persistCurrentPageDraft({ description: value });
-            }}
-            onPaste={handleDescriptionPaste}
-            onFiles={handleDescriptionFiles}
-            onFocus={focusMainDescriptionField}
-            placeholder={isPptRenovationProject ? t('preview.enterPageJson') : t('preview.enterDescription')}
-            data-testid="preview-text-description-input"
-            rows={8}
-            maxHeight="100%"
-            showUploadButton={false}
-            showImagePreview={false}
-            slashActions={descriptionSlashActions}
-            className="min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent"
-          />
           {isPptRenovationProject && (
             <div className="mt-3 flex justify-end">
               <Button
