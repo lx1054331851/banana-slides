@@ -62,6 +62,8 @@ _local_backup/
 !CLA.md 
 !CONTRIBUTING.md
 .venv
+*.egg-info/
+banana_slides.egg-info/
 
 # VS Code workspace settings
 .vscode/
