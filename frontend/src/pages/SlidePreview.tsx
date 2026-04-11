@@ -1797,18 +1797,31 @@ export const SlidePreview: React.FC = () => {
     // 先检查分辨率，如果是1K则显示警告
     await checkResolutionAndExecute(async () => {
       const isPartialGenerate = isMultiSelectMode && selectedPageIds.size > 0;
+      const isRenovationProject = currentProject?.creation_type === 'ppt_renovation';
 
       // 检查要生成的页面中是否有已有图片的
       const pagesToGenerate = isPartialGenerate
         ? currentProject?.pages.filter(p => p.id && selectedPageIds.has(p.id))
         : currentProject?.pages;
-      const generatedPages = pagesToGenerate?.filter((p) => !isPageGenerating(p) && (p.generated_image_path || p.preview_image_path)) || [];
+      const isRenovationOriginalFirstPage = (page: Page) => (
+        isRenovationProject && page.order_index === 0
+      );
+      const hasEffectiveGeneratedImage = (page: Page) => {
+        if (!isRenovationProject) {
+          return Boolean(page.generated_image_path || page.preview_image_path);
+        }
+        // PPT 翻新项目初始化时会带原始图，这里把原始第 1 页视为基线已存在。
+        // 其余页面只有在真正翻新完成后（COMPLETED）才算“已生成”。
+        return isRenovationOriginalFirstPage(page) || page.status === 'COMPLETED';
+      };
+
+      const generatedPages = pagesToGenerate?.filter((p) => !isPageGenerating(p) && hasEffectiveGeneratedImage(p)) || [];
       const generatingPages = pagesToGenerate?.filter((p) => isPageGenerating(p)) || [];
       const targetPageIds = (pagesToGenerate || [])
         .map(p => p.id)
         .filter((id): id is string => !!id);
       const missingPageIds = (pagesToGenerate || [])
-        .filter(p => !isPageGenerating(p) && !p.generated_image_path && !p.preview_image_path && p.id)
+        .filter(p => !isPageGenerating(p) && !hasEffectiveGeneratedImage(p) && p.id)
         .map(p => p.id!) || [];
       const totalCount = targetPageIds.length;
       const generatedCount = generatedPages.length;
