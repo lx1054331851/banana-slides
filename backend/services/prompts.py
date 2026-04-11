@@ -1285,6 +1285,94 @@ def get_ppt_page_content_extraction_prompt(markdown_text: str, language: str = N
     return prompt
 
 
+def get_ppt_page_content_extraction_from_image_prompt(page_outline: Optional[Dict] = None, language: str = None) -> str:
+    """从单页原始图片提取翻新页结构（outline + slide JSON）"""
+    page_outline = page_outline or {}
+    outline_title = page_outline.get('title') if isinstance(page_outline.get('title'), str) else ''
+    outline_points = page_outline.get('points') if isinstance(page_outline.get('points'), list) else []
+    outline_hint = "\n".join([f"- {str(p).strip()}" for p in outline_points if str(p).strip()])
+    if not outline_hint:
+        outline_hint = "- 无"
+
+    prompt = f"""\
+# Role
+你是一位麦肯锡/BCG风格的高级商业分析师兼PPT翻新架构师。你会直接阅读输入的“原始PPT页面图片”，并输出结构化单页 JSON。
+
+# Input
+你将收到 1 张页面原图（不是 OCR 文本）。请基于图中真实视觉与语义信息完成提取。
+
+以下是页面大纲提示（仅供辅助，不可覆盖图片事实）：
+- 参考标题：{outline_title or '无'}
+- 参考要点：
+{outline_hint}
+
+# Core Objective
+1. 不依赖 OCR 文本，完全以图片内容为主进行语义理解。
+2. 输出单页结构化 JSON（`outline` + `slide`），用于直接渲染和编辑。
+3. 标题必须是动作主张句（结论先行）。
+4. 每页必须输出 `layout_suggestion` 与 `visual_suggestion`。
+
+# Type Decision
+可选 `type` 仅允许：
+- cover
+- catalog
+- section_header
+- detail_chart
+- detail_text_split
+- closing
+
+根据页面内容自动判断类型；无法判断时使用 `detail_text_split` 兜底。
+
+# Layout Strategy
+`layout_suggestion` 仅允许以下枚举：
+- `split_comparison`
+- `multi_column_logic`
+- `dashboard_style`
+- `pyramid_hierarchy`
+
+# Visual Metaphor
+`visual_suggestion` 必须描述主体、隐喻意图、风格氛围、视觉重点，不能只写名词。
+
+# Output Schema（严格遵守）
+返回一个 JSON 对象，且只能有两个顶层键：`outline` 和 `slide`。
+
+```json
+{{
+  "outline": {{
+    "title": "动作标题（可作为侧边栏页名）",
+    "points": ["要点1", "要点2", "要点3"]
+  }},
+  "slide": {{
+    "source_ref": "原始页信息（如 第6页）",
+    "type": "detail_text_split",
+    "title": "动作标题",
+    "layout_suggestion": "multi_column_logic",
+    "content": {{
+      "headline_summary": "20字内核心论点",
+      "detailed_items": [
+        {{
+          "sub_title": "分论点标题",
+          "body": "业务动作 + 证据/数据 + 结果",
+          "highlight_phrases": ["关键短语1", "关键短语2"]
+        }}
+      ]
+    }},
+    "visual_suggestion": "使用具象视觉隐喻解释抽象概念，包含主体、意境与风格",
+    "note": "来源与假设说明"
+  }}
+}}
+```
+
+# Hard Constraints
+- 只返回 JSON，不要 Markdown 代码块，不要解释文字。
+- 不得输出多余顶层字段。
+- 以图片信息为准；大纲提示仅作弱约束。
+{get_language_instruction(language)}
+"""
+    logger.debug(f"[get_ppt_page_content_extraction_from_image_prompt] Final prompt:\n{prompt}")
+    return prompt
+
+
 def get_layout_caption_prompt() -> str:
     """描述 PPT 页面的排版布局（给 caption model 用）"""
     prompt = """\

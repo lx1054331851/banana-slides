@@ -244,6 +244,25 @@ def get_renovation_page_sources(project_dir: Path) -> list[str]:
     return split_pdf_to_pages(str(source_pdf), str(split_dir))
 
 
+def get_renovation_original_page_images(project_dir: Path) -> list[str]:
+    """Return original per-page images rendered during renovation project creation."""
+    pages_dir = project_dir / "pages"
+    if not pages_dir.exists():
+        return []
+
+    original_images = sorted(
+        (
+            path for path in pages_dir.iterdir()
+            if path.is_file()
+            and path.suffix.lower() in {'.png', '.jpg', '.jpeg', '.webp'}
+            and path.stem.startswith("page_")
+            and path.stem.endswith("_original")
+        ),
+        key=_original_page_image_sort_key,
+    )
+    return [str(path) for path in original_images]
+
+
 def _generation_logs_enabled() -> bool:
     try:
         from flask import current_app, has_app_context
@@ -456,6 +475,36 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                 }
                 for page in pages
             ]
+
+            is_renovation = (project_context.creation_type == 'ppt_renovation')
+            page_source_image_by_id: Dict[str, str] = {}
+            if is_renovation:
+                try:
+                    from services import FileService
+                    file_service = FileService(app.config['UPLOAD_FOLDER'])
+                    project_dir = Path(app.config['UPLOAD_FOLDER']) / project_id
+                    original_images = get_renovation_original_page_images(project_dir)
+                    original_by_order = {i: img for i, img in enumerate(original_images)}
+
+                    for page in pages:
+                        image_path = original_by_order.get(page.order_index)
+                        if not image_path:
+                            rel = page.generated_image_path or page.cached_image_path
+                            if rel:
+                                try:
+                                    image_path = file_service.get_absolute_path(rel)
+                                except Exception:
+                                    image_path = None
+                        if image_path and Path(image_path).exists():
+                            page_source_image_by_id[page.id] = image_path
+
+                    logger.info(
+                        "Renovation description generation uses raw page images: mapped=%s/%s",
+                        len(page_source_image_by_id),
+                        len(pages),
+                    )
+                except Exception:
+                    logger.warning("Failed to prepare renovation page source images", exc_info=True)
             
             # Mark all pages as GENERATING_DESCRIPTION before starting
             for page in pages:
@@ -492,17 +541,24 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                         # Get singleton AI service instance
                         from services.ai_service_manager import get_ai_service
                         ai_service = get_ai_service()
-                        
-                        desc_result = ai_service.generate_page_description(
-                            project_context, outline, page_outline, page_index,
-                            language=language,
-                            detail_level=detail_level
-                        )
 
-                        if project_context.creation_type == 'ppt_renovation':
-                            desc_result['text'] = ai_service.normalize_renovation_description_text(
-                                desc_result.get('text', ''),
+                        if is_renovation:
+                            source_image = page_source_image_by_id.get(page_id)
+                            if not source_image:
+                                raise ValueError(f"No original page image found for renovation page {page_id}")
+                            extracted = ai_service.extract_page_content_from_image(
+                                source_image,
+                                language=language,
                                 page_outline=page_outline,
+                            )
+                            desc_result = {
+                                'text': extracted.get('description', ''),
+                            }
+                        else:
+                            desc_result = ai_service.generate_page_description(
+                                project_context, outline, page_outline, page_index,
+                                language=language,
+                                detail_level=detail_level
                             )
 
                         # generate_page_description returns dict with text + optional extra_fields

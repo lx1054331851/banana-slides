@@ -427,20 +427,36 @@ def generate_page_description(project_id, page_id):
         page_data = outline_content.copy()
         if page.part:
             page_data['part'] = page.part
-        
-        desc_result = ai_service.generate_page_description(
-            project_context,
-            outline,
-            page_data,
-            page.order_index + 1,
-            language=language,
-            detail_level=detail_level
-        )
 
         if project.creation_type == 'ppt_renovation':
-            desc_result['text'] = ai_service.normalize_renovation_description_text(
-                desc_result.get('text', ''),
+            project_dir = Path(current_app.config['UPLOAD_FOLDER']) / project_id
+            source_image = None
+            for ext in ('png', 'jpg', 'jpeg', 'webp'):
+                candidate = project_dir / 'pages' / f"page_{page.order_index + 1}_original.{ext}"
+                if candidate.exists():
+                    source_image = str(candidate)
+                    break
+            if not source_image:
+                rel = page.generated_image_path or page.cached_image_path
+                if rel:
+                    source_image = file_service.get_absolute_path(rel)
+            if not source_image:
+                return bad_request("No source image found for renovation page")
+
+            extracted = ai_service.extract_page_content_from_image(
+                source_image,
+                language=language,
                 page_outline=page_data,
+            )
+            desc_result = {'text': extracted.get('description', '')}
+        else:
+            desc_result = ai_service.generate_page_description(
+                project_context,
+                outline,
+                page_data,
+                page.order_index + 1,
+                language=language,
+                detail_level=detail_level
             )
 
         # Save description (generate_page_description returns dict with text + optional extra_fields)

@@ -34,7 +34,8 @@ from services.task_manager import (
     task_manager,
     generate_descriptions_task,
     generate_images_task,
-    process_ppt_renovation_task
+    process_ppt_renovation_task,
+    get_renovation_original_page_images,
 )
 from services.style_preview_service import (
     generate_style_recommendations_and_previews_task,
@@ -1249,43 +1250,75 @@ def generate_descriptions_stream(project_id):
                 db.session.commit()
 
                 # Stream descriptions
-                for result in ai_service.generate_descriptions_stream(
-                    project_context, outline, flat_pages,
-                    language=language, detail_level=detail_level
-                ):
-                    if '__stream_complete__' in result:
-                        continue
+                if proj.creation_type == 'ppt_renovation':
+                    project_dir = Path(current_app.config['UPLOAD_FOLDER']) / project_id
+                    original_images = get_renovation_original_page_images(project_dir)
+                    original_by_order = {i: p for i, p in enumerate(original_images)}
+                    file_service = FileService(current_app.config['UPLOAD_FOLDER'])
 
-                    idx = result.get('page_index', -1)
-                    if idx < 0 or idx >= len(pages):
-                        continue
-
-                    page = pages[idx]
-                    desc_text = result.get('description_text', '')
-                    if proj.creation_type == 'ppt_renovation':
+                    for idx, page in enumerate(pages):
                         page_outline = flat_pages[idx] if idx < len(flat_pages) else {}
-                        desc_text = ai_service.normalize_renovation_description_text(
-                            desc_text,
+                        source_image = original_by_order.get(page.order_index)
+                        if not source_image:
+                            rel = page.generated_image_path or page.cached_image_path
+                            if rel:
+                                source_image = file_service.get_absolute_path(rel)
+                        if not source_image:
+                            raise ValueError(f"No source image found for renovation page {page.id}")
+
+                        extracted = ai_service.extract_page_content_from_image(
+                            source_image,
+                            language=language,
                             page_outline=page_outline,
                         )
-                    desc_content = {
-                        'text': desc_text,
-                        'generated_at': datetime.utcnow().isoformat(),
-                    }
-                    if result.get('extra_fields'):
-                        desc_content['extra_fields'] = result['extra_fields']
+                        desc_content = {
+                            'text': extracted.get('description', ''),
+                            'generated_at': datetime.utcnow().isoformat(),
+                        }
 
-                    page.set_description_content(desc_content)
-                    page.status = 'DESCRIPTION_GENERATED'
-                    page.updated_at = datetime.utcnow()
-                    db.session.commit()
+                        page.set_description_content(desc_content)
+                        page.status = 'DESCRIPTION_GENERATED'
+                        page.updated_at = datetime.utcnow()
+                        db.session.commit()
 
-                    yield _sse_event('description', {
-                        'page_index': idx,
-                        'page_id': page.id,
-                        'text': desc_content['text'],
-                        'extra_fields': result.get('extra_fields'),
-                    })
+                        yield _sse_event('description', {
+                            'page_index': idx,
+                            'page_id': page.id,
+                            'text': desc_content['text'],
+                            'extra_fields': None,
+                        })
+                else:
+                    for result in ai_service.generate_descriptions_stream(
+                        project_context, outline, flat_pages,
+                        language=language, detail_level=detail_level
+                    ):
+                        if '__stream_complete__' in result:
+                            continue
+
+                        idx = result.get('page_index', -1)
+                        if idx < 0 or idx >= len(pages):
+                            continue
+
+                        page = pages[idx]
+                        desc_text = result.get('description_text', '')
+                        desc_content = {
+                            'text': desc_text,
+                            'generated_at': datetime.utcnow().isoformat(),
+                        }
+                        if result.get('extra_fields'):
+                            desc_content['extra_fields'] = result['extra_fields']
+
+                        page.set_description_content(desc_content)
+                        page.status = 'DESCRIPTION_GENERATED'
+                        page.updated_at = datetime.utcnow()
+                        db.session.commit()
+
+                        yield _sse_event('description', {
+                            'page_index': idx,
+                            'page_id': page.id,
+                            'text': desc_content['text'],
+                            'extra_fields': result.get('extra_fields'),
+                        })
 
                 # 检查是否所有页面都已生成描述
                 missing = [p for p in pages if p.status == 'GENERATING_DESCRIPTION']

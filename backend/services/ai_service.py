@@ -25,6 +25,7 @@ from .prompts import (
     get_descriptions_refinement_prompt,
     get_cover_ending_fields_detect_prompt,
     get_ppt_page_content_extraction_prompt,
+    get_ppt_page_content_extraction_from_image_prompt,
     get_layout_caption_prompt,
     get_style_extraction_prompt,
     get_outline_generation_prompt_markdown,
@@ -1478,20 +1479,8 @@ class AIService:
             expected_count=len(current_descriptions or []),
         )
 
-    def extract_page_content(self, markdown_text: str, language: str = 'zh') -> Dict:
-        """
-        从 fileparser 解析出的 markdown 文本中提取页面结构化内容
-
-        Args:
-            markdown_text: 单页 PDF 解析出的 markdown 文本
-            language: 输出语言
-
-        Returns:
-            Dict with keys: title, points, description, slide(optional)
-        """
-        prompt = get_ppt_page_content_extraction_prompt(markdown_text, language=language)
-        result = self.generate_json(prompt, thinking_budget=1000)
-
+    def _normalize_extracted_page_content_result(self, result: Dict) -> Dict:
+        """Normalize extraction result into {title, points, description(JSON string), slide}."""
         if not isinstance(result, dict):
             raise ValueError(f"Expected dict, got {type(result)}")
 
@@ -1611,6 +1600,41 @@ class AIService:
             'description': json.dumps(parsed_slide, ensure_ascii=False, indent=2),
             'slide': parsed_slide,
         }
+
+    def extract_page_content(self, markdown_text: str, language: str = 'zh') -> Dict:
+        """
+        从 fileparser 解析出的 markdown 文本中提取页面结构化内容
+
+        Args:
+            markdown_text: 单页 PDF 解析出的 markdown 文本
+            language: 输出语言
+
+        Returns:
+            Dict with keys: title, points, description, slide(optional)
+        """
+        prompt = get_ppt_page_content_extraction_prompt(markdown_text, language=language)
+        result = self.generate_json(prompt, thinking_budget=1000)
+        return self._normalize_extracted_page_content_result(result)
+
+    def extract_page_content_from_image(self, image_path: str, language: str = 'zh',
+                                        page_outline: Optional[Dict] = None) -> Dict:
+        """
+        直接从单页原始图片中提取页面结构化内容（绕过 OCR 文本）。
+
+        Args:
+            image_path: 页面原图路径
+            language: 输出语言
+            page_outline: 当前页大纲（可选，仅作弱约束）
+
+        Returns:
+            Dict with keys: title, points, description, slide(optional)
+        """
+        prompt = get_ppt_page_content_extraction_from_image_prompt(
+            page_outline=page_outline or {},
+            language=language
+        )
+        result = self.generate_json_with_image(prompt, image_path=image_path, thinking_budget=1000)
+        return self._normalize_extracted_page_content_result(result)
 
     def _generate_text_from_image(self, prompt: str, image_path: str) -> str:
         """Helper to generate text from a prompt and an image, using caption_provider."""
