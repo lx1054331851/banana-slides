@@ -1442,10 +1442,60 @@ class AIService:
         if not title and points:
             title = points[0]
 
+        # Try parsing legacy description as JSON slide first.
+        parsed_slide = None
+        if description:
+            try:
+                maybe_obj = json.loads(description)
+                if isinstance(maybe_obj, dict) and maybe_obj.get('type') and isinstance(maybe_obj.get('content'), dict):
+                    parsed_slide = maybe_obj
+            except Exception:
+                parsed_slide = None
+
+        # Hard fallback: always normalize to slide JSON so renovation UI can directly display JSON.
+        if parsed_slide is None:
+            detail_items = []
+            if points:
+                detail_items = [
+                    {
+                        "sub_title": f"要点{i + 1}",
+                        "body": p,
+                        "highlight_phrases": [],
+                    }
+                    for i, p in enumerate(points[:6])
+                ]
+            elif description:
+                detail_items = [{
+                    "sub_title": "核心说明",
+                    "body": description,
+                    "highlight_phrases": [],
+                }]
+
+            headline_summary = points[0] if points else (title or "核心结论待补充")
+            parsed_slide = {
+                "source_ref": "",
+                "type": "detail_text_split",
+                "title": title or "未命名页面",
+                "layout_suggestion": "multi_column_logic",
+                "content": {
+                    "headline_summary": headline_summary,
+                    "detailed_items": detail_items if detail_items else [{
+                        "sub_title": "核心观点",
+                        "body": headline_summary,
+                        "highlight_phrases": [],
+                    }],
+                },
+                "visual_suggestion": "",
+                "note": "legacy_extraction_fallback",
+            }
+
+        normalized_title = self._normalize_text(parsed_slide.get('title')) or title or "未命名页面"
+        normalized_points = points or self._extract_slide_points(parsed_slide) or [normalized_title]
         return {
-            'title': title,
-            'points': points,
-            'description': description,
+            'title': normalized_title,
+            'points': normalized_points,
+            'description': json.dumps(parsed_slide, ensure_ascii=False, indent=2),
+            'slide': parsed_slide,
         }
 
     def _generate_text_from_image(self, prompt: str, image_path: str) -> str:
