@@ -68,6 +68,10 @@ const previewI18n = {
       regionSelect: "区域选图", endRegionSelect: "结束区域选图",
       pageOutline: "页面大纲（可编辑）", pageDescription: "页面描述（可编辑）",
       pageJson: "页面 JSON（可编辑）",
+      refineJson: "AI 优化 JSON",
+      refineJsonTooltip: "优化当前页 JSON",
+      refineJsonDialogTitle: "AI 优化当前页 JSON",
+      refineJsonPlaceholder: "例如：保持原有结构，精简文案，突出结论，并增强可视化表达",
       refineDescription: "AI 优化", refineDescriptionTooltip: "AI 优化当前页描述",
       refinePlaceholder: "例如：让描述更具体，突出核心结论，改成更适合商务汇报的语气... · Enter 提交，Shift+Enter 换行",
       refineApplied: "AI 优化已应用到当前描述草稿", refineFailed: "页面描述优化失败，请稍后重试",
@@ -216,6 +220,10 @@ const previewI18n = {
       regionSelect: "Region Select", endRegionSelect: "End Region Select",
       pageOutline: "Page Outline (Editable)", pageDescription: "Page Description (Editable)",
       pageJson: "Page JSON (Editable)",
+      refineJson: "AI Refine JSON",
+      refineJsonTooltip: "Refine current page JSON",
+      refineJsonDialogTitle: "AI Refine Current Page JSON",
+      refineJsonPlaceholder: "e.g., Keep the schema, tighten wording, highlight conclusions, and improve visual clarity",
       refineDescription: "AI Refine", refineDescriptionTooltip: "Refine current page description with AI",
       refinePlaceholder: "e.g., Make the description more specific, highlight the key conclusion, and use a business presentation tone... · Enter to submit, Shift+Enter for newline",
       refineApplied: "AI refinement applied to the current draft", refineFailed: "Failed to refine page description",
@@ -376,6 +384,7 @@ import {
   exportEditablePPTX as apiExportEditablePPTX,
   getSettings,
   refineDescriptions,
+  refineSinglePageDescription,
   addPage,
   getTaskStatus,
   updateSettings,
@@ -1060,6 +1069,10 @@ export const SlidePreview: React.FC = () => {
   const [pending1KAction, setPending1KAction] = useState<(() => Promise<void>) | null>(null);
   const [showBatchDescriptionGenerateDialog, setShowBatchDescriptionGenerateDialog] = useState(false);
   const [showBatchGenerateDialog, setShowBatchGenerateDialog] = useState(false);
+  const [showJsonRefineDialog, setShowJsonRefineDialog] = useState(false);
+  const [jsonRefineRequirement, setJsonRefineRequirement] = useState('');
+  const [jsonRefineHistory, setJsonRefineHistory] = useState<string[]>([]);
+  const [isJsonRefining, setIsJsonRefining] = useState(false);
   const [batchGenerateContext, setBatchGenerateContext] = useState<{
     total: number;
     generated: number;
@@ -2872,6 +2885,40 @@ export const SlidePreview: React.FC = () => {
   }
 
   const selectedPage = currentProject.pages[selectedIndex];
+  const handleSubmitJsonRefine = async () => {
+    if (!projectId || !selectedPage?.id) return;
+    const requirement = jsonRefineRequirement.trim();
+    if (!requirement || isJsonRefining) return;
+
+    try {
+      setIsJsonRefining(true);
+      const response = await refineSinglePageDescription(
+        projectId,
+        selectedPage.id,
+        requirement,
+        editDescription,
+        selectedPage.outline_content,
+        jsonRefineHistory,
+      );
+      const refinedText = response.data?.refined_description || '';
+      const nextText = formatJsonForEditor(refinedText, 4);
+      setEditDescription(nextText);
+      persistCurrentPageDraft({ description: nextText });
+      setJsonRefineHistory((prev) => [...prev, requirement]);
+      setJsonRefineRequirement('');
+      setShowJsonRefineDialog(false);
+      show({ message: t('preview.refineApplied'), type: 'success' });
+    } catch (error: any) {
+      const errorMessage =
+        error?.response?.data?.error?.message ||
+        error?.message ||
+        t('preview.refineFailed');
+      show({ message: errorMessage, type: 'error' });
+    } finally {
+      setIsJsonRefining(false);
+    }
+  };
+
   const imageUrl = (selectedPage?.generated_image_path || selectedPage?.preview_image_path)
     ? getImageUrl(selectedPage.generated_image_path || selectedPage.preview_image_path, selectedPage.updated_at)
     : '';
@@ -3002,8 +3049,23 @@ export const SlidePreview: React.FC = () => {
         )}
 
         <div className="min-h-0 overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 flex flex-col dark:border-[#2d3447] dark:bg-[#151a26]">
-          <div className="mb-3 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
-            {isPptRenovationProject ? t('preview.pageJson') : t('preview.pageDescription')}
+          <div className="mb-3 shrink-0 flex items-center justify-between gap-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
+              {isPptRenovationProject ? t('preview.pageJson') : t('preview.pageDescription')}
+            </div>
+            {isPptRenovationProject && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon={<Sparkles size={14} />}
+                title={t('preview.refineJsonTooltip')}
+                onClick={() => setShowJsonRefineDialog(true)}
+                className="h-7 rounded-lg border border-[#e6dab8] bg-[#fbf7eb] px-2 text-xs font-medium text-[#7c6740] hover:bg-[#f7edd2] dark:border-[#3f4962] dark:bg-[#1a2232] dark:text-[#c4d2f3] dark:hover:bg-[#222d44]"
+              >
+                {t('preview.refineJson')}
+              </Button>
+            )}
           </div>
           <MarkdownTextarea
             ref={descriptionTextareaRef}
@@ -4752,6 +4814,51 @@ export const SlidePreview: React.FC = () => {
               }}
             >
               {t('common.cancel')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showJsonRefineDialog}
+        onClose={() => {
+          if (isJsonRefining) return;
+          setShowJsonRefineDialog(false);
+        }}
+        title={t('preview.refineJsonDialogTitle')}
+        size="md"
+      >
+        <div className="space-y-4">
+          <textarea
+            value={jsonRefineRequirement}
+            onChange={(event) => setJsonRefineRequirement(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.nativeEvent as KeyboardEvent).isComposing) return;
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                void handleSubmitJsonRefine();
+              }
+            }}
+            placeholder={t('preview.refineJsonPlaceholder')}
+            rows={4}
+            disabled={isJsonRefining}
+            className="w-full resize-none rounded-xl border border-[#e3d8b7] bg-[#fffaf0] px-4 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-[#b8ae96] focus:border-banana-400/80 focus:ring-2 focus:ring-banana-400/15 dark:border-[#343c52] dark:bg-[#0f1420] dark:text-[#e2e8f0] dark:placeholder:text-[#66708c]"
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setShowJsonRefineDialog(false)}
+              disabled={isJsonRefining}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              loading={isJsonRefining}
+              disabled={!jsonRefineRequirement.trim()}
+              onClick={() => void handleSubmitJsonRefine()}
+            >
+              {t('preview.refineJson')}
             </Button>
           </div>
         </div>
