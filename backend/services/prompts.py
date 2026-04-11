@@ -874,133 +874,133 @@ def get_long_report_split_prompt(report_text: str,
 # ⚡️ MCK-Style Deconstruction Rules (咨询级拆解法则 - 必须严格遵守)
 
 ## 1. 标题逻辑：从“标签”转向“主张”
-- **禁止使用**：`3.2 市场规模分析`、`4.1 核心竞争对手` 等标签式标题。
-- **强制使用**：`3.2 全球固态电池市场预计在2026年进入爆发期`、`4.1 头部玩家通过全产业链布局构建高壁垒` 等动作标题。
+- **禁止使用**：标签式标题（如“3.2 市场规模分析”）。
+- **强制使用**：动作标题（如“3.2 全球固态电池市场预计在2026年进入爆发期”）。
 - **逻辑测试**：只读标题，观众应能理解整份报告的核心叙事。
 
 ## 2. 严控过渡页泛滥与强制模块化 (Strict Structure)
-- **切勿机械生成过渡页**：如果原报告有8个章节，绝对不要生成8张过渡页。
-- **模块化聚合**：将报告在逻辑上整合为 3-4 个核心大模块（Part），**只在这些大模块切换时使用 `section_header` 过渡页**（全篇控制在 3-5 张内）。遇到原文小章节请直接生成详情页进入正题。
-- **强制首尾结构**：必须在封面后紧接一页 `catalog`（目录），且全篇最后一页必须是 `closing`（结尾愿景页）。
+- **模块化聚合**：将报告在逻辑上整合为 3-4 个核心大模块（Part），只在这些大模块切换时使用 `section_header`（全篇 3-5 张内）。
+- **强制首尾结构**：必须有封面 `cover`、目录 `catalog`、以及包含愿景的结尾页 `closing`。
 
 ## 3. “So What?” 深度挖掘与图表数据化 (Insight & Chart Logic)
-- **洞察提取**：在提取信息时必须自问“这个数据说明了什么？”将“事实描述”转化为“洞察结论”，填入 `headline_summary` 或 `key_takeaway` 字段。
-- **图表识别与结构化**：若原文包含趋势、对比、占比数据，优先使用 `detail_chart` 类型。在 `chart_data` 字段中，严格输出 `labels` 和 `datasets` 结构，保留长尾数据以支撑对比逻辑（MECE原则）。
+- **洞察提取**：必须自问“这个数据说明了什么？”，将“事实描述”转化为“洞察结论”，写入 `headline_summary` 或 `key_takeaway`。
+- **图表结构化**：若有趋势/对比/占比数据，优先使用 `detail_chart`，并输出标准 `chart_data.labels + datasets`。
 
 ## 4. 文本纯净度与专业词汇保护 (Cleanliness & Entities)
-- **彻底去除引用标记**：在填入 JSON 的视觉展示字段（如 title, body, detail）时，**必须彻底删除**类似 ``, `[1]`, `(作者, 年份)` 等学术标记，确保画面纯净高级。重要的数据来源请单独放入 `note` 字段。
-- **实体不丢失**：所有技术术语、法律条款、特定品牌名（如“ICCA法案”、“8000Kicks”）必须 1:1 还原，不得模糊处理。
+- **彻底去除引用标记**：删除 ``, `[1]`, `(作者, 年份)` 等标记；来源信息写入 `note`。
+- **专业名词保护**：技术术语、法律条款、品牌名必须 1:1 还原。
 
 ## 5. 视觉层级与高亮映射 (Visual Hierarchy)
-- **Highlight Phrases**：在纯文字或图表分析页中，提取最核心的**数据（如 36.5%）、剧烈动词或核心名词**填入 `highlight_phrases` 数组，前端将据此进行特殊颜色/加粗/放大渲染。
-- **逻辑分块**：列表内容应保持逻辑平行，避免长段落。
+- **Highlight Phrases**：提取关键数字、核心动词、关键名词写入 `highlight_phrases` 数组。
+- **逻辑分块**：列表保持逻辑平行，避免长段落。
 
-## 6. 交互限制 (No Follow-up Questions)
-- 你已经拿到了完整报告正文，**禁止**向用户追问“请粘贴正文/请补充信息/请上传文件”等请求。
-- 必须基于输入内容一次性完成输出；若个别信息缺失，请使用审慎默认值并继续生成。
+## 6. 文案语态：专业务实，拒绝空泛 (Pragmatic & Professional Tone)
+- 用商业短句表达，拒绝空洞术语；每条内容要有明确动作、数据或案例支撑。
+
+## 7. 布局策略：逻辑与视觉对齐 (Layout Strategy)
+- 每一页必须输出 `layout_suggestion`，按内容逻辑选择：
+  - `split_comparison`: 左右对比（竞品、优劣势、前后变化）
+  - `multi_column_logic`: 三/四栏并列（策略拆解、路径分工）
+  - `dashboard_style`: 数据看板（左结论右数据图）
+  - `pyramid_hierarchy`: 金字塔/层级结构（机制、架构、能力分层）
+
+## 8. 视觉隐喻：以形传神 (Visual Metaphor & Imagery)
+- 按需给出 `visual_suggestion`，用于解释抽象概念或增强情感共鸣。
+- 禁止平铺直叙的配图建议，优先使用“视觉隐喻”（例如锁、迷雾晶体、桥梁、罗盘等意象）。
+- `visual_suggestion` 要描述主体、意境、风格与画面重点，不要只写名词。
+
+## 9. 页面类型选择策略 (Type Selection)
+- 可选类型只允许：`cover`、`catalog`、`section_header`、`detail_chart`、`detail_text_split`、`closing`。
+- **不要固定默认类型**。应根据每页内容自动判断并返回最合适的 `type`。
+- 若信息不足无法判断时，才使用 `detail_text_split` 作为兜底类型。
+
+## 10. 交互限制 (No Follow-up Questions)
+- 禁止向用户追问“请补充文本/上传文件”等问题，必须一次性完成输出。
 
 以下是需要拆解的报告原文：
 <<<REPORT_TEXT>>>
 
 # Output Format (JSON Structure)
-
-请严格按照以下 JSON 结构输出，不可随意更改 Key 名：
+请严格按以下结构输出，不可随意更改 key 名：
 
 ```json
 {
   "meta": {
     "report_title": "报告主标题",
-    "consulting_logic": "叙事主线描述（用一两句话概括全篇的逻辑推演路径，相当于电梯演讲）",
+    "consulting_logic": "叙事主线描述（电梯演讲）",
     "total_pages_estimate": "25-35",
-    "primary_color_theme": "Consulting Blue / Professional Gray"
+    "primary_color_theme": "Consulting Blue"
   },
   "slides": [
     {
       "id": 1,
       "type": "cover",
       "title": "封面",
+      "layout_suggestion": "dashboard_style",
       "content": {
-        "headline": "主标题：一个有力、宏观的主张",
+        "headline": "主标题：有力、宏观的主张",
         "sub_headline": "副标题：研究范围与核心视角",
         "presenter_info": "汇报人 | 机构 | 日期"
-      }
+      },
+      "visual_suggestion": "场景化、高质感的背景图描述"
     },
     {
       "id": 2,
       "type": "catalog",
       "title": "目录 / AGENDA",
+      "layout_suggestion": "multi_column_logic",
       "content": {
         "sections": [
           "Part 1: [结论导向的大模块1]",
           "Part 2: [结论导向的大模块2]",
           "Part 3: [结论导向的大模块3]"
         ]
-      },
-      "note": "开场向观众展示今天的核心议题"
-    },
-    {
-      "id": 3,
-      "type": "section_header",
-      "title": "Part 1: [结论导向的大模块1]",
-      "content": {
-        "part_number": "ONE",
-        "headline_summary": "该章节要解决的核心问题或核心结论"
       }
     },
     {
       "id": "N",
       "source_ref": "对应原文章节号",
-      "type": "detail_chart",
-      "title": "【动作标题】2026年全球市场规模将达XXX亿美元，增速领跑全行业",
-      "content": {
-        "chart_type": "bar / line / pie / waterfall",
-        "chart_data": {
-          "labels": ["2023", "2024E", "2025E", "2026E"],
-          "datasets": [
-            {
-              "label": "市场规模(亿美元)",
-              "data": [100, 150, 220, 350]
-            }
-          ]
-        },
-        "key_takeaway": "【洞察】图表说明了什么：年复合增长率(CAGR)高达35%",
-        "highlight_phrases": ["350亿美元", "35%"]
-      },
-      "note": "溯源信息：数据来自XX行业报告，预测基于XX假设。"
-    },
-    {
-      "id": "N+1",
-      "source_ref": "对应原文章节号",
       "type": "detail_text_split",
-      "title": "【动作标题】通过‘三位一体’战略，XXX品牌成功实现全渠道覆盖",
+      "title": "【动作标题】通过‘去污名化’三步走策略，品牌可有效降低用户心理门槛",
+      "layout_suggestion": "multi_column_logic",
       "content": {
-        "headline_summary": "本页的核心论点概述（控制在20字内，供前端做放大展示）",
+        "headline_summary": "核心逻辑概述：语言重构是第一步，物理感官修正是个中关键。",
         "detailed_items": [
           {
-            "sub_title": "策略1：线上数字化转型",
-            "body": "详细描述，包含原文特定品牌名和关键动作。注意彻底删除等引用标记。",
-            "highlight_phrases": ["数字化转型", "增长20%"]
+            "sub_title": "策略1：语义重构",
+            "body": "使用‘韧皮纤维’替代‘大麻’，利用亚麻的正向认知进行对冲。",
+            "highlight_phrases": ["语义重构", "对冲"]
           }
         ]
       },
-      "note": "转场语或演讲者备注..."
+      "visual_suggestion": "一张展示词汇转换的对比图，背景是低透明度显微镜纤维结构，传递专业与科学感。",
+      "note": "备注..."
     },
     {
       "id": "LAST",
       "type": "closing",
       "title": "总结与展望",
+      "layout_suggestion": "pyramid_hierarchy",
       "content": {
-        "final_conclusion": "【一句话高度概括全篇核心价值或主要结论】",
-        "vision": "【基于报告内容的未来愿景或战略建议】",
-        "slogan": "【精炼、有煽动力的口号，如：重塑认知，引领未来】",
-        "qa_text": "Q&A | 感谢聆听",
-        "contact_info": "your.email@example.com"
+        "final_conclusion": "总结文字",
+        "vision": "愿景描述",
+        "slogan": "重塑认知，引领未来",
+        "qa_text": "Q&A",
+        "contact_info": "email@example.com"
       },
-      "note": "演讲者结语，升华主题，号召行动(CTA)"
+      "visual_suggestion": "意境深远的自然与科技融合远景图，体现未来感"
     }
   ]
 }
 ```
+
+Task:
+- 必须包含目录页和结尾愿景页。
+- 必须清除引用标记。
+- 每一页都必须给出具体 `layout_suggestion`。
+- 在逻辑关键页给出具象化且有意境的 `visual_suggestion`。
+- 文案务实，杜绝空洞词，标题必须是动作主张句。
+- 只返回 JSON，不要额外解释。
 """)
     prompt = prompt.replace("<<<REPORT_TEXT>>>", report_text)
     final_prompt = files_xml + prompt
@@ -1197,6 +1197,7 @@ def get_ppt_page_content_extraction_prompt(markdown_text: str, language: str = N
 2. 标题必须是“有结论的动作句”，不能是标签式名词。
 3. 如果原文有趋势/对比/占比数据，优先输出 `detail_chart`，并补全 `labels + datasets`。
 4. 如果原文主要是观点和论据，使用 `detail_text_split`，并给出分块论据。
+5. 每页都必须给出 `layout_suggestion`，并在关键逻辑页提供具象化 `visual_suggestion`。
 
 # MCK-Style Rules（翻新版）
 1. 结论先行：标题要回答 “So what?”，让管理层一眼看懂本页结论。
@@ -1214,7 +1215,22 @@ def get_ppt_page_content_extraction_prompt(markdown_text: str, language: str = N
 - detail_text_split
 - closing
 
-若无法明确判断，默认使用 `detail_text_split`。
+不要固定默认类型，应根据页面内容自动判断后返回最合适的 `type`。
+若无法明确判断，才使用 `detail_text_split` 兜底。
+
+# Layout Strategy
+`layout_suggestion` 仅允许以下枚举：
+- `split_comparison`
+- `multi_column_logic`
+- `dashboard_style`
+- `pyramid_hierarchy`
+
+# Visual Metaphor
+`visual_suggestion` 不是简单名词，必须描述：
+- 画面主体
+- 隐喻意图
+- 风格氛围
+- 视觉重点
 
 # Output Schema（严格遵守）
 返回一个 JSON 对象，且只能有两个顶层键：`outline` 和 `slide`。
@@ -1229,6 +1245,7 @@ def get_ppt_page_content_extraction_prompt(markdown_text: str, language: str = N
     "source_ref": "原始页信息（如 第6页）",
     "type": "detail_text_split",
     "title": "动作标题",
+    "layout_suggestion": "multi_column_logic",
     "content": {{
       "headline_summary": "20字内核心论点",
       "detailed_items": [
@@ -1239,6 +1256,7 @@ def get_ppt_page_content_extraction_prompt(markdown_text: str, language: str = N
         }}
       ]
     }},
+    "visual_suggestion": "使用具象视觉隐喻解释抽象概念，包含主体、意境与风格",
     "note": "来源与假设说明"
   }}
 }}
@@ -1255,6 +1273,7 @@ def get_ppt_page_content_extraction_prompt(markdown_text: str, language: str = N
   - `headline_summary`
   - `detailed_items[]`（每项含 `sub_title`、`body`、`highlight_phrases`）
 - 其他类型按语义填充合理字段（如 cover 的 headline/sub_headline，closing 的 final_conclusion/vision）。
+- 所有类型都必须有 `layout_suggestion`。
 
 # Hard Constraints
 - 只返回 JSON，不要 Markdown 代码块，不要解释文字。
