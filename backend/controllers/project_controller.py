@@ -1261,8 +1261,15 @@ def generate_descriptions_stream(project_id):
                         continue
 
                     page = pages[idx]
+                    desc_text = result.get('description_text', '')
+                    if proj.creation_type == 'ppt_renovation':
+                        page_outline = flat_pages[idx] if idx < len(flat_pages) else {}
+                        desc_text = ai_service.normalize_renovation_description_text(
+                            desc_text,
+                            page_outline=page_outline,
+                        )
                     desc_content = {
-                        'text': result.get('description_text', ''),
+                        'text': desc_text,
                         'generated_at': datetime.utcnow().isoformat(),
                     }
                     if result.get('extra_fields'):
@@ -1918,8 +1925,14 @@ def refine_descriptions(project_id):
         
         # Update pages with refined descriptions
         for page, refined_desc in zip(pages, refined_descriptions):
+            normalized_desc = refined_desc
+            if project.creation_type == 'ppt_renovation':
+                normalized_desc = ai_service.normalize_renovation_description_text(
+                    refined_desc,
+                    page_outline=page.get_outline_content() or {},
+                )
             desc_content = {
-                "text": refined_desc,
+                "text": normalized_desc,
                 "generated_at": datetime.utcnow().isoformat()
             }
             page.set_description_content(desc_content)

@@ -347,6 +347,12 @@ def refine_page_description(project_id, page_id):
                 503,
             )
 
+        if project.creation_type == 'ppt_renovation':
+            final_refined_description = ai_service.normalize_renovation_description_text(
+                final_refined_description,
+                page_outline=outline_content,
+            )
+
         return success_response({
             'refined_description': final_refined_description,
             'message': '页面描述优化成功'
@@ -430,6 +436,12 @@ def generate_page_description(project_id, page_id):
             language=language,
             detail_level=detail_level
         )
+
+        if project.creation_type == 'ppt_renovation':
+            desc_result['text'] = ai_service.normalize_renovation_description_text(
+                desc_result.get('text', ''),
+                page_outline=page_data,
+            )
 
         # Save description (generate_page_description returns dict with text + optional extra_fields)
         desc_content = {

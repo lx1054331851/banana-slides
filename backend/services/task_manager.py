@@ -499,6 +499,12 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                             detail_level=detail_level
                         )
 
+                        if project_context.creation_type == 'ppt_renovation':
+                            desc_result['text'] = ai_service.normalize_renovation_description_text(
+                                desc_result.get('text', ''),
+                                page_outline=page_outline,
+                            )
+
                         # generate_page_description returns dict with text + optional extra_fields
                         desc_content = {
                             "text": desc_result['text'],

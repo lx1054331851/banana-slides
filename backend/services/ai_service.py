@@ -933,6 +933,120 @@ class AIService:
 
         return None
 
+    def _try_extract_single_slide_json(self, text: str) -> Optional[Dict]:
+        """尝试从任意文本中解析单页 slide JSON。"""
+        if not text or not isinstance(text, str) or not text.strip():
+            return None
+
+        raw = text.strip()
+        candidates = [raw]
+
+        fenced_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw, re.IGNORECASE)
+        if fenced_match:
+            candidates.append(fenced_match.group(1).strip())
+
+        first_obj = raw.find('{')
+        last_obj = raw.rfind('}')
+        if first_obj != -1 and last_obj != -1 and last_obj > first_obj:
+            candidates.append(raw[first_obj:last_obj + 1])
+
+        first_arr = raw.find('[')
+        last_arr = raw.rfind(']')
+        if first_arr != -1 and last_arr != -1 and last_arr > first_arr:
+            candidates.append(raw[first_arr:last_arr + 1])
+
+        for candidate in candidates:
+            try:
+                parsed = json.loads(candidate)
+            except Exception:
+                continue
+
+            if isinstance(parsed, dict):
+                if isinstance(parsed.get('slide'), dict):
+                    return parsed.get('slide')
+                if isinstance(parsed.get('slides'), list):
+                    slides = parsed.get('slides') or []
+                    if slides and isinstance(slides[0], dict):
+                        return slides[0]
+                if parsed.get('type') and isinstance(parsed.get('content'), dict):
+                    return parsed
+
+            if isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
+                first = parsed[0]
+                if first.get('type') and isinstance(first.get('content'), dict):
+                    return first
+
+        return None
+
+    def normalize_renovation_description_text(self, description_text: str, page_outline: Optional[Dict] = None) -> str:
+        """
+        将任意描述文本标准化为翻新项目可直接渲染的单页 JSON 字符串。
+        """
+        page_outline = page_outline or {}
+        slide_obj = self._try_extract_single_slide_json(description_text or "")
+
+        if slide_obj is None:
+            outline_title = self._normalize_text(page_outline.get('title'))
+            outline_points = page_outline.get('points') if isinstance(page_outline.get('points'), list) else []
+            clean_points = [self._normalize_text(p) for p in outline_points if self._normalize_text(p)]
+
+            body_text = (description_text or '').strip()
+            if body_text.startswith('页面标题：'):
+                body_text = re.sub(r'^页面标题：.*$', '', body_text, flags=re.MULTILINE).strip()
+
+            detailed_items = []
+            if clean_points:
+                for i, p in enumerate(clean_points[:6]):
+                    detailed_items.append({
+                        "sub_title": f"要点{i + 1}",
+                        "body": p,
+                        "highlight_phrases": [],
+                    })
+            elif body_text:
+                detailed_items.append({
+                    "sub_title": "核心说明",
+                    "body": body_text,
+                    "highlight_phrases": [],
+                })
+
+            headline_summary = clean_points[0] if clean_points else (outline_title or "核心结论待补充")
+            slide_obj = {
+                "source_ref": "",
+                "type": "detail_text_split",
+                "title": outline_title or "未命名页面",
+                "layout_suggestion": "multi_column_logic",
+                "content": {
+                    "headline_summary": headline_summary,
+                    "detailed_items": detailed_items if detailed_items else [{
+                        "sub_title": "核心观点",
+                        "body": headline_summary,
+                        "highlight_phrases": [],
+                    }],
+                },
+                "visual_suggestion": "",
+                "note": "renovation_normalized",
+            }
+        else:
+            slide_obj = dict(slide_obj)
+            title = self._normalize_text(slide_obj.get('title')) or self._normalize_text(page_outline.get('title')) or "未命名页面"
+            slide_obj['title'] = title
+            if not slide_obj.get('type'):
+                slide_obj['type'] = 'detail_chart' if isinstance(slide_obj.get('content'), dict) and slide_obj.get('content', {}).get('chart_data') else 'detail_text_split'
+            if not isinstance(slide_obj.get('content'), dict):
+                slide_obj['content'] = {
+                    "headline_summary": title,
+                    "detailed_items": [{
+                        "sub_title": "核心观点",
+                        "body": (description_text or '').strip() or title,
+                        "highlight_phrases": [],
+                    }]
+                }
+            slide_obj.setdefault('layout_suggestion', 'multi_column_logic')
+            slide_obj.setdefault('visual_suggestion', '')
+            slide_obj.setdefault('note', '')
+
+        return json.dumps(slide_obj, ensure_ascii=False, indent=2)
+
     @staticmethod
     def _normalize_text(value) -> str:
         if isinstance(value, str):
