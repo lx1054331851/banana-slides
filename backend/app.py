@@ -6,6 +6,7 @@ import sys
 import hmac
 import logging
 import tempfile
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import event
@@ -19,7 +20,7 @@ _project_root = Path(__file__).parent.parent
 _env_file = _project_root / '.env'
 load_dotenv(dotenv_path=_env_file, override=True)
 
-from flask import Flask
+from flask import Flask, g, request
 from flask_cors import CORS
 from models import db
 from config import Config, get_default_sqlalchemy_database_uri
@@ -101,6 +102,13 @@ def create_app(load_settings_from_db=None):
     app.config['CORS_ORIGINS'] = cors_origins
     
     # Initialize logging (log to stdout so Docker can capture it)
+    # Force line buffering to avoid delayed logs in some terminals/shell wrappers.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+        sys.stderr.reconfigure(line_buffering=True)
+    except Exception:
+        pass
+
     log_level = getattr(logging, app.config['LOG_LEVEL'], logging.INFO)
     logging.basicConfig(
         level=log_level,
@@ -120,6 +128,28 @@ def create_app(load_settings_from_db=None):
     logging.getLogger('urllib3').setLevel(logging.WARNING)
     logging.getLogger('werkzeug').setLevel(logging.INFO)  # Flask开发服务器日志保持INFO
     logging.getLogger('volcenginesdkarkruntime').setLevel(logging.WARNING)
+
+    @app.before_request
+    def _mark_request_start():
+        g._request_start_ts = time.perf_counter()
+
+    @app.after_request
+    def _log_request(response):
+        # Independent access log to ensure request logs are visible even when werkzeug logger is muted.
+        try:
+            start = getattr(g, "_request_start_ts", None)
+            elapsed_ms = ((time.perf_counter() - start) * 1000.0) if start else 0.0
+            app.logger.info(
+                '%s %s %s %s %.1fms',
+                request.method,
+                request.path,
+                response.status_code,
+                request.remote_addr or '-',
+                elapsed_ms,
+            )
+        except Exception:
+            pass
+        return response
 
     # Initialize extensions
     db.init_app(app)
