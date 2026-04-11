@@ -11,6 +11,7 @@ AI Service Prompts - 集中管理所有 AI 服务的 prompt 模板
 """
 import json
 import logging
+import re
 from textwrap import dedent
 from typing import List, Dict, Optional, TYPE_CHECKING
 
@@ -147,6 +148,49 @@ def _format_reference_files_xml(reference_files_content: Optional[List[Dict[str,
     xml_parts.append('</uploaded_files>')
     xml_parts.append('')  # Empty line after XML
     return '\n'.join(xml_parts)
+
+
+def _try_extract_slide_like_json(text: str) -> Optional[Dict]:
+    """尝试从文本中提取单页 slide JSON（兼容 ```json 包裹与数组/对象形式）。"""
+    if not isinstance(text, str):
+        return None
+
+    raw = text.strip()
+    if not raw:
+        return None
+
+    candidates = [raw]
+    fenced_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw, re.IGNORECASE)
+    if fenced_match:
+        candidates.append(fenced_match.group(1).strip())
+
+    first_obj = raw.find('{')
+    last_obj = raw.rfind('}')
+    if first_obj != -1 and last_obj != -1 and last_obj > first_obj:
+        candidates.append(raw[first_obj:last_obj + 1])
+
+    first_arr = raw.find('[')
+    last_arr = raw.rfind(']')
+    if first_arr != -1 and last_arr != -1 and last_arr > first_arr:
+        candidates.append(raw[first_arr:last_arr + 1])
+
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            continue
+
+        if isinstance(parsed, dict):
+            slide_obj = parsed.get('slide') if isinstance(parsed.get('slide'), dict) else parsed
+            if slide_obj.get('type') and isinstance(slide_obj.get('content'), dict):
+                return slide_obj
+
+        if isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
+            first = parsed[0]
+            if first.get('type') and isinstance(first.get('content'), dict):
+                return first
+
+    return None
 
 
 def _format_requirements(requirements: str, context: str = "outline") -> str:
@@ -628,6 +672,8 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
                                        previous_requirements: Optional[List[str]] = None,
                                        language: str = None) -> str:
     """根据用户要求修改已有页面描述的 prompt"""
+    is_renovation_project = getattr(project_context, 'creation_type', None) == 'ppt_renovation'
+
     # 构建大纲文本
     outline_text = ""
     if outline:
@@ -637,12 +683,32 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
     # 构建所有页面描述的汇总
     all_descriptions_text = "当前所有页面的描述：\n\n"
     has_any_description = False
+    structured_pages: List[Dict] = []
+    structured_count = 0
     for desc in current_descriptions:
         page_num = desc.get('index', 0) + 1
         title = desc.get('title', '未命名')
         content = desc.get('description_content', '')
         if isinstance(content, dict):
             content = content.get('text', '')
+        if not isinstance(content, str):
+            content = str(content or '')
+
+        parsed_slide = _try_extract_slide_like_json(content) if content else None
+        if parsed_slide is not None:
+            structured_count += 1
+            structured_pages.append({
+                "page_number": page_num,
+                "outline_title": title,
+                "current_slide": parsed_slide,
+            })
+        else:
+            structured_pages.append({
+                "page_number": page_num,
+                "outline_title": title,
+                "current_slide": None,
+                "current_text": content.strip(),
+            })
 
         if content:
             has_any_description = True
@@ -652,6 +718,46 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
 
     if not has_any_description:
         all_descriptions_text = "当前所有页面的描述：\n\n(当前没有内容，需要基于大纲生成新的描述)\n\n"
+
+    structured_mode = (
+        is_renovation_project
+        and structured_count > 0
+        and structured_count >= max(1, (len(current_descriptions) + 1) // 2)
+    )
+
+    if structured_mode:
+        structured_pages_json = json.dumps(structured_pages, ensure_ascii=False, indent=2)
+        prompt = (f"""\
+你是“PPT 页面 JSON 优化器”。目标：在不丢失业务语义的前提下，优化每页结构化 JSON，使其可直接渲染。
+{_get_original_input_labeled(project_context)}{outline_text}
+当前页面 JSON（按页面顺序）：
+{structured_pages_json}
+{_get_previous_requirements_text(previous_requirements)}
+**用户现在提出新的要求：{user_requirement}**
+
+【硬约束】
+1. 只输出合法 JSON 数组，不要 Markdown，不要解释文字。
+2. 数组长度必须等于输入页面数（{len(current_descriptions)}），顺序保持一致。
+3. 每个元素必须是单页 JSON 对象，优先保留并优化原字段：`source_ref`、`type`、`title`、`layout_suggestion`、`content`、`visual_suggestion`、`note`。
+4. 专业术语与品牌名必须保留（例如 OpenClaw、Agent、低代码、经营协同平台）。
+5. 禁止无故降级结构：不要把已存在的结构化 JSON 改成纯文本描述。
+6. `highlight_phrases` 不能整页清空；若原有为空，可按正文补充 2-4 个关键词。
+7. `visual_suggestion` 不能无故置空，应保留或增强为“主体 + 隐喻 + 风格 + 重点”。
+
+【结尾页强化规则（当页面本身是结尾页，或用户要求出现“结尾/收尾/总结/slogan/closing”时必须执行）】
+1. 该页 `type` 必须保持结尾语义（`closing` 或 `结尾页`），不得改为普通详情类型。
+2. 标题需具备收束感与号召感。
+3. 内容必须体现“1句可上屏 slogan + 3条以内总结要点（战略/路径/行动）”。
+4. 每条总结保持精简有力，避免长段论证。
+
+【输出要求】
+1. 返回一个 JSON 数组，数组每个元素是优化后的单页 JSON 对象（不是字符串）。
+2. 如果某页输入缺失 `current_slide`，可基于 `outline_title` 和用户要求补全为合理结构化 JSON。
+
+现在开始优化，只输出 JSON 数组。
+{get_language_instruction(language)}
+""")
+        return _build_prompt(prompt, project_context.reference_files_content, tag='get_descriptions_refinement_prompt')
 
     prompt = (f"""\
 You are a helpful assistant that modifies PPT page descriptions based on user requirements.
