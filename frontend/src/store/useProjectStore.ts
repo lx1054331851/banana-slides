@@ -182,11 +182,21 @@ export const useProjectStore = create<ProjectState>((set, get) => {
           promises.push(api.updatePage(projectId, pageId, { part: data.part }));
         }
 
-        // 如果没有特定的内容更新，使用通用端点
+        // 其余字段统一走通用端点（例如 json_refine_context）
+        const genericPayload: Record<string, any> = {};
+        Object.keys(data).forEach((key) => {
+          if (key === 'description_content' || key === 'outline_content' || key === 'part') {
+            return;
+          }
+          genericPayload[key] = data[key];
+        });
+        if (Object.keys(genericPayload).length > 0) {
+          promises.push(api.updatePage(projectId, pageId, genericPayload));
+        }
+
         if (promises.length === 0) {
           await api.updatePage(projectId, pageId, data);
         } else {
-          // 并行执行所有更新请求
           await Promise.all(promises);
         }
         
