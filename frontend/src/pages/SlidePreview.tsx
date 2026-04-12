@@ -3099,7 +3099,7 @@ export const SlidePreview: React.FC = () => {
             showUploadButton={false}
             showImagePreview={false}
             slashActions={descriptionSlashActions}
-            className="min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent"
+            className="min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent [&_[role=textbox]]:pr-0"
           />
           {isPptRenovationProject && (
             <div className="absolute bottom-3 left-0 right-0 z-20 flex items-center justify-end gap-2 px-2">
