@@ -3032,7 +3032,7 @@ export const SlidePreview: React.FC = () => {
 
   const editorCanvasContent = (
     <div
-      className={`${isPptRenovationProject ? 'min-h-[620px] sm:min-h-[680px] lg:min-h-[760px]' : 'min-h-[520px] sm:min-h-[560px] lg:min-h-[580px]'} w-full min-w-0 rounded-[24px] border border-[#eadfbf] bg-white p-4 sm:p-5 lg:p-6 dark:border-border-primary dark:bg-[radial-gradient(circle_at_top,#1b2340_0%,#151a26_34%,#101521_100%)]`}
+      className={`${isPptRenovationProject ? 'min-h-[620px] sm:min-h-[680px] lg:min-h-[760px] overflow-y-auto overscroll-contain' : 'min-h-[520px] sm:min-h-[560px] lg:min-h-[580px]'} w-full min-w-0 rounded-[24px] border border-[#eadfbf] bg-white p-4 sm:p-5 lg:p-6 dark:border-border-primary dark:bg-[radial-gradient(circle_at_top,#1b2340_0%,#151a26_34%,#101521_100%)]`}
       style={isMobileView ? undefined : { width: '100%', maxWidth: '100%', aspectRatio: aspectRatioStyle }}
       data-testid="preview-editor-canvas"
     >
@@ -4294,7 +4294,7 @@ export const SlidePreview: React.FC = () => {
 
                     <section
                       data-testid="preview-editor-pane"
-                      className={`min-h-0 min-w-0 ${isMobileView ? 'overflow-visible' : 'overflow-y-auto overscroll-contain'}`}
+                      className={`min-h-0 min-w-0 ${isMobileView ? 'overflow-visible' : (isPptRenovationProject ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain')}`}
                     >
                       <div className="flex min-h-full flex-col px-3 pt-3 pb-0 md:px-4 md:pt-4 md:pb-0">
                         <div className="shrink-0">
