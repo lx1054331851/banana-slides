@@ -4317,7 +4317,7 @@ export const SlidePreview: React.FC = () => {
                       className={`min-h-0 min-w-0 ${isMobileView ? 'overflow-visible' : (isPptRenovationProject ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain')}`}
                     >
                       <div className={`flex h-full min-h-0 flex-col ${isPptRenovationProject ? 'px-2 pt-1 pb-0 md:px-3 md:pt-1 md:pb-0' : 'px-3 pt-3 pb-0 md:px-4 md:pt-4 md:pb-0'}`}>
-                        <div className={`${isPptRenovationProject ? 'min-h-0 flex-1' : 'shrink-0'}`}>
+                        <div className={`${isPptRenovationProject ? (isMobileView ? 'min-h-0 flex-1' : 'min-h-0 basis-0 flex-[3]') : 'shrink-0'}`}>
                           {editorCanvasContent}
                         </div>
                         {!isPptRenovationProject && (
@@ -4325,7 +4325,7 @@ export const SlidePreview: React.FC = () => {
                             {externalFieldTags}
                           </div>
                         )}
-                        <div className={`${isPptRenovationProject ? 'mt-1 flex-1 justify-start' : 'mt-2 flex-1 justify-end'} min-h-0 overflow-visible flex flex-col`}>
+                        <div className={`${isPptRenovationProject ? (isMobileView ? 'mt-1 flex-1 justify-start' : 'mt-0 min-h-0 basis-0 flex-[1] justify-start') : 'mt-2 flex-1 justify-end'} min-h-0 overflow-visible flex flex-col`}>
                           <div className={`${isPptRenovationProject ? 'min-h-0 h-full' : 'min-h-0'}`}>
                             <PageAiWorkbench
                               title={t('preview.pageAiTitle')}
