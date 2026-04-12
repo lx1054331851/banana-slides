@@ -883,6 +883,32 @@ export const SlidePreview: React.FC = () => {
     });
   }, [currentProject?.id, selectedIndex]);
 
+  useEffect(() => {
+    if (!currentProject) {
+      setJsonRefineRequirement('');
+      setJsonRefineHistory([]);
+      return;
+    }
+
+    const page = currentProject.pages[selectedIndex];
+    const pageId = page?.id;
+    if (!pageId) {
+      setJsonRefineRequirement('');
+      setJsonRefineHistory([]);
+      return;
+    }
+
+    const cached = jsonRefineContextByPage[pageId];
+    if (!cached) {
+      setJsonRefineRequirement('');
+      setJsonRefineHistory([]);
+      return;
+    }
+
+    setJsonRefineRequirement(cached.requirementDraft || '');
+    setJsonRefineHistory(Array.isArray(cached.history) ? cached.history : []);
+  }, [currentProject?.id, selectedIndex]);
+
   const sidebarCollapsedWidth = 72;
   const sidebarMinWidth = sidebarCollapsedWidth;
   const sidebarMaxWidth = Math.round(viewportWidth * (2 / 3));
@@ -1190,6 +1216,7 @@ export const SlidePreview: React.FC = () => {
   const [showJsonRefineDialog, setShowJsonRefineDialog] = useState(false);
   const [jsonRefineRequirement, setJsonRefineRequirement] = useState('');
   const [jsonRefineHistory, setJsonRefineHistory] = useState<string[]>([]);
+  const [jsonRefineContextByPage, setJsonRefineContextByPage] = useState<Record<string, JsonRefineContextState>>({});
   const [isJsonRefining, setIsJsonRefining] = useState(false);
   const jsonRefineInputRef = useRef<HTMLInputElement | null>(null);
   const [batchGenerateContext, setBatchGenerateContext] = useState<{
@@ -2477,6 +2504,33 @@ export const SlidePreview: React.FC = () => {
       },
     }));
   }, [currentProject, selectedIndex, editPrompt, selectedContextImages, pageAiMessages, editRunImageModel]);
+
+  useEffect(() => {
+    if (!currentProject) return;
+    const page = currentProject.pages[selectedIndex];
+    const pageId = page?.id;
+    if (!pageId) return;
+
+    setJsonRefineContextByPage((prev) => {
+      const prevContext = prev[pageId];
+      const prevHistory = prevContext?.history || [];
+      const sameRequirement = (prevContext?.requirementDraft || '') === jsonRefineRequirement;
+      const sameHistory = prevHistory.length === jsonRefineHistory.length
+        && prevHistory.every((item, index) => item === jsonRefineHistory[index]);
+
+      if (sameRequirement && sameHistory) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [pageId]: {
+          requirementDraft: jsonRefineRequirement,
+          history: [...jsonRefineHistory],
+        },
+      };
+    });
+  }, [currentProject, selectedIndex, jsonRefineRequirement, jsonRefineHistory]);
 
   // ========== 预览图矩形选择相关逻辑（编辑弹窗内） ==========
   const handleSelectionMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
