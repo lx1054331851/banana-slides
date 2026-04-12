@@ -203,3 +203,31 @@ body {
 .markdown-content {
   line-height: 1.6;
 }
+
+/* JSON editor in renovation page */
+.json-slide-editor .jsoneditor {
+  border: 0;
+  height: 100%;
+}
+
+.json-slide-editor .jsoneditor-outer {
+  border: 0;
+}
+
+.json-slide-editor .jsoneditor-menu {
+  background: #fff8e6;
+  border-bottom: 1px solid #f1dfad;
+}
+
+.json-slide-editor .jsoneditor-statusbar {
+  border-top: 1px solid #f1dfad;
+}
+
+.dark .json-slide-editor .jsoneditor-menu {
+  background: #1a2234;
+  border-bottom-color: #2e3a55;
+}
+
+.dark .json-slide-editor .jsoneditor-statusbar {
+  border-top-color: #2e3a55;
+}
