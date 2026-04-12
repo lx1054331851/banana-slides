@@ -360,7 +360,6 @@ import {
 } from '@/components/shared';
 import type { MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
 import { MaterialGeneratorModal } from '@/components/shared/MaterialGeneratorModal';
-import { JsonSlideEditor } from '@/components/shared/JsonSlideEditor';
 import {
   TemplateSelector,
   getTemplateFile,
@@ -945,7 +944,6 @@ export const SlidePreview: React.FC = () => {
   const [editOutlinePoints, setEditOutlinePoints] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const descriptionTextareaRef = useRef<MarkdownTextareaRef | null>(null);
-  const jsonEditorRef = useRef<MarkdownTextareaRef | null>(null);
   const activeDescriptionSetContent = useRef<(updater: (prev: string) => string) => void>(setEditDescription);
   const activeDescriptionInsertAtCursor = useRef<((markdown: string) => void) | undefined>(undefined);
   const [editExtraFields, setEditExtraFields] = useState<Record<string, string>>({});
@@ -959,7 +957,7 @@ export const SlidePreview: React.FC = () => {
   const focusMainDescriptionField = useCallback(() => {
     activeDescriptionSetContent.current = setEditDescription;
     activeDescriptionInsertAtCursor.current = (markdown: string) => {
-      (descriptionTextareaRef.current || jsonEditorRef.current)?.insertAtCursor(markdown);
+      descriptionTextareaRef.current?.insertAtCursor(markdown);
     };
   }, []);
   const [isGlobalAiDrawerOpen, setIsGlobalAiDrawerOpen] = useState(false);
@@ -3088,39 +3086,27 @@ export const SlidePreview: React.FC = () => {
           <div className="mb-3 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
             {isPptRenovationProject ? t('preview.pageJson') : t('preview.pageDescription')}
           </div>
-          {isPptRenovationProject ? (
-            <JsonSlideEditor
-              ref={jsonEditorRef}
-              value={editDescription}
-              onChange={(value: string) => {
-                setEditDescription(value);
-                persistCurrentPageDraft({ description: value });
-              }}
-              onFocus={focusMainDescriptionField}
-              data-testid="preview-text-description-input"
-              className="min-h-[220px] flex-1 border-0 bg-transparent shadow-none"
-            />
-          ) : (
-            <MarkdownTextarea
-              ref={descriptionTextareaRef}
-              value={editDescription}
-              onChange={(value: string) => {
-                setEditDescription(value);
-                persistCurrentPageDraft({ description: value });
-              }}
-              onPaste={handleDescriptionPaste}
-              onFiles={handleDescriptionFiles}
-              onFocus={focusMainDescriptionField}
-              placeholder={t('preview.enterDescription')}
-              data-testid="preview-text-description-input"
-              rows={8}
-              maxHeight="100%"
-              showUploadButton={false}
-              showImagePreview={false}
-              slashActions={descriptionSlashActions}
-              className="min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent [&_[role=textbox]]:pr-0"
-            />
-          )}
+          <MarkdownTextarea
+            ref={descriptionTextareaRef}
+            value={editDescription}
+            onChange={(value: string) => {
+              setEditDescription(value);
+              persistCurrentPageDraft({ description: value });
+            }}
+            onPaste={isPptRenovationProject ? undefined : handleDescriptionPaste}
+            onFiles={isPptRenovationProject ? undefined : handleDescriptionFiles}
+            onFocus={focusMainDescriptionField}
+            placeholder={isPptRenovationProject ? t('preview.enterPageJson') : t('preview.enterDescription')}
+            data-testid="preview-text-description-input"
+            rows={isPptRenovationProject ? 14 : 8}
+            maxHeight="100%"
+            showUploadButton={false}
+            showImagePreview={false}
+            slashActions={isPptRenovationProject ? undefined : descriptionSlashActions}
+            className={isPptRenovationProject
+              ? 'min-h-[220px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:font-mono'
+              : 'min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent [&_[role=textbox]]:pr-0'}
+          />
           {isPptRenovationProject && (
             <div className="absolute bottom-3 left-0 right-0 z-20 flex items-center justify-end gap-2 px-2">
               {showJsonRefineDialog && (

@@ -26,7 +26,6 @@
     "clsx": "^2.0.0",
     "i18next": "^25.8.0",
     "i18next-browser-languagedetector": "^8.2.0",
-    "jsoneditor": "^10.4.3",
     "katex": "^0.16.28",
     "lucide-react": "^0.294.0",
     "mammoth": "^1.7.2",
