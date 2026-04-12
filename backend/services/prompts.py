@@ -726,6 +726,19 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
     )
 
     if structured_mode:
+        mckinsey_guidance_block = """【麦肯锡表达约束（统一后端管理）】
+1. 结论先行（Pyramid Principle）：每个层级先给结论，再给支撑信息。
+2. 结构 MECE：同层级避免重复、交叉和遗漏，维度要并列且互斥穷尽。
+3. 采用 SCQA 压缩表达：背景-冲突-问题-回答，优先体现在 title/headline_summary/body。
+4. 行动导向：措辞强调可执行性与经营含义，避免空泛口号。
+
+【页面类型自适应】
+1. 先判断页面性质：问题分析页 / 方案页 / 总结页。
+2. 若为问题分析页（标题或内容含“问题/痛点/挑战/现状/原因/瓶颈/风险/诊断”等），采用“诊断结论先行”：先给本质判断与影响，再给证据链。
+3. 若为方案页或路径页，采用“行动结论先行”：先给策略结论，再给抓手与落地路径。
+4. 若为总结/结尾页，采用“主张先行”：先给统一主张（slogan 级），再给 2-3 条收束要点。
+5. 若无法判断类型，默认结论先行，但禁止臆断与虚构。"""
+
         structured_pages_json = json.dumps(structured_pages, ensure_ascii=False, indent=2)
         prompt = (f"""\
 你是“PPT 页面 JSON 优化器”。目标：在不丢失业务语义的前提下，优化每页结构化 JSON，使其可直接渲染。
@@ -743,6 +756,8 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
 5. 禁止无故降级结构：不要把已存在的结构化 JSON 改成纯文本描述。
 6. `highlight_phrases` 不能整页清空；若原有为空，可按正文补充 2-4 个关键词。
 7. `visual_suggestion` 不能无故置空，应保留或增强为“主体 + 隐喻 + 风格 + 重点”。
+
+{mckinsey_guidance_block}
 
 【结尾页强化规则（当页面本身是结尾页，或用户要求出现“结尾/收尾/总结/slogan/closing”时必须执行）】
 1. 该页 `type` 必须保持结尾语义（`closing` 或 `结尾页`），不得改为普通详情类型。

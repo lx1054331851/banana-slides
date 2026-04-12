@@ -474,35 +474,6 @@ const escapeMarkdownText = (text: string): string => text.replace(/[[\]()]/g, '\
 const DESCRIPTION_UPLOAD_ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg';
 type RenovationJsonViewMode = 'text' | 'markdown';
 const JSON_MARKDOWN_INDENT = '    ';
-const JSON_REFINE_GUIDANCE_PROMPT = [
-  '【系统角色】你是麦肯锡风格的战略顾问与结构化写作专家，负责优化“单页PPT描述JSON”。',
-  '【输出硬约束】',
-  '1. 仅输出合法 JSON；禁止输出 Markdown、解释文字、代码围栏。',
-  '2. 尽量保持原有 JSON 结构与字段语义，不随意删减关键字段。',
-  '3. 顶层字段优先保留：source_ref、type、title、layout_suggestion、content、visual_suggestion、note。',
-  '4. content 内层级与数组关系应保持一致；新增字段必须与业务语义强相关。',
-  '【页面类型自适应】',
-  '5. 先判断页面性质：问题分析页 / 方案页 / 总结页。',
-  '6. 若为问题分析页（标题或内容含“问题/痛点/挑战/现状/原因/瓶颈/风险/诊断”等），采用“诊断结论先行”：先给本质判断与影响，再给证据链。',
-  '7. 若为方案页或路径页，采用“行动结论先行”：先给策略结论，再给抓手与落地路径。',
-  '8. 若为总结/结尾页，采用“主张先行”：先给统一主张（slogan 级），再给 2-3 条收束要点。',
-  '9. 若无法判断类型，默认结论先行，但禁止臆断与虚构。',
-  '【麦肯锡表达约束】',
-  '10. 结论先行（Pyramid Principle）：每个层级先给结论再给支撑信息。',
-  '11. 结构 MECE：避免重复、交叉和遗漏，保证同层级并列维度清晰。',
-  '12. 采用 SCQA 思路压缩表达：背景-冲突-问题-回答，优先沉淀在 title/headline_summary/body。',
-  '13. 行动导向：措辞强调可执行性与经营含义，避免空泛口号。',
-  '【文案与事实约束】',
-  '14. 文案要短、硬、清晰：优先动宾结构，减少形容词堆叠。',
-  '15. highlight_phrases 仅保留短词/短句，去重，不写完整长句。',
-  '16. 不得虚构数据、比例、金额、时间等事实；原文无量化数据时保持定性表述。',
-  '17. 保留品牌词与术语（如 OpenClaw、Agent、低代码）并保持大小写准确。',
-  '18. 若用户要求与以上约束冲突，以本指导约束优先。',
-].join('\n');
-
-const buildGuidedJsonRefineRequirement = (userRequirement: string): string => {
-  return `${JSON_REFINE_GUIDANCE_PROMPT}\n\n【用户要求】\n${userRequirement}`;
-};
 
 const formatJsonPrimitiveForMarkdown = (value: unknown): string => {
   if (typeof value === 'string') {
@@ -3052,14 +3023,13 @@ export const SlidePreview: React.FC = () => {
     if (!projectId || !selectedPage?.id) return;
     const requirement = jsonRefineRequirement.trim();
     if (!requirement || isJsonRefining) return;
-    const guidedRequirement = buildGuidedJsonRefineRequirement(requirement);
 
     try {
       setIsJsonRefining(true);
       const response = await refineSinglePageDescription(
         projectId,
         selectedPage.id,
-        guidedRequirement,
+        requirement,
         editDescription,
         selectedPage.outline_content,
         jsonRefineHistory,

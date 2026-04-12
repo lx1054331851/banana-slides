@@ -53,6 +53,8 @@ def test_refinement_prompt_uses_structured_json_mode_for_renovation():
     assert "结尾页强化规则" in prompt
     assert "数组长度必须等于输入页面数（1）" in prompt
     assert "current_slide" in prompt
+    assert "麦肯锡表达约束（统一后端管理）" in prompt
+    assert "页面类型自适应" in prompt
 
 
 def test_refinement_prompt_keeps_legacy_mode_for_non_renovation():
