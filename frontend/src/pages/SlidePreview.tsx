@@ -464,6 +464,11 @@ type PageAiContextState = {
   };
 };
 
+type JsonRefineContextState = {
+  requirementDraft: string;
+  history: string[];
+};
+
 type MaterialSelectorMode = 'pageAi' | 'description';
 
 const isSupportedDescriptionImageUrl = (url: string): boolean => {
