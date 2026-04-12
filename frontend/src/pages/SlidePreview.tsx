@@ -3072,7 +3072,13 @@ export const SlidePreview: React.FC = () => {
           </div>
         )}
 
-        <div className="relative min-h-0 overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 flex flex-col dark:border-[#2d3447] dark:bg-[#151a26]">
+        <div
+          className={`relative min-h-0 flex flex-col ${
+            isPptRenovationProject
+              ? ''
+              : 'overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 dark:border-[#2d3447] dark:bg-[#151a26]'
+          }`}
+        >
           <div className="mb-3 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
             {isPptRenovationProject ? t('preview.pageJson') : t('preview.pageDescription')}
           </div>
@@ -3096,7 +3102,7 @@ export const SlidePreview: React.FC = () => {
             className="min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent"
           />
           {isPptRenovationProject && (
-            <div className="absolute bottom-3 left-5 right-5 z-20 flex items-center justify-end gap-2">
+            <div className="absolute bottom-3 left-0 right-0 z-20 flex items-center justify-end gap-2 px-2">
               {showJsonRefineDialog && (
                 <div className="min-w-0 flex-1 rounded-xl border border-[#ead6a2] bg-[linear-gradient(120deg,#fff9e8_0%,#fff3d6_54%,#ffefbf_100%)] p-2 shadow-[0_10px_20px_rgba(250,204,21,0.12)] transition-all duration-300 dark:border-[#4a3f2a] dark:bg-[linear-gradient(120deg,#1e1a12_0%,#2a2215_56%,#322816_100%)]">
                   <div className="flex items-center gap-2">
