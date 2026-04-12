@@ -203,3 +203,36 @@ body {
 .markdown-content {
   line-height: 1.6;
 }
+
+/* JSON -> Markdown 预览：增强层级缩进与列表可读性 */
+.markdown-content.json-markdown-preview ul,
+.markdown-content.json-markdown-preview ol {
+  list-style-position: outside !important;
+  padding-left: 1.25rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.markdown-content.json-markdown-preview ul ul,
+.markdown-content.json-markdown-preview ul ol,
+.markdown-content.json-markdown-preview ol ul,
+.markdown-content.json-markdown-preview ol ol {
+  padding-left: 1.1rem;
+  margin-top: 0.2rem;
+}
+
+.markdown-content.json-markdown-preview li {
+  margin: 0.15rem 0;
+}
+
+.markdown-content.json-markdown-preview code {
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.35rem;
+  padding: 0.05rem 0.35rem;
+}
+
+.dark .markdown-content.json-markdown-preview code {
+  background: #1f2937;
+  border-color: #374151;
+}

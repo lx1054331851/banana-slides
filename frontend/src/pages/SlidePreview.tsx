@@ -473,6 +473,7 @@ const isSupportedDescriptionImageUrl = (url: string): boolean => {
 const escapeMarkdownText = (text: string): string => text.replace(/[[\]()]/g, '\\$&');
 const DESCRIPTION_UPLOAD_ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg';
 type RenovationJsonViewMode = 'text' | 'markdown';
+const JSON_MARKDOWN_INDENT = '    ';
 
 const formatJsonPrimitiveForMarkdown = (value: unknown): string => {
   if (typeof value === 'string') {
@@ -484,51 +485,87 @@ const formatJsonPrimitiveForMarkdown = (value: unknown): string => {
   return `\`${JSON.stringify(value)}\``;
 };
 
-const appendJsonMarkdownLines = (
-  value: unknown,
-  lines: string[],
-  depth: number,
-  key?: string
-): void => {
-  const indent = '  '.repeat(depth);
-  const keyLabel = key ? `\`${escapeMarkdownText(key)}\`` : '';
-  const prefix = `${indent}- `;
+const escapeCodeKey = (key: string): string => key.replace(/`/g, '\\`');
 
-  if (Array.isArray(value)) {
-    if (value.length === 0) {
-      lines.push(`${prefix}${keyLabel ? `${keyLabel}: ` : ''}\`[]\``);
-      return;
-    }
-    if (keyLabel) {
-      lines.push(`${prefix}${keyLabel}`);
-    }
-    value.forEach((item, index) => {
-      appendJsonMarkdownLines(item, lines, depth + (keyLabel ? 1 : 0), `[${index}]`);
-    });
+const appendMarkdownArray = (value: unknown[], lines: string[], indent: string): void => {
+  if (value.length === 0) {
+    lines.push(`${indent}- \`[]\``);
     return;
   }
 
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>);
-    if (entries.length === 0) {
-      lines.push(`${prefix}${keyLabel ? `${keyLabel}: ` : ''}\`{}\``);
+  value.forEach((item, index) => {
+    const orderPrefix = `${indent}${index + 1}. `;
+    if (Array.isArray(item)) {
+      if (item.length === 0) {
+        lines.push(`${orderPrefix}\`[]\``);
+      } else {
+        lines.push(`${orderPrefix}`);
+        appendMarkdownArray(item, lines, `${indent}${JSON_MARKDOWN_INDENT}`);
+      }
       return;
     }
-    if (keyLabel) {
-      lines.push(`${prefix}${keyLabel}`);
+
+    if (item && typeof item === 'object') {
+      const entries = Object.entries(item as Record<string, unknown>);
+      if (entries.length === 0) {
+        lines.push(`${orderPrefix}\`{}\``);
+      } else {
+        lines.push(`${orderPrefix}`);
+        appendMarkdownObject(item as Record<string, unknown>, lines, `${indent}${JSON_MARKDOWN_INDENT}`);
+      }
+      return;
     }
-    entries.forEach(([entryKey, entryValue]) => {
-      appendJsonMarkdownLines(entryValue, lines, depth + (keyLabel ? 1 : 0), entryKey);
-    });
+
+    lines.push(`${orderPrefix}${formatJsonPrimitiveForMarkdown(item)}`);
+  });
+};
+
+const appendMarkdownObject = (value: Record<string, unknown>, lines: string[], indent: string): void => {
+  const entries = Object.entries(value);
+  if (entries.length === 0) {
+    lines.push(`${indent}- \`{}\``);
     return;
   }
 
-  lines.push(`${prefix}${keyLabel ? `${keyLabel}: ` : ''}${formatJsonPrimitiveForMarkdown(value)}`);
+  entries.forEach(([key, entryValue]) => {
+    const keyLabel = `\`${escapeCodeKey(key)}\``;
+
+    if (Array.isArray(entryValue)) {
+      if (entryValue.length === 0) {
+        lines.push(`${indent}- ${keyLabel}: \`[]\``);
+      } else {
+        lines.push(`${indent}- ${keyLabel}:`);
+        appendMarkdownArray(entryValue, lines, `${indent}${JSON_MARKDOWN_INDENT}`);
+      }
+      return;
+    }
+
+    if (entryValue && typeof entryValue === 'object') {
+      const childEntries = Object.entries(entryValue as Record<string, unknown>);
+      if (childEntries.length === 0) {
+        lines.push(`${indent}- ${keyLabel}: \`{}\``);
+      } else {
+        lines.push(`${indent}- ${keyLabel}:`);
+        appendMarkdownObject(entryValue as Record<string, unknown>, lines, `${indent}${JSON_MARKDOWN_INDENT}`);
+      }
+      return;
+    }
+
+    lines.push(`${indent}- ${keyLabel}: ${formatJsonPrimitiveForMarkdown(entryValue)}`);
+  });
 };
 
 const convertJsonToMarkdown = (value: unknown): string => {
   const lines: string[] = [];
-  appendJsonMarkdownLines(value, lines, 0);
+
+  if (Array.isArray(value)) {
+    appendMarkdownArray(value, lines, '');
+  } else if (value && typeof value === 'object') {
+    appendMarkdownObject(value as Record<string, unknown>, lines, '');
+  } else {
+    lines.push(formatJsonPrimitiveForMarkdown(value));
+  }
+
   return lines.join('\n');
 };
 
@@ -3209,7 +3246,7 @@ export const SlidePreview: React.FC = () => {
                   {t('preview.jsonParseFailed')}
                 </div>
               ) : renovationJsonMarkdown ? (
-                <Markdown className="text-sm leading-6 text-slate-700 dark:text-[#d9e2f2]">
+                <Markdown className="json-markdown-preview text-sm leading-6 text-slate-700 dark:text-[#d9e2f2]">
                   {renovationJsonMarkdown}
                 </Markdown>
               ) : (
