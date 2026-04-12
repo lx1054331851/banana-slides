@@ -464,11 +464,6 @@ type PageAiContextState = {
   };
 };
 
-type JsonRefineContextState = {
-  requirementDraft: string;
-  history: string[];
-};
-
 type MaterialSelectorMode = 'pageAi' | 'description';
 
 const isSupportedDescriptionImageUrl = (url: string): boolean => {
@@ -898,16 +893,15 @@ export const SlidePreview: React.FC = () => {
       return;
     }
 
-    const cached = jsonRefineContextByPage[pageId];
-    if (!cached) {
-      setJsonRefineRequirement('');
-      setJsonRefineHistory([]);
-      return;
-    }
+    const context = page.json_refine_context || {};
+    const requirementDraft = typeof context.requirement_draft === 'string' ? context.requirement_draft : '';
+    const history = Array.isArray(context.history)
+      ? context.history.filter((item): item is string => typeof item === 'string')
+      : [];
 
-    setJsonRefineRequirement(cached.requirementDraft || '');
-    setJsonRefineHistory(Array.isArray(cached.history) ? cached.history : []);
-  }, [currentProject?.id, selectedIndex]);
+    setJsonRefineRequirement(requirementDraft);
+    setJsonRefineHistory(history);
+  }, [currentProject, selectedIndex]);
 
   const sidebarCollapsedWidth = 72;
   const sidebarMinWidth = sidebarCollapsedWidth;
@@ -1216,7 +1210,6 @@ export const SlidePreview: React.FC = () => {
   const [showJsonRefineDialog, setShowJsonRefineDialog] = useState(false);
   const [jsonRefineRequirement, setJsonRefineRequirement] = useState('');
   const [jsonRefineHistory, setJsonRefineHistory] = useState<string[]>([]);
-  const [jsonRefineContextByPage, setJsonRefineContextByPage] = useState<Record<string, JsonRefineContextState>>({});
   const [isJsonRefining, setIsJsonRefining] = useState(false);
   const jsonRefineInputRef = useRef<HTMLInputElement | null>(null);
   const [batchGenerateContext, setBatchGenerateContext] = useState<{
@@ -2511,26 +2504,26 @@ export const SlidePreview: React.FC = () => {
     const pageId = page?.id;
     if (!pageId) return;
 
-    setJsonRefineContextByPage((prev) => {
-      const prevContext = prev[pageId];
-      const prevHistory = prevContext?.history || [];
-      const sameRequirement = (prevContext?.requirementDraft || '') === jsonRefineRequirement;
-      const sameHistory = prevHistory.length === jsonRefineHistory.length
-        && prevHistory.every((item, index) => item === jsonRefineHistory[index]);
+    const context = page.json_refine_context || {};
+    const requirementDraft = typeof context.requirement_draft === 'string' ? context.requirement_draft : '';
+    const history = Array.isArray(context.history)
+      ? context.history.filter((item): item is string => typeof item === 'string')
+      : [];
+    const sameRequirement = requirementDraft === jsonRefineRequirement;
+    const sameHistory = history.length === jsonRefineHistory.length
+      && history.every((item, index) => item === jsonRefineHistory[index]);
 
-      if (sameRequirement && sameHistory) {
-        return prev;
-      }
+    if (sameRequirement && sameHistory) {
+      return;
+    }
 
-      return {
-        ...prev,
-        [pageId]: {
-          requirementDraft: jsonRefineRequirement,
-          history: [...jsonRefineHistory],
-        },
-      };
+    updatePageLocal(pageId, {
+      json_refine_context: {
+        requirement_draft: jsonRefineRequirement,
+        history: [...jsonRefineHistory],
+      },
     });
-  }, [currentProject, selectedIndex, jsonRefineRequirement, jsonRefineHistory]);
+  }, [currentProject, selectedIndex, jsonRefineRequirement, jsonRefineHistory, updatePageLocal]);
 
   // ========== 预览图矩形选择相关逻辑（编辑弹窗内） ==========
   const handleSelectionMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {

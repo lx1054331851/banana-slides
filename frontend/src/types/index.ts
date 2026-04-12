@@ -90,6 +90,11 @@ export interface PageAiMessage {
 
 export type PreviewMode = 'text' | 'image';
 
+export interface JsonRefineContext {
+  requirement_draft?: string;
+  history?: string[];
+}
+
 export interface CoverEndingFieldDetect {
   key: string;
   page_role: 'cover' | 'ending';
@@ -135,6 +140,7 @@ export interface Page {
   part?: string; // 章节名
   outline_content: OutlineContent | null;
   description_content?: DescriptionContent;
+  json_refine_context?: JsonRefineContext;
   generated_image_url?: string; // 后端返回 generated_image_url
   preview_image_url?: string; // 后端返回 preview_image_url
   cached_image_url?: string; // 后端返回 cached_image_url
