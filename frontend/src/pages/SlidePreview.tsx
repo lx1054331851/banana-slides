@@ -3032,7 +3032,7 @@ export const SlidePreview: React.FC = () => {
 
   const editorCanvasContent = (
     <div
-      className={`${isPptRenovationProject ? 'min-h-[620px] sm:min-h-[680px] lg:min-h-[760px] overflow-y-auto overscroll-contain' : 'min-h-[520px] sm:min-h-[560px] lg:min-h-[580px]'} w-full min-w-0 rounded-[24px] border border-[#eadfbf] bg-white p-4 sm:p-5 lg:p-6 dark:border-border-primary dark:bg-[radial-gradient(circle_at_top,#1b2340_0%,#151a26_34%,#101521_100%)]`}
+      className={`${isPptRenovationProject ? 'min-h-[620px] sm:min-h-[680px] lg:min-h-[760px] overflow-y-auto overscroll-contain pl-4 pr-0 py-4 sm:pl-5 sm:pr-0 sm:py-5 lg:pl-6 lg:pr-0 lg:py-6' : 'min-h-[520px] sm:min-h-[560px] lg:min-h-[580px] p-4 sm:p-5 lg:p-6'} w-full min-w-0 rounded-[24px] border border-[#eadfbf] bg-white dark:border-border-primary dark:bg-[radial-gradient(circle_at_top,#1b2340_0%,#151a26_34%,#101521_100%)]`}
       style={isMobileView ? undefined : { width: '100%', maxWidth: '100%', aspectRatio: aspectRatioStyle }}
       data-testid="preview-editor-canvas"
     >
