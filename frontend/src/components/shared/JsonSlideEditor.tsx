@@ -16,6 +16,8 @@ interface JsonEditorInstance {
   set: (json: unknown) => void;
   setText: (text: string) => void;
   getText: () => string;
+  setMode?: (mode: 'tree' | 'code' | 'text' | 'preview') => void;
+  getMode?: () => string;
   focus?: () => void;
 }
 
@@ -38,13 +40,13 @@ const SLIDE_JSON_SCHEMA = {
   additionalProperties: true,
 };
 
-const prettyJson = (text: string, indent = 4) => {
+const tryParseJson = (text: string): { ok: true; value: unknown } | { ok: false } => {
   const raw = (text || '').trim();
-  if (!raw) return '{}';
+  if (!raw) return { ok: true, value: {} };
   try {
-    return JSON.stringify(JSON.parse(raw), null, indent);
+    return { ok: true, value: JSON.parse(raw) };
   } catch {
-    return text || '';
+    return { ok: false };
   }
 };
 
@@ -60,19 +62,25 @@ export const JsonSlideEditor = forwardRef<MarkdownTextareaRef, JsonSlideEditorPr
   const latestTextRef = useRef<string>(value || '');
   const applyingExternalRef = useRef(false);
   const [validationErrorCount, setValidationErrorCount] = useState(0);
+  const [hasSyntaxError, setHasSyntaxError] = useState(false);
 
   const applyTextToEditor = useCallback((text: string) => {
     const editor = editorRef.current;
     if (!editor) return;
-    const normalized = prettyJson(text, 4);
+    const rawText = text || '';
+    const parsed = tryParseJson(rawText);
     applyingExternalRef.current = true;
     try {
-      try {
-        editor.set(JSON.parse(normalized));
-      } catch {
-        editor.setText(text || '');
+      if (parsed.ok) {
+        editor.setMode?.('tree');
+        editor.set(parsed.value);
+        setHasSyntaxError(false);
+      } else {
+        editor.setMode?.('text');
+        editor.setText(rawText);
+        setHasSyntaxError(true);
       }
-      latestTextRef.current = text || '';
+      latestTextRef.current = rawText;
     } finally {
       applyingExternalRef.current = false;
     }
@@ -99,9 +107,10 @@ export const JsonSlideEditor = forwardRef<MarkdownTextareaRef, JsonSlideEditorPr
       if (!containerRef.current) return;
       const mod = (await import('jsoneditor')) as unknown as JsonEditorModule;
       if (!mounted || !containerRef.current) return;
+      const initialParsed = tryParseJson(value || '');
 
       const instance = new mod.JSONEditor(containerRef.current, {
-        mode: 'tree',
+        mode: initialParsed.ok ? 'tree' : 'text',
         modes: ['tree', 'code', 'text', 'preview'],
         mainMenuBar: true,
         navigationBar: true,
@@ -110,12 +119,14 @@ export const JsonSlideEditor = forwardRef<MarkdownTextareaRef, JsonSlideEditorPr
         onChangeText: (text: string) => {
           if (applyingExternalRef.current) return;
           latestTextRef.current = text;
+          setHasSyntaxError(!tryParseJson(text).ok);
           onChange(text);
         },
         onChangeJSON: (json: unknown) => {
           if (applyingExternalRef.current) return;
           const text = JSON.stringify(json, null, 4);
           latestTextRef.current = text;
+          setHasSyntaxError(false);
           onChange(text);
         },
         onValidationError: (errors: unknown[]) => {
@@ -155,15 +166,18 @@ export const JsonSlideEditor = forwardRef<MarkdownTextareaRef, JsonSlideEditorPr
       />
       <div className={cn(
         'shrink-0 border-t px-3 py-1.5 text-[11px]',
-        validationErrorCount > 0
+        hasSyntaxError || validationErrorCount > 0
           ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
           : 'border-gray-200 bg-gray-50 text-gray-500 dark:border-border-primary dark:bg-background-tertiary dark:text-foreground-tertiary'
       )}>
-        {validationErrorCount > 0 ? `JSON 校验提示：${validationErrorCount} 个问题` : 'JSON 校验通过'}
+        {hasSyntaxError
+          ? '当前内容不是严格 JSON，已切换为文本模式展示原文'
+          : validationErrorCount > 0
+            ? `JSON 校验提示：${validationErrorCount} 个问题`
+            : 'JSON 校验通过'}
       </div>
     </div>
   );
 });
 
 JsonSlideEditor.displayName = 'JsonSlideEditor';
-
