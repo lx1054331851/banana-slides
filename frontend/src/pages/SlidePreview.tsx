@@ -76,7 +76,7 @@ const previewI18n = {
       refineJson: "AI 优化 JSON",
       refineJsonTooltip: "优化当前页 JSON",
       refineJsonDialogTitle: "AI 优化当前页 JSON",
-      refineJsonPlaceholder: "例如：保持原有结构，精简文案，突出结论，并增强可视化表达",
+      refineJsonPlaceholder: "例如：保持原有结构，精简文案，突出结论，并增强可视化表达（系统将自动附加结构化指导Prompt）",
       refineJsonInlineHint: "Enter 发送，Shift+Enter 换行",
       refineDescription: "AI 优化", refineDescriptionTooltip: "AI 优化当前页描述",
       refinePlaceholder: "例如：让描述更具体，突出核心结论，改成更适合商务汇报的语气... · Enter 提交，Shift+Enter 换行",
@@ -234,7 +234,7 @@ const previewI18n = {
       refineJson: "AI Refine JSON",
       refineJsonTooltip: "Refine current page JSON",
       refineJsonDialogTitle: "AI Refine Current Page JSON",
-      refineJsonPlaceholder: "e.g., Keep the schema, tighten wording, highlight conclusions, and improve visual clarity",
+      refineJsonPlaceholder: "e.g., Keep the schema, tighten wording, highlight conclusions, and improve visual clarity (system guidance prompt will be auto-attached)",
       refineJsonInlineHint: "Enter to send, Shift+Enter for newline",
       refineDescription: "AI Refine", refineDescriptionTooltip: "Refine current page description with AI",
       refinePlaceholder: "e.g., Make the description more specific, highlight the key conclusion, and use a business presentation tone... · Enter to submit, Shift+Enter for newline",
@@ -474,6 +474,22 @@ const escapeMarkdownText = (text: string): string => text.replace(/[[\]()]/g, '\
 const DESCRIPTION_UPLOAD_ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg';
 type RenovationJsonViewMode = 'text' | 'markdown';
 const JSON_MARKDOWN_INDENT = '    ';
+const JSON_REFINE_GUIDANCE_PROMPT = [
+  '【系统指导】你正在优化“单页PPT描述JSON”，请严格遵守：',
+  '1. 只输出合法 JSON，不要输出 Markdown、说明文字或代码围栏。',
+  '2. 尽量保持原有 JSON 结构与字段语义，不随意删减关键字段。',
+  '3. 顶层字段需优先保留：source_ref、type、title、layout_suggestion、content、visual_suggestion、note。',
+  '4. content 内原有层级与数组关系应保持一致；如需补充字段，必须与业务语义强相关。',
+  '5. 文案优化目标：结论前置、表达精炼、逻辑清晰、可直接用于演示页。',
+  '6. highlight_phrases 保持“短词/短句”风格，避免长句，尽量去重。',
+  '7. 不得虚构数据、比例、金额、时间等事实；原文无量化数据时保持定性表述。',
+  '8. 保留品牌词与术语（如 OpenClaw、Agent、低代码）并保持大小写准确。',
+  '9. 若用户要求与以上约束冲突，以本指导约束优先。',
+].join('\n');
+
+const buildGuidedJsonRefineRequirement = (userRequirement: string): string => {
+  return `${JSON_REFINE_GUIDANCE_PROMPT}\n\n【用户要求】\n${userRequirement}`;
+};
 
 const formatJsonPrimitiveForMarkdown = (value: unknown): string => {
   if (typeof value === 'string') {
@@ -3023,13 +3039,14 @@ export const SlidePreview: React.FC = () => {
     if (!projectId || !selectedPage?.id) return;
     const requirement = jsonRefineRequirement.trim();
     if (!requirement || isJsonRefining) return;
+    const guidedRequirement = buildGuidedJsonRefineRequirement(requirement);
 
     try {
       setIsJsonRefining(true);
       const response = await refineSinglePageDescription(
         projectId,
         selectedPage.id,
-        requirement,
+        guidedRequirement,
         editDescription,
         selectedPage.outline_content,
         jsonRefineHistory,
