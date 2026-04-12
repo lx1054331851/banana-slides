@@ -23,6 +23,7 @@ interface JsonEditorInstance {
 
 interface JsonEditorModule {
   JSONEditor: new (container: HTMLElement, options?: Record<string, unknown>) => JsonEditorInstance;
+  default?: new (container: HTMLElement, options?: Record<string, unknown>) => JsonEditorInstance;
 }
 
 const SLIDE_JSON_SCHEMA = {
@@ -58,11 +59,13 @@ export const JsonSlideEditor = forwardRef<MarkdownTextareaRef, JsonSlideEditorPr
   'data-testid': dataTestId,
 }, ref) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const fallbackTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const editorRef = useRef<JsonEditorInstance | null>(null);
   const latestTextRef = useRef<string>(value || '');
   const applyingExternalRef = useRef(false);
   const [validationErrorCount, setValidationErrorCount] = useState(0);
   const [hasSyntaxError, setHasSyntaxError] = useState(false);
+  const [fallbackReason, setFallbackReason] = useState<string | null>(null);
 
   const applyTextToEditor = useCallback((text: string) => {
     const editor = editorRef.current;
@@ -89,14 +92,22 @@ export const JsonSlideEditor = forwardRef<MarkdownTextareaRef, JsonSlideEditorPr
   useImperativeHandle(ref, () => ({
     insertAtCursor: (text: string) => {
       const editor = editorRef.current;
-      const current = editor?.getText() || '';
+      const current = editor?.getText() ?? fallbackTextareaRef.current?.value ?? '';
       const merged = `${current}${current.endsWith('\n') || !current ? '' : '\n'}${text}`;
       onChange(merged);
       latestTextRef.current = merged;
-      applyTextToEditor(merged);
+      if (editor) {
+        applyTextToEditor(merged);
+      } else if (fallbackTextareaRef.current) {
+        fallbackTextareaRef.current.value = merged;
+      }
     },
     focus: () => {
-      editorRef.current?.focus?.();
+      if (editorRef.current) {
+        editorRef.current.focus?.();
+      } else {
+        fallbackTextareaRef.current?.focus();
+      }
     },
   }), [applyTextToEditor, onChange]);
 
@@ -105,11 +116,20 @@ export const JsonSlideEditor = forwardRef<MarkdownTextareaRef, JsonSlideEditorPr
 
     const init = async () => {
       if (!containerRef.current) return;
-      const mod = (await import('jsoneditor')) as unknown as JsonEditorModule;
+      const mod = (await import('jsoneditor')) as unknown as JsonEditorModule & Record<string, unknown>;
       if (!mounted || !containerRef.current) return;
+      const EditorCtor =
+        mod.JSONEditor ||
+        mod.default ||
+        ((mod as unknown as { default?: unknown })?.default as JsonEditorModule['JSONEditor']) ||
+        (mod as unknown as JsonEditorModule['JSONEditor']);
+
+      if (typeof EditorCtor !== 'function') {
+        throw new Error('JSONEditor constructor unavailable');
+      }
       const initialParsed = tryParseJson(value || '');
 
-      const instance = new mod.JSONEditor(containerRef.current, {
+      const instance = new EditorCtor(containerRef.current, {
         mode: initialParsed.ok ? 'tree' : 'text',
         modes: ['tree', 'code', 'text', 'preview'],
         mainMenuBar: true,
@@ -135,10 +155,15 @@ export const JsonSlideEditor = forwardRef<MarkdownTextareaRef, JsonSlideEditorPr
       });
 
       editorRef.current = instance;
+      setFallbackReason(null);
       applyTextToEditor(value || '{}');
     };
 
-    void init();
+    void init().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      setFallbackReason(message);
+      editorRef.current = null;
+    });
 
     return () => {
       mounted = false;
@@ -158,19 +183,37 @@ export const JsonSlideEditor = forwardRef<MarkdownTextareaRef, JsonSlideEditorPr
       'json-slide-editor flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-border-primary dark:bg-background-secondary',
       className
     )}>
-      <div
-        className="min-h-[220px] flex-1"
-        ref={containerRef}
-        onFocusCapture={onFocus}
-        data-testid={dataTestId}
-      />
+      {fallbackReason ? (
+        <textarea
+          ref={fallbackTextareaRef}
+          value={value}
+          onChange={(event) => {
+            const next = event.target.value;
+            latestTextRef.current = next;
+            setHasSyntaxError(!tryParseJson(next).ok);
+            onChange(next);
+          }}
+          onFocus={onFocus}
+          data-testid={dataTestId}
+          className="min-h-[220px] flex-1 resize-none bg-transparent px-4 py-3 font-mono text-sm leading-6 text-gray-900 outline-none dark:text-foreground-primary"
+        />
+      ) : (
+        <div
+          className="min-h-[220px] flex-1"
+          ref={containerRef}
+          onFocusCapture={onFocus}
+          data-testid={dataTestId}
+        />
+      )}
       <div className={cn(
         'shrink-0 border-t px-3 py-1.5 text-[11px]',
-        hasSyntaxError || validationErrorCount > 0
+        fallbackReason || hasSyntaxError || validationErrorCount > 0
           ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300'
           : 'border-gray-200 bg-gray-50 text-gray-500 dark:border-border-primary dark:bg-background-tertiary dark:text-foreground-tertiary'
       )}>
-        {hasSyntaxError
+        {fallbackReason
+          ? `JSON 结构编辑器不可用，已回退为文本模式（${fallbackReason}）`
+          : hasSyntaxError
           ? '当前内容不是严格 JSON，已切换为文本模式展示原文'
           : validationErrorCount > 0
             ? `JSON 校验提示：${validationErrorCount} 个问题`
