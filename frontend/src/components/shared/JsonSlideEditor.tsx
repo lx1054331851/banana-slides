@@ -41,6 +41,69 @@ const SLIDE_JSON_SCHEMA = {
   additionalProperties: true,
 };
 
+const JSON_FIELD_NAME_MAP: Record<string, string> = {
+  source_ref: '来源页',
+  type: '页面类型',
+  title: '标题',
+  layout_suggestion: '布局建议',
+  content: '内容',
+  headline_summary: '摘要',
+  detailed_items: '详细条目',
+  sub_title: '小标题',
+  body: '正文',
+  highlight_phrases: '高亮短语',
+  visual_suggestion: '视觉建议',
+  note: '备注',
+};
+
+const JSON_FIELD_NAME_REVERSE_MAP = Object.entries(JSON_FIELD_NAME_MAP).reduce<Record<string, string>>((acc, [en, zh]) => {
+  acc[zh] = en;
+  return acc;
+}, {});
+
+const mapJsonKeys = (value: unknown, mapper: (key: string) => string): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) => mapJsonKeys(item, mapper));
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).reduce<Record<string, unknown>>((acc, [key, val]) => {
+      acc[mapper(key)] = mapJsonKeys(val, mapper);
+      return acc;
+    }, {});
+  }
+  return value;
+};
+
+const toDisplayKey = (key: string): string => JSON_FIELD_NAME_MAP[key] ?? key;
+const toStorageKey = (key: string): string => JSON_FIELD_NAME_REVERSE_MAP[key] ?? key;
+const toDisplayJson = (value: unknown): unknown => mapJsonKeys(value, toDisplayKey);
+const toStorageJson = (value: unknown): unknown => mapJsonKeys(value, toStorageKey);
+
+const mapSchemaKeys = (schema: unknown): unknown => {
+  if (!schema || typeof schema !== 'object') return schema;
+  const obj = schema as Record<string, unknown>;
+  const next: Record<string, unknown> = { ...obj };
+
+  if (Array.isArray(obj.required)) {
+    next.required = obj.required.map((key) => (typeof key === 'string' ? toDisplayKey(key) : key));
+  }
+
+  if (obj.properties && typeof obj.properties === 'object' && !Array.isArray(obj.properties)) {
+    next.properties = Object.entries(obj.properties as Record<string, unknown>).reduce<Record<string, unknown>>((acc, [key, val]) => {
+      acc[toDisplayKey(key)] = mapSchemaKeys(val);
+      return acc;
+    }, {});
+  }
+
+  if (obj.items) {
+    next.items = mapSchemaKeys(obj.items);
+  }
+
+  return next;
+};
+
+const DISPLAY_SLIDE_JSON_SCHEMA = mapSchemaKeys(SLIDE_JSON_SCHEMA);
+
 const tryParseJson = (text: string): { ok: true; value: unknown } | { ok: false } => {
   const raw = (text || '').trim();
   if (!raw) return { ok: true, value: {} };
@@ -76,7 +139,7 @@ export const JsonSlideEditor = forwardRef<MarkdownTextareaRef, JsonSlideEditorPr
     try {
       if (parsed.ok) {
         editor.setMode?.('tree');
-        editor.set(parsed.value);
+        editor.set(toDisplayJson(parsed.value));
         setHasSyntaxError(false);
       } else {
         editor.setMode?.('text');
@@ -135,7 +198,7 @@ export const JsonSlideEditor = forwardRef<MarkdownTextareaRef, JsonSlideEditorPr
         mainMenuBar: true,
         navigationBar: true,
         statusBar: true,
-        schema: SLIDE_JSON_SCHEMA,
+        schema: DISPLAY_SLIDE_JSON_SCHEMA,
         onChangeText: (text: string) => {
           if (applyingExternalRef.current) return;
           latestTextRef.current = text;
@@ -144,7 +207,7 @@ export const JsonSlideEditor = forwardRef<MarkdownTextareaRef, JsonSlideEditorPr
         },
         onChangeJSON: (json: unknown) => {
           if (applyingExternalRef.current) return;
-          const text = JSON.stringify(json, null, 4);
+          const text = JSON.stringify(toStorageJson(json), null, 4);
           latestTextRef.current = text;
           setHasSyntaxError(false);
           onChange(text);
@@ -217,7 +280,7 @@ export const JsonSlideEditor = forwardRef<MarkdownTextareaRef, JsonSlideEditorPr
           ? '当前内容不是严格 JSON，已切换为文本模式展示原文'
           : validationErrorCount > 0
             ? `JSON 校验提示：${validationErrorCount} 个问题`
-            : 'JSON 校验通过'}
+          : 'JSON 校验通过（字段名可中文展示，保存仍为英文键）'}
       </div>
     </div>
   );
