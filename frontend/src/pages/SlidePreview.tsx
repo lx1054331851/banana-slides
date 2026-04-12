@@ -4314,7 +4314,7 @@ export const SlidePreview: React.FC = () => {
                       data-testid="preview-editor-pane"
                       className={`min-h-0 min-w-0 ${isMobileView ? 'overflow-visible' : (isPptRenovationProject ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain')}`}
                     >
-                      <div className="flex min-h-full flex-col px-3 pt-3 pb-0 md:px-4 md:pt-4 md:pb-0">
+                      <div className={`flex min-h-full flex-col ${isPptRenovationProject ? 'px-2 pt-1 pb-0 md:px-3 md:pt-1 md:pb-0' : 'px-3 pt-3 pb-0 md:px-4 md:pt-4 md:pb-0'}`}>
                         <div className="shrink-0">
                           {editorCanvasContent}
                         </div>
@@ -4323,7 +4323,7 @@ export const SlidePreview: React.FC = () => {
                             {externalFieldTags}
                           </div>
                         )}
-                        <div className={`${isPptRenovationProject ? 'mt-0' : 'mt-2'} min-h-0 flex-1 overflow-visible flex flex-col justify-end`}>
+                        <div className={`${isPptRenovationProject ? 'mt-1 flex-none justify-start' : 'mt-2 flex-1 justify-end'} min-h-0 overflow-visible flex flex-col`}>
                           <div className="min-h-0">
                             <PageAiWorkbench
                               title={t('preview.pageAiTitle')}
