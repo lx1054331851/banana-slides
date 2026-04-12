@@ -195,6 +195,7 @@ export const JsonSlideEditor = forwardRef<MarkdownTextareaRef, JsonSlideEditorPr
       const instance = new EditorCtor(containerRef.current, {
         mode: initialParsed.ok ? 'tree' : 'text',
         modes: ['tree', 'code', 'text', 'preview'],
+        language: 'zh-CN',
         mainMenuBar: true,
         navigationBar: true,
         statusBar: true,
