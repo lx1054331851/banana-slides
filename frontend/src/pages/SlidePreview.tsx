@@ -4165,7 +4165,7 @@ export const SlidePreview: React.FC = () => {
             </div>
           ) : (
             <>
-              <div className="flex-1 min-h-0 overflow-hidden px-2 py-3 md:px-3 md:py-4">
+              <div className={`flex-1 min-h-0 overflow-hidden ${isPptRenovationProject ? 'px-2 pt-2 pb-1 md:px-3 md:pt-2 md:pb-1' : 'px-2 py-3 md:px-3 md:py-4'}`}>
                 <div className="flex h-full w-full flex-col gap-4">
                   {isRenovationProcessing && (
                     <div className="rounded-2xl border border-banana-200 bg-white/90 px-4 py-4 shadow-sm">
@@ -4323,8 +4323,8 @@ export const SlidePreview: React.FC = () => {
                             {externalFieldTags}
                           </div>
                         )}
-                        <div className={`${isPptRenovationProject ? 'mt-1 flex-none justify-start' : 'mt-2 flex-1 justify-end'} min-h-0 overflow-visible flex flex-col`}>
-                          <div className="min-h-0">
+                        <div className={`${isPptRenovationProject ? 'mt-1 flex-1 justify-start' : 'mt-2 flex-1 justify-end'} min-h-0 overflow-visible flex flex-col`}>
+                          <div className={`${isPptRenovationProject ? 'min-h-0 h-full' : 'min-h-0'}`}>
                             <PageAiWorkbench
                               title={t('preview.pageAiTitle')}
                               subtitle={t('preview.pageAiSubtitle')}
