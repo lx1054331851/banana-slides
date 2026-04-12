@@ -3036,7 +3036,9 @@ export const SlidePreview: React.FC = () => {
 
   const editorCanvasContent = (
     <div
-      className={`${isPptRenovationProject ? 'min-h-[620px] sm:min-h-[680px] lg:min-h-[760px] overflow-y-auto overscroll-contain pl-4 pr-0 py-4 sm:pl-5 sm:pr-0 sm:py-5 lg:pl-6 lg:pr-0 lg:py-6' : 'min-h-[520px] sm:min-h-[560px] lg:min-h-[580px] p-4 sm:p-5 lg:p-6'} w-full min-w-0 rounded-[24px] border border-[#eadfbf] bg-white dark:border-border-primary dark:bg-[radial-gradient(circle_at_top,#1b2340_0%,#151a26_34%,#101521_100%)]`}
+      className={`${isPptRenovationProject
+        ? `${isMobileView ? 'min-h-[520px]' : 'h-full min-h-0'} overflow-y-auto overscroll-contain pl-4 pr-0 py-4 sm:pl-5 sm:pr-0 sm:py-5 lg:pl-6 lg:pr-0 lg:py-6`
+        : 'min-h-[520px] sm:min-h-[560px] lg:min-h-[580px] p-4 sm:p-5 lg:p-6'} w-full min-w-0 rounded-[24px] border border-[#eadfbf] bg-white dark:border-border-primary dark:bg-[radial-gradient(circle_at_top,#1b2340_0%,#151a26_34%,#101521_100%)]`}
       style={isMobileView ? undefined : { width: '100%', maxWidth: '100%', aspectRatio: aspectRatioStyle }}
       data-testid="preview-editor-canvas"
     >
@@ -4314,8 +4316,8 @@ export const SlidePreview: React.FC = () => {
                       data-testid="preview-editor-pane"
                       className={`min-h-0 min-w-0 ${isMobileView ? 'overflow-visible' : (isPptRenovationProject ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain')}`}
                     >
-                      <div className={`flex min-h-full flex-col ${isPptRenovationProject ? 'px-2 pt-1 pb-0 md:px-3 md:pt-1 md:pb-0' : 'px-3 pt-3 pb-0 md:px-4 md:pt-4 md:pb-0'}`}>
-                        <div className="shrink-0">
+                      <div className={`flex h-full min-h-0 flex-col ${isPptRenovationProject ? 'px-2 pt-1 pb-0 md:px-3 md:pt-1 md:pb-0' : 'px-3 pt-3 pb-0 md:px-4 md:pt-4 md:pb-0'}`}>
+                        <div className={`${isPptRenovationProject ? 'min-h-0 flex-1' : 'shrink-0'}`}>
                           {editorCanvasContent}
                         </div>
                         {!isPptRenovationProject && (
