@@ -40,7 +40,8 @@ def create_page(project_id):
     {
         "order_index": 2,
         "part": "optional",
-        "outline_content": {"title": "...", "points": [...]}
+        "outline_content": {"title": "...", "points": [...]},
+        "json_refine_context": {"requirement_draft": "...", "history": ["..."]}
     }
     """
     try:
@@ -68,6 +69,8 @@ def create_page(project_id):
         if 'description_content' in data:
             page.set_description_content(data['description_content'])
             page.status = 'DESCRIPTION_GENERATED'
+        if 'json_refine_context' in data:
+            page.set_json_refine_context(data['json_refine_context'])
 
         db.session.add(page)
         
@@ -130,7 +133,8 @@ def update_page(project_id, page_id):
 
     Request body:
     {
-        "part": "章节名"
+        "part": "章节名",
+        "json_refine_context": {"requirement_draft": "...", "history": ["..."]}
     }
     """
     try:
@@ -147,6 +151,8 @@ def update_page(project_id, page_id):
         # Update part field if provided
         if 'part' in data:
             page.part = data['part']
+        if 'json_refine_context' in data:
+            page.set_json_refine_context(data.get('json_refine_context'))
 
         page.updated_at = datetime.utcnow()
 

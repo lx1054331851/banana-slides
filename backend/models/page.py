@@ -20,6 +20,7 @@ class Page(db.Model):
     part = db.Column(db.String(200), nullable=True)  # Optional section name
     outline_content = db.Column(db.Text, nullable=True)  # JSON string
     description_content = db.Column(db.Text, nullable=True)  # JSON string
+    json_refine_context = db.Column(db.Text, nullable=True)  # JSON string: {"requirement_draft": "...", "history": []}
     generated_image_path = db.Column(db.String(500), nullable=True)  # Original PNG image path
     cached_image_path = db.Column(db.String(500), nullable=True)  # Compressed JPG thumbnail path
     status = db.Column(db.String(50), nullable=False, default='DRAFT')
@@ -63,6 +64,23 @@ class Page(db.Model):
             self.description_content = json.dumps(data, ensure_ascii=False)
         else:
             self.description_content = None
+
+    def get_json_refine_context(self):
+        """Parse json_refine_context from JSON string"""
+        if self.json_refine_context:
+            try:
+                parsed = json.loads(self.json_refine_context)
+                return parsed if isinstance(parsed, dict) else None
+            except json.JSONDecodeError:
+                return None
+        return None
+
+    def set_json_refine_context(self, data):
+        """Set json_refine_context as JSON string"""
+        if data and isinstance(data, dict):
+            self.json_refine_context = json.dumps(data, ensure_ascii=False)
+        else:
+            self.json_refine_context = None
     
     def to_dict(self, include_versions=False):
         """Convert to dictionary"""
@@ -82,6 +100,7 @@ class Page(db.Model):
             'part': self.part,
             'outline_content': self.get_outline_content(),
             'description_content': self.get_description_content(),
+            'json_refine_context': self.get_json_refine_context(),
             'generated_image_url': original_url or display_image_url,
             'cached_image_url': cached_url,
             'preview_image_url': display_image_url,
