@@ -70,8 +70,13 @@ const previewI18n = {
       pageJson: "页面 JSON（可编辑）",
       jsonTextTab: "JSON文本",
       jsonStyleGuideTab: "风格指导",
-      jsonStyleGuideHint: "展示当前项目引用的全局 JSON 风格指导",
-      jsonStyleGuideEmpty: "当前项目未引用全局 JSON 风格指导",
+      jsonStyleGuideHint: "可编辑：保存后将为当前页（及当前图片版本）创建独立风格指导覆盖",
+      jsonStyleGuidePlaceholder: "请输入当前页风格指导 JSON；留空表示继续引用全局风格指导",
+      jsonStyleGuideSourceImage: "当前图片版本已绑定独立风格指导",
+      jsonStyleGuideSourcePage: "当前页已绑定独立风格指导（未细分到图片版本）",
+      jsonStyleGuideSourceGlobal: "当前页正在引用项目全局风格指导",
+      jsonStyleGuideReset: "恢复全局引用",
+      jsonStyleGuideEmpty: "当前页和项目均未配置风格指导 JSON",
       refineJson: "AI 优化 JSON",
       refineJsonTooltip: "优化当前页 JSON",
       refineJsonDialogTitle: "AI 优化当前页 JSON",
@@ -227,8 +232,13 @@ const previewI18n = {
       pageJson: "Page JSON (Editable)",
       jsonTextTab: "JSON Text",
       jsonStyleGuideTab: "Style Guide",
-      jsonStyleGuideHint: "Show the global JSON style guide referenced by this project",
-      jsonStyleGuideEmpty: "This project is not referencing a global JSON style guide yet",
+      jsonStyleGuideHint: "Editable: once saved, this becomes a page/image-level override instead of global style",
+      jsonStyleGuidePlaceholder: "Enter style guide JSON for this page. Leave empty to keep using the global style guide",
+      jsonStyleGuideSourceImage: "Current image version is using a dedicated style guide override",
+      jsonStyleGuideSourcePage: "Current page is using a page-level style guide override",
+      jsonStyleGuideSourceGlobal: "Current page is using the project global style guide",
+      jsonStyleGuideReset: "Revert To Global",
+      jsonStyleGuideEmpty: "No style guide JSON is configured for this page or project",
       refineJson: "AI Refine JSON",
       refineJsonTooltip: "Refine current page JSON",
       refineJsonDialogTitle: "AI Refine Current Page JSON",
@@ -439,6 +449,7 @@ type PageDraft = {
   points: string;
   description: string;
   extraFields: Record<string, string>;
+  styleGuideBindings: StyleGuideBindings;
 };
 
 type PageAiUploadedReference = {
@@ -470,6 +481,49 @@ const isSupportedDescriptionImageUrl = (url: string): boolean => {
 const escapeMarkdownText = (text: string): string => text.replace(/[[\]()]/g, '\\$&');
 const DESCRIPTION_UPLOAD_ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg';
 type RenovationJsonViewMode = 'text' | 'styleGuide';
+const PAGE_STYLE_GUIDE_DEFAULT_BINDING = '__page_default__';
+
+type StyleGuideBindings = Record<string, string>;
+
+const buildStyleGuideBindingKey = (imageVersionId?: string | null): string => (
+  imageVersionId ? `image_version:${imageVersionId}` : PAGE_STYLE_GUIDE_DEFAULT_BINDING
+);
+
+const normalizeStyleGuideBindings = (raw: unknown): StyleGuideBindings => {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {};
+  }
+  return Object.entries(raw as Record<string, unknown>).reduce<StyleGuideBindings>((acc, [key, value]) => {
+    if (!key || typeof value !== 'string') return acc;
+    if (!value.trim()) return acc;
+    acc[key] = value;
+    return acc;
+  }, {});
+};
+
+const getDescriptionStyleGuideBindings = (
+  descriptionContent?: DescriptionContent | null
+): StyleGuideBindings => {
+  if (!descriptionContent || typeof descriptionContent !== 'object') {
+    return {};
+  }
+  return normalizeStyleGuideBindings((descriptionContent as any).style_guide_bindings);
+};
+
+const serializeStyleGuideBindings = (bindings: StyleGuideBindings): StyleGuideBindings | undefined => {
+  const normalized = normalizeStyleGuideBindings(bindings);
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+};
+
+const areStyleGuideBindingsEqual = (left: StyleGuideBindings, right: StyleGuideBindings): boolean => {
+  const leftEntries = Object.entries(normalizeStyleGuideBindings(left)).sort(([a], [b]) => a.localeCompare(b));
+  const rightEntries = Object.entries(normalizeStyleGuideBindings(right)).sort(([a], [b]) => a.localeCompare(b));
+  if (leftEntries.length !== rightEntries.length) return false;
+  return leftEntries.every(([key, value], index) => {
+    const [rightKey, rightValue] = rightEntries[index];
+    return key === rightKey && value.trim() === rightValue.trim();
+  });
+};
 
 const getMaterialMarkdownLabel = (material: Material): string => {
   return (
@@ -718,6 +772,7 @@ export const SlidePreview: React.FC = () => {
         setEditOutlinePoints('');
         setEditDescription('');
         setEditExtraFields({});
+        setEditStyleGuideBindings({});
       }
       return;
     }
@@ -732,6 +787,7 @@ export const SlidePreview: React.FC = () => {
       setEditOutlinePoints(pageDraft.points);
       setEditDescription(pageDraft.description);
       setEditExtraFields(pageDraft.extraFields);
+      setEditStyleGuideBindings(pageDraft.styleGuideBindings || {});
       return;
     }
 
@@ -739,6 +795,7 @@ export const SlidePreview: React.FC = () => {
     setEditOutlinePoints(page.outline_content?.points?.join('\n') || '');
     setEditDescription(formatDescriptionForEditor(getDescriptionText(page.description_content), currentProject));
     setEditExtraFields(getDescriptionExtraFields(page.description_content));
+    setEditStyleGuideBindings(getDescriptionStyleGuideBindings(page.description_content));
   }, [currentProject, selectedIndex, pageDrafts, formatDescriptionForEditor]);
 
   useEffect(() => {
@@ -977,6 +1034,7 @@ export const SlidePreview: React.FC = () => {
   const [editOutlineTitle, setEditOutlineTitle] = useState('');
   const [editOutlinePoints, setEditOutlinePoints] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editStyleGuideBindings, setEditStyleGuideBindings] = useState<StyleGuideBindings>({});
   const [renovationJsonViewMode, setRenovationJsonViewMode] = useState<RenovationJsonViewMode>('text');
   const descriptionTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const activeDescriptionSetContent = useRef<(updater: (prev: string) => string) => void>(setEditDescription);
@@ -1356,6 +1414,7 @@ export const SlidePreview: React.FC = () => {
         points: page?.outline_content?.points?.join('\n') || '',
         description: formatDescriptionForEditor(getDescriptionText(page?.description_content), currentProject),
         extraFields: getDescriptionExtraFields(page?.description_content),
+        styleGuideBindings: getDescriptionStyleGuideBindings(page?.description_content),
       };
       return {
         ...prev,
@@ -1375,6 +1434,7 @@ export const SlidePreview: React.FC = () => {
       setEditOutlinePoints('');
       setEditDescription('');
       setEditExtraFields({});
+      setEditStyleGuideBindings({});
       return;
     }
 
@@ -1383,6 +1443,7 @@ export const SlidePreview: React.FC = () => {
     setEditOutlinePoints(page.outline_content?.points?.join('\n') || '');
     setEditDescription(formatDescriptionForEditor(getDescriptionText(page.description_content), project));
     setEditExtraFields(getDescriptionExtraFields(page.description_content));
+    setEditStyleGuideBindings(getDescriptionStyleGuideBindings(page.description_content));
   }, [selectedIndex, formatDescriptionForEditor]);
 
   // Memoize pages with generated images to avoid re-computing in multiple places
@@ -1736,6 +1797,7 @@ export const SlidePreview: React.FC = () => {
         setImageVersions([]);
         return;
       }
+      setImageVersions([]);
 
       try {
         const response = await getPageImageVersions(projectId, page.id);
@@ -2015,12 +2077,31 @@ export const SlidePreview: React.FC = () => {
 
     const originalDesc = getDescriptionText(page.description_content);
     const originalExtraFields = getDescriptionExtraFields(page.description_content);
+    const originalStyleGuideBindings = getDescriptionStyleGuideBindings(page.description_content);
     const serializedExtraFields = serializeExtraFields(editExtraFields);
-    if (editDescription !== originalDesc || !areStringRecordsEqual(editExtraFields, originalExtraFields)) {
-      updates.description_content = {
+    const serializedStyleGuideBindings = serializeStyleGuideBindings(editStyleGuideBindings);
+    if (
+      editDescription !== originalDesc
+      || !areStringRecordsEqual(editExtraFields, originalExtraFields)
+      || !areStyleGuideBindingsEqual(editStyleGuideBindings, originalStyleGuideBindings)
+    ) {
+      const nextDescriptionContent: Record<string, any> = {
+        ...(page.description_content && typeof page.description_content === 'object'
+          ? page.description_content as Record<string, any>
+          : {}),
         text: editDescription,
-        ...(serializedExtraFields ? { extra_fields: serializedExtraFields } : {}),
-      } as DescriptionContent;
+      };
+      if (serializedExtraFields) {
+        nextDescriptionContent.extra_fields = serializedExtraFields;
+      } else {
+        delete nextDescriptionContent.extra_fields;
+      }
+      if (serializedStyleGuideBindings) {
+        nextDescriptionContent.style_guide_bindings = serializedStyleGuideBindings;
+      } else {
+        delete nextDescriptionContent.style_guide_bindings;
+      }
+      updates.description_content = nextDescriptionContent as DescriptionContent;
     }
 
     if (Object.keys(updates).length > 0) {
@@ -2030,10 +2111,11 @@ export const SlidePreview: React.FC = () => {
         points: editOutlinePoints,
         description: editDescription,
         extraFields: editExtraFields,
+        styleGuideBindings: editStyleGuideBindings,
       });
       show({ message: t('slidePreview.outlineSaved'), type: 'success' });
     }
-  }, [currentProject, selectedIndex, editOutlineTitle, editOutlinePoints, editDescription, editExtraFields, updatePageLocal, persistCurrentPageDraft, show, t]);
+  }, [currentProject, selectedIndex, editOutlineTitle, editOutlinePoints, editDescription, editExtraFields, editStyleGuideBindings, updatePageLocal, persistCurrentPageDraft, show, t]);
 
   const executePageImageGeneration = useCallback(async (options?: {
     prompt?: string;
@@ -3090,10 +3172,56 @@ export const SlidePreview: React.FC = () => {
     ? Math.max(0, Math.min(100, Math.round((descriptionGenerationCompleted / descriptionGenerationTotal) * 100)))
     : 0;
   const isPptRenovationProject = currentProject?.creation_type === 'ppt_renovation';
+  const currentImageVersionId = imageVersions.find((version) => version.is_current)?.version_id || null;
+  const activeStyleGuideBindingKey = buildStyleGuideBindingKey(currentImageVersionId);
   const projectStyleGuideJson = useMemo(() => {
     if (!isPptRenovationProject) return '';
     return formatJsonForEditor(currentProject?.template_style_json || '');
   }, [isPptRenovationProject, currentProject?.template_style_json]);
+  const currentImageBoundStyleGuide = editStyleGuideBindings[activeStyleGuideBindingKey] || '';
+  const pageDefaultStyleGuide = editStyleGuideBindings[PAGE_STYLE_GUIDE_DEFAULT_BINDING] || '';
+  const resolvedStyleGuideText = currentImageBoundStyleGuide || pageDefaultStyleGuide || projectStyleGuideJson || '';
+  const isCurrentImageStyleBound = Boolean(currentImageBoundStyleGuide.trim());
+  const isPageStyleBound = !isCurrentImageStyleBound && Boolean(pageDefaultStyleGuide.trim());
+  const styleGuideSourceLabel = isCurrentImageStyleBound
+    ? t('preview.jsonStyleGuideSourceImage')
+    : isPageStyleBound
+      ? t('preview.jsonStyleGuideSourcePage')
+      : t('preview.jsonStyleGuideSourceGlobal');
+  const hasAnyStyleGuideSource = Boolean(
+    resolvedStyleGuideText.trim() || projectStyleGuideJson.trim() || currentImageBoundStyleGuide.trim() || pageDefaultStyleGuide.trim()
+  );
+  const handleStyleGuideTextChange = (value: string) => {
+    setEditStyleGuideBindings((prev) => {
+      const next = { ...prev };
+      if (value.trim()) {
+        next[PAGE_STYLE_GUIDE_DEFAULT_BINDING] = value;
+        if (activeStyleGuideBindingKey !== PAGE_STYLE_GUIDE_DEFAULT_BINDING) {
+          next[activeStyleGuideBindingKey] = value;
+        }
+      } else {
+        delete next[activeStyleGuideBindingKey];
+        delete next[PAGE_STYLE_GUIDE_DEFAULT_BINDING];
+      }
+      persistCurrentPageDraft({ styleGuideBindings: next });
+      return next;
+    });
+  };
+  const handleResetStyleGuideBinding = () => {
+    setEditStyleGuideBindings((prev) => {
+      if (
+        !Object.prototype.hasOwnProperty.call(prev, activeStyleGuideBindingKey)
+        && !Object.prototype.hasOwnProperty.call(prev, PAGE_STYLE_GUIDE_DEFAULT_BINDING)
+      ) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[activeStyleGuideBindingKey];
+      delete next[PAGE_STYLE_GUIDE_DEFAULT_BINDING];
+      persistCurrentPageDraft({ styleGuideBindings: next });
+      return next;
+    });
+  };
   const editorGridClasses = isPptRenovationProject
     ? 'grid h-full min-h-0 gap-3 grid-rows-[minmax(0,1fr)] lg:gap-4 lg:grid-rows-[minmax(0,1fr)]'
     : 'grid h-full min-h-0 gap-3 grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-4 lg:grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]';
@@ -3182,18 +3310,37 @@ export const SlidePreview: React.FC = () => {
           </div>
           {isPptRenovationProject && renovationJsonViewMode === 'styleGuide' ? (
             <div className="min-h-[220px] flex-1 overflow-y-auto rounded-xl border border-[#eadfbe] bg-[#fffdf7] px-4 py-3 dark:border-[#2f3a53] dark:bg-[#101827]">
-              <div className="mb-3 text-xs text-[#9b885f] dark:text-[#8ea0c8]">
-                {t('preview.jsonStyleGuideHint')}
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="text-xs text-[#9b885f] dark:text-[#8ea0c8]">
+                  {t('preview.jsonStyleGuideHint')}
+                </div>
+                {(isCurrentImageStyleBound || isPageStyleBound) && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleResetStyleGuideBinding}
+                    className="h-7 rounded-md border border-[#e6dab8] bg-[#fbf7eb] px-2 text-[11px] text-[#7c6740] hover:bg-[#f7edd2] dark:border-[#3f4962] dark:bg-[#1a2232] dark:text-[#c4d2f3] dark:hover:bg-[#222d44]"
+                  >
+                    {t('preview.jsonStyleGuideReset')}
+                  </Button>
+                )}
               </div>
-              {projectStyleGuideJson ? (
-                <pre className="whitespace-pre-wrap break-words font-mono text-[13px] leading-6 text-slate-700 dark:text-[#d9e2f2]">
-                  {projectStyleGuideJson}
-                </pre>
-              ) : (
+              <div className="mb-3 inline-flex items-center rounded-full border border-[#e8d9b4] bg-[#fff9ec] px-2.5 py-1 text-[11px] text-[#8a7750] dark:border-[#3c4762] dark:bg-[#1a2335] dark:text-[#9eaccf]">
+                {styleGuideSourceLabel}
+              </div>
+              {!hasAnyStyleGuideSource && (
                 <div className="text-sm text-slate-500 dark:text-foreground-tertiary">
                   {t('preview.jsonStyleGuideEmpty')}
                 </div>
               )}
+              <textarea
+                value={resolvedStyleGuideText}
+                onChange={(event) => handleStyleGuideTextChange(event.target.value)}
+                placeholder={t('preview.jsonStyleGuidePlaceholder')}
+                rows={14}
+                className="mt-2 min-h-[220px] w-full resize-y rounded-lg border border-[#e8d9b4] bg-white/95 px-3 py-2 font-mono text-[13px] leading-6 text-slate-700 outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-[#b8aa86] focus:border-[#d4b35c] focus:ring-2 focus:ring-[#f2cf76]/35 dark:border-[#5a4e37] dark:bg-[#0f1420] dark:text-[#e2e8f0] dark:placeholder:text-[#66708c] dark:focus:border-[#e6c677] dark:focus:ring-[#d8b259]/30"
+              />
             </div>
           ) : (
             <MarkdownTextarea
@@ -3522,12 +3669,14 @@ export const SlidePreview: React.FC = () => {
 
   const currentPageDescriptionText = getDescriptionText(selectedPage?.description_content);
   const currentPageExtraFields = getDescriptionExtraFields(selectedPage?.description_content);
+  const currentPageStyleGuideBindings = getDescriptionStyleGuideBindings(selectedPage?.description_content);
   const isCurrentPageDirty = Boolean(
     selectedPage && (
       editOutlineTitle !== (selectedPage.outline_content?.title || '') ||
       editOutlinePoints !== (selectedPage.outline_content?.points?.join('\n') || '') ||
       editDescription !== currentPageDescriptionText ||
-      !areStringRecordsEqual(editExtraFields, currentPageExtraFields)
+      !areStringRecordsEqual(editExtraFields, currentPageExtraFields) ||
+      !areStyleGuideBindingsEqual(editStyleGuideBindings, currentPageStyleGuideBindings)
     )
   );
   const textStatusLabel = isCurrentPageDirty ? '文本未保存' : '文本已保存';

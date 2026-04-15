@@ -9,6 +9,10 @@ from utils.image_resolution_policy import (
     get_project_default_image_resolution,
     resolve_effective_image_resolution,
 )
+from utils.style_guidance import (
+    build_combined_style_requirements,
+    resolve_page_style_guide_json,
+)
 from utils.text_normalization import normalize_user_text, normalize_user_text_list
 from services import FileService, ProjectContext
 from services.ai_service_manager import get_ai_service
@@ -605,10 +609,17 @@ def generate_page_image(project_id, page_id):
             ref_image_path = file_service.get_template_path(project_id)
         has_template = bool(ref_image_path)
         use_template = has_template  # normalize by actual presence
+
+        current_version = PageImageVersion.query.filter_by(page_id=page_id, is_current=True).first()
+        page_style_json = resolve_page_style_guide_json(
+            desc_content,
+            image_version_id=current_version.id if current_version else None,
+        )
+        effective_style_json = page_style_json or project.template_style_json
         
         # 检查是否有模板图片或风格描述/风格JSON
         # 如果都没有，则返回错误
-        if not has_template and not project.template_style and not project.template_style_json:
+        if not has_template and not project.template_style and not effective_style_json:
             return bad_request("No template image or style description found for project")
         
         # Generate prompt
@@ -638,12 +649,12 @@ def generate_page_image(project_id, page_id):
                 additional_ref_images = image_urls
                 has_material_images = True
         
-        # 合并额额外要求 + 风格JSON + 风格描述
-        combined_requirements = project.extra_requirements or ""
-        if project.template_style_json:
-            combined_requirements = combined_requirements + f"\n\nppt页面风格指导(JSON)：\n<style_json>\n{project.template_style_json}\n</style_json>\n"
-        if project.template_style:
-            combined_requirements = combined_requirements + f"\n\n附加风格要求：\n{project.template_style}"
+        # 合并额外要求 + 风格JSON + 风格描述（页级风格覆盖优先于全局）
+        combined_requirements = build_combined_style_requirements(
+            extra_requirements=project.extra_requirements,
+            style_json=effective_style_json,
+            style_text=project.template_style,
+        )
         
         # Create async task for image generation
         task = Task(
@@ -892,12 +903,19 @@ def edit_page_image(project_id, page_id):
                 "pages": current_part_pages
             })
 
+        current_version = PageImageVersion.query.filter_by(page_id=page_id, is_current=True).first()
+        page_style_json = resolve_page_style_guide_json(
+            desc_content,
+            image_version_id=current_version.id if current_version else None,
+        )
+        effective_style_json = page_style_json or project.template_style_json
+
         # Keep style-related requirements so edit endpoint can fallback to text-to-image mode
-        combined_requirements = project.extra_requirements or ""
-        if project.template_style_json:
-            combined_requirements = combined_requirements + f"\n\nppt页面风格指导(JSON)：\n<style_json>\n{project.template_style_json}\n</style_json>\n"
-        if project.template_style:
-            combined_requirements = combined_requirements + f"\n\n附加风格要求：\n{project.template_style}"
+        combined_requirements = build_combined_style_requirements(
+            extra_requirements=project.extra_requirements,
+            style_json=effective_style_json,
+            style_text=project.template_style,
+        )
         
         # Create async task for image editing
         task = Task(

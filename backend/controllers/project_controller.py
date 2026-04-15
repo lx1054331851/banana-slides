@@ -21,11 +21,14 @@ from utils.image_resolution_policy import (
     resolve_effective_image_resolution,
 )
 from utils.text_normalization import normalize_user_text, normalize_user_text_list
+from utils.style_guidance import (
+    resolve_page_style_guide_json,
+)
 from sqlalchemy.orm import joinedload
 from werkzeug.exceptions import BadRequest
 from werkzeug.utils import secure_filename
 
-from models import db, Project, Page, Task, ReferenceFile
+from models import db, Project, Page, PageImageVersion, Task, ReferenceFile
 from services import ProjectContext, FileService
 from services.prompts import get_long_report_split_prompt
 from services.ai_service_manager import get_ai_service
@@ -1431,8 +1434,28 @@ def generate_images(project_id):
             ref_image_path = file_service.get_template_path(project_id)
         has_template = bool(ref_image_path)
         use_template = has_template  # use actual template presence for prompt/runtime
-        
-        if not has_template and not project.template_style and not project.template_style_json:
+
+        page_ids_for_style = [p.id for p in pages if p.id]
+        current_versions = []
+        if page_ids_for_style:
+            current_versions = PageImageVersion.query.filter(
+                PageImageVersion.page_id.in_(page_ids_for_style),
+                PageImageVersion.is_current.is_(True),
+            ).all()
+        current_version_by_page_id = {item.page_id: item.id for item in current_versions}
+
+        page_style_json_map = {}
+        for page in pages:
+            if not page.id:
+                continue
+            style_json = resolve_page_style_guide_json(
+                page.get_description_content(),
+                image_version_id=current_version_by_page_id.get(page.id),
+            )
+            if style_json:
+                page_style_json_map[page.id] = style_json
+
+        if not has_template and not project.template_style and not project.template_style_json and not page_style_json_map:
             return bad_request("请先上传模板图片或添加风格描述。")
         
         # Reconstruct outline from pages with part structure
@@ -1485,13 +1508,6 @@ def generate_images(project_id):
         # Get AI service instance (cached by route fingerprint when override/defaults are active)
         ai_service = get_ai_service(routing_bundle=routing_bundle)
         
-        # 合并额外要求和风格描述
-        combined_requirements = project.extra_requirements or ""
-        if project.template_style_json:
-            combined_requirements = combined_requirements + f"\n\nppt页面风格指导(JSON)：\n<style_json>\n{project.template_style_json}\n</style_json>\n"
-        if project.template_style:
-            combined_requirements = combined_requirements + f"\n\n附加风格要求：\n{project.template_style}"
-        
         # Set all target pages to QUEUED before submitting background task
         # This ensures the status is visible to frontend immediately after API returns
         for page in pages:
@@ -1514,9 +1530,13 @@ def generate_images(project_id):
             project.image_aspect_ratio,
             effective_resolution,
             app,
-            combined_requirements if combined_requirements.strip() else None,
+            None,
             language,
-            selected_page_ids if selected_page_ids else None
+            selected_page_ids if selected_page_ids else None,
+            project.extra_requirements or '',
+            project.template_style_json or '',
+            project.template_style or '',
+            page_style_json_map,
         )
         
         # Update project status

@@ -16,6 +16,7 @@ from models import db, Task, Page, Material, PageImageVersion
 from services.prompts import get_image_edit_prompt
 from utils import get_filtered_pages
 from utils.image_utils import check_image_resolution
+from utils.style_guidance import build_combined_style_requirements
 from utils.text_normalization import normalize_user_text
 
 
@@ -667,7 +668,11 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                         resolution: str = "2K", app=None,
                         extra_requirements: str = None,
                         language: str = None,
-                        page_ids: list = None):
+                        page_ids: list = None,
+                        base_extra_requirements: str = None,
+                        project_template_style_json: str = None,
+                        project_template_style: str = None,
+                        page_style_json_map: Optional[Dict[str, str]] = None):
     """
     Background task for generating page images
     Based on demo.py gen_images_parallel()
@@ -677,6 +682,10 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
     Args:
         language: Output language (zh, en, ja, auto)
         page_ids: Optional list of page IDs to generate (if not provided, generates all pages)
+        base_extra_requirements: project-level extra requirements without style content
+        project_template_style_json: project-level style guide JSON
+        project_template_style: project-level style text
+        page_style_json_map: optional page_id -> style_json override map
     """
     if app is None:
         raise ValueError("Flask app instance must be provided")
@@ -804,12 +813,31 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                             page_ref_image_path = file_service.get_template_path(project_id)
                             # 注意：如果有风格描述，即使没有模板图片也允许生成
                             # 这个检查已经在 controller 层完成，这里不再检查
+
+                        page_style_json = None
+                        if isinstance(page_style_json_map, dict):
+                            page_style_json = page_style_json_map.get(page_id)
+                        if (
+                            base_extra_requirements is not None
+                            or project_template_style_json is not None
+                            or project_template_style is not None
+                        ):
+                            effective_style_json = page_style_json or project_template_style_json
+                            page_extra_requirements = build_combined_style_requirements(
+                                extra_requirements=base_extra_requirements,
+                                style_json=effective_style_json,
+                                style_text=project_template_style,
+                            )
+                        else:
+                            page_extra_requirements = extra_requirements
+                        if isinstance(page_extra_requirements, str):
+                            page_extra_requirements = page_extra_requirements.strip() or None
                         
                         # Generate image prompt
                         prompt = ai_service.generate_image_prompt(
                             outline, page_data, desc_text, page_index,
                             has_material_images=has_material_images,
-                            extra_requirements=extra_requirements,
+                            extra_requirements=page_extra_requirements,
                             language=language,
                             has_template=use_template,
                             aspect_ratio=aspect_ratio
@@ -845,7 +873,7 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                             primary_reference=page_ref_image_path,
                             additional_references=page_additional_ref_images,
                             description_text=desc_text,
-                            extra_requirements=extra_requirements,
+                            extra_requirements=page_extra_requirements,
                             extra_requirements_in_prompt=True,
                             upload_root=file_service.upload_folder,
                         )
