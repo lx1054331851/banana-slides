@@ -3181,16 +3181,6 @@ export const SlidePreview: React.FC = () => {
   const currentImageBoundStyleGuide = editStyleGuideBindings[activeStyleGuideBindingKey] || '';
   const pageDefaultStyleGuide = editStyleGuideBindings[PAGE_STYLE_GUIDE_DEFAULT_BINDING] || '';
   const resolvedStyleGuideText = currentImageBoundStyleGuide || pageDefaultStyleGuide || projectStyleGuideJson || '';
-  const isCurrentImageStyleBound = Boolean(currentImageBoundStyleGuide.trim());
-  const isPageStyleBound = !isCurrentImageStyleBound && Boolean(pageDefaultStyleGuide.trim());
-  const styleGuideSourceLabel = isCurrentImageStyleBound
-    ? t('preview.jsonStyleGuideSourceImage')
-    : isPageStyleBound
-      ? t('preview.jsonStyleGuideSourcePage')
-      : t('preview.jsonStyleGuideSourceGlobal');
-  const hasAnyStyleGuideSource = Boolean(
-    resolvedStyleGuideText.trim() || projectStyleGuideJson.trim() || currentImageBoundStyleGuide.trim() || pageDefaultStyleGuide.trim()
-  );
   const handleStyleGuideTextChange = (value: string) => {
     setEditStyleGuideBindings((prev) => {
       const next = { ...prev };
@@ -3203,21 +3193,6 @@ export const SlidePreview: React.FC = () => {
         delete next[activeStyleGuideBindingKey];
         delete next[PAGE_STYLE_GUIDE_DEFAULT_BINDING];
       }
-      persistCurrentPageDraft({ styleGuideBindings: next });
-      return next;
-    });
-  };
-  const handleResetStyleGuideBinding = () => {
-    setEditStyleGuideBindings((prev) => {
-      if (
-        !Object.prototype.hasOwnProperty.call(prev, activeStyleGuideBindingKey)
-        && !Object.prototype.hasOwnProperty.call(prev, PAGE_STYLE_GUIDE_DEFAULT_BINDING)
-      ) {
-        return prev;
-      }
-      const next = { ...prev };
-      delete next[activeStyleGuideBindingKey];
-      delete next[PAGE_STYLE_GUIDE_DEFAULT_BINDING];
       persistCurrentPageDraft({ styleGuideBindings: next });
       return next;
     });
@@ -3309,39 +3284,18 @@ export const SlidePreview: React.FC = () => {
             )}
           </div>
           {isPptRenovationProject && renovationJsonViewMode === 'styleGuide' ? (
-            <div className="min-h-[220px] flex-1 overflow-y-auto rounded-xl border border-[#eadfbe] bg-[#fffdf7] px-4 py-3 dark:border-[#2f3a53] dark:bg-[#101827]">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <div className="text-xs text-[#9b885f] dark:text-[#8ea0c8]">
-                  {t('preview.jsonStyleGuideHint')}
-                </div>
-                {(isCurrentImageStyleBound || isPageStyleBound) && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleResetStyleGuideBinding}
-                    className="h-7 rounded-md border border-[#e6dab8] bg-[#fbf7eb] px-2 text-[11px] text-[#7c6740] hover:bg-[#f7edd2] dark:border-[#3f4962] dark:bg-[#1a2232] dark:text-[#c4d2f3] dark:hover:bg-[#222d44]"
-                  >
-                    {t('preview.jsonStyleGuideReset')}
-                  </Button>
-                )}
-              </div>
-              <div className="mb-3 inline-flex items-center rounded-full border border-[#e8d9b4] bg-[#fff9ec] px-2.5 py-1 text-[11px] text-[#8a7750] dark:border-[#3c4762] dark:bg-[#1a2335] dark:text-[#9eaccf]">
-                {styleGuideSourceLabel}
-              </div>
-              {!hasAnyStyleGuideSource && (
-                <div className="text-sm text-slate-500 dark:text-foreground-tertiary">
-                  {t('preview.jsonStyleGuideEmpty')}
-                </div>
-              )}
-              <textarea
-                value={resolvedStyleGuideText}
-                onChange={(event) => handleStyleGuideTextChange(event.target.value)}
-                placeholder={t('preview.jsonStyleGuidePlaceholder')}
-                rows={14}
-                className="mt-2 min-h-[220px] w-full resize-y rounded-lg border border-[#e8d9b4] bg-white/95 px-3 py-2 font-mono text-[13px] leading-6 text-slate-700 outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-[#b8aa86] focus:border-[#d4b35c] focus:ring-2 focus:ring-[#f2cf76]/35 dark:border-[#5a4e37] dark:bg-[#0f1420] dark:text-[#e2e8f0] dark:placeholder:text-[#66708c] dark:focus:border-[#e6c677] dark:focus:ring-[#d8b259]/30"
-              />
-            </div>
+            <MarkdownTextarea
+              value={resolvedStyleGuideText}
+              onChange={(value: string) => handleStyleGuideTextChange(value)}
+              placeholder={t('preview.jsonStyleGuidePlaceholder')}
+              data-testid="preview-style-guide-input"
+              rows={14}
+              maxHeight="100%"
+              showUploadButton={false}
+              showImagePreview={false}
+              slashActions={undefined}
+              className="min-h-[220px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:font-mono"
+            />
           ) : (
             <MarkdownTextarea
               ref={descriptionTextareaRef}
