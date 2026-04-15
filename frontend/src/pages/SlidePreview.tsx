@@ -69,10 +69,9 @@ const previewI18n = {
       pageOutline: "页面大纲（可编辑）", pageDescription: "页面描述（可编辑）",
       pageJson: "页面 JSON（可编辑）",
       jsonTextTab: "JSON文本",
-      jsonMarkdownTab: "Markdown预览",
-      jsonMarkdownHint: "JSON 解析后自动转换为 Markdown 展示",
-      jsonParseFailed: "JSON 解析失败，请先修正文本格式后再查看 Markdown 预览。",
-      jsonMarkdownEmpty: "暂无可展示内容",
+      jsonStyleGuideTab: "风格指导",
+      jsonStyleGuideHint: "展示当前项目引用的全局 JSON 风格指导",
+      jsonStyleGuideEmpty: "当前项目未引用全局 JSON 风格指导",
       refineJson: "AI 优化 JSON",
       refineJsonTooltip: "优化当前页 JSON",
       refineJsonDialogTitle: "AI 优化当前页 JSON",
@@ -227,10 +226,9 @@ const previewI18n = {
       pageOutline: "Page Outline (Editable)", pageDescription: "Page Description (Editable)",
       pageJson: "Page JSON (Editable)",
       jsonTextTab: "JSON Text",
-      jsonMarkdownTab: "Markdown Preview",
-      jsonMarkdownHint: "Auto-convert parsed JSON into markdown view",
-      jsonParseFailed: "JSON parse failed. Please fix syntax before markdown preview.",
-      jsonMarkdownEmpty: "No content to preview",
+      jsonStyleGuideTab: "Style Guide",
+      jsonStyleGuideHint: "Show the global JSON style guide referenced by this project",
+      jsonStyleGuideEmpty: "This project is not referencing a global JSON style guide yet",
       refineJson: "AI Refine JSON",
       refineJsonTooltip: "Refine current page JSON",
       refineJsonDialogTitle: "AI Refine Current Page JSON",
@@ -356,7 +354,6 @@ import {
 import {
   Button,
   Loading,
-  Markdown,
   MarkdownTextarea,
   Modal,
   useToast,
@@ -472,102 +469,7 @@ const isSupportedDescriptionImageUrl = (url: string): boolean => {
 
 const escapeMarkdownText = (text: string): string => text.replace(/[[\]()]/g, '\\$&');
 const DESCRIPTION_UPLOAD_ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg';
-type RenovationJsonViewMode = 'text' | 'markdown';
-const JSON_MARKDOWN_INDENT = '    ';
-
-const formatJsonPrimitiveForMarkdown = (value: unknown): string => {
-  if (typeof value === 'string') {
-    const normalized = value.trim();
-    return normalized.length > 0 ? normalized.replace(/\n/g, '<br/>') : '（空字符串）';
-  }
-  if (value === null) return '`null`';
-  if (typeof value === 'number' || typeof value === 'boolean') return `\`${String(value)}\``;
-  return `\`${JSON.stringify(value)}\``;
-};
-
-const escapeCodeKey = (key: string): string => key.replace(/`/g, '\\`');
-
-const appendMarkdownArray = (value: unknown[], lines: string[], indent: string): void => {
-  if (value.length === 0) {
-    lines.push(`${indent}- \`[]\``);
-    return;
-  }
-
-  value.forEach((item, index) => {
-    const orderPrefix = `${indent}${index + 1}. `;
-    if (Array.isArray(item)) {
-      if (item.length === 0) {
-        lines.push(`${orderPrefix}\`[]\``);
-      } else {
-        lines.push(`${orderPrefix}`);
-        appendMarkdownArray(item, lines, `${indent}${JSON_MARKDOWN_INDENT}`);
-      }
-      return;
-    }
-
-    if (item && typeof item === 'object') {
-      const entries = Object.entries(item as Record<string, unknown>);
-      if (entries.length === 0) {
-        lines.push(`${orderPrefix}\`{}\``);
-      } else {
-        lines.push(`${orderPrefix}`);
-        appendMarkdownObject(item as Record<string, unknown>, lines, `${indent}${JSON_MARKDOWN_INDENT}`);
-      }
-      return;
-    }
-
-    lines.push(`${orderPrefix}${formatJsonPrimitiveForMarkdown(item)}`);
-  });
-};
-
-const appendMarkdownObject = (value: Record<string, unknown>, lines: string[], indent: string): void => {
-  const entries = Object.entries(value);
-  if (entries.length === 0) {
-    lines.push(`${indent}- \`{}\``);
-    return;
-  }
-
-  entries.forEach(([key, entryValue]) => {
-    const keyLabel = `\`${escapeCodeKey(key)}\``;
-
-    if (Array.isArray(entryValue)) {
-      if (entryValue.length === 0) {
-        lines.push(`${indent}- ${keyLabel}: \`[]\``);
-      } else {
-        lines.push(`${indent}- ${keyLabel}:`);
-        appendMarkdownArray(entryValue, lines, `${indent}${JSON_MARKDOWN_INDENT}`);
-      }
-      return;
-    }
-
-    if (entryValue && typeof entryValue === 'object') {
-      const childEntries = Object.entries(entryValue as Record<string, unknown>);
-      if (childEntries.length === 0) {
-        lines.push(`${indent}- ${keyLabel}: \`{}\``);
-      } else {
-        lines.push(`${indent}- ${keyLabel}:`);
-        appendMarkdownObject(entryValue as Record<string, unknown>, lines, `${indent}${JSON_MARKDOWN_INDENT}`);
-      }
-      return;
-    }
-
-    lines.push(`${indent}- ${keyLabel}: ${formatJsonPrimitiveForMarkdown(entryValue)}`);
-  });
-};
-
-const convertJsonToMarkdown = (value: unknown): string => {
-  const lines: string[] = [];
-
-  if (Array.isArray(value)) {
-    appendMarkdownArray(value, lines, '');
-  } else if (value && typeof value === 'object') {
-    appendMarkdownObject(value as Record<string, unknown>, lines, '');
-  } else {
-    lines.push(formatJsonPrimitiveForMarkdown(value));
-  }
-
-  return lines.join('\n');
-};
+type RenovationJsonViewMode = 'text' | 'styleGuide';
 
 const getMaterialMarkdownLabel = (material: Material): string => {
   return (
@@ -3188,20 +3090,10 @@ export const SlidePreview: React.FC = () => {
     ? Math.max(0, Math.min(100, Math.round((descriptionGenerationCompleted / descriptionGenerationTotal) * 100)))
     : 0;
   const isPptRenovationProject = currentProject?.creation_type === 'ppt_renovation';
-  const parsedRenovationJson = useMemo(() => {
-    if (!isPptRenovationProject) return null;
-    const raw = editDescription.trim();
-    if (!raw) return {};
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
-  }, [editDescription, isPptRenovationProject]);
-  const renovationJsonMarkdown = useMemo(() => {
-    if (!isPptRenovationProject || parsedRenovationJson === null) return '';
-    return convertJsonToMarkdown(parsedRenovationJson);
-  }, [isPptRenovationProject, parsedRenovationJson]);
+  const projectStyleGuideJson = useMemo(() => {
+    if (!isPptRenovationProject) return '';
+    return formatJsonForEditor(currentProject?.template_style_json || '');
+  }, [isPptRenovationProject, currentProject?.template_style_json]);
   const editorGridClasses = isPptRenovationProject
     ? 'grid h-full min-h-0 gap-3 grid-rows-[minmax(0,1fr)] lg:gap-4 lg:grid-rows-[minmax(0,1fr)]'
     : 'grid h-full min-h-0 gap-3 grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-4 lg:grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]';
@@ -3276,34 +3168,30 @@ export const SlidePreview: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setRenovationJsonViewMode('markdown')}
+                  onClick={() => setRenovationJsonViewMode('styleGuide')}
                   className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                    renovationJsonViewMode === 'markdown'
+                    renovationJsonViewMode === 'styleGuide'
                       ? 'bg-banana-500 text-black shadow-sm'
                       : 'text-[#8a7750] hover:bg-[#f7edd2] dark:text-[#9eaccf] dark:hover:bg-[#232f47]'
                   }`}
                 >
-                  {t('preview.jsonMarkdownTab')}
+                  {t('preview.jsonStyleGuideTab')}
                 </button>
               </div>
             )}
           </div>
-          {isPptRenovationProject && renovationJsonViewMode === 'markdown' ? (
+          {isPptRenovationProject && renovationJsonViewMode === 'styleGuide' ? (
             <div className="min-h-[220px] flex-1 overflow-y-auto rounded-xl border border-[#eadfbe] bg-[#fffdf7] px-4 py-3 dark:border-[#2f3a53] dark:bg-[#101827]">
               <div className="mb-3 text-xs text-[#9b885f] dark:text-[#8ea0c8]">
-                {t('preview.jsonMarkdownHint')}
+                {t('preview.jsonStyleGuideHint')}
               </div>
-              {parsedRenovationJson === null ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
-                  {t('preview.jsonParseFailed')}
-                </div>
-              ) : renovationJsonMarkdown ? (
-                <Markdown className="json-markdown-preview text-sm leading-6 text-slate-700 dark:text-[#d9e2f2]">
-                  {renovationJsonMarkdown}
-                </Markdown>
+              {projectStyleGuideJson ? (
+                <pre className="whitespace-pre-wrap break-words font-mono text-[13px] leading-6 text-slate-700 dark:text-[#d9e2f2]">
+                  {projectStyleGuideJson}
+                </pre>
               ) : (
                 <div className="text-sm text-slate-500 dark:text-foreground-tertiary">
-                  {t('preview.jsonMarkdownEmpty')}
+                  {t('preview.jsonStyleGuideEmpty')}
                 </div>
               )}
             </div>
