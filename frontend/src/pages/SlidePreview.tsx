@@ -4534,7 +4534,7 @@ export const SlidePreview: React.FC = () => {
                             {externalFieldTags}
                           </div>
                         )}
-                        <div className={`${isPptRenovationProject ? (isMobileView ? 'mt-1 flex-1 justify-start' : 'mt-0 min-h-0 basis-0 flex-[1] justify-start') : 'mt-2 flex-1 justify-end'} min-h-0 overflow-visible flex flex-col`}>
+                        <div className={`${isPptRenovationProject ? (isMobileView ? 'mt-1 flex-1 justify-start' : 'mt-1 min-h-0 basis-0 flex-[1] justify-start') : 'mt-2 flex-1 justify-end'} min-h-0 overflow-visible flex flex-col`}>
                           <div className={`${isPptRenovationProject ? 'min-h-0 h-full' : 'min-h-0'}`}>
                             <PageAiWorkbench
                               title={t('preview.pageAiTitle')}
