@@ -14,7 +14,10 @@ from io import BytesIO
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 from .base import ImageProvider
 from config import get_config
-from ..genai_client import make_genai_client
+from ..genai_client import (
+    is_transient_genai_network_error,
+    make_genai_client,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,15 +55,31 @@ class GenAIImageProvider(ImageProvider):
         location: str = None,
         adapter_options: Optional[dict] = None,
     ):
-        self.client = make_genai_client(
-            vertexai=vertexai,
-            api_key=api_key,
-            api_base=api_base,
-            project_id=project_id,
-            location=location,
-        )
+        self.vertexai = vertexai
+        self.api_key = api_key
+        self.api_base = api_base
+        self.project_id = project_id
+        self.location = location
+        self.client = self._create_client()
         self.model = model
         self.adapter_options = adapter_options or {}
+
+    def _create_client(self):
+        return make_genai_client(
+            vertexai=self.vertexai,
+            api_key=self.api_key,
+            api_base=self.api_base,
+            project_id=self.project_id,
+            location=self.location,
+        )
+
+    def _rebuild_client_after_transient_error(self) -> bool:
+        """
+        Rebuild the underlying client after transient TLS/network failures.
+        This gives httpx / connection pools a fresh connection state for retry.
+        """
+        self.client = self._create_client()
+        return True
 
     @staticmethod
     def _should_retry_without_image_size(error: Exception) -> bool:
@@ -147,10 +166,10 @@ class GenAIImageProvider(ImageProvider):
             logger.debug(f"Calling GenAI API for image generation with {len(ref_images) if ref_images else 0} reference images...")
             logger.debug(f"Config - aspect_ratio: {aspect_ratio}, resolution: {resolution}, enable_thinking: {enable_thinking}")
 
-            # First attempt: include image_size (for providers that support explicit size)
             include_image_size = not bool(self.adapter_options.get("omit_image_size"))
-            try:
-                response = self.client.models.generate_content(
+
+            def _call_generate_content(use_image_size: bool):
+                return self.client.models.generate_content(
                     model=self.model,
                     contents=contents,
                     config=self._build_generate_config(
@@ -158,30 +177,31 @@ class GenAIImageProvider(ImageProvider):
                         resolution=resolution,
                         enable_thinking=enable_thinking,
                         thinking_budget=thinking_budget,
-                        include_image_size=include_image_size,
+                        include_image_size=use_image_size,
                     )
                 )
+
+            try:
+                response = _call_generate_content(include_image_size)
             except Exception as first_error:
-                # Compatibility fallback: retry once without image_size.
-                if self._should_retry_without_image_size(first_error):
+                if is_transient_genai_network_error(first_error) and self._rebuild_client_after_transient_error():
+                    logger.warning(
+                        "GenAI image call hit transient network/TLS error, rebuilding client and retrying. "
+                        "model=%s, aspect_ratio=%s, resolution=%s, error=%s",
+                        self.model, aspect_ratio, resolution, first_error
+                    )
+                    response = _call_generate_content(include_image_size)
+                elif self._should_retry_without_image_size(first_error):
                     logger.warning(
                         "GenAI image call failed with image_size=%s, retrying without image_size. "
                         "model=%s, aspect_ratio=%s, error=%s",
                         resolution, self.model, aspect_ratio, first_error
                     )
-                    response = self.client.models.generate_content(
-                        model=self.model,
-                        contents=contents,
-                        config=self._build_generate_config(
-                            aspect_ratio=aspect_ratio,
-                            resolution=resolution,
-                            enable_thinking=enable_thinking,
-                            thinking_budget=thinking_budget,
-                            include_image_size=False,
-                        )
-                    )
+                    response = _call_generate_content(False)
                 else:
                     raise
+            except Exception:
+                raise
 
             logger.debug("GenAI API call completed")
             
@@ -227,6 +247,10 @@ class GenAIImageProvider(ImageProvider):
             raise ValueError(error_msg)
             
         except Exception as e:
-            error_detail = f"Error generating image with GenAI: {type(e).__name__}: {str(e)}"
+            if is_transient_genai_network_error(e):
+                network_hint = " 上游连接暂时不稳定，请稍后重试。"
+            else:
+                network_hint = ""
+            error_detail = f"Error generating image with GenAI: {type(e).__name__}: {str(e)}{network_hint}"
             logger.error(error_detail, exc_info=True)
             raise Exception(error_detail) from e

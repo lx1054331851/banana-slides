@@ -1,13 +1,34 @@
 """Shared GenAI client factory used by both text and image providers."""
 
 import logging
+
 from google import genai
 from google.genai import types
+
 from config import get_config
 
 logger = logging.getLogger(__name__)
 
 
+def is_transient_genai_network_error(exc: Exception) -> bool:
+    """Heuristically detect transient network / TLS failures for GenAI calls."""
+    text = f"{type(exc).__name__}: {exc}".lower()
+    markers = (
+        "connecterror",
+        "connectionerror",
+        "connection error",
+        "readtimeout",
+        "writetimeout",
+        "timeout",
+        "remoteprotocolerror",
+        "unexpected_eof_while_reading",
+        "ssl:",
+        "eof occurred in violation of protocol",
+        "temporarily unavailable",
+        "connection reset",
+        "broken pipe",
+    )
+    return any(marker in text for marker in markers)
 def make_genai_client(
     *,
     vertexai: bool,
