@@ -751,7 +751,7 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
 【硬约束】
 1. 只输出合法 JSON 数组，不要 Markdown，不要解释文字。
 2. 数组长度必须等于输入页面数（{len(current_descriptions)}），顺序保持一致。
-3. 每个元素必须是单页 JSON 对象，优先保留并优化原字段：`source_ref`、`type`、`title`、`layout_suggestion`、`content`、`visual_suggestion`、`note`。
+3. 每个元素必须是单页 JSON 对象，优先保留并优化原字段：`type`、`title`、`layout_suggestion`、`content`、`visual_suggestion`、`note`。
 4. 专业术语与品牌名必须保留（例如 OpenClaw、Agent、低代码、经营协同平台）。
 5. 禁止无故降级结构：不要把已存在的结构化 JSON 改成纯文本描述。
 6. `highlight_phrases` 不能整页清空；若原有为空，可按正文补充 2-4 个关键词。
@@ -1031,10 +1031,10 @@ def get_long_report_split_prompt(report_text: str,
 - `visual_suggestion` 要描述主体、意境、风格与画面重点，不要只写名词。
 
 ## 9. 页面类型选择策略 (Type Selection)
-- 可选类型只允许：封面页（`cover`）、目录页（`catalog`）、章节页（`section_header`）、图表页（`detail_chart`）、图文页（`detail_text_split`）、结尾页（`closing`）。
+- 可选类型只允许：`封面页`、`目录页`、`章节页`、`图表页`、`图文页`、`结尾页`。
 - 返回时优先使用中文值；系统会自动兼容英文值。
 - **不要固定默认类型**。应根据每页内容自动判断并返回最合适的 `type`。
-- 若信息不足无法判断时，才使用图文页（`detail_text_split`）作为兜底类型。
+- 若信息不足无法判断时，才使用`图文页`作为兜底类型。
 
 ## 10. 交互限制 (No Follow-up Questions)
 - 禁止向用户追问“请补充文本/上传文件”等问题，必须一次性完成输出。
@@ -1081,8 +1081,7 @@ def get_long_report_split_prompt(report_text: str,
     },
     {
       "id": "N",
-      "source_ref": "对应原文章节号",
-      "type": "detail_text_split",
+      "type": "图文页",
       "title": "【动作标题】通过‘去污名化’三步走策略，品牌可有效降低用户心理门槛",
       "layout_suggestion": "multi_column_logic",
       "content": {
@@ -1318,7 +1317,7 @@ def get_ppt_page_content_extraction_prompt(markdown_text: str, language: str = N
 1. 输出一个可直接落库、可直接渲染的单页 JSON，不要输出多页结构。
 2. 标题必须是“有结论的动作句”，不能是标签式名词。
 3. 如果原文有趋势/对比/占比数据，优先输出“图表页（detail_chart）”，并补全 `labels + datasets`。
-4. 如果原文主要是观点和论据，使用“图文页（detail_text_split）”，并给出分块论据。
+4. 如果原文主要是观点和论据，使用“图文页”，并给出分块论据。
 5. 每页都必须给出 `layout_suggestion`，并在关键逻辑页提供具象化 `visual_suggestion`。
 
 # MCK-Style Rules（翻新版）
@@ -1334,12 +1333,12 @@ def get_ppt_page_content_extraction_prompt(markdown_text: str, language: str = N
 - 目录页（catalog）
 - 章节页（section_header）
 - 图表页（detail_chart）
-- 图文页（detail_text_split）
+- 图文页
 - 结尾页（closing）
 
 返回时优先使用中文值（如“图文页”）；系统会自动兼容英文值。
 不要固定默认类型，应根据页面内容自动判断后返回最合适的 `type`。
-若无法明确判断，才使用“图文页（detail_text_split）”兜底。
+若无法明确判断，才使用“图文页”兜底。
 
 # Layout Strategy
 `layout_suggestion` 仅允许以下枚举：
@@ -1367,7 +1366,6 @@ def get_ppt_page_content_extraction_prompt(markdown_text: str, language: str = N
     "points": ["要点1", "要点2", "要点3"]
   }},
   "slide": {{
-    "source_ref": "原始页信息（如 第6页）",
     "type": "图文页",
     "title": "动作标题",
     "layout_suggestion": "多栏逻辑",
@@ -1394,7 +1392,7 @@ def get_ppt_page_content_extraction_prompt(markdown_text: str, language: str = N
   - `chart_data.datasets[]`（含 `label` 与 `data`）
   - `key_takeaway`
   - `highlight_phrases`
-- 图文页（`detail_text_split`）必须包含：
+- 图文页必须包含：
   - `headline_summary`
   - `detailed_items[]`（每项含 `sub_title`、`body`、`highlight_phrases`）
 - 其他类型按语义填充合理字段（如 cover 的 headline/sub_headline，closing 的 final_conclusion/vision）。
@@ -1431,11 +1429,11 @@ def get_ppt_page_content_extraction_from_image_prompt(page_outline: Optional[Dic
 - 目录页（catalog）
 - 章节页（section_header）
 - 图表页（detail_chart）
-- 图文页（detail_text_split）
+- 图文页
 - 结尾页（closing）
 
 返回时优先使用中文值（如“图文页”）；系统会自动兼容英文值。
-根据页面内容自动判断类型；无法判断时使用“图文页（detail_text_split）”兜底。
+根据页面内容自动判断类型；无法判断时使用“图文页”兜底。
 
 # Layout Strategy
 `layout_suggestion` 仅允许以下枚举：
@@ -1459,7 +1457,6 @@ def get_ppt_page_content_extraction_from_image_prompt(page_outline: Optional[Dic
     "points": ["要点1", "要点2", "要点3"]
   }},
   "slide": {{
-    "source_ref": "原始页信息（如 第6页）",
     "type": "图文页",
     "title": "动作标题",
     "layout_suggestion": "多栏逻辑",

@@ -38,22 +38,35 @@ def test_passthrough_uses_raw_slide_json():
     descriptions = service.parse_description_to_page_descriptions(ctx, outline=[])
 
     assert len(descriptions) == 2
-    assert json.loads(descriptions[0]) == slides[0]
-    assert json.loads(descriptions[1]) == slides[1]
+    first_slide = json.loads(descriptions[0])
+    second_slide = json.loads(descriptions[1])
+
+    assert first_slide["type"] == "封面页"
+    assert second_slide["type"] == "图文页"
+    assert "source_ref" not in first_slide
+    assert "source_ref" not in second_slide
+    assert first_slide["title"] == slides[0]["title"]
+    assert second_slide["title"] == slides[1]["title"]
 
 
 def test_passthrough_preserves_order():
     service = _build_service()
     slides = [
-        {"id": 10, "type": "detail_chart", "title": "第二页", "content": {"chart_data": {"labels": ["A"], "datasets": []}}},
+        {"id": 10, "type": "detail_chart", "source_ref": "第10页", "title": "第二页", "content": {"chart_data": {"labels": ["A"], "datasets": []}}},
         {"id": 3, "type": "catalog", "title": "第一页", "content": {"sections": ["S1"]}},
     ]
     ctx = ProjectContext({"creation_type": "descriptions", "description_text": json.dumps({"slides": slides}, ensure_ascii=False)})
 
     descriptions = service.parse_description_to_page_descriptions(ctx, outline=[])
 
-    assert json.loads(descriptions[0])["id"] == 10
-    assert json.loads(descriptions[1])["id"] == 3
+    first_slide = json.loads(descriptions[0])
+    second_slide = json.loads(descriptions[1])
+
+    assert first_slide["id"] == 10
+    assert second_slide["id"] == 3
+    assert first_slide["type"] == "图表页"
+    assert second_slide["type"] == "目录页"
+    assert "source_ref" not in first_slide
 
 
 def test_passthrough_does_not_call_model_split():

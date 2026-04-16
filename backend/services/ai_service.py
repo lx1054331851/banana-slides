@@ -96,6 +96,15 @@ SLIDE_TYPE_ALIASES: Dict[str, str] = {
     '结尾页': 'closing',
 }
 
+SLIDE_TYPE_OUTPUT_LABELS: Dict[str, str] = {
+    'cover': '封面页',
+    'catalog': '目录页',
+    'section_header': '章节页',
+    'detail_chart': '图表页',
+    'detail_text_split': '图文页',
+    'closing': '结尾页',
+}
+
 LAYOUT_ALIASES: Dict[str, str] = {
     '左右对比': 'split_comparison',
     '多栏逻辑': 'multi_column_logic',
@@ -981,6 +990,23 @@ class AIService:
             'points': points if isinstance(points, list) else [],
         }
 
+    def _format_slide_for_output(self, value: Any) -> Any:
+        """格式化对外展示的 slide JSON：去 source_ref，type 统一中文。"""
+        if isinstance(value, list):
+            return [self._format_slide_for_output(item) for item in value]
+        if isinstance(value, dict):
+            formatted: Dict[str, Any] = {}
+            for key, raw_val in value.items():
+                if key == 'source_ref':
+                    continue
+                val = self._format_slide_for_output(raw_val)
+                if key == 'type' and isinstance(raw_val, str):
+                    normalized_type = SLIDE_TYPE_ALIASES.get(raw_val.strip(), raw_val.strip())
+                    val = SLIDE_TYPE_OUTPUT_LABELS.get(normalized_type, raw_val.strip())
+                formatted[key] = val
+            return formatted
+        return value
+
     def _try_extract_ppt_json_slides(self, description_text: str) -> Optional[List[Dict]]:
         """
         尝试从 description_text 中提取结构化 PPT JSON 的 slides。
@@ -1115,7 +1141,6 @@ class AIService:
 
             headline_summary = clean_points[0] if clean_points else (outline_title or "核心结论待补充")
             slide_obj = {
-                "source_ref": "",
                 "type": "detail_text_split",
                 "title": outline_title or "未命名页面",
                 "layout_suggestion": "multi_column_logic",
@@ -1149,7 +1174,7 @@ class AIService:
             slide_obj.setdefault('visual_suggestion', '')
             slide_obj.setdefault('note', '')
 
-        return json.dumps(slide_obj, ensure_ascii=False, indent=2)
+        return json.dumps(self._format_slide_for_output(slide_obj), ensure_ascii=False, indent=2)
 
     @staticmethod
     def _normalize_text(value) -> str:
@@ -1255,7 +1280,11 @@ class AIService:
         """
         将结构化 slides 直接按页转为原始 JSON 字符串（无字段展开、无语义压缩）。
         """
-        return [json.dumps(slide, ensure_ascii=False, indent=2) for slide in slides]
+        formatted_slides = [
+            self._format_slide_for_output(self._canonicalize_slide_json(slide) if isinstance(slide, dict) else {})
+            for slide in slides
+        ]
+        return [json.dumps(slide, ensure_ascii=False, indent=2) for slide in formatted_slides]
     
     def generate_image_prompt(self, outline: List[Dict], page: Dict,
                             page_desc: str, page_index: int,
@@ -1638,7 +1667,7 @@ class AIService:
             return {
                 'title': title,
                 'points': points,
-                'description': json.dumps(slide_obj, ensure_ascii=False, indent=2),
+                'description': json.dumps(self._format_slide_for_output(slide_obj), ensure_ascii=False, indent=2),
                 'slide': slide_obj,
             }
 
@@ -1695,7 +1724,6 @@ class AIService:
 
             headline_summary = points[0] if points else (title or "核心结论待补充")
             parsed_slide = {
-                "source_ref": "",
                 "type": "detail_text_split",
                 "title": title or "未命名页面",
                 "layout_suggestion": "multi_column_logic",
@@ -1716,7 +1744,7 @@ class AIService:
         return {
             'title': normalized_title,
             'points': normalized_points,
-            'description': json.dumps(parsed_slide, ensure_ascii=False, indent=2),
+            'description': json.dumps(self._format_slide_for_output(parsed_slide), ensure_ascii=False, indent=2),
             'slide': parsed_slide,
         }
 
