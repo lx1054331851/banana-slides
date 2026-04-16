@@ -80,6 +80,7 @@ interface PageAiWorkbenchProps {
   onRemoveReference: (referenceId: string) => void;
   onOpenMaterialSelector?: () => void;
   onUploadFiles: (files: File[]) => void;
+  cardless?: boolean;
 }
 
 export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
@@ -117,6 +118,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   onRemoveReference,
   onOpenMaterialSelector,
   onUploadFiles,
+  cardless = false,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const descriptionPickerRef = useRef<HTMLDivElement | null>(null);
@@ -211,7 +213,12 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   return (
     <section
       data-testid="page-ai-workbench"
-      className="relative h-full rounded-[28px] border border-slate-200 bg-white dark:border-border-primary dark:bg-[linear-gradient(180deg,rgba(30,30,36,0.96)_0%,rgba(23,23,30,0.98)_100%)]"
+      className={cn(
+        'relative h-full',
+        cardless
+          ? 'bg-transparent'
+          : 'rounded-[28px] border border-slate-200 bg-white dark:border-border-primary dark:bg-[linear-gradient(180deg,rgba(30,30,36,0.96)_0%,rgba(23,23,30,0.98)_100%)]',
+      )}
     >
       <div className="flex h-full flex-col px-5 pt-4 pb-2">
         {headerActions && (
@@ -219,7 +226,10 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
             {headerActions}
           </div>
         )}
-        <div className="flex min-h-0 flex-1 flex-col overflow-visible rounded-[24px] bg-white dark:bg-transparent">
+        <div className={cn(
+          'flex min-h-0 flex-1 flex-col overflow-visible',
+          cardless ? 'bg-transparent' : 'rounded-[24px] bg-white dark:bg-transparent',
+        )}>
           {references.length > 0 && (
             <div className="border-b border-slate-100 px-4 py-2 dark:border-border-primary">
               <div className="flex items-center gap-2 overflow-x-auto pb-1">

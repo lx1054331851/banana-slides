@@ -3589,7 +3589,11 @@ export const SlidePreview: React.FC = () => {
     <div
       className={`${useRenovationPreviewForm
         ? `${isMobileView ? 'min-h-[520px]' : 'h-full min-h-0'} overflow-y-auto overscroll-contain pl-4 pr-0 py-4 sm:pl-5 sm:pr-0 sm:py-5 lg:pl-6 lg:pr-0 lg:py-6`
-        : 'min-h-[520px] sm:min-h-[560px] lg:min-h-[580px] p-4 sm:p-5 lg:p-6'} w-full min-w-0 rounded-[24px] border border-[#eadfbf] bg-white dark:border-border-primary dark:bg-[radial-gradient(circle_at_top,#1b2340_0%,#151a26_34%,#101521_100%)]`}
+        : 'min-h-[520px] sm:min-h-[560px] lg:min-h-[580px] p-4 sm:p-5 lg:p-6'} w-full min-w-0 ${
+        useRenovationPreviewForm
+          ? 'bg-transparent'
+          : 'rounded-[24px] border border-[#eadfbf] bg-white dark:border-border-primary dark:bg-[radial-gradient(circle_at_top,#1b2340_0%,#151a26_34%,#101521_100%)]'
+      }`}
       style={isMobileView ? undefined : { width: '100%', maxWidth: '100%', aspectRatio: aspectRatioStyle }}
       data-testid="preview-editor-canvas"
     >
@@ -5011,6 +5015,7 @@ export const SlidePreview: React.FC = () => {
                                 setIsMaterialSelectorOpen(true);
                               } : undefined}
                               onUploadFiles={handleFileUpload}
+                              cardless={useRenovationPreviewForm}
                             />
                           </div>
                         </div>
