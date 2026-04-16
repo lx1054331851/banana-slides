@@ -3743,10 +3743,11 @@ export const SlidePreview: React.FC = () => {
                 rows={4}
                 maxHeight="100%"
                 resizable={false}
+                useOuterScrollContainer
                 showUploadButton={false}
                 showImagePreview={false}
                 slashActions={undefined}
-                className="preview-json-editor h-full min-h-0 flex-1 overflow-hidden border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:min-h-0 [&_[role=textbox]]:overflow-y-scroll [&_[role=textbox]]:pr-2 [&_[role=textbox]]:font-mono"
+                className="preview-json-editor h-full min-h-0 flex-1 overflow-hidden border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:min-h-0 [&_[role=textbox]]:pr-2 [&_[role=textbox]]:font-mono"
               />
             ) : (
               <MarkdownTextarea
@@ -3764,11 +3765,12 @@ export const SlidePreview: React.FC = () => {
                 rows={useRenovationPreviewForm ? 4 : 8}
                 maxHeight="100%"
                 resizable={useRenovationPreviewForm ? false : true}
+                useOuterScrollContainer={useRenovationPreviewForm}
                 showUploadButton={false}
                 showImagePreview={!useRenovationPreviewForm}
                 slashActions={descriptionSlashActions}
                 className={useRenovationPreviewForm
-                  ? 'preview-json-editor h-full min-h-0 flex-1 overflow-hidden border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:min-h-0 [&_[role=textbox]]:overflow-y-scroll [&_[role=textbox]]:pr-2 [&_[role=textbox]]:font-mono'
+                  ? 'preview-json-editor h-full min-h-0 flex-1 overflow-hidden border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:min-h-0 [&_[role=textbox]]:pr-2 [&_[role=textbox]]:font-mono'
                   : 'min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent [&_[role=textbox]]:pr-0'}
               />
             )}
