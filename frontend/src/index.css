@@ -173,6 +173,45 @@ body {
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* 预览页 JSON 编辑器：显式保留滚动条沟槽，避免 Windows 下滚动条不可见 */
+.preview-json-editor [role="textbox"] {
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+}
+
+.preview-json-editor [role="textbox"]::-webkit-scrollbar {
+  width: 10px;
+}
+
+.preview-json-editor [role="textbox"]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.preview-json-editor [role="textbox"]::-webkit-scrollbar-thumb {
+  background: rgba(212, 179, 92, 0.7);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.preview-json-editor [role="textbox"]::-webkit-scrollbar-thumb:hover {
+  background: rgba(191, 153, 43, 0.9);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.dark .preview-json-editor [role="textbox"]::-webkit-scrollbar-thumb {
+  background: rgba(230, 198, 119, 0.5);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.dark .preview-json-editor [role="textbox"]::-webkit-scrollbar-thumb:hover {
+  background: rgba(230, 198, 119, 0.72);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
 /* 移动端触摸优化 */
 .touch-manipulation {
   touch-action: manipulation;
