@@ -3733,7 +3733,7 @@ export const SlidePreview: React.FC = () => {
               </div>
             )}
           </div>
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 flex-1 overflow-hidden">
             {useRenovationPreviewForm && renovationJsonViewMode === 'styleGuide' ? (
               <MarkdownTextarea
                 value={resolvedStyleGuideText}
@@ -3745,7 +3745,7 @@ export const SlidePreview: React.FC = () => {
                 showUploadButton={false}
                 showImagePreview={false}
                 slashActions={undefined}
-                className="h-full min-h-0 flex-1 border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:min-h-0 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:font-mono"
+                className="h-full min-h-0 flex-1 overflow-hidden border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:min-h-0 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:font-mono"
               />
             ) : (
               <MarkdownTextarea
@@ -3766,7 +3766,7 @@ export const SlidePreview: React.FC = () => {
                 showImagePreview={!useRenovationPreviewForm}
                 slashActions={descriptionSlashActions}
                 className={useRenovationPreviewForm
-                  ? 'h-full min-h-0 flex-1 border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:min-h-0 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:font-mono'
+                  ? 'h-full min-h-0 flex-1 overflow-hidden border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:min-h-0 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:font-mono'
                   : 'min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent [&_[role=textbox]]:pr-0'}
               />
             )}
