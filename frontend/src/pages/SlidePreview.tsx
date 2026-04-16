@@ -620,6 +620,33 @@ const formatJsonForEditor = (text: string, indent = 4): string => {
   }
 };
 
+const stripSourceRefField = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripSourceRefField(item));
+  }
+  if (value && typeof value === 'object') {
+    const next: Record<string, unknown> = {};
+    Object.entries(value as Record<string, unknown>).forEach(([key, val]) => {
+      if (key === 'source_ref') return;
+      next[key] = stripSourceRefField(val);
+    });
+    return next;
+  }
+  return value;
+};
+
+const removeSourceRefFromJsonText = (text: string, indent = 4): string => {
+  const raw = (text || '').trim();
+  if (!raw) return text || '';
+  try {
+    const parsed = JSON.parse(raw);
+    const sanitized = stripSourceRefField(parsed);
+    return JSON.stringify(sanitized, null, indent);
+  } catch {
+    return text || '';
+  }
+};
+
 export const SlidePreview: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -739,7 +766,7 @@ export const SlidePreview: React.FC = () => {
   const [pageDrafts, setPageDrafts] = useState<Record<string, PageDraft>>({});
   const formatDescriptionForEditor = useCallback((descriptionText: string, project?: Project | null) => {
     if ((project || currentProject)?.creation_type !== 'ppt_renovation') return descriptionText;
-    return formatJsonForEditor(descriptionText, 4);
+    return removeSourceRefFromJsonText(descriptionText, 4);
   }, [currentProject]);
   // 页面挂载时恢复正在进行的导出任务（页面刷新后）
   useEffect(() => {
@@ -2062,6 +2089,9 @@ export const SlidePreview: React.FC = () => {
     if (!currentProject) return;
     const page = currentProject.pages[selectedIndex];
     if (!page?.id) return;
+    const nextDescriptionText = currentProject.creation_type === 'ppt_renovation'
+      ? removeSourceRefFromJsonText(editDescription, 4)
+      : editDescription;
 
     const updates: Partial<Page> = {};
 
@@ -2081,7 +2111,7 @@ export const SlidePreview: React.FC = () => {
     const serializedExtraFields = serializeExtraFields(editExtraFields);
     const serializedStyleGuideBindings = serializeStyleGuideBindings(editStyleGuideBindings);
     if (
-      editDescription !== originalDesc
+      nextDescriptionText !== originalDesc
       || !areStringRecordsEqual(editExtraFields, originalExtraFields)
       || !areStyleGuideBindingsEqual(editStyleGuideBindings, originalStyleGuideBindings)
     ) {
@@ -2089,7 +2119,7 @@ export const SlidePreview: React.FC = () => {
         ...(page.description_content && typeof page.description_content === 'object'
           ? page.description_content as Record<string, any>
           : {}),
-        text: editDescription,
+        text: nextDescriptionText,
       };
       if (serializedExtraFields) {
         nextDescriptionContent.extra_fields = serializedExtraFields;
@@ -2109,10 +2139,13 @@ export const SlidePreview: React.FC = () => {
       persistCurrentPageDraft({
         title: editOutlineTitle,
         points: editOutlinePoints,
-        description: editDescription,
+        description: nextDescriptionText,
         extraFields: editExtraFields,
         styleGuideBindings: editStyleGuideBindings,
       });
+      if (nextDescriptionText !== editDescription) {
+        setEditDescription(nextDescriptionText);
+      }
       show({ message: t('slidePreview.outlineSaved'), type: 'success' });
     }
   }, [currentProject, selectedIndex, editOutlineTitle, editOutlinePoints, editDescription, editExtraFields, editStyleGuideBindings, updatePageLocal, persistCurrentPageDraft, show, t]);
@@ -3071,7 +3104,7 @@ export const SlidePreview: React.FC = () => {
         jsonRefineHistory,
       );
       const refinedText = response.data?.refined_description || '';
-      const nextText = formatJsonForEditor(refinedText, 4);
+      const nextText = removeSourceRefFromJsonText(refinedText, 4);
       setEditDescription(nextText);
       persistCurrentPageDraft({ description: nextText });
       setJsonRefineHistory((prev) => [...prev, requirement]);
