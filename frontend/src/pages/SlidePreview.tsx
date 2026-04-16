@@ -3832,10 +3832,16 @@ export const SlidePreview: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   icon={<Send size={14} />}
-                  title={t('preview.pageAiSendTooltip')}
-                  aria-label={t('preview.pageAiSendTooltip')}
-                  onClick={() => void handlePageAiSend()}
-                  disabled={isPageAiSubmitting}
+                  title={t('preview.refineJson')}
+                  aria-label={t('preview.refineJson')}
+                  onClick={() => {
+                    if (!showJsonRefineDialog) {
+                      setShowJsonRefineDialog(true);
+                      return;
+                    }
+                    void handleSubmitJsonRefine();
+                  }}
+                  disabled={isJsonRefining || (showJsonRefineDialog && !jsonRefineRequirement.trim())}
                   className="h-7 w-7 rounded-md border-0 bg-transparent px-0 text-[#7c6740] hover:bg-[#f7edd2] disabled:opacity-50 dark:text-[#c4d2f3] dark:hover:bg-[#222d44]"
                 />
               </div>
