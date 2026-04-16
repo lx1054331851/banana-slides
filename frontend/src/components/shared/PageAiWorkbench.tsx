@@ -408,11 +408,14 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                   disabled={!canSend}
                   title={sendTooltip}
                   aria-label={sendLabel}
-                  className={`inline-flex h-11 min-w-[112px] flex-shrink-0 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-medium transition-all ${
+                  className={cn(
+                    'inline-flex h-11 min-w-[112px] flex-shrink-0 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-medium transition-all',
                     canSend
-                      ? 'bg-banana-500 text-black shadow-yellow hover:-translate-y-0.5 dark:bg-banana-500 dark:text-black'
+                      ? (cardless
+                        ? 'border border-[#e6ca67] bg-white text-[#1f2937] shadow-sm hover:bg-[#fffdf2] dark:border-banana-500/50 dark:bg-background-secondary dark:text-foreground-primary dark:hover:bg-background-hover'
+                        : 'bg-banana-500 text-black shadow-yellow hover:-translate-y-0.5 dark:bg-banana-500 dark:text-black')
                       : 'bg-slate-100 text-slate-300 dark:bg-background-hover dark:text-foreground-tertiary'
-                  }`}
+                  )}
                   data-testid="page-ai-send"
                 >
                   <ArrowUp size={18} />
