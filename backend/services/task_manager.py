@@ -560,6 +560,14 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                                 language=language,
                                 detail_level=detail_level
                             )
+                            normalized_text = ai_service.normalize_renovation_description_text(
+                                desc_result.get('text', ''),
+                                page_outline=page_outline,
+                            )
+                            desc_result = {
+                                **desc_result,
+                                'text': normalized_text,
+                            }
 
                         # generate_page_description returns dict with text + optional extra_fields
                         desc_content = {

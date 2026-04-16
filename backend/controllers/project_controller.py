@@ -1302,7 +1302,13 @@ def generate_descriptions_stream(project_id):
                             continue
 
                         page = pages[idx]
-                        desc_text = result.get('description_text', '')
+                        page_outline = flat_pages[idx] if idx < len(flat_pages) else {}
+                        raw_desc_text = result.get('description_text', '')
+                        # Keep text-generation projects aligned with renovation JSON description format.
+                        desc_text = ai_service.normalize_renovation_description_text(
+                            raw_desc_text,
+                            page_outline=page_outline,
+                        )
                         desc_content = {
                             'text': desc_text,
                             'generated_at': datetime.utcnow().isoformat(),
