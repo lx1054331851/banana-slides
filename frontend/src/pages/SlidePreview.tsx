@@ -412,7 +412,7 @@ import type { Material } from '@/api/endpoints';
 import { SlideCard } from '@/components/preview/SlideCard';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useExportTasksStore, type ExportTaskType } from '@/store/useExportTasksStore';
-import { getImageUrl } from '@/api/client';
+import { getImageUrl, getPageImageUrl } from '@/api/client';
 import { useImagePaste } from '@/hooks/useImagePaste';
 import {
   getPageImageVersions,
@@ -481,9 +481,10 @@ const SortablePreviewThumbnail: React.FC<{
   id: string;
   itemIndex: number;
   getItemIndex: (id: string) => number;
+  layoutMode?: 'vertical' | 'grid';
   className?: string;
   children: React.ReactNode;
-}> = ({ id, itemIndex, getItemIndex, className, children }) => {
+}> = ({ id, itemIndex, getItemIndex, layoutMode = 'vertical', className, children }) => {
   const { active, over } = useDndContext();
   const { attributes, setNodeRef, transform, transition, isDragging, listeners } = useSortable({ id });
 
@@ -491,8 +492,32 @@ const SortablePreviewThumbnail: React.FC<{
   const overId = over?.id ? String(over.id) : '';
   const activeIndex = activeId ? getItemIndex(activeId) : -1;
   const isDropTarget = !isDragging && !!overId && overId === id && activeId !== id && activeIndex >= 0;
-  const showDropLineAbove = isDropTarget && activeIndex > itemIndex;
-  const showDropLineBelow = isDropTarget && activeIndex < itemIndex;
+  const activeRect = active?.rect.current.translated || active?.rect.current.initial;
+  const overRect = over?.rect || null;
+
+  let dropIndicator: 'none' | 'above' | 'below' | 'left' | 'right' = 'none';
+
+  if (isDropTarget) {
+    if (layoutMode === 'grid' && activeRect && overRect) {
+      const activeCenterX = activeRect.left + activeRect.width / 2;
+      const activeCenterY = activeRect.top + activeRect.height / 2;
+      const overCenterX = overRect.left + overRect.width / 2;
+      const overCenterY = overRect.top + overRect.height / 2;
+      const deltaX = activeCenterX - overCenterX;
+      const deltaY = activeCenterY - overCenterY;
+
+      dropIndicator = Math.abs(deltaX) > Math.abs(deltaY)
+        ? (deltaX < 0 ? 'left' : 'right')
+        : (deltaY < 0 ? 'above' : 'below');
+    } else {
+      dropIndicator = activeIndex > itemIndex ? 'above' : 'below';
+    }
+  }
+
+  const showDropLineAbove = dropIndicator === 'above';
+  const showDropLineBelow = dropIndicator === 'below';
+  const showDropLineLeft = dropIndicator === 'left';
+  const showDropLineRight = dropIndicator === 'right';
 
   const style: React.CSSProperties = {
     transform: transform ? CSS.Translate.toString(transform) : undefined,
@@ -518,6 +543,20 @@ const SortablePreviewThumbnail: React.FC<{
         <div className="pointer-events-none absolute -bottom-2 left-2 right-2 z-40 flex items-center">
           <span className="h-2.5 w-2.5 rounded-full bg-banana-500 shadow-[0_0_0_2px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_2px_rgba(17,24,39,0.9)]" />
           <span className="h-0.5 flex-1 rounded-full bg-banana-500 shadow-[0_0_10px_rgba(245,158,11,0.45)]" />
+        </div>
+      )}
+      {showDropLineLeft && (
+        <div className="pointer-events-none absolute -left-2 top-2 bottom-2 z-40 flex flex-col items-center">
+          <span className="h-2.5 w-2.5 rounded-full bg-banana-500 shadow-[0_0_0_2px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_2px_rgba(17,24,39,0.9)]" />
+          <span className="w-0.5 flex-1 rounded-full bg-banana-500 shadow-[0_0_10px_rgba(245,158,11,0.45)]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-banana-500 shadow-[0_0_0_2px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_2px_rgba(17,24,39,0.9)]" />
+        </div>
+      )}
+      {showDropLineRight && (
+        <div className="pointer-events-none absolute -right-2 top-2 bottom-2 z-40 flex flex-col items-center">
+          <span className="h-2.5 w-2.5 rounded-full bg-banana-500 shadow-[0_0_0_2px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_2px_rgba(17,24,39,0.9)]" />
+          <span className="w-0.5 flex-1 rounded-full bg-banana-500 shadow-[0_0_10px_rgba(245,158,11,0.45)]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-banana-500 shadow-[0_0_0_2px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_2px_rgba(17,24,39,0.9)]" />
         </div>
       )}
       {children}
@@ -3597,9 +3636,7 @@ export const SlidePreview: React.FC = () => {
     }
   };
 
-  const imageUrl = (selectedPage?.generated_image_path || selectedPage?.preview_image_path)
-    ? getImageUrl(selectedPage.generated_image_path || selectedPage.preview_image_path, selectedPage.updated_at)
-    : '';
+  const imageUrl = getPageImageUrl(selectedPage);
 
   const hasAllImages = currentProject.pages.every(
     (p) => p.generated_image_path || p.preview_image_path
@@ -4550,7 +4587,7 @@ export const SlidePreview: React.FC = () => {
                         >
                           {(page.preview_image_path || page.generated_image_path) ? (
                             <img
-                              src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
+                              src={getPageImageUrl(page, { preferPreview: true })}
                               alt={`Slide ${index + 1}`}
                               className="w-full h-full object-cover rounded"
                             />
@@ -4583,7 +4620,7 @@ export const SlidePreview: React.FC = () => {
                     >
                       {(page.preview_image_path || page.generated_image_path) ? (
                         <img
-                          src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
+                          src={getPageImageUrl(page, { preferPreview: true })}
                           alt={`Slide ${index + 1}`}
                           className="w-full h-full object-cover rounded"
                         />
@@ -4687,7 +4724,7 @@ export const SlidePreview: React.FC = () => {
                                 <div className="aspect-video bg-gray-100 dark:bg-background-primary ring-1 ring-gray-200/90">
                                   {(page.preview_image_path || page.generated_image_path) ? (
                                     <img
-                                      src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
+                                      src={getPageImageUrl(page, { preferPreview: true })}
                                       alt={`Slide ${index + 1}`}
                                       className="w-full h-full object-cover"
                                     />
@@ -4774,7 +4811,7 @@ export const SlidePreview: React.FC = () => {
                             <div className="aspect-video bg-gray-100 dark:bg-background-primary ring-1 ring-gray-200/90">
                               {(page.preview_image_path || page.generated_image_path) ? (
                                 <img
-                                  src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
+                                  src={getPageImageUrl(page, { preferPreview: true })}
                                   alt={`Slide ${index + 1}`}
                                   className="w-full h-full object-cover"
                                 />
@@ -4865,7 +4902,7 @@ export const SlidePreview: React.FC = () => {
                               >
                                 {(page.preview_image_path || page.generated_image_path) ? (
                                   <img
-                                    src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
+                                    src={getPageImageUrl(page, { preferPreview: true })}
                                     alt={`Slide ${index + 1}`}
                                     className="w-full h-full object-cover rounded"
                                   />
@@ -4965,7 +5002,7 @@ export const SlidePreview: React.FC = () => {
                           >
                             {(page.preview_image_path || page.generated_image_path) ? (
                               <img
-                                src={getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)}
+                                src={getPageImageUrl(page, { preferPreview: true })}
                                 alt={`Slide ${index + 1}`}
                                 className="w-full h-full object-cover rounded"
                               />

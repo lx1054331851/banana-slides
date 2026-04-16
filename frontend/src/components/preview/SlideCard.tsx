@@ -2,7 +2,7 @@ import React from 'react';
 import { Edit2, Trash2 } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 import { StatusBadge, Skeleton } from '@/components/shared';
-import { getImageUrl } from '@/api/client';
+import { getPageImageUrl } from '@/api/client';
 import type { Page } from '@/types';
 
 // SlideCard 组件自包含翻译
@@ -53,9 +53,7 @@ export const SlideCard: React.FC<SlideCardProps> = ({
   aspectRatio = '16:9',
 }) => {
   const t = useT(slideCardI18n);
-  const imageUrl = (page.preview_image_path || page.generated_image_path)
-    ? getImageUrl(page.preview_image_path || page.generated_image_path, page.updated_at)
-    : '';
+  const imageUrl = getPageImageUrl(page, { preferPreview: true });
   const hasImage = Boolean(page.preview_image_path || page.generated_image_path);
 
   const generatingByStatus = page.status === 'QUEUED' || page.status === 'GENERATING';

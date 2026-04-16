@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { Page } from '@/types';
 
 // 开发环境：通过 Vite proxy 转发
 // 生产环境：通过 nginx proxy 转发
@@ -79,6 +80,26 @@ export const getImageUrl = (path?: string, timestamp?: string | number): string 
   }
   
   return url;
+};
+
+export const getPageImageUrl = (
+  page?: Pick<Page, 'generated_image_path' | 'preview_image_path' | 'status' | 'updated_at'> | null,
+  options: { preferPreview?: boolean; bustCacheWhileGenerating?: boolean } = {}
+): string => {
+  if (!page) return '';
+
+  const path = options.preferPreview
+    ? (page.preview_image_path || page.generated_image_path)
+    : (page.generated_image_path || page.preview_image_path);
+
+  const shouldBustCache = Boolean(
+    page.updated_at && (
+      options.bustCacheWhileGenerating ||
+      page.status === 'COMPLETED'
+    )
+  );
+
+  return getImageUrl(path, shouldBustCache ? page.updated_at : undefined);
 };
 
 export default apiClient;
