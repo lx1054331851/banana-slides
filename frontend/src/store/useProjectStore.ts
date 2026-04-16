@@ -908,9 +908,13 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       } catch (error: any) {
         console.error('[流式描述] 错误:', error);
         streamDone = true;
+        const backendMessage =
+          error?.response?.data?.error?.message ||
+          error?.response?.data?.message ||
+          '';
         await get().syncProject();
         set({
-          error: normalizeErrorMessage(error.message || t('store.generateDescFailed')),
+          error: normalizeErrorMessage(backendMessage || error.message || t('store.generateDescFailed')),
           isDescriptionStreaming: false,
         });
         throw error;
@@ -988,9 +992,13 @@ export const useProjectStore = create<ProjectState>((set, get) => {
 
       } catch (error: any) {
         console.error('[生成描述] 启动任务失败:', error);
+        const backendMessage =
+          error?.response?.data?.error?.message ||
+          error?.response?.data?.message ||
+          '';
         await get().syncProject();
         set({
-          error: normalizeErrorMessage(error.message || t('store.startGenerationFailed')),
+          error: normalizeErrorMessage(backendMessage || error.message || t('store.startGenerationFailed')),
           isDescriptionStreaming: false,
           taskProgress: null,
         });

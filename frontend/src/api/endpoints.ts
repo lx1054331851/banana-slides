@@ -392,7 +392,21 @@ export const generateDescriptionsStream = async (
   });
 
   if (!response.ok || !response.body) {
-    callbacks.onError(`HTTP ${response.status}`);
+    let detail = '';
+    try {
+      const text = await response.text();
+      if (text) {
+        try {
+          const parsed = JSON.parse(text);
+          detail = parsed?.error?.message || parsed?.message || text;
+        } catch {
+          detail = text;
+        }
+      }
+    } catch {
+      // ignore parsing failures
+    }
+    callbacks.onError(detail || `HTTP ${response.status}`);
     return;
   }
 
