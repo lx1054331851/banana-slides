@@ -7,6 +7,7 @@ import {
   DndContext,
   PointerSensor,
   closestCenter,
+  useDndContext,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -478,10 +479,20 @@ type PageDraft = {
 
 const SortablePreviewThumbnail: React.FC<{
   id: string;
+  itemIndex: number;
+  getItemIndex: (id: string) => number;
   className?: string;
   children: React.ReactNode;
-}> = ({ id, className, children }) => {
-  const { setNodeRef, transform, transition, isDragging, listeners } = useSortable({ id });
+}> = ({ id, itemIndex, getItemIndex, className, children }) => {
+  const { active, over } = useDndContext();
+  const { attributes, setNodeRef, transform, transition, isDragging, listeners } = useSortable({ id });
+
+  const activeId = active?.id ? String(active.id) : '';
+  const overId = over?.id ? String(over.id) : '';
+  const activeIndex = activeId ? getItemIndex(activeId) : -1;
+  const isDropTarget = !isDragging && !!overId && overId === id && activeId !== id && activeIndex >= 0;
+  const showDropLineAbove = isDropTarget && activeIndex > itemIndex;
+  const showDropLineBelow = isDropTarget && activeIndex < itemIndex;
 
   const style: React.CSSProperties = {
     transform: transform ? CSS.Translate.toString(transform) : undefined,
@@ -494,8 +505,21 @@ const SortablePreviewThumbnail: React.FC<{
       ref={setNodeRef}
       style={style}
       className={`${className || ''} select-none cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-90' : ''}`}
+      {...attributes}
       {...listeners}
     >
+      {showDropLineAbove && (
+        <div className="pointer-events-none absolute -top-2 left-2 right-2 z-40 flex items-center">
+          <span className="h-2.5 w-2.5 rounded-full bg-banana-500 shadow-[0_0_0_2px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_2px_rgba(17,24,39,0.9)]" />
+          <span className="h-0.5 flex-1 rounded-full bg-banana-500 shadow-[0_0_10px_rgba(245,158,11,0.45)]" />
+        </div>
+      )}
+      {showDropLineBelow && (
+        <div className="pointer-events-none absolute -bottom-2 left-2 right-2 z-40 flex items-center">
+          <span className="h-2.5 w-2.5 rounded-full bg-banana-500 shadow-[0_0_0_2px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_2px_rgba(17,24,39,0.9)]" />
+          <span className="h-0.5 flex-1 rounded-full bg-banana-500 shadow-[0_0_10px_rgba(245,158,11,0.45)]" />
+        </div>
+      )}
       {children}
     </div>
   );
@@ -3425,6 +3449,14 @@ export const SlidePreview: React.FC = () => {
     () => currentProject?.pages.map((page) => page.id).filter((id): id is string => Boolean(id)) || [],
     [currentProject?.pages]
   );
+  const previewSortablePageIndexMap = useMemo(
+    () => Object.fromEntries(previewSortablePageIds.map((id, index) => [id, index])),
+    [previewSortablePageIds]
+  );
+  const getPreviewSortablePageIndex = useCallback(
+    (id: string) => previewSortablePageIndexMap[id] ?? -1,
+    [previewSortablePageIndexMap]
+  );
   const canReorderPreviewPages = Boolean(
     !isMobileView &&
     !isMultiSelectMode &&
@@ -4498,6 +4530,8 @@ export const SlidePreview: React.FC = () => {
                       <SortablePreviewThumbnail
                         key={page.id || `collapsed-${index}`}
                         id={page.id!}
+                        itemIndex={index}
+                        getItemIndex={getPreviewSortablePageIndex}
                         className="relative"
                       >
                         <button
@@ -4629,6 +4663,8 @@ export const SlidePreview: React.FC = () => {
                             <SortablePreviewThumbnail
                               key={page.id || `grid-${index}`}
                               id={page.id!}
+                              itemIndex={index}
+                              getItemIndex={getPreviewSortablePageIndex}
                               className="relative group"
                             >
                               <button
@@ -4808,6 +4844,8 @@ export const SlidePreview: React.FC = () => {
                           <SortablePreviewThumbnail
                             key={page.id || `list-${index}`}
                             id={page.id!}
+                            itemIndex={index}
+                            getItemIndex={getPreviewSortablePageIndex}
                             className="md:w-full flex-shrink-0 relative group"
                           >
                             {/* 移动端：简化缩略图 */}
