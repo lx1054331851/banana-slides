@@ -67,7 +67,7 @@ const previewI18n = {
       versions: "版本", version: "版本", current: "当前", editPage: "编辑页面",
       regionSelect: "区域选图", endRegionSelect: "结束区域选图",
       pageOutline: "页面大纲（可编辑）", pageDescription: "页面描述（可编辑）",
-      pageJson: "页面 JSON（可编辑）",
+      pageJson: "页面 JSON",
       jsonTextTab: "页面内容",
       jsonStyleGuideTab: "风格指导",
       jsonStyleGuideHint: "可编辑：保存后将为当前页（及当前图片版本）创建独立风格指导覆盖",
@@ -229,7 +229,7 @@ const previewI18n = {
       versions: "Versions", version: "Version", current: "Current", editPage: "Edit Page",
       regionSelect: "Region Select", endRegionSelect: "End Region Select",
       pageOutline: "Page Outline (Editable)", pageDescription: "Page Description (Editable)",
-      pageJson: "Page JSON (Editable)",
+      pageJson: "Page JSON",
       jsonTextTab: "Page Content",
       jsonStyleGuideTab: "Style Guide",
       jsonStyleGuideHint: "Editable: once saved, this becomes a page/image-level override instead of global style",
@@ -3674,7 +3674,7 @@ export const SlidePreview: React.FC = () => {
                 <div className="group relative">
                   <button
                     type="button"
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#e8d9b4] bg-[#fff9ec] text-[#a88f5e] transition-colors hover:border-[#d4b35c] hover:text-[#7c6840] focus:outline-none focus:ring-2 focus:ring-banana-300 dark:border-[#3c4762] dark:bg-[#1a2335] dark:text-[#93a0bf] dark:hover:border-[#4b5a7f] dark:hover:text-[#d7def1]"
+                    className="inline-flex h-5 w-5 items-center justify-center text-[#a88f5e] transition-colors hover:text-[#7c6840] focus:outline-none focus:ring-2 focus:ring-banana-300 dark:text-[#93a0bf] dark:hover:text-[#d7def1]"
                     aria-label="JSON 编辑帮助"
                     title="JSON 编辑帮助"
                   >
