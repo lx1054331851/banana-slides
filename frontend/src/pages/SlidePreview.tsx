@@ -4811,15 +4811,6 @@ export const SlidePreview: React.FC = () => {
                             <span className="animate-pulse" style={{ animationDelay: '300ms' }}>.</span>
                           </span>
                         </span>
-                        <span className="text-amber-800/85 dark:text-amber-100/85">
-                          {generatedImageCount}/{currentProject.pages.length}
-                        </span>
-                        <span className="h-1.5 w-16 overflow-hidden rounded-full bg-amber-200/90 dark:bg-amber-300/20">
-                          <span
-                            className="block h-full rounded-full bg-amber-500 transition-all duration-500"
-                            style={{ width: `${imageGenerationProgressPercent}%` }}
-                          />
-                        </span>
                         {generatingImageCount > 1 && (
                           <span className="text-[11px] text-amber-800/80 dark:text-amber-100/80">
                             进行中 {generatingImageCount} 页
