@@ -408,7 +408,8 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                   title={sendTooltip}
                   aria-label={sendLabel}
                   className={cn(
-                    'inline-flex h-9 min-w-[112px] flex-shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium transition-all',
+                    'inline-flex h-9 flex-shrink-0 items-center justify-center gap-2 rounded-xl text-sm font-medium transition-all',
+                    cardless ? 'w-9 px-0' : 'min-w-[112px] px-3',
                     canSend
                       ? (cardless
                         ? 'border border-[#e6ca67] bg-white text-[#1f2937] shadow-sm hover:bg-[#fffdf2] dark:border-banana-500/50 dark:bg-background-secondary dark:text-foreground-primary dark:hover:bg-background-hover'
@@ -418,7 +419,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                   data-testid="page-ai-send"
                 >
                   <Send size={16} />
-                  <span>{sendLabel}</span>
+                  {!cardless && <span>{sendLabel}</span>}
                 </button>
               </div>
             </div>
