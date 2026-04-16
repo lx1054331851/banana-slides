@@ -4789,7 +4789,7 @@ export const SlidePreview: React.FC = () => {
             </div>
           ) : (
             <>
-              <div className={`flex-1 min-h-0 overflow-hidden ${useRenovationPreviewForm ? 'px-2 pt-2 pb-1 md:px-3 md:pt-2 md:pb-1' : 'px-2 py-3 md:px-3 md:py-4'}`}>
+              <div className={`flex-1 min-h-0 overflow-hidden ${useRenovationPreviewForm ? 'px-2 pt-0 pb-0 md:px-3 md:pt-0 md:pb-0' : 'px-2 py-3 md:px-3 md:py-4'}`}>
                 <div className="flex h-full w-full flex-col gap-4">
                   <div
                     ref={previewSplitContainerRef}
@@ -4917,7 +4917,7 @@ export const SlidePreview: React.FC = () => {
                     >
                       <div
                         ref={shouldUseEditorVerticalSplit ? editorVerticalSplitContainerRef : undefined}
-                        className={`${shouldUseEditorVerticalSplit ? 'grid h-full min-h-0 overflow-hidden px-2 pt-1 pb-0 md:px-3 md:pt-1 md:pb-0' : `flex h-full min-h-0 flex-col ${useRenovationPreviewForm ? 'px-2 pt-1 pb-0 md:px-3 md:pt-1 md:pb-0' : 'px-3 pt-3 pb-0 md:px-4 md:pt-4 md:pb-0'}`}`}
+                        className={`${shouldUseEditorVerticalSplit ? 'grid h-full min-h-0 overflow-hidden pt-1 pb-0 md:pt-1 md:pb-0' : `flex h-full min-h-0 flex-col ${useRenovationPreviewForm ? 'px-2 pt-1 pb-0 md:px-3 md:pt-1 md:pb-0' : 'px-3 pt-3 pb-0 md:px-4 md:pt-4 md:pb-0'}`}`}
                         style={shouldUseEditorVerticalSplit
                           ? {
                             gridTemplateRows: `minmax(${PREVIEW_EDITOR_CANVAS_MIN_HEIGHT}px, ${Math.max(resolvedEditorVerticalSplitRatio * 100, 1)}fr) ${PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX}px minmax(${PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT}px, ${Math.max((1 - resolvedEditorVerticalSplitRatio) * 100, 1)}fr)`,
