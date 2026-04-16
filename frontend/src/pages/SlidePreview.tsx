@@ -1288,6 +1288,30 @@ export const SlidePreview: React.FC = () => {
     };
     setIsResizingEditorVerticalSplit(true);
   }, [isMobileView, resolvedEditorVerticalSplitRatio]);
+  const handleLinkedSplitResizeStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (isMobileView || !previewSplitContainerRef.current || !editorVerticalSplitContainerRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const previewContainerWidth = previewSplitContainerRef.current.getBoundingClientRect().width;
+    const previewAvailableWidth = Math.max(1, previewContainerWidth - PREVIEW_SPLIT_DIVIDER_PX);
+    previewSplitResizeRef.current = {
+      startX: event.clientX,
+      startWidth: previewAvailableWidth * resolvedPreviewSplitRatio,
+      availableWidth: previewAvailableWidth,
+    };
+
+    const editorContainerHeight = editorVerticalSplitContainerRef.current.getBoundingClientRect().height;
+    const editorAvailableHeight = Math.max(1, editorContainerHeight - PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX);
+    editorVerticalSplitResizeRef.current = {
+      startY: event.clientY,
+      startHeight: editorAvailableHeight * resolvedEditorVerticalSplitRatio,
+      availableHeight: editorAvailableHeight,
+    };
+
+    setIsResizingPreviewSplit(true);
+    setIsResizingEditorVerticalSplit(true);
+  }, [isMobileView, resolvedPreviewSplitRatio, resolvedEditorVerticalSplitRatio]);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [activeTemplateTab, setActiveTemplateTab] = useState<TemplateSelectorTab>('image');
   const [draftTemplateSelection, setDraftTemplateSelection] = useState<TemplateSelection | null>(null);
@@ -4937,6 +4961,13 @@ export const SlidePreview: React.FC = () => {
                             <div
                               className="absolute right-0 top-1/2 h-px -translate-y-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70"
                               style={{ left: `-${Math.ceil(PREVIEW_SPLIT_DIVIDER_PX / 2)}px` }}
+                            />
+                            <div
+                              role="separator"
+                              aria-label="联动调整左右与上下分区"
+                              className="absolute top-1/2 z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 cursor-move rounded-md bg-transparent hover:bg-banana-200/40"
+                              style={{ left: `-${Math.ceil(PREVIEW_SPLIT_DIVIDER_PX / 2)}px` }}
+                              onMouseDown={handleLinkedSplitResizeStart}
                             />
                           </div>
                         )}
