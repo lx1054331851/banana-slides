@@ -4389,12 +4389,6 @@ export const SlidePreview: React.FC = () => {
                         data-testid="preview-description-progress"
                         className="inline-flex items-center gap-1 rounded-full border border-banana-200 bg-banana-50 px-2 py-0.5 text-[11px] leading-none dark:border-banana-700/50 dark:bg-banana-900/15"
                       >
-                        <span className="font-semibold text-slate-700 dark:text-foreground-secondary">
-                          {t('preview.descriptionGeneratingProgress', {
-                            completed: descriptionGenerationCompleted,
-                            total: descriptionGenerationTotal,
-                          })}
-                        </span>
                         <span className="font-semibold text-banana-700 dark:text-banana">
                           {descriptionGenerationProgressPercent}%
                         </span>
