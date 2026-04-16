@@ -15,7 +15,6 @@ from tenacity import retry, stop_after_attempt, retry_if_exception_type
 from .prompts import (
     get_outline_generation_prompt,
     get_outline_parsing_prompt,
-    get_page_description_prompt,
     get_image_generation_prompt,
     get_image_edit_prompt,
     get_description_to_outline_prompt,
@@ -784,7 +783,6 @@ class AIService:
         Returns:
             Dict with 'text' and optional 'extra_fields'
         """
-        extra_field_names = self._get_extra_field_names()
         part_info = f"\nThis page belongs to: {page_outline['part']}" if 'part' in page_outline else ""
 
         if _generation_logs_enabled():
@@ -796,41 +794,7 @@ class AIService:
                 detail_level,
             )
 
-        try:
-            json_prompt = get_page_description_json_prompt(
-                project_context=project_context,
-                outline=outline,
-                page_outline=page_outline,
-                page_index=page_index,
-                part_info=part_info,
-                language=language,
-                detail_level=detail_level,
-            )
-            json_result = self.generate_json(json_prompt, thinking_budget=1000)
-            if isinstance(json_result, list):
-                json_result = json_result[0] if json_result and isinstance(json_result[0], dict) else {}
-            if not isinstance(json_result, dict):
-                raise ValueError(f"structured page description should be dict, got {type(json_result)}")
-            normalized = self._normalize_extracted_page_content_result(json_result)
-            result = {'text': normalized.get('description', '')}
-            if _generation_logs_enabled():
-                logger.info(
-                    "[Generate Description Done] page=%s title=%s chars=%s mode=structured_json",
-                    page_index,
-                    page_outline.get('title', 'Untitled'),
-                    len(result.get('text') or ''),
-                )
-            return result
-        except Exception:
-            logger.warning(
-                "Structured JSON generation failed, fallback to legacy text mode: page=%s title=%s",
-                page_index,
-                page_outline.get('title', 'Untitled'),
-                exc_info=True,
-            )
-
-        # Fallback: legacy plain-text generation + extra field extraction.
-        desc_prompt = get_page_description_prompt(
+        json_prompt = get_page_description_json_prompt(
             project_context=project_context,
             outline=outline,
             page_outline=page_outline,
@@ -838,22 +802,20 @@ class AIService:
             part_info=part_info,
             language=language,
             detail_level=detail_level,
-            extra_fields=extra_field_names,
         )
-        actual_budget = self._get_text_thinking_budget()
-        response_text = self.text_provider.generate_text(desc_prompt, thinking_budget=actual_budget)
-        text = dedent(response_text)
-        description_text, extra_fields = self._parse_extra_fields(text, extra_field_names)
-        result = {'text': description_text}
-        if extra_fields:
-            result['extra_fields'] = extra_fields
+        json_result = self.generate_json(json_prompt, thinking_budget=1000)
+        if isinstance(json_result, list):
+            json_result = json_result[0] if json_result and isinstance(json_result[0], dict) else {}
+        if not isinstance(json_result, dict):
+            raise ValueError(f"structured page description should be dict, got {type(json_result)}")
+        normalized = self._normalize_extracted_page_content_result(json_result)
+        result = {'text': normalized.get('description', '')}
         if _generation_logs_enabled():
             logger.info(
-                "[Generate Description Done] page=%s title=%s chars=%s extra_fields=%s mode=legacy_text",
+                "[Generate Description Done] page=%s title=%s chars=%s mode=structured_json",
                 page_index,
                 page_outline.get('title', 'Untitled'),
-                len(description_text or ''),
-                len(extra_fields or {}),
+                len(result.get('text') or ''),
             )
         return result
 
