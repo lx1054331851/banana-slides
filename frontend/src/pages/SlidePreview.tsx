@@ -4974,10 +4974,6 @@ export const SlidePreview: React.FC = () => {
                             onMouseDown={handleEditorVerticalSplitResizeStart}
                           >
                             <div
-                              className="pointer-events-none absolute right-0 top-1/2 z-30 h-px -translate-y-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70"
-                              style={{ left: `-${PREVIEW_SPLIT_DIVIDER_PX + 28}px` }}
-                            />
-                            <div
                               role="separator"
                               aria-label="联动调整左右与上下分区"
                               className="absolute top-1/2 z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 cursor-move rounded-md bg-transparent hover:bg-banana-200/40"
@@ -4992,7 +4988,19 @@ export const SlidePreview: React.FC = () => {
                           </div>
                         )}
                         <div className={`${shouldUseEditorVerticalSplit ? 'min-h-0 overflow-hidden' : `${useRenovationPreviewForm ? (isMobileView ? 'mt-1 flex-1 justify-start' : 'mt-1 min-h-0 basis-0 flex-[1] justify-start') : 'mt-2 flex-1 justify-end'} min-h-0 overflow-visible flex flex-col`}`}>
-                          <div className={`${useRenovationPreviewForm ? 'min-h-0 h-full' : 'min-h-0'}`}>
+                          <div className={`relative ${useRenovationPreviewForm ? 'min-h-0 h-full' : 'min-h-0'}`}>
+                            {shouldUseEditorVerticalSplit && (
+                              <>
+                                <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-gray-200 dark:bg-border-primary" />
+                                <div
+                                  className="pointer-events-none absolute top-0 z-20 h-px bg-gray-200 dark:bg-border-primary"
+                                  style={{
+                                    left: `-${PREVIEW_SPLIT_DIVIDER_PX + 28}px`,
+                                    width: `${PREVIEW_SPLIT_DIVIDER_PX + 28}px`,
+                                  }}
+                                />
+                              </>
+                            )}
                             <PageAiWorkbench
                               title={t('preview.pageAiTitle')}
                               subtitle={t('preview.pageAiSubtitle')}
