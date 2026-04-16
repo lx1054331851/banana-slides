@@ -3327,7 +3327,7 @@ export const SlidePreview: React.FC = () => {
     ? Math.max(0, Math.min(100, Math.round((renovationProgress.completed / renovationProgress.total) * 100)))
     : 0;
   const isPptRenovationProject = currentProject?.creation_type === 'ppt_renovation';
-  const isTextGeneratedLastPreviewPage = currentProject?.creation_type === 'descriptions'
+  const isTextGeneratedLastPreviewPage = currentProject?.creation_type !== 'ppt_renovation'
     && selectedIndex === currentProject.pages.length - 1;
   const useRenovationPreviewForm = isPptRenovationProject || isTextGeneratedLastPreviewPage;
   const currentImageVersionId = imageVersions.find((version) => version.is_current)?.version_id || null;
