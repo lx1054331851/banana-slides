@@ -3613,7 +3613,7 @@ export const SlidePreview: React.FC = () => {
   const editorCanvasContent = (
     <div
       className={`${useRenovationPreviewForm
-        ? `${isMobileView ? 'min-h-[520px] overflow-y-auto overscroll-contain' : 'h-full min-h-0 overflow-hidden'} pl-2 pr-0 py-2 sm:pl-3 sm:pr-0 sm:py-3 lg:pl-4 lg:pr-0 lg:py-3`
+        ? `${isMobileView ? 'min-h-[520px] overflow-y-auto overscroll-contain' : 'h-full min-h-0 overflow-hidden'} pl-2 pr-0 pt-2 pb-0 sm:pl-3 sm:pr-0 sm:pt-3 sm:pb-0 lg:pl-4 lg:pr-0 lg:pt-3 lg:pb-0`
         : 'min-h-[520px] sm:min-h-[560px] lg:min-h-[580px] p-4 sm:p-5 lg:p-6'} w-full min-w-0 ${
         useRenovationPreviewForm
           ? 'bg-transparent'
