@@ -3696,7 +3696,7 @@ export const SlidePreview: React.FC = () => {
             )}
           </div>
           {useRenovationPreviewForm && renovationJsonViewMode === 'text' && (
-            <div className="mb-1 text-[11px] text-[#a88f5e] dark:text-[#93a0bf]">
+            <div className="-mt-1 mb-1 text-[11px] text-[#a88f5e] dark:text-[#93a0bf]">
               输入 <span className="font-semibold">/</span> 可快速插入图片（本地上传或素材库选择）
             </div>
           )}
