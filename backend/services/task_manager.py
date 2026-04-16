@@ -1197,8 +1197,12 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
             request_snapshot: Optional[str] = None
             operation_type = 'regenerate' if current_image_rel_path else 'generate'
 
-            # 有原图且输入了修改指令时走图像编辑；否则走文生图重绘模式
-            should_edit_existing_image = bool(current_image_rel_path and edit_instruction_text)
+            # 有原图且带了修改文字或附加参考图时，固定走图像编辑模式；
+            # 只有“无修改文字且无附加图”的纯重绘场景才回退到文生图。
+            has_edit_references = bool(additional_ref_images)
+            should_edit_existing_image = bool(
+                current_image_rel_path and (edit_instruction_text or has_edit_references)
+            )
 
             try:
                 if should_edit_existing_image:
@@ -1206,10 +1210,15 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                     merged_edit_refs: List[str] = []
                     if additional_ref_images:
                         merged_edit_refs.extend(additional_ref_images)
+                    effective_edit_instruction = edit_instruction_text or (
+                        "Please update the current PPT page image using the attached references."
+                        if str(language or '').lower().startswith('en')
+                        else "请参考附加图片修改当前页 PPT 图片。"
+                    )
 
                     logger.info(f"🎨 Editing image for page {page_id}...")
                     prompt_text = get_image_edit_prompt(
-                        edit_instruction=edit_instruction_text,
+                        edit_instruction=effective_edit_instruction,
                         reference_image_count=1 + len(merged_edit_refs),
                     )
                     operation_type = 'edit'
@@ -1220,7 +1229,7 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                         prompt_text=prompt_text,
                         primary_reference=current_image_path,
                         additional_references=merged_edit_refs,
-                        edit_instruction=edit_instruction_text,
+                        edit_instruction=effective_edit_instruction,
                         upload_root=file_service.upload_folder,
                     )
                     image = ai_service.generate_image(
