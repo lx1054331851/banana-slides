@@ -1343,8 +1343,6 @@ export const SlidePreview: React.FC = () => {
   const [isJsonRefining, setIsJsonRefining] = useState(false);
   const jsonRefineInputRef = useRef<HTMLInputElement | null>(null);
   const pageAiTextareaRef = useRef<MarkdownTextareaRef | null>(null);
-  const [isPageAiDialogOpen, setIsPageAiDialogOpen] = useState(false);
-  const [reopenPageAiDialogAfterRegionPick, setReopenPageAiDialogAfterRegionPick] = useState(false);
   const [batchGenerateContext, setBatchGenerateContext] = useState<{
     total: number;
     generated: number;
@@ -2913,10 +2911,6 @@ export const SlidePreview: React.FC = () => {
       }
     } finally {
       // 不清理 selectionRect，让选区在界面上持续显示
-      if (reopenPageAiDialogAfterRegionPick) {
-        setIsPageAiDialogOpen(true);
-        setReopenPageAiDialogAfterRegionPick(false);
-      }
     }
   };
 
@@ -3928,11 +3922,6 @@ export const SlidePreview: React.FC = () => {
     await handleSubmitCurrentPageGeneration({ appendPageAiMessages: true });
   }, [handleSubmitCurrentPageGeneration]);
 
-  const handleOpenPageAiDialog = useCallback(() => {
-    if (!selectedPageHasImage) return;
-    setIsPageAiDialogOpen(true);
-  }, [selectedPageHasImage]);
-
   const currentPageDescriptionText = getDescriptionText(selectedPage?.description_content);
   const currentPageExtraFields = getDescriptionExtraFields(selectedPage?.description_content);
   const currentPageStyleGuideBindings = getDescriptionStyleGuideBindings(selectedPage?.description_content);
@@ -4724,7 +4713,7 @@ export const SlidePreview: React.FC = () => {
                               <div className={`flex ${selectedPageHasImage ? 'h-full flex-col items-center justify-center gap-4' : ''}`}>
                                 <div
                                   ref={previewContainerRef}
-                                  className={`group/preview relative overflow-hidden touch-manipulation ${isFullscreen
+                                  className={`relative overflow-hidden touch-manipulation ${isFullscreen
                                     ? 'h-screen w-screen max-h-none max-w-none rounded-none bg-black shadow-none'
                                     : 'rounded-2xl border border-[#eadfbf] bg-white dark:border-border-primary dark:bg-background-primary'
                                   }`}
@@ -4744,18 +4733,6 @@ export const SlidePreview: React.FC = () => {
                                         draggable={false}
                                         crossOrigin="anonymous"
                                       />
-                                      {!isFullscreen && (
-                                        <button
-                                          type="button"
-                                          onClick={handleOpenPageAiDialog}
-                                          className="absolute bottom-4 right-4 z-20 inline-flex items-center gap-2 rounded-full border border-white/70 bg-slate-950/80 px-3.5 py-2 text-sm font-medium text-white opacity-0 shadow-[0_12px_28px_rgba(15,23,42,0.28)] transition-all hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 group-hover/preview:opacity-100 group-focus-within/preview:opacity-100"
-                                          title={t('preview.refineDescription')}
-                                          aria-label={t('preview.refineDescription')}
-                                        >
-                                          <Sparkles size={16} />
-                                          <span>AI优化</span>
-                                        </button>
-                                      )}
                                       <button
                                         type="button"
                                         aria-label={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
@@ -4929,73 +4906,6 @@ export const SlidePreview: React.FC = () => {
                   </div>
                 </div>
               </div>
-
-              <Modal
-                isOpen={isPageAiDialogOpen}
-                onClose={() => {
-                  setIsPageAiDialogOpen(false);
-                  setReopenPageAiDialogAfterRegionPick(false);
-                }}
-                title={t('preview.pageAiTitle')}
-                size="wide"
-              >
-                <div className="h-[min(72vh,760px)] min-h-[420px]">
-                  <PageAiWorkbench
-                    title={t('preview.pageAiTitle')}
-                    subtitle={t('preview.pageAiSubtitle')}
-                    emptyTitle={t('preview.pageAiEmptyTitle')}
-                    emptyDescription={t('preview.pageAiEmptyDescription')}
-                    inputPlaceholder={t('preview.editPromptPlaceholder')}
-                    inputHint={t('preview.pageAiInputHint')}
-                    sendTooltip={t('preview.pageAiSendTooltip')}
-                    referencesTitle={t('preview.pageAiReferencesTitle')}
-                    referencesEmpty={t('preview.pageAiReferencesEmpty')}
-                    descriptionSourcesTitle={t('preview.pageAiDescriptionSourcesTitle')}
-                    templateLabel={t('preview.pageAiTemplateReference')}
-                    materialLabel={t('preview.pageAiMaterialReference')}
-                    uploadLabel={t('preview.pageAiUploadReference')}
-                    loadingLabel={t('preview.pageAiLoading')}
-                    regionSelectLabel={t('preview.regionSelect')}
-                    regionSelectActiveLabel={t('preview.endRegionSelect')}
-                    modelLabel={t('preview.editRunImageModelLabel')}
-                    modelHint={t('preview.editRunImageModelHint')}
-                    messages={pageAiMessages}
-                    references={selectedPageAiReferences}
-                    descriptionImageOptions={[]}
-                    hasTemplateReference={false}
-                    templatePreviewUrl={undefined}
-                    activeReferenceId={activePreviewReferenceId}
-                    inputValue={editPrompt}
-                    inputRef={pageAiTextareaRef}
-                    slashActions={pageAiSlashActions}
-                    sendLabel={selectedPageHasImage ? t('preview.regenerate') : t('preview.generateImage')}
-                    modelValue={editRunImageModel}
-                    modelOptions={PROJECT_SUPPORTED_IMAGE_MODELS}
-                    isSubmitting={isPageAiSubmitting}
-                    isRegionSelectionActive={isRegionSelectionMode}
-                    onInputChange={setEditPrompt}
-                    onModelChange={setEditRunImageModel}
-                    onSend={() => void handlePageAiSend()}
-                    onToggleRegionSelect={() => {
-                      setIsPageAiDialogOpen(false);
-                      setReopenPageAiDialogAfterRegionPick(true);
-                      setIsRegionSelectionMode(true);
-                      setSelectionStart(null);
-                      setSelectionRect(null);
-                      setIsSelectingRegion(false);
-                    }}
-                    onToggleTemplate={handleToggleTemplateReference}
-                    onToggleDescriptionImage={handleToggleDescriptionImage}
-                    onReferenceClick={handlePreviewReferenceFocus}
-                    onRemoveReference={handleRemovePageAiReference}
-                    onOpenMaterialSelector={projectId ? () => {
-                      setMaterialSelectorMode('pageAi');
-                      setIsMaterialSelectorOpen(true);
-                    } : undefined}
-                    onUploadFiles={handleFileUpload}
-                  />
-                </div>
-              </Modal>
 
               <div
                 data-testid="preview-status-bar"
