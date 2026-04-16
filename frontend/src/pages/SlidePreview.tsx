@@ -3661,7 +3661,7 @@ export const SlidePreview: React.FC = () => {
         <div
           className={`relative min-h-0 flex flex-col ${
             useRenovationPreviewForm
-              ? ''
+              ? 'overflow-hidden'
               : 'overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 dark:border-[#2d3447] dark:bg-[#151a26]'
           }`}
         >
@@ -3742,6 +3742,7 @@ export const SlidePreview: React.FC = () => {
                 data-testid="preview-style-guide-input"
                 rows={4}
                 maxHeight="100%"
+                resizable={false}
                 showUploadButton={false}
                 showImagePreview={false}
                 slashActions={undefined}
@@ -3762,6 +3763,7 @@ export const SlidePreview: React.FC = () => {
                 data-testid="preview-text-description-input"
                 rows={useRenovationPreviewForm ? 4 : 8}
                 maxHeight="100%"
+                resizable={useRenovationPreviewForm ? false : true}
                 showUploadButton={false}
                 showImagePreview={!useRenovationPreviewForm}
                 slashActions={descriptionSlashActions}
