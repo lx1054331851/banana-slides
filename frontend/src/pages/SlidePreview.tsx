@@ -1762,7 +1762,7 @@ export const SlidePreview: React.FC = () => {
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
         goPrevPage();
-      } else if (event.key === 'ArrowRight') {
+      } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
         event.preventDefault();
         goNextPage();
       }
