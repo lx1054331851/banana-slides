@@ -3832,8 +3832,8 @@ export const SlidePreview: React.FC = () => {
                   variant="ghost"
                   size="sm"
                   icon={<Send size={14} />}
-                  title={t('preview.refineJson')}
-                  aria-label={t('preview.refineJson')}
+                  title={t('preview.generateImage')}
+                  aria-label={t('preview.generateImage')}
                   onClick={() => {
                     if (!showJsonRefineDialog) {
                       setShowJsonRefineDialog(true);
