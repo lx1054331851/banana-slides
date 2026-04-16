@@ -3670,6 +3670,26 @@ export const SlidePreview: React.FC = () => {
               <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
                 {useRenovationPreviewForm ? t('preview.pageJson') : t('preview.pageDescription')}
               </div>
+              {useRenovationPreviewForm && (
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    icon={<History size={14} />}
+                    onClick={handleOpenHistory}
+                    disabled={historyVersionsDescending.length === 0}
+                    aria-label={t('preview.historyButton')}
+                    title={t('preview.historyButton')}
+                    className="h-6 w-6 rounded-full border border-[#d9c99d] bg-[#f9f2df] p-0 text-[#7c6840] shadow-sm hover:bg-[#f6ebcf] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:bg-background-hover"
+                  />
+                  {historyVersionsDescending.length > 0 && (
+                    <span className="absolute -right-1 -top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-banana-500 px-1 py-0 text-[9px] font-bold leading-none text-black shadow-sm">
+                      {historyVersionsDescending.length}
+                    </span>
+                  )}
+                </div>
+              )}
               {useRenovationPreviewForm && renovationJsonViewMode === 'text' && (
                 <div className="group relative">
                   <button
@@ -5053,7 +5073,7 @@ export const SlidePreview: React.FC = () => {
                               modelOptions={PROJECT_SUPPORTED_IMAGE_MODELS}
                               isSubmitting={isPageAiSubmitting}
                               isRegionSelectionActive={isRegionSelectionMode}
-                              headerActions={(
+                              headerActions={!useRenovationPreviewForm ? (
                                 <div className="relative">
                                   <Button
                                     type="button"
@@ -5072,7 +5092,7 @@ export const SlidePreview: React.FC = () => {
                                     </span>
                                   )}
                                 </div>
-                              )}
+                              ) : undefined}
                               onInputChange={setEditPrompt}
                               onModelChange={setEditRunImageModel}
                               onSend={() => void handlePageAiSend()}
