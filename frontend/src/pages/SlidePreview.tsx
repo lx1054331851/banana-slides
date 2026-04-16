@@ -3463,6 +3463,11 @@ export const SlidePreview: React.FC = () => {
               </div>
             )}
           </div>
+          {useRenovationPreviewForm && renovationJsonViewMode === 'text' && (
+            <div className="mb-2 text-[11px] text-[#a88f5e] dark:text-[#93a0bf]">
+              输入 <span className="font-semibold">/</span> 可快速插入图片（本地上传或素材库选择）
+            </div>
+          )}
           {useRenovationPreviewForm && renovationJsonViewMode === 'styleGuide' ? (
             <MarkdownTextarea
               value={resolvedStyleGuideText}
@@ -3484,16 +3489,16 @@ export const SlidePreview: React.FC = () => {
                 setEditDescription(value);
                 persistCurrentPageDraft({ description: value });
               }}
-              onPaste={useRenovationPreviewForm ? undefined : handleDescriptionPaste}
-              onFiles={useRenovationPreviewForm ? undefined : handleDescriptionFiles}
+              onPaste={handleDescriptionPaste}
+              onFiles={handleDescriptionFiles}
               onFocus={focusMainDescriptionField}
               placeholder={useRenovationPreviewForm ? t('preview.enterPageJson') : t('preview.enterDescription')}
               data-testid="preview-text-description-input"
               rows={useRenovationPreviewForm ? 14 : 8}
               maxHeight="100%"
               showUploadButton={false}
-              showImagePreview={false}
-              slashActions={useRenovationPreviewForm ? undefined : descriptionSlashActions}
+              showImagePreview={useRenovationPreviewForm}
+              slashActions={descriptionSlashActions}
               className={useRenovationPreviewForm
                 ? 'min-h-[220px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:font-mono'
                 : 'min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent [&_[role=textbox]]:pr-0'}
