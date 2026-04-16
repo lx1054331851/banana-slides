@@ -442,6 +442,11 @@ const PREVIEW_SPLIT_DEFAULT_RATIO = 0.45;
 const PREVIEW_SPLIT_DIVIDER_PX = 12;
 const PREVIEW_VISUAL_MIN_WIDTH = 360;
 const PREVIEW_EDITOR_MIN_WIDTH = 420;
+const PREVIEW_EDITOR_VERTICAL_SPLIT_STORAGE_KEY = 'previewEditorVerticalSplitRatio';
+const PREVIEW_EDITOR_VERTICAL_SPLIT_DEFAULT_RATIO = 0.74;
+const PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX = 12;
+const PREVIEW_EDITOR_CANVAS_MIN_HEIGHT = 260;
+const PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT = 180;
 const FLOATING_FULLSCREEN_BUTTON_SIZE = 44;
 
 type PageDraft = {
@@ -885,6 +890,18 @@ export const SlidePreview: React.FC = () => {
   const [isResizingPreviewSplit, setIsResizingPreviewSplit] = useState(false);
   const previewSplitContainerRef = useRef<HTMLDivElement | null>(null);
   const previewSplitResizeRef = useRef<{ startX: number; startWidth: number; availableWidth: number } | null>(null);
+  const [editorVerticalSplitRatio, setEditorVerticalSplitRatio] = useState(() => {
+    if (typeof window === 'undefined') return PREVIEW_EDITOR_VERTICAL_SPLIT_DEFAULT_RATIO;
+    const stored = Number(window.localStorage.getItem(PREVIEW_EDITOR_VERTICAL_SPLIT_STORAGE_KEY));
+    if (Number.isFinite(stored) && stored > 0.15 && stored < 0.9) {
+      return stored;
+    }
+    return PREVIEW_EDITOR_VERTICAL_SPLIT_DEFAULT_RATIO;
+  });
+  const [editorVerticalSplitContainerHeight, setEditorVerticalSplitContainerHeight] = useState(0);
+  const [isResizingEditorVerticalSplit, setIsResizingEditorVerticalSplit] = useState(false);
+  const editorVerticalSplitContainerRef = useRef<HTMLDivElement | null>(null);
+  const editorVerticalSplitResizeRef = useRef<{ startY: number; startHeight: number; availableHeight: number } | null>(null);
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
   const [isRenovationProcessing, setIsRenovationProcessing] = useState(false);
@@ -1061,6 +1078,14 @@ export const SlidePreview: React.FC = () => {
   }, [previewSplitRatio]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem(PREVIEW_EDITOR_VERTICAL_SPLIT_STORAGE_KEY, String(editorVerticalSplitRatio));
+    } catch {
+      // ignore storage errors
+    }
+  }, [editorVerticalSplitRatio]);
+
+  useEffect(() => {
     if (!viewportWidth) return;
     setSidebarWidthPxExpanded((prev) =>
       Math.min(Math.max(prev, sidebarMinWidth), sidebarMaxWidth)
@@ -1194,6 +1219,75 @@ export const SlidePreview: React.FC = () => {
     };
     setIsResizingPreviewSplit(true);
   }, [isMobileView, resolvedPreviewSplitRatio]);
+
+  useEffect(() => {
+    const node = editorVerticalSplitContainerRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+
+    const updateHeight = () => {
+      setEditorVerticalSplitContainerHeight(node.getBoundingClientRect().height);
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [isMobileView, currentProject?.id, selectedIndex]);
+
+  const resolvedEditorVerticalSplitRatio = useMemo(() => {
+    if (isMobileView) return PREVIEW_EDITOR_VERTICAL_SPLIT_DEFAULT_RATIO;
+    if (!editorVerticalSplitContainerHeight) return editorVerticalSplitRatio;
+
+    const availableHeight = Math.max(1, editorVerticalSplitContainerHeight - PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX);
+    const minRatio = PREVIEW_EDITOR_CANVAS_MIN_HEIGHT / availableHeight;
+    const maxRatio = (availableHeight - PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT) / availableHeight;
+    const clampedMin = Math.min(Math.max(minRatio, 0.2), 0.85);
+    const clampedMax = Math.max(clampedMin, Math.min(maxRatio, 0.85));
+    return Math.min(Math.max(editorVerticalSplitRatio, clampedMin), clampedMax);
+  }, [isMobileView, editorVerticalSplitContainerHeight, editorVerticalSplitRatio]);
+
+  useEffect(() => {
+    if (!isResizingEditorVerticalSplit) return;
+
+    const handleMove = (event: MouseEvent) => {
+      const resizeState = editorVerticalSplitResizeRef.current;
+      if (!resizeState) return;
+      const nextHeight = resizeState.startHeight + (event.clientY - resizeState.startY);
+      const clampedHeight = Math.min(
+        Math.max(nextHeight, PREVIEW_EDITOR_CANVAS_MIN_HEIGHT),
+        Math.max(PREVIEW_EDITOR_CANVAS_MIN_HEIGHT, resizeState.availableHeight - PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT)
+      );
+      setEditorVerticalSplitRatio(clampedHeight / resizeState.availableHeight);
+    };
+
+    const handleUp = () => {
+      setIsResizingEditorVerticalSplit(false);
+      editorVerticalSplitResizeRef.current = null;
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+      document.body.style.userSelect = '';
+    };
+  }, [isResizingEditorVerticalSplit]);
+
+  const handleEditorVerticalSplitResizeStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (isMobileView || !editorVerticalSplitContainerRef.current) return;
+    event.preventDefault();
+    const containerHeight = editorVerticalSplitContainerRef.current.getBoundingClientRect().height;
+    const availableHeight = Math.max(1, containerHeight - PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX);
+    editorVerticalSplitResizeRef.current = {
+      startY: event.clientY,
+      startHeight: availableHeight * resolvedEditorVerticalSplitRatio,
+      availableHeight,
+    };
+    setIsResizingEditorVerticalSplit(true);
+  }, [isMobileView, resolvedEditorVerticalSplitRatio]);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [activeTemplateTab, setActiveTemplateTab] = useState<TemplateSelectorTab>('image');
   const [draftTemplateSelection, setDraftTemplateSelection] = useState<TemplateSelection | null>(null);
@@ -3489,6 +3583,7 @@ export const SlidePreview: React.FC = () => {
   const editorGridClasses = useRenovationPreviewForm
     ? 'grid h-full min-h-0 gap-3 grid-rows-[minmax(0,1fr)] lg:gap-4 lg:grid-rows-[minmax(0,1fr)]'
     : 'grid h-full min-h-0 gap-3 grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-4 lg:grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]';
+  const shouldUseEditorVerticalSplit = useRenovationPreviewForm && !isMobileView;
 
   const editorCanvasContent = (
     <div
@@ -4816,16 +4911,34 @@ export const SlidePreview: React.FC = () => {
                       data-testid="preview-editor-pane"
                       className={`min-h-0 min-w-0 ${isMobileView ? 'overflow-visible' : (useRenovationPreviewForm ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain')}`}
                     >
-                      <div className={`flex h-full min-h-0 flex-col ${useRenovationPreviewForm ? 'px-2 pt-1 pb-0 md:px-3 md:pt-1 md:pb-0' : 'px-3 pt-3 pb-0 md:px-4 md:pt-4 md:pb-0'}`}>
-                        <div className={`${useRenovationPreviewForm ? (isMobileView ? 'min-h-0 flex-1' : 'min-h-0 basis-0 flex-[3]') : 'shrink-0'}`}>
+                      <div
+                        ref={shouldUseEditorVerticalSplit ? editorVerticalSplitContainerRef : undefined}
+                        className={`${shouldUseEditorVerticalSplit ? 'grid h-full min-h-0 overflow-hidden px-2 pt-1 pb-0 md:px-3 md:pt-1 md:pb-0' : `flex h-full min-h-0 flex-col ${useRenovationPreviewForm ? 'px-2 pt-1 pb-0 md:px-3 md:pt-1 md:pb-0' : 'px-3 pt-3 pb-0 md:px-4 md:pt-4 md:pb-0'}`}`}
+                        style={shouldUseEditorVerticalSplit
+                          ? {
+                            gridTemplateRows: `minmax(${PREVIEW_EDITOR_CANVAS_MIN_HEIGHT}px, ${Math.max(resolvedEditorVerticalSplitRatio * 100, 1)}fr) ${PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX}px minmax(${PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT}px, ${Math.max((1 - resolvedEditorVerticalSplitRatio) * 100, 1)}fr)`,
+                          }
+                          : undefined}
+                      >
+                        <div className={shouldUseEditorVerticalSplit ? 'min-h-0 overflow-hidden' : `${useRenovationPreviewForm ? (isMobileView ? 'min-h-0 flex-1' : 'min-h-0 basis-0 flex-[3]') : 'shrink-0'}`}>
                           {editorCanvasContent}
                         </div>
+                        {shouldUseEditorVerticalSplit && (
+                          <div
+                            role="separator"
+                            aria-orientation="horizontal"
+                            className={`group relative cursor-row-resize ${isResizingEditorVerticalSplit ? 'bg-banana-300/70' : 'bg-transparent'}`}
+                            onMouseDown={handleEditorVerticalSplitResizeStart}
+                          >
+                            <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
+                          </div>
+                        )}
                         {!useRenovationPreviewForm && (
                           <div className="mt-3 shrink-0">
                             {externalFieldTags}
                           </div>
                         )}
-                        <div className={`${useRenovationPreviewForm ? (isMobileView ? 'mt-1 flex-1 justify-start' : 'mt-1 min-h-0 basis-0 flex-[1] justify-start') : 'mt-2 flex-1 justify-end'} min-h-0 overflow-visible flex flex-col`}>
+                        <div className={`${shouldUseEditorVerticalSplit ? 'min-h-0 overflow-hidden' : `${useRenovationPreviewForm ? (isMobileView ? 'mt-1 flex-1 justify-start' : 'mt-1 min-h-0 basis-0 flex-[1] justify-start') : 'mt-2 flex-1 justify-end'} min-h-0 overflow-visible flex flex-col`}`}>
                           <div className={`${useRenovationPreviewForm ? 'min-h-0 h-full' : 'min-h-0'}`}>
                             <PageAiWorkbench
                               title={t('preview.pageAiTitle')}
