@@ -222,10 +222,10 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
     >
       <div className={cn(
         'flex h-full flex-col',
-        cardless ? 'px-2 pt-2 pb-1 md:px-3 md:pt-2 md:pb-1' : 'px-5 pt-4 pb-2',
+        cardless ? 'px-2 pt-0 pb-0 md:px-3 md:pt-0 md:pb-0' : 'px-5 pt-4 pb-2',
       )}>
         {headerActions && (
-          <div className={cn('absolute z-20', cardless ? 'right-2 top-2' : 'right-4 top-3')}>
+          <div className={cn('absolute z-20', cardless ? 'right-2 top-0' : 'right-4 top-3')}>
             {headerActions}
           </div>
         )}
@@ -290,7 +290,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
             </div>
           )}
 
-          <div className={cn('min-h-0 flex-1', cardless ? 'mx-2 mt-0.5' : 'mx-4 mt-1')}>
+          <div className={cn('min-h-0 flex-1', cardless ? 'mx-2 mt-0' : 'mx-4 mt-1')}>
             <MarkdownTextarea
               ref={inputRef}
               value={inputValue}
