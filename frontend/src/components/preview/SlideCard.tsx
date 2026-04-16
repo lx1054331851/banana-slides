@@ -60,6 +60,7 @@ export const SlideCard: React.FC<SlideCardProps> = ({
 
   const generatingByStatus = page.status === 'QUEUED' || page.status === 'GENERATING';
   const generating = !hasImage && (isGenerating || generatingByStatus);
+  const hideActions = isGenerating || generatingByStatus;
   const badgeStatus = hasImage && generatingByStatus ? 'COMPLETED' : page.status;
 
   return (
@@ -76,38 +77,40 @@ export const SlideCard: React.FC<SlideCardProps> = ({
           isSelected ? 'bg-banana-500' : 'bg-transparent'
         }`}
       />
-      <div
-        className={`absolute top-2 right-2 z-20 flex items-center gap-1.5 transition-opacity ${
-          hasImage ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : 'opacity-100'
-        }`}
-      >
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit();
-          }}
-          className="p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-gray-700 dark:text-foreground-secondary transition-colors hover:bg-banana-50 dark:hover:bg-background-hover"
-          aria-label={t('slideCard.editPage')}
-          title={t('slideCard.editPage')}
+      {!hideActions && (
+        <div
+          className={`absolute top-2 right-2 z-20 flex items-center gap-1.5 transition-opacity ${
+            hasImage ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : 'opacity-100'
+          }`}
         >
-          <Edit2 size={16} />
-        </button>
-        {showDelete && (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onDelete();
+              onEdit();
             }}
-            className="p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-red-600 transition-colors hover:bg-red-50"
-            aria-label={t('slideCard.confirmDeleteTitle')}
-            title={t('slideCard.confirmDeleteTitle')}
+            className="p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-gray-700 dark:text-foreground-secondary transition-colors hover:bg-banana-50 dark:hover:bg-background-hover"
+            aria-label={t('slideCard.editPage')}
+            title={t('slideCard.editPage')}
           >
-            <Trash2 size={16} />
+            <Edit2 size={16} />
           </button>
-        )}
-      </div>
+          {showDelete && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-red-600 transition-colors hover:bg-red-50"
+              aria-label={t('slideCard.confirmDeleteTitle')}
+              title={t('slideCard.confirmDeleteTitle')}
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* 标题 */}
       <div className="flex items-start gap-2 pl-3">

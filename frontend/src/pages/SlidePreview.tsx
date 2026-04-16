@@ -4205,6 +4205,7 @@ export const SlidePreview: React.FC = () => {
                 >
                   {currentProject.pages.map((page, index) => {
                     const hasImage = Boolean(page.preview_image_path || page.generated_image_path);
+                    const isGenerating = isPageGenerating(page);
                     return (
                       <div key={page.id || `grid-${index}`} className="relative group">
                         <button
@@ -4251,7 +4252,7 @@ export const SlidePreview: React.FC = () => {
                             {selectedPageIds.has(page.id) && <Check size={12} />}
                           </button>
                         )}
-                        {!isMultiSelectMode && (
+                        {!isMultiSelectMode && !isGenerating && (
                           <button
                             type="button"
                             onClick={(e) => {

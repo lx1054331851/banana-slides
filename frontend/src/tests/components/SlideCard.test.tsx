@@ -43,6 +43,22 @@ describe('SlideCard', () => {
     expect(onEdit).toHaveBeenCalledTimes(1)
   })
 
+  it('hides edit and delete actions while image generation is in progress', () => {
+    render(
+      <SlideCard
+        page={{ ...basePage, status: 'GENERATING' }}
+        index={1}
+        isSelected={false}
+        onClick={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
+
+    expect(screen.queryByLabelText('slideCard.editPage')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('slideCard.confirmDeleteTitle')).not.toBeInTheDocument()
+  })
+
   it('uses the same light ring style as template cards', () => {
     const { container, rerender } = render(
       <SlideCard
