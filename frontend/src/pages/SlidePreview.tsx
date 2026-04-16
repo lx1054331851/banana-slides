@@ -627,7 +627,6 @@ const SLIDE_KEY_EN_TO_ZH: Record<string, string> = {
   content: '内容',
   visual_suggestion: '视觉建议',
   note: '备注',
-  source_ref: '来源页',
   headline_summary: '核心结论',
   detailed_items: '详细条目',
   sub_title: '小标题',
@@ -690,6 +689,15 @@ const LAYOUT_ZH_TO_EN: Record<string, string> = {
   金字塔层级: 'pyramid_hierarchy',
 };
 
+const isReferenceFieldKey = (rawKey: string, normalizedKey?: string): boolean => {
+  const compactRaw = (rawKey || '').trim().toLowerCase().replace(/-/g, '_');
+  if (rawKey === '来源页' || rawKey === '来源' || compactRaw.endsWith('_ref')) {
+    return true;
+  }
+  const compactNormalized = (normalizedKey || '').trim().toLowerCase().replace(/-/g, '_');
+  return compactNormalized.endsWith('_ref');
+};
+
 const canonicalizeSlideJsonValue = (value: unknown): unknown => {
   if (Array.isArray(value)) {
     return value.map((item) => canonicalizeSlideJsonValue(item));
@@ -698,7 +706,7 @@ const canonicalizeSlideJsonValue = (value: unknown): unknown => {
     const next: Record<string, unknown> = {};
     Object.entries(value as Record<string, unknown>).forEach(([rawKey, rawValue]) => {
       const key = SLIDE_KEY_ZH_TO_EN[rawKey] || rawKey;
-      if (key === 'source_ref') return;
+      if (isReferenceFieldKey(rawKey, key)) return;
       let normalizedValue = canonicalizeSlideJsonValue(rawValue);
       if (key === 'type' && typeof normalizedValue === 'string') {
         normalizedValue = SLIDE_TYPE_ZH_TO_EN[normalizedValue.trim()] || normalizedValue.trim();
@@ -721,7 +729,7 @@ const localizeSlideJsonValue = (value: unknown): unknown => {
     const next: Record<string, unknown> = {};
     Object.entries(value as Record<string, unknown>).forEach(([rawKey, rawValue]) => {
       const canonicalKey = SLIDE_KEY_ZH_TO_EN[rawKey] || rawKey;
-      if (canonicalKey === 'source_ref') return;
+      if (isReferenceFieldKey(rawKey, canonicalKey)) return;
       let localizedValue = localizeSlideJsonValue(rawValue);
       if (canonicalKey === 'type' && typeof localizedValue === 'string') {
         localizedValue = SLIDE_TYPE_EN_TO_ZH[localizedValue.trim()] || localizedValue.trim();

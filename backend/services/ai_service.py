@@ -56,8 +56,6 @@ SLIDE_KEY_ALIASES: Dict[str, str] = {
     '视觉提示': 'visual_suggestion',
     '备注': 'note',
     '说明': 'note',
-    '来源页': 'source_ref',
-    '来源': 'source_ref',
     '核心结论': 'headline_summary',
     '详细条目': 'detailed_items',
     '小标题': 'sub_title',
@@ -121,6 +119,20 @@ def _generation_logs_enabled() -> bool:
     except Exception:
         pass
     return bool(get_config().LOG_GENERATION_DETAILS)
+
+
+def _is_reference_field_key(raw_key: Any, normalized_key: Any = None) -> bool:
+    if isinstance(raw_key, str):
+        if raw_key in {'来源页', '来源'}:
+            return True
+        compact_raw = raw_key.strip().lower().replace('-', '_')
+        if compact_raw.endswith('_ref'):
+            return True
+    if isinstance(normalized_key, str):
+        compact_normalized = normalized_key.strip().lower().replace('-', '_')
+        if compact_normalized.endswith('_ref'):
+            return True
+    return False
 
 
 class ProjectContext:
@@ -965,7 +977,7 @@ class AIService:
             normalized: Dict[str, Any] = {}
             for raw_key, raw_val in value.items():
                 key = SLIDE_KEY_ALIASES.get(raw_key, raw_key)
-                if key == 'source_ref':
+                if _is_reference_field_key(raw_key, key):
                     continue
                 val = self._canonicalize_slide_json(raw_val)
                 if key == 'type' and isinstance(val, str):
@@ -991,13 +1003,13 @@ class AIService:
         }
 
     def _format_slide_for_output(self, value: Any) -> Any:
-        """格式化对外展示的 slide JSON：去 source_ref，type 统一中文。"""
+        """格式化对外展示的 slide JSON：去引用字段，type 统一中文。"""
         if isinstance(value, list):
             return [self._format_slide_for_output(item) for item in value]
         if isinstance(value, dict):
             formatted: Dict[str, Any] = {}
             for key, raw_val in value.items():
-                if key == 'source_ref':
+                if _is_reference_field_key(key):
                     continue
                 val = self._format_slide_for_output(raw_val)
                 if key == 'type' and isinstance(raw_val, str):

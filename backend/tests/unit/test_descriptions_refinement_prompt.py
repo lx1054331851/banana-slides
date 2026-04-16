@@ -21,7 +21,6 @@ class _DummyProjectContext:
 def test_refinement_prompt_uses_structured_json_mode_for_renovation():
     project_context = _DummyProjectContext(creation_type='ppt_renovation')
     slide = {
-        "source_ref": "单页：数字化不是选择题",
         "type": "结尾页",
         "title": "把数字化做成经营升级引擎",
         "layout_suggestion": "pyramid_hierarchy",
