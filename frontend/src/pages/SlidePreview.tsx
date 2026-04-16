@@ -3665,8 +3665,15 @@ export const SlidePreview: React.FC = () => {
           }`}
         >
           <div className={`mb-2 shrink-0 ${useRenovationPreviewForm ? 'flex items-center justify-between gap-2' : ''}`}>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
-              {useRenovationPreviewForm ? t('preview.pageJson') : t('preview.pageDescription')}
+            <div className={`${useRenovationPreviewForm ? 'flex min-w-0 items-center gap-3' : ''}`}>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
+                {useRenovationPreviewForm ? t('preview.pageJson') : t('preview.pageDescription')}
+              </div>
+              {useRenovationPreviewForm && renovationJsonViewMode === 'text' && (
+                <div className="text-[11px] text-[#a88f5e] dark:text-[#93a0bf]">
+                  输入 <span className="font-semibold">/</span> 可快速插入图片（本地上传或素材库选择）
+                </div>
+              )}
             </div>
             {useRenovationPreviewForm && (
               <div className="inline-flex items-center rounded-lg border border-[#e8d9b4] bg-[#fff9ec] p-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
@@ -3695,11 +3702,6 @@ export const SlidePreview: React.FC = () => {
               </div>
             )}
           </div>
-          {useRenovationPreviewForm && renovationJsonViewMode === 'text' && (
-            <div className="-mt-1 mb-1 text-[11px] text-[#a88f5e] dark:text-[#93a0bf]">
-              输入 <span className="font-semibold">/</span> 可快速插入图片（本地上传或素材库选择）
-            </div>
-          )}
           {useRenovationPreviewForm && renovationJsonViewMode === 'styleGuide' ? (
             <MarkdownTextarea
               value={resolvedStyleGuideText}
