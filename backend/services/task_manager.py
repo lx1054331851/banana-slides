@@ -14,6 +14,7 @@ from sqlalchemy import func
 from PIL import Image
 from models import db, Task, Page, Material, PageImageVersion
 from services.prompts import get_image_edit_prompt
+from services.upstream_retry import call_with_transient_retry
 from utils import get_filtered_pages
 from utils.image_utils import check_image_resolution
 from utils.style_guidance import build_combined_style_requirements
@@ -47,6 +48,14 @@ from services.pdf_service import split_pdf_to_pages
 from services.export_helpers import maybe_compress_export_images
 
 logger = logging.getLogger(__name__)
+
+
+def _rebuild_image_provider_after_proxy_enabled(ai_service) -> None:
+    """Refresh provider client state after proxy env is enabled mid-process."""
+    provider = getattr(ai_service, "image_provider", None)
+    rebuild = getattr(provider, "_rebuild_client_after_transient_error", None)
+    if callable(rebuild):
+        rebuild()
 
 
 def _get_existing_page_image_path(page: Page) -> Optional[str]:
@@ -1226,12 +1235,17 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                     edit_instruction=effective_edit_instruction,
                     upload_root=file_service.upload_folder,
                 )
-                image = ai_service.generate_image(
-                    prompt_text,
-                    current_image_path,
-                    aspect_ratio,
-                    resolution,
-                    additional_ref_images=merged_edit_refs if merged_edit_refs else None
+                image = call_with_transient_retry(
+                    fn=lambda: ai_service.generate_image(
+                        prompt_text,
+                        current_image_path,
+                        aspect_ratio,
+                        resolution,
+                        additional_ref_images=merged_edit_refs if merged_edit_refs else None,
+                    ),
+                    description=f"edit_page_image:{page_id}",
+                    max_attempts=3,
+                    on_proxy_enabled=lambda: _rebuild_image_provider_after_proxy_enabled(ai_service),
                 )
             finally:
                 # Clean up temp directory if created

@@ -1163,9 +1163,6 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     let consecutiveEmptyResponses = 0;
     let consecutiveUnknownStatuses = 0;
     const maxTransientRetries = 5;
-    const maxPollingDurationMs = 5 * 60 * 1000; // 5 min hard stop
-    const pollStartedAt = Date.now();
-
     const clearPageTaskMappings = () => {
       const { pageGeneratingTasks } = get();
       const newTasks = { ...pageGeneratingTasks };
@@ -1193,16 +1190,6 @@ export const useProjectStore = create<ProjectState>((set, get) => {
 
     const poll = async () => {
       try {
-        if (Date.now() - pollStartedAt > maxPollingDurationMs) {
-          set({
-            pageGeneratingTasks: clearPageTaskMappings(),
-            error: normalizeErrorMessage(t('store.imageTaskTimeout'))
-          });
-          markTargetPagesFailedLocally();
-          await get().syncProject();
-          return;
-        }
-
         const response = await api.getTaskStatus(projectId, taskId);
         const task = response.data;
         
