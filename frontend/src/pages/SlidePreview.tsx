@@ -1468,6 +1468,7 @@ export const SlidePreview: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [floatingFullscreenButtonPosition, setFloatingFullscreenButtonPosition] = useState({ x: 0.92, y: 0.1 });
   const [imageVersions, setImageVersions] = useState<ImageVersion[]>([]);
+  const imageVersionsPageIdRef = useRef<string | null>(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [selectedHistoryVersionId, setSelectedHistoryVersionId] = useState<string | null>(null);
   const [copiedHistoryVersionId, setCopiedHistoryVersionId] = useState<string | null>(null);
@@ -2186,34 +2187,51 @@ export const SlidePreview: React.FC = () => {
     setIsTemplateModalOpen(true);
   }, [appliedTemplateSelection?.kind, currentProject?.template_style_json]);
 
+  const selectedPageForVersionFetch = currentProject?.pages?.[selectedIndex] || null;
+  const selectedPageVersionFetchKey = selectedPageForVersionFetch?.id
+    ? [
+      selectedPageForVersionFetch.id,
+      selectedPageForVersionFetch.generated_image_path || '',
+      selectedPageForVersionFetch.preview_image_path || '',
+    ].join(':')
+    : null;
+
   // 加载当前页面的历史版本
   useEffect(() => {
-    const loadVersions = async () => {
-      if (!currentProject || !projectId || selectedIndex < 0 || selectedIndex >= currentProject.pages.length) {
-        setImageVersions([]);
-        return;
-      }
-
-      const page = currentProject.pages[selectedIndex];
-      if (!page?.id) {
-        setImageVersions([]);
-        return;
-      }
+    if (!projectId || !selectedPageForVersionFetch?.id || !selectedPageVersionFetchKey) {
+      imageVersionsPageIdRef.current = null;
       setImageVersions([]);
+      return;
+    }
 
+    let cancelled = false;
+    const pageChanged = imageVersionsPageIdRef.current !== selectedPageForVersionFetch.id;
+    imageVersionsPageIdRef.current = selectedPageForVersionFetch.id;
+
+    if (pageChanged) {
+      setImageVersions([]);
+    }
+
+    const loadVersions = async () => {
       try {
-        const response = await getPageImageVersions(projectId, page.id);
-        if (response.data?.versions) {
+        const response = await getPageImageVersions(projectId, selectedPageForVersionFetch.id);
+        if (!cancelled && response.data?.versions) {
           setImageVersions(response.data.versions);
         }
       } catch (error) {
         console.error('Failed to load image versions:', error);
-        setImageVersions([]);
+        if (!cancelled && pageChanged) {
+          setImageVersions([]);
+        }
       }
     };
 
-    loadVersions();
-  }, [currentProject, selectedIndex, projectId]);
+    void loadVersions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, selectedPageForVersionFetch?.id, selectedPageVersionFetchKey]);
 
   useEffect(() => {
     if (imageVersions.length === 0) {
