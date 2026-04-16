@@ -220,9 +220,12 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
           : 'rounded-[28px] border border-slate-200 bg-white dark:border-border-primary dark:bg-[linear-gradient(180deg,rgba(30,30,36,0.96)_0%,rgba(23,23,30,0.98)_100%)]',
       )}
     >
-      <div className="flex h-full flex-col px-5 pt-4 pb-2">
+      <div className={cn(
+        'flex h-full flex-col',
+        cardless ? 'px-2 pt-2 pb-1 md:px-3 md:pt-2 md:pb-1' : 'px-5 pt-4 pb-2',
+      )}>
         {headerActions && (
-          <div className="absolute right-4 top-3 z-20">
+          <div className={cn('absolute z-20', cardless ? 'right-2 top-2' : 'right-4 top-3')}>
             {headerActions}
           </div>
         )}
@@ -231,7 +234,10 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
           cardless ? 'bg-transparent' : 'rounded-[24px] bg-white dark:bg-transparent',
         )}>
           {references.length > 0 && (
-            <div className="border-b border-slate-100 px-4 py-2 dark:border-border-primary">
+            <div className={cn(
+              'border-b border-slate-100 dark:border-border-primary',
+              cardless ? 'px-2 py-1.5' : 'px-4 py-2',
+            )}>
               <div className="flex items-center gap-2 overflow-x-auto pb-1">
                 {references.map((reference) => (
                   <div
@@ -284,7 +290,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
             </div>
           )}
 
-          <div className="mx-4 mt-1 min-h-0 flex-1">
+          <div className={cn('min-h-0 flex-1', cardless ? 'mx-2 mt-0.5' : 'mx-4 mt-1')}>
             <MarkdownTextarea
               ref={inputRef}
               value={inputValue}
@@ -300,7 +306,10 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
               className="h-full min-h-[128px] border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent [&_[role=textbox]]:min-h-[128px] [&_[role=textbox]]:px-0 [&_[role=textbox]]:py-0 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:text-sm [&_[role=textbox]]:leading-6"
             />
           </div>
-          <div className="border-t border-slate-100 px-4 pt-2 pb-1 dark:border-border-primary">
+          <div className={cn(
+            'border-t border-slate-100 dark:border-border-primary',
+            cardless ? 'px-2 pt-1.5 pb-0.5' : 'px-4 pt-2 pb-1',
+          )}>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"

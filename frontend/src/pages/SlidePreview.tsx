@@ -3581,14 +3581,14 @@ export const SlidePreview: React.FC = () => {
     });
   };
   const editorGridClasses = useRenovationPreviewForm
-    ? 'grid h-full min-h-0 gap-3 grid-rows-[minmax(0,1fr)] lg:gap-4 lg:grid-rows-[minmax(0,1fr)]'
+    ? 'grid h-full min-h-0 gap-2 grid-rows-[minmax(0,1fr)] lg:gap-3 lg:grid-rows-[minmax(0,1fr)]'
     : 'grid h-full min-h-0 gap-3 grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-4 lg:grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]';
   const shouldUseEditorVerticalSplit = useRenovationPreviewForm && !isMobileView;
 
   const editorCanvasContent = (
     <div
       className={`${useRenovationPreviewForm
-        ? `${isMobileView ? 'min-h-[520px]' : 'h-full min-h-0'} overflow-y-auto overscroll-contain pl-4 pr-0 py-4 sm:pl-5 sm:pr-0 sm:py-5 lg:pl-6 lg:pr-0 lg:py-6`
+        ? `${isMobileView ? 'min-h-[520px]' : 'h-full min-h-0'} overflow-y-auto overscroll-contain pl-2 pr-0 py-2 sm:pl-3 sm:pr-0 sm:py-3 lg:pl-4 lg:pr-0 lg:py-3`
         : 'min-h-[520px] sm:min-h-[560px] lg:min-h-[580px] p-4 sm:p-5 lg:p-6'} w-full min-w-0 ${
         useRenovationPreviewForm
           ? 'bg-transparent'
@@ -3640,7 +3640,7 @@ export const SlidePreview: React.FC = () => {
               : 'overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 dark:border-[#2d3447] dark:bg-[#151a26]'
           }`}
         >
-          <div className={`mb-3 shrink-0 ${useRenovationPreviewForm ? 'flex items-center justify-between gap-3' : ''}`}>
+          <div className={`mb-2 shrink-0 ${useRenovationPreviewForm ? 'flex items-center justify-between gap-2' : ''}`}>
             <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
               {useRenovationPreviewForm ? t('preview.pageJson') : t('preview.pageDescription')}
             </div>
@@ -3672,7 +3672,7 @@ export const SlidePreview: React.FC = () => {
             )}
           </div>
           {useRenovationPreviewForm && renovationJsonViewMode === 'text' && (
-            <div className="mb-2 text-[11px] text-[#a88f5e] dark:text-[#93a0bf]">
+            <div className="mb-1 text-[11px] text-[#a88f5e] dark:text-[#93a0bf]">
               输入 <span className="font-semibold">/</span> 可快速插入图片（本地上传或素材库选择）
             </div>
           )}
