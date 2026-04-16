@@ -1759,7 +1759,7 @@ export const SlidePreview: React.FC = () => {
           target.tagName === 'TEXTAREA' ||
           target.isContentEditable);
       if (isTyping) return;
-      if (event.key === 'ArrowLeft') {
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
         event.preventDefault();
         goPrevPage();
       } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
