@@ -66,8 +66,6 @@ interface MarkdownTextareaProps {
   onSelectFromLibrary?: () => void;
   /** Allow manual vertical resize. Default: true */
   resizable?: boolean;
-  /** Let an outer wrapper own scrolling instead of the contentEditable itself */
-  useOuterScrollContainer?: boolean;
   slashActions?: Array<{
     id: string;
     label: string;
@@ -316,7 +314,6 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   showImagePreview = false,
   onSelectFromLibrary,
   resizable = true,
-  useOuterScrollContainer = false,
   slashActions,
   'data-testid': dataTestId,
 }, ref) => {
@@ -854,10 +851,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
         className
       )}>
         {!collapsed && (
-          <div className={cn(
-            "relative flex min-h-0 flex-1 flex-col",
-            useOuterScrollContainer && "markdown-textarea-scroll-region overflow-y-auto overflow-x-hidden"
-          )}>
+          <div className="relative flex min-h-0 flex-1 flex-col">
             <div
               ref={editorRef}
               contentEditable
@@ -883,9 +877,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
               onFocus={onFocus}
               style={editorStyle}
               className={cn(
-                useOuterScrollContainer
-                  ? "min-h-full h-auto w-full flex-1 overflow-visible whitespace-pre-wrap break-words px-4 py-3 outline-none text-gray-900 dark:text-foreground-primary"
-                  : "h-full min-h-0 w-full flex-1 overflow-y-auto whitespace-pre-wrap break-words px-4 py-3 outline-none text-gray-900 dark:text-foreground-primary",
+                "h-full min-h-0 w-full flex-1 overflow-y-auto whitespace-pre-wrap break-words px-4 py-3 outline-none text-gray-900 dark:text-foreground-primary",
                 resizable ? 'resize-y' : 'resize-none'
               )}
             />
