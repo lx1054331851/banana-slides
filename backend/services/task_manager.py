@@ -1204,15 +1204,13 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                 if should_edit_existing_image:
                     current_image_path = file_service.get_absolute_path(current_image_rel_path)
                     merged_edit_refs: List[str] = []
-                    if template_path:
-                        merged_edit_refs.append(template_path)
                     if additional_ref_images:
                         merged_edit_refs.extend(additional_ref_images)
 
                     logger.info(f"🎨 Editing image for page {page_id}...")
                     prompt_text = get_image_edit_prompt(
                         edit_instruction=edit_instruction_text,
-                        original_description=original_description,
+                        reference_image_count=1 + len(merged_edit_refs),
                     )
                     operation_type = 'edit'
                     request_snapshot = _build_image_request_snapshot(
@@ -1222,10 +1220,7 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                         prompt_text=prompt_text,
                         primary_reference=current_image_path,
                         additional_references=merged_edit_refs,
-                        original_description=original_description,
                         edit_instruction=edit_instruction_text,
-                        extra_requirements=extra_requirements,
-                        extra_requirements_in_prompt=False,
                         upload_root=file_service.upload_folder,
                     )
                     image = ai_service.generate_image(

@@ -965,22 +965,28 @@ def get_image_generation_prompt(page_desc: str, outline_text: str,
     return prompt
 
 
-def get_image_edit_prompt(edit_instruction: str, original_description: str = None) -> str:
+def get_image_edit_prompt(
+    edit_instruction: str,
+    original_description: str = None,
+    reference_image_count: int = 1,
+) -> str:
     """生成图片编辑 prompt"""
-    if original_description:
-        if "其他页面素材" in original_description:
-            original_description = original_description.split("其他页面素材")[0].strip()
+    ref_count = max(1, int(reference_image_count or 1))
+    image_lines = [
+        "图片1：原始需要优化的 PPT 页面图，请以这张图为主进行编辑。"
+    ]
+    for index in range(2, ref_count + 1):
+        image_lines.append(
+            f"图片{index}：用户补充的截图、局部框选或插入图片，请结合它理解具体修改区域和修改方式。"
+        )
 
-        prompt = (f"""\
-该PPT页面的原始页面描述为：
-{original_description}
-
-现在，根据以下指令修改这张PPT页面：{edit_instruction}
-
-要求维持原有的文字内容和设计风格，只按照指令进行修改。提供的参考图中既有新素材，也有用户手动框选出的区域，请你根据原图和参考图的关系智能判断用户意图。
-""")
-    else:
-        prompt = f"根据以下指令修改这张PPT页面：{edit_instruction}\n保持原有的内容结构和设计风格，只按照指令进行修改。提供的参考图中既有新素材，也有用户手动框选出的区域，请你根据原图和参考图的关系智能判断用户意图。"
+    prompt = (
+        "请根据提供的图片顺序完成这张 PPT 页面图片编辑。\n"
+        f"{chr(10).join(image_lines)}\n\n"
+        f"修改要求：\n{edit_instruction.strip()}\n\n"
+        "不要额外引入新的风格提示词、页面描述或模板设定。"
+        "只依据这些图片和修改要求完成编辑，并尽量保持原页面主体结构与版式逻辑。"
+    )
 
     logger.debug(f"[get_image_edit_prompt] Final prompt:\n{prompt}")
     return prompt

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/utils';
 import type { PageAiMessage, PageAiReference } from '@/types';
+import { MarkdownTextarea, type MarkdownTextareaRef } from './MarkdownTextarea';
 
 type DescriptionImageOption = {
   id: string;
@@ -57,6 +58,13 @@ interface PageAiWorkbenchProps {
   templatePreviewUrl?: string;
   activeReferenceId?: string | null;
   inputValue: string;
+  inputRef?: React.Ref<MarkdownTextareaRef>;
+  slashActions?: Array<{
+    id: string;
+    label: string;
+    description?: string;
+    onSelect: () => void;
+  }>;
   modelValue: string;
   modelOptions: readonly string[];
   isSubmitting: boolean;
@@ -92,6 +100,8 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   templatePreviewUrl,
   activeReferenceId,
   inputValue,
+  inputRef,
+  slashActions,
   modelValue,
   modelOptions,
   isSubmitting,
@@ -198,14 +208,6 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
     };
   }, [showDescriptionPicker, showModelPicker]);
 
-  const handleTextareaKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((event.nativeEvent as KeyboardEvent).isComposing) return;
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      onSend();
-    }
-  };
-
   return (
     <section
       data-testid="page-ai-workbench"
@@ -272,16 +274,22 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
             </div>
           )}
 
-          <textarea
-            value={inputValue}
-            onChange={(event) => onInputChange(event.target.value)}
-            onKeyDown={handleTextareaKeyDown}
-            placeholder={inputPlaceholder}
-            rows={4}
-            className="mx-4 mt-1 min-h-[128px] min-w-0 flex-1 appearance-none self-stretch resize-none bg-transparent px-0 py-0 text-sm leading-6 text-slate-700 outline-none placeholder:text-[#a79b81] focus:ring-0 dark:text-[#e2e8f0] dark:placeholder:text-[#66708c]"
-            disabled={isSubmitting}
-            data-testid="page-ai-input"
-          />
+          <div className="mx-4 mt-1 min-h-0 flex-1">
+            <MarkdownTextarea
+              ref={inputRef}
+              value={inputValue}
+              onChange={onInputChange}
+              onFiles={onUploadFiles}
+              placeholder={inputPlaceholder}
+              rows={4}
+              maxHeight="100%"
+              showUploadButton={false}
+              showImagePreview={false}
+              slashActions={slashActions}
+              data-testid="page-ai-input"
+              className="h-full min-h-[128px] border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent [&_[role=textbox]]:min-h-[128px] [&_[role=textbox]]:px-0 [&_[role=textbox]]:py-0 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:text-sm [&_[role=textbox]]:leading-6"
+            />
+          </div>
           <div className="border-t border-slate-100 px-4 pt-2 pb-1 dark:border-border-primary">
             <div className="flex flex-wrap items-center gap-2">
               <button

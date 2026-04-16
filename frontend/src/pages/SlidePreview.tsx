@@ -458,6 +458,7 @@ type PageAiUploadedReference = {
   file: File;
   previewUrl: string;
   label: string;
+  markdownUrl?: string;
   regionBounds?: PageAiRegionBounds;
 };
 
@@ -472,7 +473,7 @@ type PageAiContextState = {
   };
 };
 
-type MaterialSelectorMode = 'pageAi' | 'description';
+type MaterialSelectorMode = 'pageAi' | 'pageAiInline' | 'description';
 
 const isSupportedDescriptionImageUrl = (url: string): boolean => {
   return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/files/');
@@ -553,15 +554,33 @@ const createUploadedReference = (
   file: File,
   sourceType: PageAiUploadedReference['sourceType'],
   label: string = file.name,
-  meta?: Pick<PageAiUploadedReference, 'regionBounds'>,
-): PageAiUploadedReference => ({
-  id: `${sourceType}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-  sourceType,
-  file,
-  previewUrl: URL.createObjectURL(file),
-  label,
-  ...meta,
-});
+  meta?: Pick<PageAiUploadedReference, 'regionBounds' | 'markdownUrl'>,
+): PageAiUploadedReference => {
+  const previewUrl = URL.createObjectURL(file);
+  return {
+    id: `${sourceType}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    sourceType,
+    file,
+    previewUrl,
+    label,
+    markdownUrl: meta?.markdownUrl ?? previewUrl,
+    regionBounds: meta?.regionBounds,
+  };
+};
+
+const stripMarkdownImages = (text: string): string => (
+  text
+    .replace(/!\[.*?\]\((.*?)\)/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+);
+
+const removeMarkdownImageByUrl = (text: string, url: string): string => {
+  if (!url) return text;
+  const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`!?\\[[^\\]]*\\]\\(${escapedUrl}\\)\\n?`, 'g');
+  return text.replace(pattern, '').replace(/\n{3,}/g, '\n\n').trim();
+};
 
 const getPageDraftKey = (page?: Page | null, index = 0): string | null => {
   if (!page) return null;
@@ -1323,6 +1342,9 @@ export const SlidePreview: React.FC = () => {
   const [descriptionGenerationError, setDescriptionGenerationError] = useState<string | null>(null);
   const [isJsonRefining, setIsJsonRefining] = useState(false);
   const jsonRefineInputRef = useRef<HTMLInputElement | null>(null);
+  const pageAiTextareaRef = useRef<MarkdownTextareaRef | null>(null);
+  const [isPageAiDialogOpen, setIsPageAiDialogOpen] = useState(false);
+  const [reopenPageAiDialogAfterRegionPick, setReopenPageAiDialogAfterRegionPick] = useState(false);
   const [batchGenerateContext, setBatchGenerateContext] = useState<{
     total: number;
     generated: number;
@@ -2507,12 +2529,14 @@ export const SlidePreview: React.FC = () => {
     if (generateFlowLockRef.current) return false;
     generateFlowLockRef.current = true;
     try {
+      const currentPage = currentProject.pages[selectedIndex];
+      const hasCurrentPageImage = Boolean(currentPage?.generated_image_path || currentPage?.preview_image_path);
       const hasTemplateSource = Boolean(
         currentProject.template_image_path ||
         currentProject.template_style?.trim() ||
         currentProject.template_style_json?.trim()
       );
-      if (!hasTemplateSource) {
+      if (!hasTemplateSource && !hasCurrentPageImage) {
         show({ message: '请先上传模板图片或添加风格描述。', type: 'error' });
         return false;
       }
@@ -2521,7 +2545,7 @@ export const SlidePreview: React.FC = () => {
     } finally {
       generateFlowLockRef.current = false;
     }
-  }, [currentProject, show, checkResolutionAndExecute]);
+  }, [currentProject, selectedIndex, show, checkResolutionAndExecute]);
 
   const handleFileUpload = useCallback((files: File[]) => {
     setSelectedContextImages((prev) => ({
@@ -2533,11 +2557,44 @@ export const SlidePreview: React.FC = () => {
     }));
   }, []);
 
-  const removeUploadedReference = useCallback((referenceId: string) => {
+  const appendPageAiFiles = useCallback((files: File[], options?: {
+    sourceType?: PageAiUploadedReference['sourceType'];
+    labels?: string[];
+    insertIntoPrompt?: boolean;
+  }) => {
+    const nextReferences = files.map((file, index) => createUploadedReference(
+      file,
+      options?.sourceType || 'upload',
+      options?.labels?.[index] || file.name,
+    ));
     setSelectedContextImages((prev) => ({
       ...prev,
-      uploadedReferences: prev.uploadedReferences.filter((reference) => reference.id !== referenceId),
+      uploadedReferences: [...prev.uploadedReferences, ...nextReferences],
     }));
+
+    if (options?.insertIntoPrompt) {
+      nextReferences.forEach((reference) => {
+        pageAiTextareaRef.current?.insertAtCursor(
+          `![${escapeMarkdownText(reference.label)}](${reference.markdownUrl || reference.previewUrl})\n`
+        );
+      });
+      pageAiTextareaRef.current?.focus();
+    }
+
+    return nextReferences;
+  }, []);
+
+  const removeUploadedReference = useCallback((referenceId: string) => {
+    setSelectedContextImages((prev) => {
+      const target = prev.uploadedReferences.find((reference) => reference.id === referenceId);
+      if (target?.markdownUrl) {
+        setEditPrompt((current) => removeMarkdownImageByUrl(current, target.markdownUrl!));
+      }
+      return {
+        ...prev,
+        uploadedReferences: prev.uploadedReferences.filter((reference) => reference.id !== referenceId),
+      };
+    });
   }, []);
 
   const uploadedReferenceCleanupRef = useRef<PageAiUploadedReference[]>([]);
@@ -2569,17 +2626,26 @@ export const SlidePreview: React.FC = () => {
       return;
     }
 
+    if (materialSelectorMode === 'pageAiInline') {
+      const markdown = materials
+        .map((material) => `![${escapeMarkdownText(getMaterialMarkdownLabel(material))}](${material.url})`)
+        .join('\n');
+      if (markdown) {
+        pageAiTextareaRef.current?.insertAtCursor(`${markdown}\n`);
+        pageAiTextareaRef.current?.focus();
+        show({ message: t('slidePreview.materialsAdded', { count: materials.length }), type: 'success' });
+      }
+      return;
+    }
+
     try {
       const files = await Promise.all(
         materials.map((material) => materialUrlToFile(material))
       );
-      setSelectedContextImages((prev) => ({
-        ...prev,
-        uploadedReferences: [
-          ...prev.uploadedReferences,
-          ...files.map((file, index) => createUploadedReference(file, 'material', materials[index]?.name || file.name)),
-        ],
-      }));
+      appendPageAiFiles(files, {
+        sourceType: 'material',
+        labels: materials.map((material) => material.name || material.filename || getMaterialMarkdownLabel(material)),
+      });
       show({ message: t('slidePreview.materialsAdded', { count: materials.length }), type: 'success' });
     } catch (error: any) {
       console.error('加载素材失败:', error);
@@ -2634,6 +2700,51 @@ export const SlidePreview: React.FC = () => {
 
     return actions;
   }, [handleDescriptionFiles, projectId, t]);
+
+  const pageAiSlashActions = useMemo(() => {
+    const actions = [
+      {
+        id: 'upload-local',
+        label: t('preview.descriptionSlashUpload'),
+        description: t('preview.descriptionSlashUploadDesc'),
+        onSelect: () => {
+          pageAiTextareaRef.current?.focus();
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = DESCRIPTION_UPLOAD_ACCEPT;
+          input.multiple = true;
+          input.style.position = 'fixed';
+          input.style.left = '-9999px';
+          document.body.appendChild(input);
+          input.oncancel = () => {
+            input.remove();
+          };
+          input.onchange = () => {
+            const files = Array.from(input.files || []);
+            input.remove();
+            if (files.length > 0) {
+              appendPageAiFiles(files, { sourceType: 'upload', insertIntoPrompt: true });
+            }
+          };
+          input.click();
+        },
+      },
+    ];
+
+    if (projectId) {
+      actions.push({
+        id: 'select-material',
+        label: t('preview.descriptionSlashMaterials'),
+        description: t('preview.descriptionSlashMaterialsDesc'),
+        onSelect: () => {
+          setMaterialSelectorMode('pageAiInline');
+          setIsMaterialSelectorOpen(true);
+        },
+      });
+    }
+
+    return actions;
+  }, [appendPageAiFiles, projectId, t]);
 
   useEffect(() => {
     if (!currentProject) return;
@@ -2802,6 +2913,10 @@ export const SlidePreview: React.FC = () => {
       }
     } finally {
       // 不清理 selectionRect，让选区在界面上持续显示
+      if (reopenPageAiDialogAfterRegionPick) {
+        setIsPageAiDialogOpen(true);
+        setReopenPageAiDialogAfterRegionPick(false);
+      }
     }
   };
 
@@ -3621,27 +3736,27 @@ export const SlidePreview: React.FC = () => {
     </div>
   );
 
-  const templatePreviewUrl = currentProject.template_image_path
-    ? getImageUrl(currentProject.template_image_path, currentProject.updated_at)
-    : undefined;
+  const pageAiInlineImageUrls = useMemo(
+    () => extractImageUrlsFromDescription(editPrompt),
+    [editPrompt]
+  );
   const selectedPageAiReferences: PageAiReference[] = (() => {
     const references: PageAiReference[] = [];
-    if (selectedContextImages.useTemplate && templatePreviewUrl) {
+    const uploadedMarkdownUrls = new Set(
+      selectedContextImages.uploadedReferences
+        .map((reference) => reference.markdownUrl)
+        .filter((url): url is string => Boolean(url))
+    );
+    pageAiInlineImageUrls
+      .filter((url) => !uploadedMarkdownUrls.has(url))
+      .forEach((url, index) => {
       references.push({
-        id: 'template-reference',
-        sourceType: 'template',
-        label: t('preview.pageAiTemplateReference'),
-        previewUrl: templatePreviewUrl,
-      });
-    }
-    selectedContextImages.descImageUrls.forEach((url, index) => {
-      references.push({
-        id: `description-reference:${url}`,
+        id: `inline-reference:${url}`,
         sourceType: 'description',
         label: `${t('preview.imagesInDescription')} ${index + 1}`,
-        previewUrl: getImageUrl(url),
+        previewUrl: isSupportedDescriptionImageUrl(url) ? getImageUrl(url) : url,
       });
-    });
+      });
     selectedContextImages.uploadedReferences.forEach((reference) => {
       references.push({
         id: reference.id,
@@ -3665,12 +3780,30 @@ export const SlidePreview: React.FC = () => {
     });
   }, [projectDefaultImageModel]);
 
+  const buildPageAiPayload = useCallback(() => {
+    const uploadedMarkdownUrls = new Set(
+      selectedContextImages.uploadedReferences
+        .map((reference) => reference.markdownUrl)
+        .filter((url): url is string => Boolean(url))
+    );
+    const inlineImageUrls = extractImageUrlsFromDescription(editPrompt)
+      .filter((url) => !uploadedMarkdownUrls.has(url));
+    return {
+      promptText: stripMarkdownImages(editPrompt),
+      inlineImageUrls,
+      uploadedReferences: selectedContextImages.uploadedReferences,
+    };
+  }, [editPrompt, selectedContextImages.uploadedReferences]);
+
   const handleSubmitCurrentPageGeneration = useCallback(async (options?: {
     appendPageAiMessages?: boolean;
   }) => {
     if (!currentProject) return;
 
-    const draftText = editPrompt.trim();
+    const payload = buildPageAiPayload();
+    const draftText = payload.promptText.trim() || (selectedPageAiReferences.length > 0
+      ? t('preview.pageAiReferenceOnlyFallback')
+      : '');
     const referenceSnapshot = selectedPageAiReferences.map((reference) => ({ ...reference }));
     const shouldAppendPageAiMessages = Boolean(
       options?.appendPageAiMessages && (draftText || referenceSnapshot.length > 0)
@@ -3692,7 +3825,11 @@ export const SlidePreview: React.FC = () => {
       const didStartGeneration = await runGenerateFlow(async () => {
         await executePageImageGeneration({
           prompt: draftText,
-          contextImages: selectedContextImages,
+          contextImages: {
+            useTemplate: false,
+            descImageUrls: payload.inlineImageUrls,
+            uploadedReferences: payload.uploadedReferences,
+          },
           model: editRunImageModel,
         });
       });
@@ -3728,22 +3865,14 @@ export const SlidePreview: React.FC = () => {
   }, [
     currentProject,
     editPrompt,
+    buildPageAiPayload,
     selectedPageAiReferences,
     t,
     runGenerateFlow,
     executePageImageGeneration,
-    selectedContextImages,
     editRunImageModel,
     resetPageAiComposer,
   ]);
-
-  const descriptionImageOptions = draftDescImageUrls.map((url, index) => ({
-    id: `description-option:${url}`,
-    label: `${t('preview.imagesInDescription')} ${index + 1}`,
-    url,
-    previewUrl: getImageUrl(url),
-    selected: selectedContextImages.descImageUrls.includes(url),
-  }));
 
   const handleToggleTemplateReference = () => {
     setSelectedContextImages((prev) => ({
@@ -3768,16 +3897,9 @@ export const SlidePreview: React.FC = () => {
     if (activePreviewReferenceId === referenceId) {
       setActivePreviewReferenceId(null);
     }
-    if (referenceId === 'template-reference') {
-      setSelectedContextImages((prev) => ({ ...prev, useTemplate: false }));
-      return;
-    }
-    if (referenceId.startsWith('description-reference:')) {
-      const url = referenceId.replace('description-reference:', '');
-      setSelectedContextImages((prev) => ({
-        ...prev,
-        descImageUrls: prev.descImageUrls.filter((item) => item !== url),
-      }));
+    if (referenceId.startsWith('inline-reference:')) {
+      const url = referenceId.replace('inline-reference:', '');
+      setEditPrompt((current) => removeMarkdownImageByUrl(current, url));
       return;
     }
     removeUploadedReference(referenceId);
@@ -3805,6 +3927,11 @@ export const SlidePreview: React.FC = () => {
   const handlePageAiSend = useCallback(async () => {
     await handleSubmitCurrentPageGeneration({ appendPageAiMessages: true });
   }, [handleSubmitCurrentPageGeneration]);
+
+  const handleOpenPageAiDialog = useCallback(() => {
+    if (!selectedPageHasImage) return;
+    setIsPageAiDialogOpen(true);
+  }, [selectedPageHasImage]);
 
   const currentPageDescriptionText = getDescriptionText(selectedPage?.description_content);
   const currentPageExtraFields = getDescriptionExtraFields(selectedPage?.description_content);
@@ -4597,7 +4724,7 @@ export const SlidePreview: React.FC = () => {
                               <div className={`flex ${selectedPageHasImage ? 'h-full flex-col items-center justify-center gap-4' : ''}`}>
                                 <div
                                   ref={previewContainerRef}
-                                  className={`relative overflow-hidden touch-manipulation ${isFullscreen
+                                  className={`group/preview relative overflow-hidden touch-manipulation ${isFullscreen
                                     ? 'h-screen w-screen max-h-none max-w-none rounded-none bg-black shadow-none'
                                     : 'rounded-2xl border border-[#eadfbf] bg-white dark:border-border-primary dark:bg-background-primary'
                                   }`}
@@ -4617,6 +4744,18 @@ export const SlidePreview: React.FC = () => {
                                         draggable={false}
                                         crossOrigin="anonymous"
                                       />
+                                      {!isFullscreen && (
+                                        <button
+                                          type="button"
+                                          onClick={handleOpenPageAiDialog}
+                                          className="absolute bottom-4 right-4 z-20 inline-flex items-center gap-2 rounded-full border border-white/70 bg-slate-950/80 px-3.5 py-2 text-sm font-medium text-white opacity-0 shadow-[0_12px_28px_rgba(15,23,42,0.28)] transition-all hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 group-hover/preview:opacity-100 group-focus-within/preview:opacity-100"
+                                          title={t('preview.refineDescription')}
+                                          aria-label={t('preview.refineDescription')}
+                                        >
+                                          <Sparkles size={16} />
+                                          <span>AI优化</span>
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         aria-label={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
@@ -4732,11 +4871,13 @@ export const SlidePreview: React.FC = () => {
                               modelHint={t('preview.editRunImageModelHint')}
                               messages={pageAiMessages}
                               references={selectedPageAiReferences}
-                              descriptionImageOptions={descriptionImageOptions}
-                              hasTemplateReference={selectedContextImages.useTemplate}
-                              templatePreviewUrl={templatePreviewUrl}
+                              descriptionImageOptions={[]}
+                              hasTemplateReference={false}
+                              templatePreviewUrl={undefined}
                               activeReferenceId={activePreviewReferenceId}
                               inputValue={editPrompt}
+                              inputRef={pageAiTextareaRef}
+                              slashActions={pageAiSlashActions}
                               sendLabel={selectedPageHasImage ? t('preview.regenerate') : t('preview.generateImage')}
                               modelValue={editRunImageModel}
                               modelOptions={PROJECT_SUPPORTED_IMAGE_MODELS}
@@ -4788,6 +4929,73 @@ export const SlidePreview: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              <Modal
+                isOpen={isPageAiDialogOpen}
+                onClose={() => {
+                  setIsPageAiDialogOpen(false);
+                  setReopenPageAiDialogAfterRegionPick(false);
+                }}
+                title={t('preview.pageAiTitle')}
+                size="wide"
+              >
+                <div className="h-[min(72vh,760px)] min-h-[420px]">
+                  <PageAiWorkbench
+                    title={t('preview.pageAiTitle')}
+                    subtitle={t('preview.pageAiSubtitle')}
+                    emptyTitle={t('preview.pageAiEmptyTitle')}
+                    emptyDescription={t('preview.pageAiEmptyDescription')}
+                    inputPlaceholder={t('preview.editPromptPlaceholder')}
+                    inputHint={t('preview.pageAiInputHint')}
+                    sendTooltip={t('preview.pageAiSendTooltip')}
+                    referencesTitle={t('preview.pageAiReferencesTitle')}
+                    referencesEmpty={t('preview.pageAiReferencesEmpty')}
+                    descriptionSourcesTitle={t('preview.pageAiDescriptionSourcesTitle')}
+                    templateLabel={t('preview.pageAiTemplateReference')}
+                    materialLabel={t('preview.pageAiMaterialReference')}
+                    uploadLabel={t('preview.pageAiUploadReference')}
+                    loadingLabel={t('preview.pageAiLoading')}
+                    regionSelectLabel={t('preview.regionSelect')}
+                    regionSelectActiveLabel={t('preview.endRegionSelect')}
+                    modelLabel={t('preview.editRunImageModelLabel')}
+                    modelHint={t('preview.editRunImageModelHint')}
+                    messages={pageAiMessages}
+                    references={selectedPageAiReferences}
+                    descriptionImageOptions={[]}
+                    hasTemplateReference={false}
+                    templatePreviewUrl={undefined}
+                    activeReferenceId={activePreviewReferenceId}
+                    inputValue={editPrompt}
+                    inputRef={pageAiTextareaRef}
+                    slashActions={pageAiSlashActions}
+                    sendLabel={selectedPageHasImage ? t('preview.regenerate') : t('preview.generateImage')}
+                    modelValue={editRunImageModel}
+                    modelOptions={PROJECT_SUPPORTED_IMAGE_MODELS}
+                    isSubmitting={isPageAiSubmitting}
+                    isRegionSelectionActive={isRegionSelectionMode}
+                    onInputChange={setEditPrompt}
+                    onModelChange={setEditRunImageModel}
+                    onSend={() => void handlePageAiSend()}
+                    onToggleRegionSelect={() => {
+                      setIsPageAiDialogOpen(false);
+                      setReopenPageAiDialogAfterRegionPick(true);
+                      setIsRegionSelectionMode(true);
+                      setSelectionStart(null);
+                      setSelectionRect(null);
+                      setIsSelectingRegion(false);
+                    }}
+                    onToggleTemplate={handleToggleTemplateReference}
+                    onToggleDescriptionImage={handleToggleDescriptionImage}
+                    onReferenceClick={handlePreviewReferenceFocus}
+                    onRemoveReference={handleRemovePageAiReference}
+                    onOpenMaterialSelector={projectId ? () => {
+                      setMaterialSelectorMode('pageAi');
+                      setIsMaterialSelectorOpen(true);
+                    } : undefined}
+                    onUploadFiles={handleFileUpload}
+                  />
+                </div>
+              </Modal>
 
               <div
                 data-testid="preview-status-bar"
