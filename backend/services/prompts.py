@@ -551,6 +551,101 @@ def get_page_description_prompt(project_context: 'ProjectContext', outline: list
     return _build_prompt(prompt, project_context.reference_files_content, tag='get_page_description_prompt')
 
 
+def get_page_description_json_prompt(project_context: 'ProjectContext', outline: list,
+                                     page_outline: dict, page_index: int,
+                                     part_info: str = "",
+                                     language: str = None,
+                                     detail_level: str = "default") -> str:
+    """为文本生成场景产出结构化单页 JSON（与翻新链路对齐）。"""
+    original_input = _get_original_input(project_context)
+    outline_text = json.dumps(outline or [], ensure_ascii=False, indent=2)
+    page_outline_text = json.dumps(page_outline or {}, ensure_ascii=False, indent=2)
+    style_json = getattr(project_context, 'template_style_json', None)
+    style_block = ""
+    if isinstance(style_json, str) and style_json.strip():
+        style_block = (
+            "## 风格指导 JSON（可选）\n"
+            "以下 JSON 是项目风格约束，若与内容不冲突请尽量吸收其语气/版式倾向：\n"
+            f"{style_json.strip()}\n"
+        )
+
+    first_page_constraint = (
+        "- 当前页是第 1 页，优先作为封面页：内容极简，只保留标题/副标题/汇报信息，不堆砌正文。\n"
+        if page_index == 1 else
+        ""
+    )
+
+    prompt = f"""\
+# Role
+你是一位麦肯锡/BCG风格的高级商业分析师兼PPT架构师。你的任务是基于大纲与上下文，生成可直接渲染的单页结构化 JSON。
+
+# 输入上下文
+原始需求：
+{original_input}
+
+完整大纲：
+{outline_text}
+{part_info}
+
+当前页（第 {page_index} 页）：
+{page_outline_text}
+
+{_format_requirements(project_context.description_requirements, "description")}
+{style_block}
+# 目标
+1. 输出一个 JSON 对象，且只能包含 `outline` 与 `slide` 两个顶层键。
+2. 必须根据当前页标题与要点“扩写并丰富内容”，不是仅改字段格式。
+3. 内容要体现结论先行、论据支撑、可执行表达。
+4. 每页必须输出 `type`、`layout_suggestion`、`content`、`visual_suggestion`、`note`。
+5. `type` 必须使用中文值：封面页/目录页/章节页/图表页/图文页/结尾页。
+6. 无法判断时，默认使用图文页。
+{first_page_constraint}
+
+# 详细程度
+当前详细程度要求：{DETAIL_LEVEL_SPECS.get(detail_level, DETAIL_LEVEL_SPECS['default'])}
+
+# 类型要求
+- 图文页：必须提供 `headline_summary` 与 `detailed_items[]`（每项含 `sub_title`、`body`、`highlight_phrases`）。
+- 图表页：必须提供 `chart_type`、`chart_data`、`key_takeaway`、`highlight_phrases`。
+- 封面页：优先使用 `headline`、`sub_headline`、`presenter_info`。
+- 结尾页：优先使用 `final_conclusion`、`vision`、`slogan`。
+
+# 输出格式（严格）
+```json
+{{
+  "outline": {{
+    "title": "动作标题",
+    "points": ["要点1", "要点2", "要点3"]
+  }},
+  "slide": {{
+    "type": "图文页",
+    "title": "动作标题",
+    "layout_suggestion": "多栏逻辑",
+    "content": {{
+      "headline_summary": "20字内核心结论",
+      "detailed_items": [
+        {{
+          "sub_title": "分论点",
+          "body": "业务动作 + 证据 + 结果",
+          "highlight_phrases": ["关键词1", "关键词2"]
+        }}
+      ]
+    }},
+    "visual_suggestion": "主体 + 隐喻 + 风格 + 重点",
+    "note": "补充假设与边界"
+  }}
+}}
+```
+
+# 硬约束
+- 只输出 JSON，不要 markdown 代码块，不要解释文字。
+- 所有字段尽量基于输入信息扩写，不臆造精确数据。
+- 不允许输出引用来源字段。
+{get_language_instruction(language)}
+"""
+    return _build_prompt(prompt, project_context.reference_files_content, tag='get_page_description_json_prompt')
+
+
 def get_all_descriptions_stream_prompt(project_context: 'ProjectContext',
                                        outline: list,
                                        flat_pages: list,

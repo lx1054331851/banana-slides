@@ -16,7 +16,6 @@ from .prompts import (
     get_outline_generation_prompt,
     get_outline_parsing_prompt,
     get_page_description_prompt,
-    get_all_descriptions_stream_prompt,
     get_image_generation_prompt,
     get_image_edit_prompt,
     get_description_to_outline_prompt,
@@ -31,6 +30,7 @@ from .prompts import (
     get_outline_generation_prompt_markdown,
     get_outline_parsing_prompt_markdown,
     get_description_to_outline_prompt_markdown,
+    get_page_description_json_prompt,
 )
 from .ai_providers import get_text_provider, get_image_provider, get_caption_provider, TextProvider, ImageProvider
 from config import get_config
@@ -153,6 +153,7 @@ class ProjectContext:
             self.creation_type = project_or_dict.creation_type or 'idea'
             self.outline_requirements = project_or_dict.outline_requirements
             self.description_requirements = project_or_dict.description_requirements
+            self.template_style_json = getattr(project_or_dict, 'template_style_json', None)
         else:
             # 是字典
             self.idea_prompt = project_or_dict.get('idea_prompt')
@@ -161,6 +162,7 @@ class ProjectContext:
             self.creation_type = project_or_dict.get('creation_type', 'idea')
             self.outline_requirements = project_or_dict.get('outline_requirements')
             self.description_requirements = project_or_dict.get('description_requirements')
+            self.template_style_json = project_or_dict.get('template_style_json')
 
         self.reference_files_content = reference_files_content or []
 
@@ -173,6 +175,7 @@ class ProjectContext:
             'creation_type': self.creation_type,
             'outline_requirements': self.outline_requirements,
             'description_requirements': self.description_requirements,
+            'template_style_json': self.template_style_json,
             'reference_files_content': self.reference_files_content
         }
 
@@ -784,6 +787,49 @@ class AIService:
         extra_field_names = self._get_extra_field_names()
         part_info = f"\nThis page belongs to: {page_outline['part']}" if 'part' in page_outline else ""
 
+        if _generation_logs_enabled():
+            logger.info(
+                "[Generate Description] page=%s title=%s language=%s detail=%s mode=structured_json",
+                page_index,
+                page_outline.get('title', 'Untitled'),
+                language,
+                detail_level,
+            )
+
+        try:
+            json_prompt = get_page_description_json_prompt(
+                project_context=project_context,
+                outline=outline,
+                page_outline=page_outline,
+                page_index=page_index,
+                part_info=part_info,
+                language=language,
+                detail_level=detail_level,
+            )
+            json_result = self.generate_json(json_prompt, thinking_budget=1000)
+            if isinstance(json_result, list):
+                json_result = json_result[0] if json_result and isinstance(json_result[0], dict) else {}
+            if not isinstance(json_result, dict):
+                raise ValueError(f"structured page description should be dict, got {type(json_result)}")
+            normalized = self._normalize_extracted_page_content_result(json_result)
+            result = {'text': normalized.get('description', '')}
+            if _generation_logs_enabled():
+                logger.info(
+                    "[Generate Description Done] page=%s title=%s chars=%s mode=structured_json",
+                    page_index,
+                    page_outline.get('title', 'Untitled'),
+                    len(result.get('text') or ''),
+                )
+            return result
+        except Exception:
+            logger.warning(
+                "Structured JSON generation failed, fallback to legacy text mode: page=%s title=%s",
+                page_index,
+                page_outline.get('title', 'Untitled'),
+                exc_info=True,
+            )
+
+        # Fallback: legacy plain-text generation + extra field extraction.
         desc_prompt = get_page_description_prompt(
             project_context=project_context,
             outline=outline,
@@ -794,30 +840,16 @@ class AIService:
             detail_level=detail_level,
             extra_fields=extra_field_names,
         )
-
-        if _generation_logs_enabled():
-            logger.info(
-                "[Generate Description] page=%s title=%s language=%s detail=%s extra_fields=%s",
-                page_index,
-                page_outline.get('title', 'Untitled'),
-                language,
-                detail_level,
-                len(extra_field_names),
-            )
-
-        # 根据 enable_text_reasoning 配置调整 thinking_budget
         actual_budget = self._get_text_thinking_budget()
         response_text = self.text_provider.generate_text(desc_prompt, thinking_budget=actual_budget)
-
         text = dedent(response_text)
         description_text, extra_fields = self._parse_extra_fields(text, extra_field_names)
-
         result = {'text': description_text}
         if extra_fields:
             result['extra_fields'] = extra_fields
         if _generation_logs_enabled():
             logger.info(
-                "[Generate Description Done] page=%s title=%s chars=%s extra_fields=%s",
+                "[Generate Description Done] page=%s title=%s chars=%s extra_fields=%s mode=legacy_text",
                 page_index,
                 page_outline.get('title', 'Untitled'),
                 len(description_text or ''),
@@ -835,117 +867,24 @@ class AIService:
         Yields dicts: {page_index, description_text, extra_fields}
         Final yield: {__stream_complete__: bool}
         """
-        extra_field_names = self._get_extra_field_names()
-
-        prompt = get_all_descriptions_stream_prompt(
-            project_context=project_context,
-            outline=outline,
-            flat_pages=flat_pages,
-            language=language,
-            detail_level=detail_level,
-            extra_fields=extra_field_names,
-        )
-
-        # Build regex pattern to detect any configured extra field header
-        field_pattern = self._build_extra_field_pattern(extra_field_names)
-
-        actual_budget = self._get_text_thinking_budget()
-        buffer = ""
-        page_index = -1
-        current_lines: list = []
-        current_field: Optional[str] = None  # None = description, str = field name
-        extra_fields: Dict[str, str] = {}
-        stream_complete = False
-
-        def _build_page_result():
-            """Build result dict from accumulated state."""
-            desc_text = "\n".join(current_lines).strip()
-            result: Dict = {
-                'page_index': page_index,
-                'description_text': desc_text,
+        # Keep text-generation streaming aligned with renovation-like structured JSON logic:
+        # generate each page through the same single-page pipeline and stream page by page.
+        for index, page_outline in enumerate(flat_pages or [], 1):
+            desc_result = self.generate_page_description(
+                project_context=project_context,
+                outline=outline or [],
+                page_outline=page_outline or {},
+                page_index=index,
+                language=language,
+                detail_level=detail_level,
+            )
+            yield {
+                'page_index': index - 1,
+                'description_text': desc_result.get('text', ''),
+                'extra_fields': desc_result.get('extra_fields'),
             }
-            if extra_fields:
-                result['extra_fields'] = dict(extra_fields)
-            return result
-
-        def _reset_page_state():
-            nonlocal current_lines, current_field, extra_fields
-            current_lines = []
-            current_field = None
-            extra_fields = {}
-
-        def _process_line(line: str, stripped: str):
-            nonlocal page_index, current_field, stream_complete
-
-            if stripped == '<!-- BEGIN -->':
-                if page_index < 0:
-                    page_index = 0
-                return 'continue'
-
-            if stripped == '<!-- END -->':
-                stream_complete = True
-                return 'continue'
-
-            if stripped == '<!-- PAGE_END -->':
-                if page_index >= 0 and (current_lines or extra_fields):
-                    return 'yield_page'
-                return 'continue'
-
-            if page_index < 0:
-                return 'continue'
-
-            # Check for extra field header
-            if field_pattern:
-                field_match = field_pattern.match(stripped)
-                if field_match:
-                    field_name = field_match.group(1)
-                    current_field = field_name
-                    value = field_match.group(2).strip()
-                    if value:
-                        extra_fields[field_name] = value
-                    return 'continue'
-
-            if not stripped:
-                return 'continue'
-
-            if current_field:
-                # Append to current extra field (multi-line)
-                if current_field in extra_fields:
-                    extra_fields[current_field] += "\n" + stripped
-                else:
-                    extra_fields[current_field] = stripped
-            else:
-                current_lines.append(line.rstrip())
-            return 'continue'
-
-        for chunk in self.text_provider.generate_text_stream(prompt, thinking_budget=actual_budget):
-            buffer += chunk
-
-            while '\n' in buffer:
-                line, buffer = buffer.split('\n', 1)
-                stripped = line.strip()
-                action = _process_line(line, stripped)
-
-                if action == 'yield_page':
-                    yield _build_page_result()
-                    _reset_page_state()
-                    page_index += 1
-
-        # Process remaining buffer
-        if buffer.strip():
-            for line in buffer.split('\n'):
-                stripped = line.strip()
-                action = _process_line(line, stripped)
-                if action == 'yield_page':
-                    yield _build_page_result()
-                    _reset_page_state()
-                    page_index += 1
-
-        # Yield last page if not yet yielded
-        if page_index >= 0 and current_lines:
-            yield _build_page_result()
-
-        yield {'__stream_complete__': stream_complete}
+        yield {'__stream_complete__': True}
+        return
 
     @staticmethod
     def _build_extra_field_pattern(field_names: list):
