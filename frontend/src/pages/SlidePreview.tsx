@@ -3783,16 +3783,29 @@ export const SlidePreview: React.FC = () => {
                   </div>
                 </div>
               )}
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                icon={<Sparkles size={14} />}
-                title={t('preview.refineJsonTooltip')}
-                aria-label={t('preview.refineJsonTooltip')}
-                onClick={() => setShowJsonRefineDialog((prev) => !prev)}
-                className="h-8 w-8 rounded-lg border border-[#e6dab8] bg-[#fbf7eb] px-0 text-[#7c6740] hover:bg-[#f7edd2] dark:border-[#3f4962] dark:bg-[#1a2232] dark:text-[#c4d2f3] dark:hover:bg-[#222d44]"
-              />
+              <div className="inline-flex items-center gap-1 rounded-lg border border-[#e6dab8] bg-[#fbf7eb] p-1 dark:border-[#3f4962] dark:bg-[#1a2232]">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  icon={<Sparkles size={14} />}
+                  title={t('preview.refineJsonTooltip')}
+                  aria-label={t('preview.refineJsonTooltip')}
+                  onClick={() => setShowJsonRefineDialog((prev) => !prev)}
+                  className="h-7 w-7 rounded-md border-0 bg-transparent px-0 text-[#7c6740] hover:bg-[#f7edd2] dark:text-[#c4d2f3] dark:hover:bg-[#222d44]"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  icon={<Send size={14} />}
+                  title={t('preview.pageAiSendTooltip')}
+                  aria-label={t('preview.pageAiSendTooltip')}
+                  onClick={() => void handlePageAiSend()}
+                  disabled={isPageAiSubmitting}
+                  className="h-7 w-7 rounded-md border-0 bg-transparent px-0 text-[#7c6740] hover:bg-[#f7edd2] disabled:opacity-50 dark:text-[#c4d2f3] dark:hover:bg-[#222d44]"
+                />
+              </div>
             </div>
           )}
         </div>
