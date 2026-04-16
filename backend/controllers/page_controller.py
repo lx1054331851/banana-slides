@@ -735,6 +735,14 @@ def edit_page_image(project_id, page_id):
         
         if not page or page.project_id != project_id:
             return not_found('Page')
+
+        has_current_image = bool(
+            page.generated_image_path
+            or getattr(page, 'cached_image_path', None)
+            or getattr(page, 'preview_image_path', None)
+        )
+        if not has_current_image:
+            return bad_request("page must have generated image first")
         
         project = Project.query.get(project_id)
         if not project:

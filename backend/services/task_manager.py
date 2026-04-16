@@ -1193,141 +1193,46 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
             edit_instruction_text = normalize_user_text(edit_instruction)
             current_image_rel_path = page_snapshot['current_image_rel_path']
             template_path = file_service.get_template_path(project_id) if use_template else None
+            if not current_image_rel_path:
+                raise ValueError("Page must have generated image first")
+
             prompt_text: Optional[str] = None
             request_snapshot: Optional[str] = None
-            operation_type = 'regenerate' if current_image_rel_path else 'generate'
-
-            # 有原图且带了修改文字或附加参考图时，固定走图像编辑模式；
-            # 只有“无修改文字且无附加图”的纯重绘场景才回退到文生图。
-            has_edit_references = bool(additional_ref_images)
-            should_edit_existing_image = bool(
-                current_image_rel_path and (edit_instruction_text or has_edit_references)
-            )
+            operation_type = 'edit'
 
             try:
-                if should_edit_existing_image:
-                    current_image_path = file_service.get_absolute_path(current_image_rel_path)
-                    merged_edit_refs: List[str] = []
-                    if additional_ref_images:
-                        merged_edit_refs.extend(additional_ref_images)
-                    effective_edit_instruction = edit_instruction_text or (
-                        "Please update the current PPT page image using the attached references."
-                        if str(language or '').lower().startswith('en')
-                        else "请参考附加图片修改当前页 PPT 图片。"
-                    )
+                current_image_path = file_service.get_absolute_path(current_image_rel_path)
+                merged_edit_refs: List[str] = []
+                if additional_ref_images:
+                    merged_edit_refs.extend(additional_ref_images)
+                effective_edit_instruction = edit_instruction_text or (
+                    "Please update the current PPT page image using the attached references."
+                    if str(language or '').lower().startswith('en')
+                    else "请参考附加图片修改当前页 PPT 图片。"
+                )
 
-                    logger.info(f"🎨 Editing image for page {page_id}...")
-                    prompt_text = get_image_edit_prompt(
-                        edit_instruction=effective_edit_instruction,
-                        reference_image_count=1 + len(merged_edit_refs),
-                    )
-                    operation_type = 'edit'
-                    request_snapshot = _build_image_request_snapshot(
-                        operation_type=operation_type,
-                        aspect_ratio=aspect_ratio,
-                        resolution=resolution,
-                        prompt_text=prompt_text,
-                        primary_reference=current_image_path,
-                        additional_references=merged_edit_refs,
-                        edit_instruction=effective_edit_instruction,
-                        upload_root=file_service.upload_folder,
-                    )
-                    image = ai_service.generate_image(
-                        prompt_text,
-                        current_image_path,
-                        aspect_ratio,
-                        resolution,
-                        additional_ref_images=merged_edit_refs if merged_edit_refs else None
-                    )
-                else:
-                    desc_content = page_snapshot['description_content']
-                    desc_text = ''
-                    if isinstance(desc_content, dict):
-                        desc_text = (desc_content.get('text', '') or '').strip()
-                        if not desc_text and desc_content.get('text_content'):
-                            text_content = desc_content.get('text_content', [])
-                            if isinstance(text_content, list):
-                                desc_text = '\n'.join([str(x) for x in text_content if str(x).strip()]).strip()
-                            else:
-                                desc_text = str(text_content).strip()
-                        if not desc_text and desc_content:
-                            # 兼容历史/自定义结构：保底将整个描述对象转为文本
-                            desc_text = json.dumps(desc_content, ensure_ascii=False)
-                    elif isinstance(desc_content, str):
-                        desc_text = desc_content.strip()
-
-                    if not desc_text and not edit_instruction_text:
-                        raise ValueError("No saved description text for page")
-
-                    desc_image_urls: List[str] = []
-                    if desc_text:
-                        desc_image_urls = ai_service.extract_image_urls_from_markdown(desc_text) or []
-                        if desc_image_urls:
-                            logger.info(f"Found {len(desc_image_urls)} image(s) in page {page_id} description")
-
-                    merged_ref_images: List[str] = []
-                    if additional_ref_images:
-                        merged_ref_images.extend(additional_ref_images)
-                    if desc_image_urls:
-                        merged_ref_images.extend(desc_image_urls)
-
-                    if template_path:
-                        merged_ref_images = [img for img in merged_ref_images if img != template_path]
-
-                    dedup_ref_images: List[str] = []
-                    seen = set()
-                    for img in merged_ref_images:
-                        if not isinstance(img, str):
-                            continue
-                        if img in seen:
-                            continue
-                        seen.add(img)
-                        dedup_ref_images.append(img)
-
-                    page_data = page_snapshot['page_data']
-
-                    generation_outline = outline if outline else [page_data]
-
-                    merged_requirements = (extra_requirements or '').strip()
-                    if edit_instruction_text:
-                        edit_requirement = f"补充修改要求：\n{edit_instruction_text}"
-                        merged_requirements = (
-                            f"{merged_requirements}\n\n{edit_requirement}".strip()
-                            if merged_requirements else edit_requirement
-                        )
-
-                    prompt_text = ai_service.generate_image_prompt(
-                        generation_outline,
-                        page_data,
-                        desc_text or edit_instruction_text,
-                        page_snapshot['order_index'] + 1,
-                        has_material_images=bool(desc_image_urls or dedup_ref_images),
-                        extra_requirements=merged_requirements if merged_requirements else None,
-                        language=language,
-                        has_template=bool(template_path)
-                    )
-                    request_snapshot = _build_image_request_snapshot(
-                        operation_type=operation_type,
-                        aspect_ratio=aspect_ratio,
-                        resolution=resolution,
-                        prompt_text=prompt_text,
-                        primary_reference=template_path,
-                        additional_references=dedup_ref_images,
-                        description_text=desc_text or edit_instruction_text,
-                        edit_instruction=edit_instruction_text or None,
-                        extra_requirements=merged_requirements if merged_requirements else None,
-                        extra_requirements_in_prompt=True,
-                        upload_root=file_service.upload_folder,
-                    )
-
-                    logger.info(f"🎨 Regenerating image for page {page_id} (text-to-image mode)...")
-                    image = ai_service.generate_image(
-                        prompt_text,
-                        template_path,
-                        aspect_ratio,
-                        resolution,
-                        additional_ref_images=dedup_ref_images if dedup_ref_images else None
-                    )
+                logger.info(f"🎨 Editing image for page {page_id}...")
+                prompt_text = get_image_edit_prompt(
+                    edit_instruction=effective_edit_instruction,
+                    reference_image_count=1 + len(merged_edit_refs),
+                )
+                request_snapshot = _build_image_request_snapshot(
+                    operation_type=operation_type,
+                    aspect_ratio=aspect_ratio,
+                    resolution=resolution,
+                    prompt_text=prompt_text,
+                    primary_reference=current_image_path,
+                    additional_references=merged_edit_refs,
+                    edit_instruction=effective_edit_instruction,
+                    upload_root=file_service.upload_folder,
+                )
+                image = ai_service.generate_image(
+                    prompt_text,
+                    current_image_path,
+                    aspect_ratio,
+                    resolution,
+                    additional_ref_images=merged_edit_refs if merged_edit_refs else None
+                )
             finally:
                 # Clean up temp directory if created
                 if temp_dir:

@@ -125,12 +125,12 @@ export function normalizeErrorMessage(errorMessage: string | null | undefined): 
       : 'This page has no saved outline. Outline is optional now; please save page description and retry.';
   } else if (message.includes('page must have generated image first')) {
     return isZh
-      ? '当前页面还没有已生成图片，系统将自动切换为文生图模式。若仍失败，请先补充页面描述后重试。'
-      : 'This page has no generated image yet. The system should fall back to text-to-image mode.';
+      ? '当前页还没有可编辑图片，请先生成或准备该页图片后再使用发送按钮。'
+      : 'This page does not have an editable image yet. Generate or prepare the page image first.';
   } else if (message.includes('edit_instruction is required')) {
     return isZh
-      ? '编辑指令为空时将自动切换为文生图模式。若仍失败，请补充页面描述后重试。'
-      : 'Empty edit instruction should fall back to text-to-image mode.';
+      ? '当前请求缺少修改指令。你也可以只附带参考图发送，系统会按图片编辑处理。'
+      : 'This request is missing edit instructions. You can also send reference images only and it will still use image editing.';
   } else if (
     message.includes('page must have description content') ||
     message.includes('no saved description content for page') ||

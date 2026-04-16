@@ -93,14 +93,14 @@ const previewI18n = {
       selectFromMaterials: "从素材库选择", upload: "上传",
       editRunImageModelLabel: "本次生成模型",
       editRunImageModelHint: "仅对本次生成生效，不会保存到项目设置",
-      editPromptLabel: "输入修改指令(将自动添加页面描述)",
+      editPromptLabel: "输入修改指令",
       editPromptPlaceholder: "例如：将框选区域内的素材移除、把背景改成蓝色、增大标题字号、更改文本框样式为虚线...",
       descriptionSlashUpload: "从本地上传",
       descriptionSlashUploadDesc: "选择本地图片并插入到当前光标位置",
       descriptionSlashMaterials: "从素材库选择",
       descriptionSlashMaterialsDesc: "从已有素材中选择并插入到当前光标位置",
       pageAiTitle: "页面级 AI 优化",
-      pageAiSubtitle: "仅作用于当前页图片编辑/重生成，自动带入当前页描述上下文。",
+      pageAiSubtitle: "仅作用于当前页图片编辑，只会携带当前页图片、引用图片和修改指令。",
       pageAiEmptyTitle: "先补充修改意图，再让 AI 处理当前页",
       pageAiEmptyDescription: "你可以引用框选区域、上传图片、素材库图片、模板图或描述内图片，再配合文字一起发送。",
       pageAiReferencesTitle: "当前引用",
@@ -110,8 +110,8 @@ const previewI18n = {
       pageAiMaterialReference: "素材库",
       pageAiUploadReference: "上传图片",
       pageAiLoading: "正在处理当前页图片...",
-      pageAiSendTooltip: "生成当前页",
-      pageAiInputHint: "Enter 生成，Shift+Enter 换行",
+      pageAiSendTooltip: "编辑当前页图片",
+      pageAiInputHint: "Enter 发送，Shift+Enter 换行",
       pageAiResponseFallback: "已开始处理当前页图片，请稍候查看最新结果。",
       pageAiReferenceOnlyFallback: "请参考这些引用修改当前页图片。",
       saveOutlineOnly: "仅保存大纲/描述", generateImage: "生成图片",
@@ -255,14 +255,14 @@ const previewI18n = {
       selectFromMaterials: "Select from Materials", upload: "Upload",
       editRunImageModelLabel: "Model For This Run",
       editRunImageModelHint: "Only applies to this generation and will not be saved to project settings.",
-      editPromptLabel: "Enter edit instructions (page description will be auto-added)",
+      editPromptLabel: "Enter edit instructions",
       editPromptPlaceholder: "e.g., Remove elements in selected area, change background to blue, increase title font size, change text box style to dashed...",
       descriptionSlashUpload: "Upload From Device",
       descriptionSlashUploadDesc: "Choose a local image and insert it at the current cursor position",
       descriptionSlashMaterials: "Insert From Materials",
       descriptionSlashMaterialsDesc: "Choose existing materials and insert them at the current cursor position",
       pageAiTitle: "Page AI Optimize",
-      pageAiSubtitle: "Only affects the current page image and automatically uses the current page description as context.",
+      pageAiSubtitle: "Only edits the current page image and sends just the current image, references, and edit instructions.",
       pageAiEmptyTitle: "Add intent, then let AI work on this page",
       pageAiEmptyDescription: "Reference a selected region, uploaded image, material library image, template image, or description image, then send them with text.",
       pageAiReferencesTitle: "Current References",
@@ -272,8 +272,8 @@ const previewI18n = {
       pageAiMaterialReference: "Materials",
       pageAiUploadReference: "Upload Image",
       pageAiLoading: "Processing the current page image...",
-      pageAiSendTooltip: "Generate current page",
-      pageAiInputHint: "Enter to generate, Shift+Enter for newline",
+      pageAiSendTooltip: "Edit current page image",
+      pageAiInputHint: "Enter to send, Shift+Enter for newline",
       pageAiResponseFallback: "Started processing the current page image. Please check back shortly.",
       pageAiReferenceOnlyFallback: "Please update the current page image using these references.",
       saveOutlineOnly: "Save Outline/Description Only", generateImage: "Generate Image",
@@ -2449,30 +2449,18 @@ export const SlidePreview: React.FC = () => {
           },
         }
         : undefined;
-      const hasExistingImage = Boolean(page.generated_image_path || page.preview_image_path);
-      const hasContextInputs = Boolean(
-        nextPrompt.trim() ||
-        nextContextImages.useTemplate ||
-        nextContextImages.descImageUrls.length > 0 ||
-        nextContextImages.uploadedReferences.length > 0
+      await editPageImage(
+        page.id,
+        nextPrompt,
+        {
+          useTemplate: nextContextImages.useTemplate,
+          descImageUrls: nextContextImages.descImageUrls,
+          uploadedFiles: nextContextImages.uploadedReferences.length > 0
+            ? nextContextImages.uploadedReferences.map((reference) => reference.file)
+            : undefined,
+        },
+        editGenerationOverride
       );
-
-      if (hasExistingImage || hasContextInputs) {
-        await editPageImage(
-          page.id,
-          nextPrompt,
-          {
-            useTemplate: nextContextImages.useTemplate,
-            descImageUrls: nextContextImages.descImageUrls,
-            uploadedFiles: nextContextImages.uploadedReferences.length > 0
-              ? nextContextImages.uploadedReferences.map((reference) => reference.file)
-              : undefined,
-          },
-          editGenerationOverride
-        );
-      } else {
-        await generateImages([page.id], editGenerationOverride);
-      }
 
       setEditContextByPage((prev) => ({
         ...prev,
@@ -2496,7 +2484,7 @@ export const SlidePreview: React.FC = () => {
       show({ message: errorMessage, type: 'error' });
       throw error;
     }
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, projectDefaultImageResolution, projectDefaultImageSource, handleSaveOutlineAndDescription, saveAllPages, generateImages, pageAiMessages, show, t]);
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, projectDefaultImageResolution, projectDefaultImageSource, handleSaveOutlineAndDescription, saveAllPages, pageAiMessages, show, t]);
 
   const handleSaveCurrentPage = useCallback(async () => {
     handleSaveOutlineAndDescription();
@@ -5074,7 +5062,7 @@ export const SlidePreview: React.FC = () => {
                               inputValue={editPrompt}
                               inputRef={pageAiTextareaRef}
                               slashActions={pageAiSlashActions}
-                              sendLabel={selectedPageHasImage ? t('preview.regenerate') : t('preview.generateImage')}
+                              sendLabel={t('preview.historyActionEdit')}
                               modelValue={editRunImageModel}
                               modelOptions={PROJECT_SUPPORTED_IMAGE_MODELS}
                               isSubmitting={isPageAiSubmitting}

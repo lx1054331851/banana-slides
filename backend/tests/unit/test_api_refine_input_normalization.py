@@ -66,6 +66,12 @@ def test_normalize_user_text_removes_hidden_control_chars():
 
 def test_edit_page_image_normalizes_invisible_edit_instruction(client, app):
     project_id, page_id = _create_project_with_page(app)
+    from models import Page, db
+
+    with app.app_context():
+        page = db.session.get(Page, page_id)
+        page.generated_image_path = 'uploads/project/page.png'
+        db.session.commit()
 
     mock_service = MagicMock()
     routing_bundle = SimpleNamespace(
@@ -86,6 +92,21 @@ def test_edit_page_image_normalizes_invisible_edit_instruction(client, app):
     assert_success_response(response, 202)
     submit_args, _ = mock_submit_task.call_args
     assert submit_args[4] == '把标题改成蓝色'
+
+
+def test_edit_page_image_requires_existing_current_image(client, app):
+    project_id, page_id = _create_project_with_page(app)
+
+    response = client.post(
+        f'/api/projects/{project_id}/pages/{page_id}/edit/image',
+        json={
+            'edit_instruction': '把标题改成蓝色',
+            'context_images': {'use_template': False, 'desc_image_urls': []},
+        },
+    )
+
+    data = assert_error_response(response, 400)
+    assert data['error']['message'] == 'page must have generated image first'
 
 
 def test_single_page_refine_fallbacks_to_first_when_multiple_descriptions_returned(client, app):
