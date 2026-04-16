@@ -3741,7 +3741,7 @@ export const SlidePreview: React.FC = () => {
             )}
           </div>
           {useRenovationPreviewForm && renovationJsonViewMode === 'text' && (
-            <div className="relative z-20 -mb-px mt-1 flex items-center justify-end gap-2 border-t border-[#efe6d2] px-1.5 pt-1.5 pb-0.5 dark:border-[#303a52]">
+            <div className="relative z-20 -mb-px mt-0 flex items-center justify-end gap-2 border-t border-[#efe6d2] px-1.5 pt-0.5 pb-0 dark:border-[#303a52]">
               {showJsonRefineDialog && (
                 <div className="min-w-0 flex-1 rounded-xl border border-[#ead6a2] bg-[linear-gradient(120deg,#fff9e8_0%,#fff3d6_54%,#ffefbf_100%)] p-2 shadow-[0_10px_20px_rgba(250,204,21,0.12)] transition-all duration-300 dark:border-[#4a3f2a] dark:bg-[linear-gradient(120deg,#1e1a12_0%,#2a2215_56%,#322816_100%)]">
                   <div className="flex items-center gap-2">
