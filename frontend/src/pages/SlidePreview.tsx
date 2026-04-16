@@ -360,6 +360,7 @@ import {
   Clock3,
   Copy,
   Send,
+  Info,
 } from 'lucide-react';
 import {
   Button,
@@ -444,7 +445,7 @@ const PREVIEW_VISUAL_MIN_WIDTH = 360;
 const PREVIEW_EDITOR_MIN_WIDTH = 420;
 const PREVIEW_EDITOR_VERTICAL_SPLIT_STORAGE_KEY = 'previewEditorVerticalSplitRatio';
 const PREVIEW_EDITOR_VERTICAL_SPLIT_DEFAULT_RATIO = 0.74;
-const PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX = 12;
+const PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX = 1;
 const PREVIEW_EDITOR_CANVAS_MIN_HEIGHT = 260;
 const PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT = 180;
 const FLOATING_FULLSCREEN_BUTTON_SIZE = 44;
@@ -3670,8 +3671,18 @@ export const SlidePreview: React.FC = () => {
                 {useRenovationPreviewForm ? t('preview.pageJson') : t('preview.pageDescription')}
               </div>
               {useRenovationPreviewForm && renovationJsonViewMode === 'text' && (
-                <div className="text-[11px] text-[#a88f5e] dark:text-[#93a0bf]">
-                  输入 <span className="font-semibold">/</span> 可快速插入图片（本地上传或素材库选择）
+                <div className="group relative">
+                  <button
+                    type="button"
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#e8d9b4] bg-[#fff9ec] text-[#a88f5e] transition-colors hover:border-[#d4b35c] hover:text-[#7c6840] focus:outline-none focus:ring-2 focus:ring-banana-300 dark:border-[#3c4762] dark:bg-[#1a2335] dark:text-[#93a0bf] dark:hover:border-[#4b5a7f] dark:hover:text-[#d7def1]"
+                    aria-label="JSON 编辑帮助"
+                    title="JSON 编辑帮助"
+                  >
+                    <Info size={12} />
+                  </button>
+                  <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-max max-w-[280px] -translate-x-1/2 rounded-xl border border-[#e8d9b4] bg-[#fffaf0] px-3 py-2 text-[11px] leading-5 text-[#8a7750] opacity-0 shadow-[0_10px_24px_rgba(15,23,42,0.08)] transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 dark:border-[#3c4762] dark:bg-[#1a2335] dark:text-[#c4d2f3]">
+                    输入 <span className="font-semibold">/</span> 可快速插入图片（本地上传或素材库选择）
+                  </div>
                 </div>
               )}
             </div>
