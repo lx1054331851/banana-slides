@@ -401,7 +401,6 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
               </div>
 
               <div className="ml-auto flex items-center gap-2">
-                <div className="hidden text-xs text-slate-500 md:block dark:text-foreground-tertiary">{inputHint}</div>
                 <button
                   type="button"
                   onClick={onSend}

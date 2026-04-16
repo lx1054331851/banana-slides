@@ -53,7 +53,7 @@ describe('PageAiWorkbench', () => {
     expect(screen.getByText('生成图片')).toBeInTheDocument()
   })
 
-  it('submits on Enter without requiring existing text', () => {
+  it('does not submit on Enter', () => {
     const onSend = vi.fn()
     render(<PageAiWorkbench {...baseProps} onSend={onSend} />)
 
@@ -62,6 +62,6 @@ describe('PageAiWorkbench', () => {
       code: 'Enter',
     })
 
-    expect(onSend).toHaveBeenCalledTimes(1)
+    expect(onSend).toHaveBeenCalledTimes(0)
   })
 })
