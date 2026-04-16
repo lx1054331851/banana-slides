@@ -3702,44 +3702,46 @@ export const SlidePreview: React.FC = () => {
               </div>
             )}
           </div>
-          {useRenovationPreviewForm && renovationJsonViewMode === 'styleGuide' ? (
-            <MarkdownTextarea
-              value={resolvedStyleGuideText}
-              onChange={(value: string) => handleStyleGuideTextChange(value)}
-              placeholder={t('preview.jsonStyleGuidePlaceholder')}
-              data-testid="preview-style-guide-input"
-              rows={14}
-              maxHeight="100%"
-              showUploadButton={false}
-              showImagePreview={false}
-              slashActions={undefined}
-              className="min-h-[220px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:font-mono"
-            />
-          ) : (
-            <MarkdownTextarea
-              ref={descriptionTextareaRef}
-              value={editDescription}
-              onChange={(value: string) => {
-                setEditDescription(value);
-                persistCurrentPageDraft({ description: value });
-              }}
-              onPaste={handleDescriptionPaste}
-              onFiles={handleDescriptionFiles}
-              onFocus={focusMainDescriptionField}
-              placeholder={useRenovationPreviewForm ? t('preview.enterPageJson') : t('preview.enterDescription')}
-              data-testid="preview-text-description-input"
-              rows={useRenovationPreviewForm ? 14 : 8}
-              maxHeight="100%"
-              showUploadButton={false}
-              showImagePreview={!useRenovationPreviewForm}
-              slashActions={descriptionSlashActions}
-              className={useRenovationPreviewForm
-                ? 'min-h-[220px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:font-mono'
-                : 'min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent [&_[role=textbox]]:pr-0'}
-            />
-          )}
+          <div className="min-h-0 flex-1">
+            {useRenovationPreviewForm && renovationJsonViewMode === 'styleGuide' ? (
+              <MarkdownTextarea
+                value={resolvedStyleGuideText}
+                onChange={(value: string) => handleStyleGuideTextChange(value)}
+                placeholder={t('preview.jsonStyleGuidePlaceholder')}
+                data-testid="preview-style-guide-input"
+                rows={4}
+                maxHeight="100%"
+                showUploadButton={false}
+                showImagePreview={false}
+                slashActions={undefined}
+                className="h-full min-h-0 flex-1 border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:min-h-0 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:font-mono"
+              />
+            ) : (
+              <MarkdownTextarea
+                ref={descriptionTextareaRef}
+                value={editDescription}
+                onChange={(value: string) => {
+                  setEditDescription(value);
+                  persistCurrentPageDraft({ description: value });
+                }}
+                onPaste={handleDescriptionPaste}
+                onFiles={handleDescriptionFiles}
+                onFocus={focusMainDescriptionField}
+                placeholder={useRenovationPreviewForm ? t('preview.enterPageJson') : t('preview.enterDescription')}
+                data-testid="preview-text-description-input"
+                rows={useRenovationPreviewForm ? 4 : 8}
+                maxHeight="100%"
+                showUploadButton={false}
+                showImagePreview={!useRenovationPreviewForm}
+                slashActions={descriptionSlashActions}
+                className={useRenovationPreviewForm
+                  ? 'h-full min-h-0 flex-1 border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:min-h-0 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:font-mono'
+                  : 'min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent [&_[role=textbox]]:pr-0'}
+              />
+            )}
+          </div>
           {useRenovationPreviewForm && renovationJsonViewMode === 'text' && (
-            <div className="absolute bottom-3 left-0 right-0 z-20 flex items-center justify-end gap-2 px-2">
+            <div className="relative z-20 -mb-px mt-1 flex items-center justify-end gap-2 border-t border-[#efe6d2] px-1.5 pt-1.5 pb-0.5 dark:border-[#303a52]">
               {showJsonRefineDialog && (
                 <div className="min-w-0 flex-1 rounded-xl border border-[#ead6a2] bg-[linear-gradient(120deg,#fff9e8_0%,#fff3d6_54%,#ffefbf_100%)] p-2 shadow-[0_10px_20px_rgba(250,204,21,0.12)] transition-all duration-300 dark:border-[#4a3f2a] dark:bg-[linear-gradient(120deg,#1e1a12_0%,#2a2215_56%,#322816_100%)]">
                   <div className="flex items-center gap-2">
