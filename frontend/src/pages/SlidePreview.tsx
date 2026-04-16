@@ -68,7 +68,7 @@ const previewI18n = {
       regionSelect: "区域选图", endRegionSelect: "结束区域选图",
       pageOutline: "页面大纲（可编辑）", pageDescription: "页面描述（可编辑）",
       pageJson: "页面 JSON（可编辑）",
-      jsonTextTab: "JSON文本",
+      jsonTextTab: "页面内容",
       jsonStyleGuideTab: "风格指导",
       jsonStyleGuideHint: "可编辑：保存后将为当前页（及当前图片版本）创建独立风格指导覆盖",
       jsonStyleGuidePlaceholder: "请输入当前页风格指导 JSON；留空表示继续引用全局风格指导",
@@ -230,7 +230,7 @@ const previewI18n = {
       regionSelect: "Region Select", endRegionSelect: "End Region Select",
       pageOutline: "Page Outline (Editable)", pageDescription: "Page Description (Editable)",
       pageJson: "Page JSON (Editable)",
-      jsonTextTab: "JSON Text",
+      jsonTextTab: "Page Content",
       jsonStyleGuideTab: "Style Guide",
       jsonStyleGuideHint: "Editable: once saved, this becomes a page/image-level override instead of global style",
       jsonStyleGuidePlaceholder: "Enter style guide JSON for this page. Leave empty to keep using the global style guide",
@@ -3171,6 +3171,10 @@ export const SlidePreview: React.FC = () => {
   const descriptionGenerationProgressPercent = descriptionGenerationTotal > 0
     ? Math.max(0, Math.min(100, Math.round((descriptionGenerationCompleted / descriptionGenerationTotal) * 100)))
     : 0;
+  const isDescriptionProgressVisible = isDescriptionStreaming && descriptionGenerationTotal > 0;
+  const renovationProgressPercent = renovationProgress && renovationProgress.total > 0
+    ? Math.max(0, Math.min(100, Math.round((renovationProgress.completed / renovationProgress.total) * 100)))
+    : 0;
   const isPptRenovationProject = currentProject?.creation_type === 'ppt_renovation';
   const currentImageVersionId = imageVersions.find((version) => version.is_current)?.version_id || null;
   const activeStyleGuideBindingKey = buildStyleGuideBindingKey(currentImageVersionId);
@@ -4220,23 +4224,58 @@ export const SlidePreview: React.FC = () => {
                   variant="secondary"
                   size="sm"
                   icon={<Sparkles size={16} />}
-                  className="h-9 rounded-xl"
+                  className="h-9 rounded-xl px-3"
                   data-testid="preview-batch-generate-descriptions"
                   loading={isDescriptionStreaming}
                   onClick={() => void handleGenerateDescriptions()}
                 >
-                  批量生成描述
+                  <span className="inline-flex items-center gap-1.5">
+                    <span>批量生成描述</span>
+                    {isDescriptionProgressVisible && (
+                      <span
+                        data-testid="preview-description-progress"
+                        className="inline-flex items-center gap-1 rounded-full border border-banana-200 bg-banana-50 px-2 py-0.5 text-[11px] leading-none dark:border-banana-700/50 dark:bg-banana-900/15"
+                      >
+                        <span className="font-semibold text-slate-700 dark:text-foreground-secondary">
+                          {t('preview.descriptionGeneratingProgress', {
+                            completed: descriptionGenerationCompleted,
+                            total: descriptionGenerationTotal,
+                          })}
+                        </span>
+                        <span className="font-semibold text-banana-700 dark:text-banana">
+                          {descriptionGenerationProgressPercent}%
+                        </span>
+                      </span>
+                    )}
+                  </span>
                 </Button>
                 <Button
                   variant="secondary"
                   size="sm"
                   icon={<ImagePlus size={16} />}
-                  className="h-9 rounded-xl"
+                  className="h-9 rounded-xl px-3"
                   data-testid="preview-batch-generate-images"
                   onClick={handleGenerateAll}
-                  disabled={isGenerateDisabled}
+                  loading={isRenovationProcessing}
+                  disabled={isGenerateDisabled || isRenovationProcessing}
                 >
-                  {generateButtonText}
+                  {isRenovationProcessing ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span>解析页面内容</span>
+                      {renovationProgress && renovationProgress.total > 0 && (
+                        <>
+                          <span className="rounded-full bg-banana-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 dark:bg-banana-900/15 dark:text-foreground-secondary">
+                            {renovationProgress.completed}/{renovationProgress.total}
+                          </span>
+                          <span className="text-[11px] font-semibold text-banana-700 dark:text-banana">
+                            {renovationProgressPercent}%
+                          </span>
+                        </>
+                      )}
+                    </span>
+                  ) : (
+                    generateButtonText
+                  )}
                 </Button>
 
                 <div className="relative" ref={fileMenuRef}>
@@ -4311,30 +4350,6 @@ export const SlidePreview: React.FC = () => {
                   onChange={handleImportDescriptions}
                 />
               </div>
-              {isDescriptionStreaming && descriptionGenerationTotal > 0 && (
-                <div
-                  data-testid="preview-description-progress"
-                  className="mt-3 rounded-2xl border border-banana-200/80 bg-white/90 px-4 py-3 shadow-sm dark:border-banana-700/40 dark:bg-background-primary/90"
-                >
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium text-slate-700 dark:text-foreground-secondary">
-                      {t('preview.descriptionGeneratingProgress', {
-                        completed: descriptionGenerationCompleted,
-                        total: descriptionGenerationTotal,
-                      })}
-                    </span>
-                    <span className="text-xs font-semibold text-banana-700 dark:text-banana">
-                      {descriptionGenerationProgressPercent}%
-                    </span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-[#efe7cf] dark:bg-background-hover">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-banana-400 to-banana-500 transition-all duration-300"
-                      style={{ width: `${descriptionGenerationProgressPercent}%` }}
-                    />
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -4369,29 +4384,6 @@ export const SlidePreview: React.FC = () => {
             <>
               <div className={`flex-1 min-h-0 overflow-hidden ${isPptRenovationProject ? 'px-2 pt-2 pb-1 md:px-3 md:pt-2 md:pb-1' : 'px-2 py-3 md:px-3 md:py-4'}`}>
                 <div className="flex h-full w-full flex-col gap-4">
-                  {isRenovationProcessing && (
-                    <div className="rounded-2xl border border-banana-200 bg-white/90 px-4 py-4 shadow-sm">
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700 dark:text-foreground-secondary">正在解析页面内容...</span>
-                        {renovationProgress && renovationProgress.total > 0 && (
-                          <span className="text-sm font-medium text-banana-600 dark:text-banana">
-                            {renovationProgress.completed}/{renovationProgress.total} 页
-                          </span>
-                        )}
-                      </div>
-                      <div className="h-2.5 overflow-hidden rounded-full bg-gray-200 dark:bg-background-hover">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-banana-400 to-banana-500 transition-all duration-500"
-                          style={{
-                            width: renovationProgress && renovationProgress.total > 0
-                              ? `${Math.round((renovationProgress.completed / renovationProgress.total) * 100)}%`
-                              : '10%',
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
                   <div
                     ref={previewSplitContainerRef}
                     data-testid="preview-main-split"
