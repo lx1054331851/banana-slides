@@ -3327,12 +3327,15 @@ export const SlidePreview: React.FC = () => {
     ? Math.max(0, Math.min(100, Math.round((renovationProgress.completed / renovationProgress.total) * 100)))
     : 0;
   const isPptRenovationProject = currentProject?.creation_type === 'ppt_renovation';
+  const isTextGeneratedLastPreviewPage = currentProject?.creation_type === 'descriptions'
+    && selectedIndex === currentProject.pages.length - 1;
+  const useRenovationPreviewForm = isPptRenovationProject || isTextGeneratedLastPreviewPage;
   const currentImageVersionId = imageVersions.find((version) => version.is_current)?.version_id || null;
   const activeStyleGuideBindingKey = buildStyleGuideBindingKey(currentImageVersionId);
   const projectStyleGuideJson = useMemo(() => {
-    if (!isPptRenovationProject) return '';
+    if (!useRenovationPreviewForm) return '';
     return formatJsonForEditor(currentProject?.template_style_json || '');
-  }, [isPptRenovationProject, currentProject?.template_style_json]);
+  }, [useRenovationPreviewForm, currentProject?.template_style_json]);
   const currentImageBoundStyleGuide = editStyleGuideBindings[activeStyleGuideBindingKey] || '';
   const pageDefaultStyleGuide = editStyleGuideBindings[PAGE_STYLE_GUIDE_DEFAULT_BINDING] || '';
   const resolvedStyleGuideText = currentImageBoundStyleGuide || pageDefaultStyleGuide || projectStyleGuideJson || '';
@@ -3352,20 +3355,20 @@ export const SlidePreview: React.FC = () => {
       return next;
     });
   };
-  const editorGridClasses = isPptRenovationProject
+  const editorGridClasses = useRenovationPreviewForm
     ? 'grid h-full min-h-0 gap-3 grid-rows-[minmax(0,1fr)] lg:gap-4 lg:grid-rows-[minmax(0,1fr)]'
     : 'grid h-full min-h-0 gap-3 grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-4 lg:grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]';
 
   const editorCanvasContent = (
     <div
-      className={`${isPptRenovationProject
+      className={`${useRenovationPreviewForm
         ? `${isMobileView ? 'min-h-[520px]' : 'h-full min-h-0'} overflow-y-auto overscroll-contain pl-4 pr-0 py-4 sm:pl-5 sm:pr-0 sm:py-5 lg:pl-6 lg:pr-0 lg:py-6`
         : 'min-h-[520px] sm:min-h-[560px] lg:min-h-[580px] p-4 sm:p-5 lg:p-6'} w-full min-w-0 rounded-[24px] border border-[#eadfbf] bg-white dark:border-border-primary dark:bg-[radial-gradient(circle_at_top,#1b2340_0%,#151a26_34%,#101521_100%)]`}
       style={isMobileView ? undefined : { width: '100%', maxWidth: '100%', aspectRatio: aspectRatioStyle }}
       data-testid="preview-editor-canvas"
     >
       <div className={editorGridClasses}>
-        {!isPptRenovationProject && (
+        {!useRenovationPreviewForm && (
           <div className="rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 dark:border-[#2d3447] dark:bg-[#151a26]">
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">标题</div>
             <input
@@ -3383,7 +3386,7 @@ export const SlidePreview: React.FC = () => {
           </div>
         )}
 
-        {!isPptRenovationProject && (
+        {!useRenovationPreviewForm && (
           <div className="min-h-0 overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 flex flex-col dark:border-[#2d3447] dark:bg-[#151a26]">
             <div className="mb-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">{t('preview.pointsPerLine')}</div>
             <textarea
@@ -3402,16 +3405,16 @@ export const SlidePreview: React.FC = () => {
 
         <div
           className={`relative min-h-0 flex flex-col ${
-            isPptRenovationProject
+            useRenovationPreviewForm
               ? ''
               : 'overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 dark:border-[#2d3447] dark:bg-[#151a26]'
           }`}
         >
-          <div className={`mb-3 shrink-0 ${isPptRenovationProject ? 'flex items-center justify-between gap-3' : ''}`}>
+          <div className={`mb-3 shrink-0 ${useRenovationPreviewForm ? 'flex items-center justify-between gap-3' : ''}`}>
             <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
-              {isPptRenovationProject ? t('preview.pageJson') : t('preview.pageDescription')}
+              {useRenovationPreviewForm ? t('preview.pageJson') : t('preview.pageDescription')}
             </div>
-            {isPptRenovationProject && (
+            {useRenovationPreviewForm && (
               <div className="inline-flex items-center rounded-lg border border-[#e8d9b4] bg-[#fff9ec] p-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
                 <button
                   type="button"
@@ -3438,7 +3441,7 @@ export const SlidePreview: React.FC = () => {
               </div>
             )}
           </div>
-          {isPptRenovationProject && renovationJsonViewMode === 'styleGuide' ? (
+          {useRenovationPreviewForm && renovationJsonViewMode === 'styleGuide' ? (
             <MarkdownTextarea
               value={resolvedStyleGuideText}
               onChange={(value: string) => handleStyleGuideTextChange(value)}
@@ -3459,22 +3462,22 @@ export const SlidePreview: React.FC = () => {
                 setEditDescription(value);
                 persistCurrentPageDraft({ description: value });
               }}
-              onPaste={isPptRenovationProject ? undefined : handleDescriptionPaste}
-              onFiles={isPptRenovationProject ? undefined : handleDescriptionFiles}
+              onPaste={useRenovationPreviewForm ? undefined : handleDescriptionPaste}
+              onFiles={useRenovationPreviewForm ? undefined : handleDescriptionFiles}
               onFocus={focusMainDescriptionField}
-              placeholder={isPptRenovationProject ? t('preview.enterPageJson') : t('preview.enterDescription')}
+              placeholder={useRenovationPreviewForm ? t('preview.enterPageJson') : t('preview.enterDescription')}
               data-testid="preview-text-description-input"
-              rows={isPptRenovationProject ? 14 : 8}
+              rows={useRenovationPreviewForm ? 14 : 8}
               maxHeight="100%"
               showUploadButton={false}
               showImagePreview={false}
-              slashActions={isPptRenovationProject ? undefined : descriptionSlashActions}
-              className={isPptRenovationProject
+              slashActions={useRenovationPreviewForm ? undefined : descriptionSlashActions}
+              className={useRenovationPreviewForm
                 ? 'min-h-[220px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:font-mono'
                 : 'min-h-[200px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent [&_[role=textbox]]:pr-0'}
             />
           )}
-          {isPptRenovationProject && renovationJsonViewMode === 'text' && (
+          {useRenovationPreviewForm && renovationJsonViewMode === 'text' && (
             <div className="absolute bottom-3 left-0 right-0 z-20 flex items-center justify-end gap-2 px-2">
               {showJsonRefineDialog && (
                 <div className="min-w-0 flex-1 rounded-xl border border-[#ead6a2] bg-[linear-gradient(120deg,#fff9e8_0%,#fff3d6_54%,#ffefbf_100%)] p-2 shadow-[0_10px_20px_rgba(250,204,21,0.12)] transition-all duration-300 dark:border-[#4a3f2a] dark:bg-[linear-gradient(120deg,#1e1a12_0%,#2a2215_56%,#322816_100%)]">
@@ -4533,7 +4536,7 @@ export const SlidePreview: React.FC = () => {
             </div>
           ) : (
             <>
-              <div className={`flex-1 min-h-0 overflow-hidden ${isPptRenovationProject ? 'px-2 pt-2 pb-1 md:px-3 md:pt-2 md:pb-1' : 'px-2 py-3 md:px-3 md:py-4'}`}>
+              <div className={`flex-1 min-h-0 overflow-hidden ${useRenovationPreviewForm ? 'px-2 pt-2 pb-1 md:px-3 md:pt-2 md:pb-1' : 'px-2 py-3 md:px-3 md:py-4'}`}>
                 <div className="flex h-full w-full flex-col gap-4">
                   <div
                     ref={previewSplitContainerRef}
@@ -4657,19 +4660,19 @@ export const SlidePreview: React.FC = () => {
 
                     <section
                       data-testid="preview-editor-pane"
-                      className={`min-h-0 min-w-0 ${isMobileView ? 'overflow-visible' : (isPptRenovationProject ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain')}`}
+                      className={`min-h-0 min-w-0 ${isMobileView ? 'overflow-visible' : (useRenovationPreviewForm ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain')}`}
                     >
-                      <div className={`flex h-full min-h-0 flex-col ${isPptRenovationProject ? 'px-2 pt-1 pb-0 md:px-3 md:pt-1 md:pb-0' : 'px-3 pt-3 pb-0 md:px-4 md:pt-4 md:pb-0'}`}>
-                        <div className={`${isPptRenovationProject ? (isMobileView ? 'min-h-0 flex-1' : 'min-h-0 basis-0 flex-[3]') : 'shrink-0'}`}>
+                      <div className={`flex h-full min-h-0 flex-col ${useRenovationPreviewForm ? 'px-2 pt-1 pb-0 md:px-3 md:pt-1 md:pb-0' : 'px-3 pt-3 pb-0 md:px-4 md:pt-4 md:pb-0'}`}>
+                        <div className={`${useRenovationPreviewForm ? (isMobileView ? 'min-h-0 flex-1' : 'min-h-0 basis-0 flex-[3]') : 'shrink-0'}`}>
                           {editorCanvasContent}
                         </div>
-                        {!isPptRenovationProject && (
+                        {!useRenovationPreviewForm && (
                           <div className="mt-3 shrink-0">
                             {externalFieldTags}
                           </div>
                         )}
-                        <div className={`${isPptRenovationProject ? (isMobileView ? 'mt-1 flex-1 justify-start' : 'mt-1 min-h-0 basis-0 flex-[1] justify-start') : 'mt-2 flex-1 justify-end'} min-h-0 overflow-visible flex flex-col`}>
-                          <div className={`${isPptRenovationProject ? 'min-h-0 h-full' : 'min-h-0'}`}>
+                        <div className={`${useRenovationPreviewForm ? (isMobileView ? 'mt-1 flex-1 justify-start' : 'mt-1 min-h-0 basis-0 flex-[1] justify-start') : 'mt-2 flex-1 justify-end'} min-h-0 overflow-visible flex flex-col`}>
+                          <div className={`${useRenovationPreviewForm ? 'min-h-0 h-full' : 'min-h-0'}`}>
                             <PageAiWorkbench
                               title={t('preview.pageAiTitle')}
                               subtitle={t('preview.pageAiSubtitle')}
