@@ -535,13 +535,14 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   useImperativeHandle(ref, () => ({
     insertAtCursor: (text: string) => {
       if (!editorRef.current) return;
+      restoreSavedSelectionRange();
       editorRef.current.focus();
       insertContentAtCursor(text);
     },
     focus: () => {
       editorRef.current?.focus();
     },
-  }), [insertContentAtCursor]);
+  }), [insertContentAtCursor, restoreSavedSelectionRange]);
 
   // --- Chip editing ---
   const startEditChip = useCallback((chip: HTMLElement) => {

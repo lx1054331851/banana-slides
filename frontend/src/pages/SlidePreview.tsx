@@ -3497,7 +3497,7 @@ export const SlidePreview: React.FC = () => {
               rows={useRenovationPreviewForm ? 14 : 8}
               maxHeight="100%"
               showUploadButton={false}
-              showImagePreview={useRenovationPreviewForm}
+              showImagePreview={!useRenovationPreviewForm}
               slashActions={descriptionSlashActions}
               className={useRenovationPreviewForm
                 ? 'min-h-[220px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent font-mono text-[13px] leading-6 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:font-mono'
