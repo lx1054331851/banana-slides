@@ -821,7 +821,7 @@ def generate_outline_stream(project_id):
                 except Exception as rollback_exc:
                     logger.warning(f"Session rollback failed: {rollback_exc}", exc_info=True)
                 logger.error(f"generate_outline_stream failed: {str(e)}", exc_info=True)
-                yield _sse_event('error', {'message': '生成过程中发生内部错误'})
+                yield _sse_event('error', {'message': f'生成过程中发生内部错误: {type(e).__name__}: {str(e)}'})
 
     return Response(
         stream_with_context(sse_generate()),
@@ -1375,7 +1375,7 @@ def generate_descriptions_stream(project_id):
                 except Exception as recover_exc:
                     logger.warning(f"Failed to recover page statuses: {recover_exc}", exc_info=True)
 
-                yield _sse_event('error', {'message': '生成过程中发生内部错误'})
+                yield _sse_event('error', {'message': f'生成过程中发生内部错误: {type(e).__name__}: {str(e)}'})
 
     return Response(
         stream_with_context(sse_generate()),
