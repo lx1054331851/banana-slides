@@ -4961,8 +4961,8 @@ export const SlidePreview: React.FC = () => {
                             onMouseDown={handleEditorVerticalSplitResizeStart}
                           >
                             <div
-                              className="absolute right-0 top-1/2 z-10 h-px -translate-y-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70"
-                              style={{ left: `-${PREVIEW_SPLIT_DIVIDER_PX}px` }}
+                              className="pointer-events-none absolute right-0 top-1/2 z-30 h-px -translate-y-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70"
+                              style={{ left: `-${PREVIEW_SPLIT_DIVIDER_PX + 28}px` }}
                             />
                             <div
                               role="separator"
