@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  ArrowUp,
   Check,
   Crop,
   Image as ImageIcon,
   ImagePlus,
   Info,
   Layers3,
+  Send,
   Settings2,
   Upload,
 } from 'lucide-react';
@@ -417,7 +417,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                   )}
                   data-testid="page-ai-send"
                 >
-                  <ArrowUp size={16} />
+                  <Send size={16} />
                   <span>{sendLabel}</span>
                 </button>
               </div>
