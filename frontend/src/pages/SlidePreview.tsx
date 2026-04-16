@@ -4939,7 +4939,7 @@ export const SlidePreview: React.FC = () => {
 
                     <section
                       data-testid="preview-editor-pane"
-                      className={`min-h-0 min-w-0 ${isMobileView ? 'overflow-visible' : (useRenovationPreviewForm ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain')}`}
+                      className={`min-h-0 min-w-0 ${isMobileView ? 'overflow-visible' : (useRenovationPreviewForm ? 'overflow-x-visible overflow-y-hidden' : 'overflow-y-auto overscroll-contain')}`}
                     >
                       <div
                         ref={shouldUseEditorVerticalSplit ? editorVerticalSplitContainerRef : undefined}
