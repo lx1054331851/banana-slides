@@ -1312,6 +1312,7 @@ export const SlidePreview: React.FC = () => {
   const [showJsonRefineDialog, setShowJsonRefineDialog] = useState(false);
   const [jsonRefineRequirement, setJsonRefineRequirement] = useState('');
   const [jsonRefineHistory, setJsonRefineHistory] = useState<string[]>([]);
+  const [descriptionGenerationError, setDescriptionGenerationError] = useState<string | null>(null);
   const [isJsonRefining, setIsJsonRefining] = useState(false);
   const jsonRefineInputRef = useRef<HTMLInputElement | null>(null);
   const [batchGenerateContext, setBatchGenerateContext] = useState<{
@@ -2371,8 +2372,22 @@ export const SlidePreview: React.FC = () => {
     const missingCount = missingPageIds.length;
 
     const executeGenerate = async (pageIdsOverride?: string[]) => {
-      await generateDescriptions(undefined, pageIdsOverride);
-      await syncProject(projectId);
+      setDescriptionGenerationError(null);
+      try {
+        await generateDescriptions(undefined, pageIdsOverride);
+        await syncProject(projectId);
+        return true;
+      } catch (error: any) {
+        const errorMessage = normalizeErrorMessage(
+          error?.response?.data?.error?.message ||
+          error?.response?.data?.message ||
+          error?.message ||
+          t('preview.generationFailed')
+        );
+        setDescriptionGenerationError(errorMessage);
+        show({ message: errorMessage, type: 'error', duration: 0 });
+        return false;
+      }
     };
 
     if (totalCount === 0) return;
@@ -2407,7 +2422,7 @@ export const SlidePreview: React.FC = () => {
       },
       { title: '确认重新生成', variant: 'warning' }
     );
-  }, [confirm, currentProject, generateDescriptions, projectId, syncProject]);
+  }, [confirm, currentProject, generateDescriptions, projectId, show, syncProject, t]);
 
   const handleAiRefineDescriptions = useCallback(async (requirement: string, previousRequirements: string[]) => {
     if (!currentProject || !projectId) return;
@@ -4396,6 +4411,22 @@ export const SlidePreview: React.FC = () => {
                     )}
                   </span>
                 </Button>
+                {descriptionGenerationError && (
+                  <div
+                    data-testid="preview-description-error-inline"
+                    className="inline-flex max-w-[560px] items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-2.5 py-1 text-xs text-red-700 dark:border-red-500/40 dark:bg-red-900/20 dark:text-red-200"
+                  >
+                    <span className="truncate" title={descriptionGenerationError}>{descriptionGenerationError}</span>
+                    <button
+                      type="button"
+                      onClick={() => setDescriptionGenerationError(null)}
+                      className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/40"
+                      aria-label="close description generation error"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
                 <Button
                   variant="secondary"
                   size="sm"
