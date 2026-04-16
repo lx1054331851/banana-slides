@@ -620,28 +620,143 @@ const formatJsonForEditor = (text: string, indent = 4): string => {
   }
 };
 
-const stripSourceRefField = (value: unknown): unknown => {
+const SLIDE_KEY_EN_TO_ZH: Record<string, string> = {
+  type: '页面类型',
+  title: '页面标题',
+  layout_suggestion: '排版建议',
+  content: '内容',
+  visual_suggestion: '视觉建议',
+  note: '备注',
+  source_ref: '来源页',
+  headline_summary: '核心结论',
+  detailed_items: '详细条目',
+  sub_title: '小标题',
+  body: '正文',
+  highlight_phrases: '高亮短语',
+  key_takeaway: '关键结论',
+  chart_type: '图表类型',
+  chart_data: '图表数据',
+  labels: '标签',
+  datasets: '数据集',
+  label: '系列名',
+  data: '数据',
+  headline: '主标题',
+  sub_headline: '副标题',
+  sections: '章节列表',
+  final_conclusion: '最终结论',
+  vision: '愿景',
+  slogan: '口号',
+  qa_text: '问答文本',
+  presenter_info: '汇报信息',
+  contact_info: '联系信息',
+};
+const SLIDE_KEY_ZH_TO_EN = Object.fromEntries(
+  Object.entries(SLIDE_KEY_EN_TO_ZH).map(([en, zh]) => [zh, en]),
+) as Record<string, string>;
+
+const SLIDE_TYPE_EN_TO_ZH: Record<string, string> = {
+  cover: '封面页',
+  catalog: '目录页',
+  section_header: '章节页',
+  detail_chart: '图表页',
+  detail_text_split: '图文页',
+  closing: '结尾页',
+};
+const SLIDE_TYPE_ZH_TO_EN: Record<string, string> = {
+  封面: 'cover',
+  封面页: 'cover',
+  目录: 'catalog',
+  目录页: 'catalog',
+  章节页: 'section_header',
+  章节过渡页: 'section_header',
+  图表页: 'detail_chart',
+  图文页: 'detail_text_split',
+  详情页: 'detail_text_split',
+  文本页: 'detail_text_split',
+  结尾: 'closing',
+  结尾页: 'closing',
+};
+
+const LAYOUT_EN_TO_ZH: Record<string, string> = {
+  split_comparison: '左右对比',
+  multi_column_logic: '多栏逻辑',
+  dashboard_style: '看板布局',
+  pyramid_hierarchy: '金字塔层级',
+};
+const LAYOUT_ZH_TO_EN: Record<string, string> = {
+  左右对比: 'split_comparison',
+  多栏逻辑: 'multi_column_logic',
+  看板布局: 'dashboard_style',
+  金字塔层级: 'pyramid_hierarchy',
+};
+
+const canonicalizeSlideJsonValue = (value: unknown): unknown => {
   if (Array.isArray(value)) {
-    return value.map((item) => stripSourceRefField(item));
+    return value.map((item) => canonicalizeSlideJsonValue(item));
   }
   if (value && typeof value === 'object') {
     const next: Record<string, unknown> = {};
-    Object.entries(value as Record<string, unknown>).forEach(([key, val]) => {
+    Object.entries(value as Record<string, unknown>).forEach(([rawKey, rawValue]) => {
+      const key = SLIDE_KEY_ZH_TO_EN[rawKey] || rawKey;
       if (key === 'source_ref') return;
-      next[key] = stripSourceRefField(val);
+      let normalizedValue = canonicalizeSlideJsonValue(rawValue);
+      if (key === 'type' && typeof normalizedValue === 'string') {
+        normalizedValue = SLIDE_TYPE_ZH_TO_EN[normalizedValue.trim()] || normalizedValue.trim();
+      }
+      if (key === 'layout_suggestion' && typeof normalizedValue === 'string') {
+        normalizedValue = LAYOUT_ZH_TO_EN[normalizedValue.trim()] || normalizedValue.trim();
+      }
+      next[key] = normalizedValue;
     });
     return next;
   }
   return value;
 };
 
-const removeSourceRefFromJsonText = (text: string, indent = 4): string => {
+const localizeSlideJsonValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) => localizeSlideJsonValue(item));
+  }
+  if (value && typeof value === 'object') {
+    const next: Record<string, unknown> = {};
+    Object.entries(value as Record<string, unknown>).forEach(([rawKey, rawValue]) => {
+      const canonicalKey = SLIDE_KEY_ZH_TO_EN[rawKey] || rawKey;
+      if (canonicalKey === 'source_ref') return;
+      let localizedValue = localizeSlideJsonValue(rawValue);
+      if (canonicalKey === 'type' && typeof localizedValue === 'string') {
+        localizedValue = SLIDE_TYPE_EN_TO_ZH[localizedValue.trim()] || localizedValue.trim();
+      }
+      if (canonicalKey === 'layout_suggestion' && typeof localizedValue === 'string') {
+        localizedValue = LAYOUT_EN_TO_ZH[localizedValue.trim()] || localizedValue.trim();
+      }
+      const outputKey = SLIDE_KEY_EN_TO_ZH[canonicalKey] || rawKey;
+      next[outputKey] = localizedValue;
+    });
+    return next;
+  }
+  return value;
+};
+
+const toCanonicalRenovationJsonText = (text: string, indent = 4): string => {
   const raw = (text || '').trim();
   if (!raw) return text || '';
   try {
     const parsed = JSON.parse(raw);
-    const sanitized = stripSourceRefField(parsed);
-    return JSON.stringify(sanitized, null, indent);
+    const normalized = canonicalizeSlideJsonValue(parsed);
+    return JSON.stringify(normalized, null, indent);
+  } catch {
+    return text || '';
+  }
+};
+
+const toLocalizedRenovationJsonText = (text: string, indent = 4): string => {
+  const raw = (text || '').trim();
+  if (!raw) return text || '';
+  try {
+    const parsed = JSON.parse(raw);
+    const normalized = canonicalizeSlideJsonValue(parsed);
+    const localized = localizeSlideJsonValue(normalized);
+    return JSON.stringify(localized, null, indent);
   } catch {
     return text || '';
   }
@@ -766,7 +881,7 @@ export const SlidePreview: React.FC = () => {
   const [pageDrafts, setPageDrafts] = useState<Record<string, PageDraft>>({});
   const formatDescriptionForEditor = useCallback((descriptionText: string, project?: Project | null) => {
     if ((project || currentProject)?.creation_type !== 'ppt_renovation') return descriptionText;
-    return removeSourceRefFromJsonText(descriptionText, 4);
+    return toLocalizedRenovationJsonText(descriptionText, 4);
   }, [currentProject]);
   // 页面挂载时恢复正在进行的导出任务（页面刷新后）
   useEffect(() => {
@@ -2090,8 +2205,11 @@ export const SlidePreview: React.FC = () => {
     const page = currentProject.pages[selectedIndex];
     if (!page?.id) return;
     const nextDescriptionText = currentProject.creation_type === 'ppt_renovation'
-      ? removeSourceRefFromJsonText(editDescription, 4)
+      ? toCanonicalRenovationJsonText(editDescription, 4)
       : editDescription;
+    const nextEditorDescriptionText = currentProject.creation_type === 'ppt_renovation'
+      ? toLocalizedRenovationJsonText(nextDescriptionText, 4)
+      : nextDescriptionText;
 
     const updates: Partial<Page> = {};
 
@@ -2139,12 +2257,12 @@ export const SlidePreview: React.FC = () => {
       persistCurrentPageDraft({
         title: editOutlineTitle,
         points: editOutlinePoints,
-        description: nextDescriptionText,
+        description: nextEditorDescriptionText,
         extraFields: editExtraFields,
         styleGuideBindings: editStyleGuideBindings,
       });
-      if (nextDescriptionText !== editDescription) {
-        setEditDescription(nextDescriptionText);
+      if (nextEditorDescriptionText !== editDescription) {
+        setEditDescription(nextEditorDescriptionText);
       }
       show({ message: t('slidePreview.outlineSaved'), type: 'success' });
     }
@@ -3104,7 +3222,7 @@ export const SlidePreview: React.FC = () => {
         jsonRefineHistory,
       );
       const refinedText = response.data?.refined_description || '';
-      const nextText = removeSourceRefFromJsonText(refinedText, 4);
+      const nextText = toLocalizedRenovationJsonText(refinedText, 4);
       setEditDescription(nextText);
       persistCurrentPageDraft({ description: nextText });
       setJsonRefineHistory((prev) => [...prev, requirement]);

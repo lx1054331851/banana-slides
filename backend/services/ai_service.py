@@ -8,7 +8,7 @@ import json
 import re
 import logging
 import requests
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional, Union, Any
 from textwrap import dedent
 from PIL import Image
 from tenacity import retry, stop_after_attempt, retry_if_exception_type
@@ -42,6 +42,66 @@ from utils.aspect_ratio_policy import (
 )
 
 logger = logging.getLogger(__name__)
+
+SLIDE_KEY_ALIASES: Dict[str, str] = {
+    '页面类型': 'type',
+    '类型': 'type',
+    '页面标题': 'title',
+    '标题': 'title',
+    '排版建议': 'layout_suggestion',
+    '布局建议': 'layout_suggestion',
+    '内容': 'content',
+    '页面内容': 'content',
+    '视觉建议': 'visual_suggestion',
+    '视觉提示': 'visual_suggestion',
+    '备注': 'note',
+    '说明': 'note',
+    '来源页': 'source_ref',
+    '来源': 'source_ref',
+    '核心结论': 'headline_summary',
+    '详细条目': 'detailed_items',
+    '小标题': 'sub_title',
+    '正文': 'body',
+    '高亮短语': 'highlight_phrases',
+    '关键结论': 'key_takeaway',
+    '图表类型': 'chart_type',
+    '图表数据': 'chart_data',
+    '标签': 'labels',
+    '数据集': 'datasets',
+    '系列名': 'label',
+    '数据': 'data',
+    '主标题': 'headline',
+    '副标题': 'sub_headline',
+    '章节列表': 'sections',
+    '最终结论': 'final_conclusion',
+    '愿景': 'vision',
+    '口号': 'slogan',
+    '问答文本': 'qa_text',
+    '汇报信息': 'presenter_info',
+    '联系信息': 'contact_info',
+}
+
+SLIDE_TYPE_ALIASES: Dict[str, str] = {
+    '封面': 'cover',
+    '封面页': 'cover',
+    '目录': 'catalog',
+    '目录页': 'catalog',
+    '章节页': 'section_header',
+    '章节过渡页': 'section_header',
+    '图表页': 'detail_chart',
+    '图文页': 'detail_text_split',
+    '详情页': 'detail_text_split',
+    '文本页': 'detail_text_split',
+    '结尾': 'closing',
+    '结尾页': 'closing',
+}
+
+LAYOUT_ALIASES: Dict[str, str] = {
+    '左右对比': 'split_comparison',
+    '多栏逻辑': 'multi_column_logic',
+    '看板布局': 'dashboard_style',
+    '金字塔层级': 'pyramid_hierarchy',
+}
 
 
 def _generation_logs_enabled() -> bool:
@@ -888,6 +948,39 @@ class AIService:
         result = "\n".join(text_parts)
         return dedent(result)
 
+    def _canonicalize_slide_json(self, value: Any) -> Any:
+        """将中文字段/枚举兼容归一到系统内部英文 schema。"""
+        if isinstance(value, list):
+            return [self._canonicalize_slide_json(item) for item in value]
+        if isinstance(value, dict):
+            normalized: Dict[str, Any] = {}
+            for raw_key, raw_val in value.items():
+                key = SLIDE_KEY_ALIASES.get(raw_key, raw_key)
+                if key == 'source_ref':
+                    continue
+                val = self._canonicalize_slide_json(raw_val)
+                if key == 'type' and isinstance(val, str):
+                    val = SLIDE_TYPE_ALIASES.get(val.strip(), val.strip())
+                if key == 'layout_suggestion' and isinstance(val, str):
+                    val = LAYOUT_ALIASES.get(val.strip(), val.strip())
+                normalized[key] = val
+            return normalized
+        return value
+
+    def _canonicalize_outline_object(self, value: Any) -> Dict:
+        if not isinstance(value, dict):
+            return {}
+        title = value.get('title')
+        if not isinstance(title, str):
+            title = value.get('页面标题') if isinstance(value.get('页面标题'), str) else value.get('标题')
+        points = value.get('points')
+        if not isinstance(points, list):
+            points = value.get('要点') if isinstance(value.get('要点'), list) else value.get('关键点')
+        return {
+            'title': self._normalize_text(title),
+            'points': points if isinstance(points, list) else [],
+        }
+
     def _try_extract_ppt_json_slides(self, description_text: str) -> Optional[List[Dict]]:
         """
         尝试从 description_text 中提取结构化 PPT JSON 的 slides。
@@ -925,12 +1018,17 @@ class AIService:
 
             if isinstance(parsed, dict):
                 slides = parsed.get('slides')
+                if not isinstance(slides, list):
+                    slides = parsed.get('页面列表')
                 if isinstance(slides, list) and all(isinstance(s, dict) for s in slides):
-                    return slides
+                    normalized_slides = [self._canonicalize_slide_json(s) for s in slides]
+                    if any(isinstance(s, dict) and (s.get('title') or s.get('type') or s.get('content')) for s in normalized_slides):
+                        return normalized_slides
 
             if isinstance(parsed, list) and all(isinstance(s, dict) for s in parsed):
-                if any('title' in s or 'type' in s or 'content' in s for s in parsed):
-                    return parsed
+                normalized_slides = [self._canonicalize_slide_json(s) for s in parsed]
+                if any('title' in s or 'type' in s or 'content' in s for s in normalized_slides):
+                    return normalized_slides
 
         return None
 
@@ -964,16 +1062,19 @@ class AIService:
 
             if isinstance(parsed, dict):
                 if isinstance(parsed.get('slide'), dict):
-                    return parsed.get('slide')
+                    return self._canonicalize_slide_json(parsed.get('slide'))
+                if isinstance(parsed.get('页面'), dict):
+                    return self._canonicalize_slide_json(parsed.get('页面'))
                 if isinstance(parsed.get('slides'), list):
                     slides = parsed.get('slides') or []
                     if slides and isinstance(slides[0], dict):
-                        return slides[0]
-                if parsed.get('type') and isinstance(parsed.get('content'), dict):
-                    return parsed
+                        return self._canonicalize_slide_json(slides[0])
+                maybe_slide = self._canonicalize_slide_json(parsed)
+                if maybe_slide.get('type') and isinstance(maybe_slide.get('content'), dict):
+                    return maybe_slide
 
             if isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
-                first = parsed[0]
+                first = self._canonicalize_slide_json(parsed[0])
                 if first.get('type') and isinstance(first.get('content'), dict):
                     return first
 
@@ -985,6 +1086,8 @@ class AIService:
         """
         page_outline = page_outline or {}
         slide_obj = self._try_extract_single_slide_json(description_text or "")
+        if isinstance(slide_obj, dict):
+            slide_obj = self._canonicalize_slide_json(slide_obj)
 
         if slide_obj is None:
             outline_title = self._normalize_text(page_outline.get('title'))
@@ -1028,7 +1131,7 @@ class AIService:
                 "note": "renovation_normalized",
             }
         else:
-            slide_obj = dict(slide_obj)
+            slide_obj = dict(self._canonicalize_slide_json(slide_obj))
             title = self._normalize_text(slide_obj.get('title')) or self._normalize_text(page_outline.get('title')) or "未命名页面"
             slide_obj['title'] = title
             if not slide_obj.get('type'):
@@ -1055,6 +1158,7 @@ class AIService:
         return ""
 
     def _extract_slide_points(self, slide: Dict) -> List[str]:
+        slide = self._canonicalize_slide_json(slide) if isinstance(slide, dict) else {}
         points: List[str] = []
         content = slide.get('content')
         if not isinstance(content, dict):
@@ -1099,7 +1203,8 @@ class AIService:
 
     def _slides_to_outline(self, slides: List[Dict]) -> List[Dict]:
         outline: List[Dict] = []
-        for idx, slide in enumerate(slides, 1):
+        for idx, raw_slide in enumerate(slides, 1):
+            slide = self._canonicalize_slide_json(raw_slide) if isinstance(raw_slide, dict) else {}
             title = self._normalize_text(slide.get('title'))
             if not title:
                 content = slide.get('content') if isinstance(slide.get('content'), dict) else {}
@@ -1119,7 +1224,8 @@ class AIService:
 
     def _slides_to_page_descriptions(self, slides: List[Dict]) -> List[str]:
         descriptions: List[str] = []
-        for idx, slide in enumerate(slides, 1):
+        for idx, raw_slide in enumerate(slides, 1):
+            slide = self._canonicalize_slide_json(raw_slide) if isinstance(raw_slide, dict) else {}
             title = self._normalize_text(slide.get('title'))
             if not title:
                 content = slide.get('content') if isinstance(slide.get('content'), dict) else {}
@@ -1485,14 +1591,26 @@ class AIService:
             raise ValueError(f"Expected dict, got {type(result)}")
 
         # New preferred format: {"outline": {...}, "slide": {...}}
-        outline_obj = result.get('outline') if isinstance(result.get('outline'), dict) else {}
-        slide_obj = result.get('slide') if isinstance(result.get('slide'), dict) else None
+        outline_obj = (
+            result.get('outline') if isinstance(result.get('outline'), dict)
+            else result.get('大纲') if isinstance(result.get('大纲'), dict)
+            else {}
+        )
+        outline_obj = self._canonicalize_outline_object(outline_obj)
+        slide_obj = (
+            result.get('slide') if isinstance(result.get('slide'), dict)
+            else result.get('页面') if isinstance(result.get('页面'), dict)
+            else None
+        )
 
         # Compatibility: allow direct single-slide object as top-level payload
-        if slide_obj is None and isinstance(result.get('content'), dict) and result.get('type'):
-            slide_obj = result
+        if slide_obj is None:
+            maybe_slide = self._canonicalize_slide_json(result)
+            if isinstance(maybe_slide.get('content'), dict) and maybe_slide.get('type'):
+                slide_obj = maybe_slide
 
         if slide_obj is not None:
+            slide_obj = self._canonicalize_slide_json(slide_obj)
             title = (
                 self._normalize_text(outline_obj.get('title'))
                 or self._normalize_text(slide_obj.get('title'))
@@ -1550,8 +1668,9 @@ class AIService:
         if description:
             try:
                 maybe_obj = json.loads(description)
-                if isinstance(maybe_obj, dict) and maybe_obj.get('type') and isinstance(maybe_obj.get('content'), dict):
-                    parsed_slide = maybe_obj
+                canonical_obj = self._canonicalize_slide_json(maybe_obj) if isinstance(maybe_obj, dict) else None
+                if isinstance(canonical_obj, dict) and canonical_obj.get('type') and isinstance(canonical_obj.get('content'), dict):
+                    parsed_slide = canonical_obj
             except Exception:
                 parsed_slide = None
 
