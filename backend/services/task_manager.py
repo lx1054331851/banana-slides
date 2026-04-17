@@ -109,12 +109,34 @@ def _format_list_section(title: str, values: Optional[List[str]]) -> str:
     return f"{title}：\n{joined}"
 
 
+def _resolve_image_model_label(ai_service) -> str:
+    """Return a readable image model label for history snapshot."""
+    route = getattr(getattr(ai_service, 'routing_bundle', None), 'image', None)
+    provider = str(getattr(route, 'provider', '') or '').strip()
+    source = str(getattr(route, 'source', '') or '').strip()
+    model = str(getattr(route, 'model', '') or '').strip()
+    if not model:
+        model = str(getattr(ai_service, 'image_model', '') or '').strip()
+    if not model:
+        model = str(getattr(getattr(ai_service, 'image_provider', None), 'model', '') or '').strip()
+
+    fields = []
+    if provider:
+        fields.append(f"provider={provider}")
+    if source:
+        fields.append(f"source={source}")
+    if model:
+        fields.append(f"model={model}")
+    return ', '.join(fields) if fields else '未记录'
+
+
 def _build_image_request_snapshot(
     *,
     operation_type: str,
     aspect_ratio: str,
     resolution: str,
     prompt_text: str,
+    image_model: Optional[str] = None,
     primary_reference: Optional[str] = None,
     additional_references: Optional[List[str]] = None,
     description_text: Optional[str] = None,
@@ -147,6 +169,7 @@ def _build_image_request_snapshot(
 
     sections = [
         f"操作类型：{operation_label}",
+        f"本次图片模型：{(image_model or '未记录').strip() or '未记录'}",
         f"画面比例：{aspect_ratio or '未记录'}",
         f"分辨率：{resolution or '未记录'}",
         _format_multiline_section("主参考图", primary_ref_display),
@@ -891,6 +914,7 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                             aspect_ratio=aspect_ratio,
                             resolution=resolution,
                             prompt_text=prompt,
+                            image_model=_resolve_image_model_label(ai_service),
                             primary_reference=page_ref_image_path,
                             additional_references=page_additional_ref_images,
                             description_text=desc_text,
@@ -1113,6 +1137,7 @@ def generate_single_page_image_task(task_id: str, project_id: str, page_id: str,
                 aspect_ratio=aspect_ratio,
                 resolution=resolution,
                 prompt_text=prompt,
+                image_model=_resolve_image_model_label(ai_service),
                 primary_reference=ref_image_path,
                 additional_references=additional_ref_images,
                 description_text=desc_text,
@@ -1234,6 +1259,7 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                     aspect_ratio=aspect_ratio,
                     resolution=resolution,
                     prompt_text=prompt_text,
+                    image_model=_resolve_image_model_label(ai_service),
                     primary_reference=current_image_path,
                     additional_references=merged_edit_refs,
                     edit_instruction=effective_edit_instruction,

@@ -10,6 +10,7 @@ from services.task_manager import (
     _build_image_request_snapshot,
     _get_existing_page_image_path,
     _load_page_generation_snapshot,
+    _resolve_image_model_label,
     edit_page_image_task,
     generate_single_page_image_task,
     get_renovation_page_sources,
@@ -228,6 +229,34 @@ def test_build_image_request_snapshot_omits_page_context_for_edit_operation():
     assert '这段风格要求也不应出现' not in snapshot
     assert '用户修改指令' in snapshot
     assert '把标题改成蓝色' in snapshot
+
+
+def test_build_image_request_snapshot_contains_image_model_label():
+    snapshot = _build_image_request_snapshot(
+        operation_type='generate',
+        aspect_ratio='16:9',
+        resolution='2K',
+        prompt_text='prompt',
+        image_model='provider=openai, source=azure, model=gpt-image-1',
+    )
+
+    assert '本次图片模型：provider=openai, source=azure, model=gpt-image-1' in snapshot
+
+
+def test_resolve_image_model_label_prefers_routing_bundle_route():
+    ai_service = SimpleNamespace(
+        image_model='fallback-image-model',
+        routing_bundle=SimpleNamespace(
+            image=SimpleNamespace(
+                provider='openai',
+                source='azure',
+                model='gpt-image-1',
+            )
+        ),
+    )
+
+    label = _resolve_image_model_label(ai_service)
+    assert label == 'provider=openai, source=azure, model=gpt-image-1'
 
 
 def test_get_renovation_page_sources_reuses_existing_split_pages(tmp_path):
