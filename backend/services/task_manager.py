@@ -124,6 +124,10 @@ def _build_image_request_snapshot(
     extra_requirements_in_prompt: bool = True,
     upload_root: Optional[Path] = None,
 ) -> str:
+    # 单独图片编辑只允许传递“当前页图片 + 引用图片 + 修改指令”。
+    # 即使上层误传了原始页面描述/风格要求，也不写入请求快照，避免被带入模型上下文。
+    suppress_page_context = operation_type == 'edit'
+
     primary_ref_display = _normalize_history_reference(primary_reference, upload_root)
     extra_ref_displays = [
         normalized
@@ -149,13 +153,13 @@ def _build_image_request_snapshot(
         _format_list_section("附加参考图 / 素材", extra_ref_displays),
     ]
 
-    if description_text is not None:
+    if description_text is not None and not suppress_page_context:
         sections.append(_format_multiline_section("页面描述（用于构建 prompt）", description_text))
-    if original_description is not None:
+    if original_description is not None and not suppress_page_context:
         sections.append(_format_multiline_section("原始页面描述", original_description))
     if edit_instruction is not None:
         sections.append(_format_multiline_section("用户修改指令", edit_instruction))
-    if extra_requirements is not None:
+    if extra_requirements is not None and not suppress_page_context:
         if extra_requirements_in_prompt:
             # 避免在历史快照里把同一段要求展示两次：
             # 这段内容已经包含在下方“最终发送给 nano banana 的 prompt”中。

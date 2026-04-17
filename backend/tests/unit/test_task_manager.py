@@ -7,6 +7,7 @@ import services.task_manager as task_manager_module
 from types import SimpleNamespace
 
 from services.task_manager import (
+    _build_image_request_snapshot,
     _get_existing_page_image_path,
     _load_page_generation_snapshot,
     edit_page_image_task,
@@ -206,6 +207,27 @@ def test_edit_page_image_task_prefers_image_edit_mode_for_reference_only_updates
         assert page.status == 'COMPLETED'
         assert page.generated_image_path.endswith('.png')
         assert page.cached_image_path.endswith('.jpg')
+
+
+def test_build_image_request_snapshot_omits_page_context_for_edit_operation():
+    snapshot = _build_image_request_snapshot(
+        operation_type='edit',
+        aspect_ratio='16:9',
+        resolution='4K',
+        prompt_text='只保留修改指令',
+        primary_reference='uploads/demo/current.png',
+        additional_references=['uploads/demo/ref1.png'],
+        original_description='这段原始页面描述不应出现',
+        extra_requirements='这段风格要求也不应出现',
+        edit_instruction='把标题改成蓝色',
+    )
+
+    assert '原始页面描述' not in snapshot
+    assert '后端追加要求' not in snapshot
+    assert '这段原始页面描述不应出现' not in snapshot
+    assert '这段风格要求也不应出现' not in snapshot
+    assert '用户修改指令' in snapshot
+    assert '把标题改成蓝色' in snapshot
 
 
 def test_get_renovation_page_sources_reuses_existing_split_pages(tmp_path):
