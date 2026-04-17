@@ -2668,6 +2668,24 @@ export const SlidePreview: React.FC = () => {
     await saveAllPages();
   }, [handleSaveOutlineAndDescription, saveAllPages]);
 
+  const handleGenerateCurrentPage = useCallback(async () => {
+    const pageId = currentProject?.pages[selectedIndex]?.id;
+    if (!pageId) return;
+
+    await checkResolutionAndExecute(async () => {
+      handleSaveOutlineAndDescription();
+      await saveAllPages();
+      await handleBatchGenerate([pageId]);
+    });
+  }, [
+    currentProject,
+    selectedIndex,
+    checkResolutionAndExecute,
+    handleSaveOutlineAndDescription,
+    saveAllPages,
+    handleBatchGenerate,
+  ]);
+
   const handleGenerateDescriptions = useCallback(async () => {
     if (!currentProject) return;
     const pagesToGenerate = currentProject.pages.filter((page) => page.id);
@@ -4042,14 +4060,8 @@ export const SlidePreview: React.FC = () => {
                   icon={<Send size={14} />}
                   title={t('preview.generateImage')}
                   aria-label={t('preview.generateImage')}
-                  onClick={() => {
-                    if (!showJsonRefineDialog) {
-                      setShowJsonRefineDialog(true);
-                      return;
-                    }
-                    void handleSubmitJsonRefine();
-                  }}
-                  disabled={isJsonRefining || (showJsonRefineDialog && !jsonRefineRequirement.trim())}
+                  onClick={() => void handleGenerateCurrentPage()}
+                  disabled={isJsonRefining || isSelectedPageGenerating}
                   className="h-7 w-7 rounded-md border-0 bg-transparent px-0 text-[#7c6740] hover:bg-[#f7edd2] disabled:opacity-50 dark:text-[#c4d2f3] dark:hover:bg-[#222d44]"
                 />
               </div>
