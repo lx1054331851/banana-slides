@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, ArrowRight, Plus, FileText, Sparkle, Download, Upload, PanelLeftClose, PanelLeftOpen, LayoutGrid, List } from 'lucide-react';
+import { ArrowLeft, Save, ArrowRight, Plus, FileText, Sparkle, Download, Upload, PanelLeftClose, PanelLeftOpen, LayoutGrid, List, ArrowUp } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 import mammoth from 'mammoth/mammoth.browser';
 
@@ -24,6 +24,7 @@ const outlineI18n = {
       contextLabels: { idea: "PPT构想", outline: "大纲", description: "描述" },
       inputLabel: { idea: "PPT 构想", outline: "原始大纲", description: "页面描述", ppt_renovation: "原始 PPT 内容" },
       inputPlaceholder: { idea: "输入你的 PPT 构想...", outline: "输入大纲内容...", description: "输入页面描述...", ppt_renovation: "已从 PDF 中提取内容" },
+      backToTop: "返回顶部",
       rawInputLabel: "原文内容",
       rawInputPlaceholder: "上传文档后会在这里显示原文，也可以直接粘贴",
       selectSourceFile: "选择文件",
@@ -66,6 +67,7 @@ const outlineI18n = {
       contextLabels: { idea: "PPT Idea", outline: "Outline", description: "Description" },
       inputLabel: { idea: "PPT Idea", outline: "Original Outline", description: "Page Descriptions", ppt_renovation: "Original PPT Content" },
       inputPlaceholder: { idea: "Enter your PPT idea...", outline: "Enter outline content...", description: "Enter page descriptions...", ppt_renovation: "Content extracted from PDF" },
+      backToTop: "Back to top",
       rawInputLabel: "Source Text",
       rawInputPlaceholder: "Upload a document to show the source text, or paste it here",
       selectSourceFile: "Choose File",
@@ -164,6 +166,7 @@ const SortableCard: React.FC<{
 };
 
 export const OutlineEditor: React.FC = () => {
+  const SCROLL_SHOW_THRESHOLD = 300;
   const navigate = useNavigate();
   const location = useLocation();
   const t = useT(outlineI18n);
@@ -187,6 +190,8 @@ export const OutlineEditor: React.FC = () => {
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const mainScrollRef = useRef<HTMLElement>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
     try {
       const stored = localStorage.getItem('outlineViewMode');
@@ -534,6 +539,14 @@ export const OutlineEditor: React.FC = () => {
     }
   }, []);
 
+  const handleMainScroll = useCallback((event: React.UIEvent<HTMLElement>) => {
+    setShowBackToTop(event.currentTarget.scrollTop > SCROLL_SHOW_THRESHOLD);
+  }, [SCROLL_SHOW_THRESHOLD]);
+
+  const handleScrollToTop = useCallback(() => {
+    mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   if (!currentProject) {
     return <Loading fullscreen message={t('outline.messages.loadingProject')} />;
   }
@@ -719,7 +732,11 @@ export const OutlineEditor: React.FC = () => {
       </div>
 
       {/* 主内容区 */}
-      <main className="flex-1 flex flex-col md:flex-row gap-3 md:gap-6 p-3 md:p-6 overflow-y-auto min-h-0 relative">
+      <main
+        ref={mainScrollRef}
+        onScroll={handleMainScroll}
+        className="flex-1 flex flex-col md:flex-row gap-3 md:gap-6 p-3 md:p-6 overflow-y-auto min-h-0 relative"
+      >
         {/* 左侧：可编辑文本区域（可收起） */}
         <div
           className="flex-shrink-0 transition-[width] duration-300 ease-in-out hidden md:block"
@@ -966,6 +983,18 @@ export const OutlineEditor: React.FC = () => {
           </div>
         </div>
       </main>
+      {showBackToTop && (
+        <button
+          type="button"
+          data-testid="outline-back-to-top-button"
+          aria-label={t('outline.backToTop')}
+          title={t('outline.backToTop')}
+          onClick={handleScrollToTop}
+          className="fixed bottom-6 right-6 z-40 p-3 rounded-full bg-banana-500 text-white shadow-lg hover:bg-banana-600 transition-all"
+        >
+          <ArrowUp size={20} />
+        </button>
+      )}
       {ConfirmDialog}
       <ToastContainer />
       <FilePreviewModal fileId={previewFileId} onClose={() => setPreviewFileId(null)} />
