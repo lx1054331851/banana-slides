@@ -236,7 +236,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
           {references.length > 0 && (
             <div className={cn(
               'border-b border-slate-100 dark:border-border-primary',
-              cardless ? 'px-2 py-1.5' : 'px-4 py-2',
+              cardless ? 'px-2 pt-3 pb-1.5' : 'px-4 py-2',
             )}>
               <div className="flex items-center gap-2 overflow-x-auto pb-1">
                 {references.map((reference) => (
@@ -290,7 +290,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
             </div>
           )}
 
-          <div className={cn('min-h-0 flex-1', cardless ? 'mx-2 mt-0 pt-2.5' : 'mx-4 mt-1')}>
+          <div className={cn('min-h-0 flex-1', cardless ? 'mx-2 mt-0 pt-5' : 'mx-4 mt-1')}>
             <MarkdownTextarea
               ref={inputRef}
               value={inputValue}
