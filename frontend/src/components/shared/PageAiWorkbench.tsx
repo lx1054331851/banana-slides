@@ -290,7 +290,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
             </div>
           )}
 
-          <div className={cn('min-h-0 flex-1', cardless ? 'mx-2 mt-0' : 'mx-4 mt-1')}>
+          <div className={cn('min-h-0 flex-1', cardless ? 'mx-2 mt-0 pt-2.5' : 'mx-4 mt-1')}>
             <MarkdownTextarea
               ref={inputRef}
               value={inputValue}
