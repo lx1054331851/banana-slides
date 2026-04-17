@@ -4101,17 +4101,6 @@ export const SlidePreview: React.FC = () => {
     return references;
   })();
 
-  const resetPageAiComposer = useCallback(() => {
-    setEditPrompt('');
-    setEditRunImageModel(projectDefaultImageModel);
-    setActivePreviewReferenceId(null);
-    setSelectedContextImages({
-      useTemplate: false,
-      descImageUrls: [],
-      uploadedReferences: [],
-    });
-  }, [projectDefaultImageModel]);
-
   const buildPageAiPayload = useCallback(() => {
     const uploadedMarkdownUrls = new Set(
       selectedContextImages.uploadedReferences
@@ -4177,7 +4166,6 @@ export const SlidePreview: React.FC = () => {
         ]);
       }
 
-      resetPageAiComposer();
     } catch (error: any) {
       const errorMessage =
         error?.response?.data?.error?.message ||
@@ -4203,7 +4191,6 @@ export const SlidePreview: React.FC = () => {
     runGenerateFlow,
     executePageImageGeneration,
     editRunImageModel,
-    resetPageAiComposer,
   ]);
 
   const handleToggleTemplateReference = () => {
