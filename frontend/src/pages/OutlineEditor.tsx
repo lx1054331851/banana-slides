@@ -165,8 +165,9 @@ const SortableCard: React.FC<{
   );
 };
 
+const SCROLL_SHOW_THRESHOLD = 300;
+
 export const OutlineEditor: React.FC = () => {
-  const SCROLL_SHOW_THRESHOLD = 300;
   const navigate = useNavigate();
   const location = useLocation();
   const t = useT(outlineI18n);
@@ -539,12 +540,31 @@ export const OutlineEditor: React.FC = () => {
     }
   }, []);
 
-  const handleMainScroll = useCallback((event: React.UIEvent<HTMLElement>) => {
-    setShowBackToTop(event.currentTarget.scrollTop > SCROLL_SHOW_THRESHOLD);
-  }, [SCROLL_SHOW_THRESHOLD]);
+  const updateBackToTopVisibility = useCallback(() => {
+    const containerTop = mainScrollRef.current?.scrollTop ?? 0;
+    const windowTop = typeof window !== 'undefined'
+      ? (window.scrollY || document.documentElement.scrollTop || 0)
+      : 0;
+    setShowBackToTop(Math.max(containerTop, windowTop) > SCROLL_SHOW_THRESHOLD);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onWindowScroll = () => updateBackToTopVisibility();
+    window.addEventListener('scroll', onWindowScroll, { passive: true });
+    updateBackToTopVisibility();
+    return () => window.removeEventListener('scroll', onWindowScroll);
+  }, [updateBackToTopVisibility]);
+
+  const handleMainScroll = useCallback(() => {
+    updateBackToTopVisibility();
+  }, [updateBackToTopVisibility]);
 
   const handleScrollToTop = useCallback(() => {
     mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }, []);
 
   if (!currentProject) {
