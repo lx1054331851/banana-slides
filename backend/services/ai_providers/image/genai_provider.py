@@ -84,20 +84,16 @@ class GenAIImageProvider(ImageProvider):
     @staticmethod
     def _should_retry_without_image_size(error: Exception) -> bool:
         """
-        Some proxies reject/charge extra for image_size and may fail with
-        provider-specific messages (e.g., "没有可用token").
-        In that case retry once without image_size.
+        Some proxies reject `image_size` and require retrying without it.
+        Only trigger this fallback when the error explicitly points to the
+        image_size field itself; otherwise we may silently downgrade quality.
         """
         msg = str(error).lower()
-        hints = (
-            "没有可用token",
-            "no available token",
-            "image_size",
-            "imagesize",
-            "invalid_request_error",
-            "unsupported",
+        return (
+            "image_size" in msg
+            or "imagesize" in msg
+            or "image size" in msg
         )
-        return any(h in msg for h in hints)
 
     @staticmethod
     def _build_generate_config(aspect_ratio: str, resolution: str,
