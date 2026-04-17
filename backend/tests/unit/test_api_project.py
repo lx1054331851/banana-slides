@@ -122,6 +122,67 @@ class TestProjectGet:
         assert refreshed_task is not None
         assert refreshed_task.status == 'FAILED'
 
+    @patch('controllers.project_controller.get_ai_service')
+    def test_stream_generate_descriptions_keeps_real_page_number_for_selected_pages(self, mock_get_ai_service, client, sample_project):
+        """测试流式生成部分页面描述时保留真实页码，避免把最后一页当第一页生成"""
+        if not sample_project:
+            pytest.skip("项目创建失败")
+
+        project_id = sample_project['project_id']
+
+        from models import db, Page, Project
+
+        project = Project.query.get(project_id)
+        assert project is not None
+
+        pages = []
+        for index in range(3):
+            page = Page(
+                project_id=project_id,
+                order_index=index,
+                status='DRAFT',
+            )
+            page.set_outline_content({'title': f'第{index + 1}页', 'points': [f'要点{index + 1}']})
+            db.session.add(page)
+            pages.append(page)
+        db.session.commit()
+
+        class FakeAiService:
+            def __init__(self):
+                self.page_numbers = None
+
+            def flatten_outline(self, outline):
+                return outline
+
+            def generate_descriptions_stream(self, project_context, outline, flat_pages, language='zh', detail_level='default', page_numbers=None):
+                self.page_numbers = page_numbers
+                yield {
+                    'page_index': 0,
+                    'description_text': f'generated-for-page-{page_numbers[0]}',
+                    'extra_fields': None,
+                }
+                yield {'__stream_complete__': True}
+
+        fake_ai_service = FakeAiService()
+        mock_get_ai_service.return_value = fake_ai_service
+
+        target_page = pages[-1]
+        response = client.post(
+            f'/api/projects/{project_id}/generate/descriptions/stream',
+            json={'page_ids': [target_page.id]},
+            buffered=True,
+        )
+
+        assert response.status_code == 200
+        body = b''.join(response.response).decode('utf-8')
+        assert 'generated-for-page-3' in body
+        assert fake_ai_service.page_numbers == [3]
+
+        db.session.refresh(target_page)
+        desc = target_page.get_description_content()
+        assert desc is not None
+        assert desc['text'] == 'generated-for-page-3'
+
     def test_get_project_keeps_generating_when_task_active(self, client, sample_project):
         """测试任务仍活跃时，不应错误恢复页面状态"""
         if not sample_project:

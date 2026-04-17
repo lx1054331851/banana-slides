@@ -1245,6 +1245,10 @@ def generate_descriptions_stream(project_id):
                     flat_pages_by_index.get(page.order_index, {})
                     for page in pages
                 ]
+                page_numbers = [
+                    ((page.order_index or 0) + 1)
+                    for page in pages
+                ]
 
                 # Set selected pages to GENERATING_DESCRIPTION
                 for page in pages:
@@ -1292,7 +1296,9 @@ def generate_descriptions_stream(project_id):
                 else:
                     for result in ai_service.generate_descriptions_stream(
                         project_context, outline, flat_pages,
-                        language=language, detail_level=detail_level
+                        language=language,
+                        detail_level=detail_level,
+                        page_numbers=page_numbers,
                     ):
                         if '__stream_complete__' in result:
                             continue

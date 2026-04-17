@@ -822,7 +822,8 @@ class AIService:
     def generate_descriptions_stream(self, project_context: ProjectContext,
                                      outline: List[Dict], flat_pages: List[Dict],
                                      language: str = 'zh',
-                                     detail_level: str = 'default'):
+                                     detail_level: str = 'default',
+                                     page_numbers: List[int] | None = None):
         """
         Stream description generation for all pages, yielding each page as it's completed.
 
@@ -832,11 +833,16 @@ class AIService:
         # Keep text-generation streaming aligned with renovation-like structured JSON logic:
         # generate each page through the same single-page pipeline and stream page by page.
         for index, page_outline in enumerate(flat_pages or [], 1):
+            page_number = (
+                page_numbers[index - 1]
+                if page_numbers and index - 1 < len(page_numbers)
+                else index
+            )
             desc_result = self.generate_page_description(
                 project_context=project_context,
                 outline=outline or [],
                 page_outline=page_outline or {},
-                page_index=index,
+                page_index=page_number,
                 language=language,
                 detail_level=detail_level,
             )
