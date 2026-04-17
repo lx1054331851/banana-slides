@@ -585,6 +585,11 @@ type PageAiContextState = {
   };
 };
 
+type PendingPageAiContextBinding = {
+  sourceVersionId: string | null;
+  context: PageAiContextState;
+};
+
 type MaterialSelectorMode = 'pageAi' | 'pageAiInline' | 'description';
 
 const isSupportedDescriptionImageUrl = (url: string): boolean => {
@@ -595,11 +600,20 @@ const escapeMarkdownText = (text: string): string => text.replace(/[[\]()]/g, '\
 const DESCRIPTION_UPLOAD_ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg';
 type RenovationJsonViewMode = 'text' | 'styleGuide';
 const PAGE_STYLE_GUIDE_DEFAULT_BINDING = '__page_default__';
+const PAGE_AI_DEFAULT_BINDING = '__page_default__';
 
 type StyleGuideBindings = Record<string, string>;
 
 const buildStyleGuideBindingKey = (imageVersionId?: string | null): string => (
   imageVersionId ? `image_version:${imageVersionId}` : PAGE_STYLE_GUIDE_DEFAULT_BINDING
+);
+
+const buildPageAiContextBindingKey = (imageVersionId?: string | null): string => (
+  imageVersionId ? `image_version:${imageVersionId}` : PAGE_AI_DEFAULT_BINDING
+);
+
+const buildPageAiContextStoreKey = (pageId: string, imageVersionId?: string | null): string => (
+  `${pageId}:${buildPageAiContextBindingKey(imageVersionId)}`
 );
 
 const normalizeStyleGuideBindings = (raw: unknown): StyleGuideBindings => {
@@ -1098,45 +1112,6 @@ export const SlidePreview: React.FC = () => {
   }, [currentProject, selectedIndex, pageDrafts, formatDescriptionForEditor]);
 
   useEffect(() => {
-    if (!currentProject) return;
-    const page = currentProject.pages[selectedIndex];
-    const pageId = page?.id;
-    if (!pageId) {
-      setEditPrompt('');
-      setPageAiMessages([]);
-      setEditRunImageModel(PROJECT_DEFAULT_IMAGE_MODEL);
-      setSelectedContextImages({
-        useTemplate: false,
-        descImageUrls: [],
-        uploadedReferences: [],
-      });
-      return;
-    }
-
-    const cached = editContextByPage[pageId];
-    if (!cached) {
-      setEditPrompt('');
-      setPageAiMessages([]);
-      setEditRunImageModel(PROJECT_DEFAULT_IMAGE_MODEL);
-      setSelectedContextImages({
-        useTemplate: false,
-        descImageUrls: [],
-        uploadedReferences: [],
-      });
-      return;
-    }
-
-    setEditPrompt(cached.draftInput);
-    setPageAiMessages(cached.messages);
-    setEditRunImageModel(cached.model);
-    setSelectedContextImages({
-      useTemplate: cached.contextImages.useTemplate,
-      descImageUrls: [...cached.contextImages.descImageUrls],
-      uploadedReferences: [...cached.contextImages.uploadedReferences],
-    });
-  }, [currentProject?.id, selectedIndex]);
-
-  useEffect(() => {
     if (!currentProject) {
       setJsonRefineRequirement('');
       setJsonRefineHistory([]);
@@ -1468,6 +1443,10 @@ export const SlidePreview: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [floatingFullscreenButtonPosition, setFloatingFullscreenButtonPosition] = useState({ x: 0.92, y: 0.1 });
   const [imageVersions, setImageVersions] = useState<ImageVersion[]>([]);
+  const currentImageVersionId = useMemo(
+    () => imageVersions.find((version) => version.is_current)?.version_id || null,
+    [imageVersions]
+  );
   const imageVersionsPageIdRef = useRef<string | null>(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [selectedHistoryVersionId, setSelectedHistoryVersionId] = useState<string | null>(null);
@@ -1591,11 +1570,84 @@ export const SlidePreview: React.FC = () => {
     targetPageIds: string[];
     missingPageIds: string[];
   } | null>(null);
-  // 每页编辑参数缓存（前端会话内缓存，便于重复执行）
-  const [editContextByPage, setEditContextByPage] = useState<Record<string, PageAiContextState>>({});
+  // 页面 AI 上下文按「页面 + 图片版本」缓存，便于切换历史版本时恢复对应输入
+  const [pageAiContextByVersion, setPageAiContextByVersion] = useState<Record<string, PageAiContextState>>({});
+  const pendingPageAiContextBindingRef = useRef<Record<string, PendingPageAiContextBinding>>({});
   const floatingFullscreenDragRef = useRef<{ moved: boolean } | null>(null);
   const [isDraggingFloatingFullscreenButton, setIsDraggingFloatingFullscreenButton] = useState(false);
   const suppressFloatingFullscreenClickRef = useRef(false);
+
+  useEffect(() => {
+    if (!currentProject) return;
+    const page = currentProject.pages[selectedIndex];
+    const pageId = page?.id;
+    if (!pageId) {
+      setEditPrompt('');
+      setPageAiMessages([]);
+      setEditRunImageModel(PROJECT_DEFAULT_IMAGE_MODEL);
+      setSelectedContextImages({
+        useTemplate: false,
+        descImageUrls: [],
+        uploadedReferences: [],
+      });
+      return;
+    }
+
+    const versionScopedKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
+    const fallbackKey = buildPageAiContextStoreKey(pageId, null);
+    const pendingBoundContext = pendingPageAiContextBindingRef.current[pageId]?.context;
+    const cached = pageAiContextByVersion[versionScopedKey]
+      || pendingBoundContext
+      || pageAiContextByVersion[fallbackKey];
+    if (!cached) {
+      setEditPrompt('');
+      setPageAiMessages([]);
+      setEditRunImageModel(PROJECT_DEFAULT_IMAGE_MODEL);
+      setSelectedContextImages({
+        useTemplate: false,
+        descImageUrls: [],
+        uploadedReferences: [],
+      });
+      return;
+    }
+
+    setEditPrompt(cached.draftInput);
+    setPageAiMessages(cached.messages);
+    setEditRunImageModel(cached.model);
+    setSelectedContextImages({
+      useTemplate: cached.contextImages.useTemplate,
+      descImageUrls: [...cached.contextImages.descImageUrls],
+      uploadedReferences: [...cached.contextImages.uploadedReferences],
+    });
+  }, [currentProject?.id, selectedIndex, currentImageVersionId]);
+
+  useEffect(() => {
+    if (!currentProject) return;
+    const page = currentProject.pages[selectedIndex];
+    const pageId = page?.id;
+    if (!pageId || !currentImageVersionId) return;
+
+    const pendingBinding = pendingPageAiContextBindingRef.current[pageId];
+    if (!pendingBinding || pendingBinding.sourceVersionId === currentImageVersionId) {
+      return;
+    }
+
+    const versionScopedKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
+    setPageAiContextByVersion((prev) => ({
+      ...prev,
+      [versionScopedKey]: {
+        draftInput: pendingBinding.context.draftInput,
+        messages: [...pendingBinding.context.messages],
+        model: pendingBinding.context.model,
+        contextImages: {
+          useTemplate: pendingBinding.context.contextImages.useTemplate,
+          descImageUrls: [...pendingBinding.context.contextImages.descImageUrls],
+          uploadedReferences: [...pendingBinding.context.contextImages.uploadedReferences],
+        },
+      },
+    }));
+    delete pendingPageAiContextBindingRef.current[pageId];
+  }, [currentProject, selectedIndex, currentImageVersionId]);
 
   useEffect(() => {
     void (async () => {
@@ -2460,8 +2512,17 @@ export const SlidePreview: React.FC = () => {
     if (!currentProject) return;
     const page = currentProject.pages[selectedIndex];
     const pageId = page?.id;
-    if (pageId && editContextByPage[pageId]) {
-      const cached = editContextByPage[pageId];
+    if (pageId) {
+      const versionScopedKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
+      const fallbackKey = buildPageAiContextStoreKey(pageId, null);
+      const cached = pageAiContextByVersion[versionScopedKey] || pageAiContextByVersion[fallbackKey];
+      if (!cached) {
+        setIsRegionSelectionMode(false);
+        setSelectionStart(null);
+        setSelectionRect(null);
+        setIsSelectingRegion(false);
+        return;
+      }
       setEditPrompt(cached.draftInput);
       setPageAiMessages(cached.messages);
       setEditRunImageModel(cached.model);
@@ -2475,7 +2536,7 @@ export const SlidePreview: React.FC = () => {
     setSelectionStart(null);
     setSelectionRect(null);
     setIsSelectingRegion(false);
-  }, [currentProject, selectedIndex, editContextByPage]);
+  }, [currentProject, selectedIndex, currentImageVersionId, pageAiContextByVersion]);
 
   // 保存大纲和描述修改
   const handleSaveOutlineAndDescription = useCallback(() => {
@@ -2591,20 +2652,6 @@ export const SlidePreview: React.FC = () => {
         },
         editGenerationOverride
       );
-
-      setEditContextByPage((prev) => ({
-        ...prev,
-        [page.id!]: {
-          draftInput: nextPrompt,
-          messages: prev[page.id!]?.messages || pageAiMessages,
-          model: normalizedEditModel,
-          contextImages: {
-            useTemplate: nextContextImages.useTemplate,
-            descImageUrls: [...nextContextImages.descImageUrls],
-            uploadedReferences: [...nextContextImages.uploadedReferences],
-          },
-        },
-      }));
     } catch (error: any) {
       const errorMessage =
         error?.response?.data?.error?.message ||
@@ -2614,7 +2661,7 @@ export const SlidePreview: React.FC = () => {
       show({ message: errorMessage, type: 'error' });
       throw error;
     }
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, projectDefaultImageResolution, projectDefaultImageSource, handleSaveOutlineAndDescription, saveAllPages, pageAiMessages, show, t]);
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, projectDefaultImageResolution, projectDefaultImageSource, handleSaveOutlineAndDescription, saveAllPages, show, t]);
 
   const handleSaveCurrentPage = useCallback(async () => {
     handleSaveOutlineAndDescription();
@@ -2836,11 +2883,11 @@ export const SlidePreview: React.FC = () => {
   useEffect(() => {
     const combined = [
       ...selectedContextImages.uploadedReferences,
-      ...Object.values(editContextByPage).flatMap((context) => context.contextImages.uploadedReferences),
+      ...Object.values(pageAiContextByVersion).flatMap((context) => context.contextImages.uploadedReferences),
     ];
     const deduped = combined.filter((reference, index, array) => array.findIndex((item) => item.id === reference.id) === index);
     uploadedReferenceCleanupRef.current = deduped;
-  }, [selectedContextImages.uploadedReferences, editContextByPage]);
+  }, [selectedContextImages.uploadedReferences, pageAiContextByVersion]);
   useEffect(() => {
     return () => {
       uploadedReferenceCleanupRef.current.forEach((reference) => {
@@ -2987,9 +3034,10 @@ export const SlidePreview: React.FC = () => {
     const pageId = page?.id;
     if (!pageId) return;
 
-    setEditContextByPage((prev) => ({
+    const contextKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
+    setPageAiContextByVersion((prev) => ({
       ...prev,
-      [pageId]: {
+      [contextKey]: {
         draftInput: editPrompt,
         messages: pageAiMessages,
         model: editRunImageModel,
@@ -3000,7 +3048,7 @@ export const SlidePreview: React.FC = () => {
         },
       },
     }));
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, pageAiMessages, editRunImageModel]);
+  }, [currentProject, selectedIndex, currentImageVersionId, editPrompt, selectedContextImages, pageAiMessages, editRunImageModel]);
 
   useEffect(() => {
     if (!currentProject) return;
@@ -3741,7 +3789,6 @@ export const SlidePreview: React.FC = () => {
   const isPptRenovationProject = currentProject?.creation_type === 'ppt_renovation';
   const isTextGenerationPreviewProject = currentProject?.creation_type !== 'ppt_renovation';
   const useRenovationPreviewForm = isPptRenovationProject || isTextGenerationPreviewProject;
-  const currentImageVersionId = imageVersions.find((version) => version.is_current)?.version_id || null;
   const activeStyleGuideBindingKey = buildStyleGuideBindingKey(currentImageVersionId);
   const projectStyleGuideJson = useMemo(() => {
     if (!useRenovationPreviewForm) return '';
@@ -4120,6 +4167,9 @@ export const SlidePreview: React.FC = () => {
     appendPageAiMessages?: boolean;
   }) => {
     if (!currentProject) return;
+    const currentPage = currentProject.pages[selectedIndex];
+    const pageId = currentPage?.id;
+    if (!pageId) return;
 
     const payload = buildPageAiPayload();
     const draftText = payload.promptText.trim() || (selectedPageAiReferences.length > 0
@@ -4129,15 +4179,18 @@ export const SlidePreview: React.FC = () => {
     const shouldAppendPageAiMessages = Boolean(
       options?.appendPageAiMessages && (draftText || referenceSnapshot.length > 0)
     );
+    const userMessage = shouldAppendPageAiMessages
+      ? createPageAiMessage(
+        'user',
+        draftText || t('preview.pageAiReferenceOnlyFallback'),
+        referenceSnapshot,
+      )
+      : null;
 
-    if (shouldAppendPageAiMessages) {
+    if (userMessage) {
       setPageAiMessages((prev) => [
         ...prev,
-        createPageAiMessage(
-          'user',
-          draftText || t('preview.pageAiReferenceOnlyFallback'),
-          referenceSnapshot,
-        ),
+        userMessage,
       ]);
     }
 
@@ -4159,12 +4212,33 @@ export const SlidePreview: React.FC = () => {
         return;
       }
 
-      if (shouldAppendPageAiMessages) {
+      const assistantMessage = shouldAppendPageAiMessages
+        ? createPageAiMessage('assistant', t('preview.pageAiResponseFallback'))
+        : null;
+      if (assistantMessage) {
         setPageAiMessages((prev) => [
           ...prev,
-          createPageAiMessage('assistant', t('preview.pageAiResponseFallback')),
+          assistantMessage,
         ]);
       }
+
+      pendingPageAiContextBindingRef.current[pageId] = {
+        sourceVersionId: currentImageVersionId,
+        context: {
+          draftInput: editPrompt,
+          messages: [
+            ...pageAiMessages,
+            ...(userMessage ? [userMessage] : []),
+            ...(assistantMessage ? [assistantMessage] : []),
+          ],
+          model: editRunImageModel,
+          contextImages: {
+            useTemplate: selectedContextImages.useTemplate,
+            descImageUrls: [...selectedContextImages.descImageUrls],
+            uploadedReferences: [...selectedContextImages.uploadedReferences],
+          },
+        },
+      };
 
     } catch (error: any) {
       const errorMessage =
@@ -4184,9 +4258,13 @@ export const SlidePreview: React.FC = () => {
     }
   }, [
     currentProject,
+    selectedIndex,
+    currentImageVersionId,
     editPrompt,
     buildPageAiPayload,
     selectedPageAiReferences,
+    pageAiMessages,
+    selectedContextImages,
     t,
     runGenerateFlow,
     executePageImageGeneration,
