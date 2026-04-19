@@ -17,8 +17,16 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column('pages', sa.Column('json_refine_context', sa.Text(), nullable=True))
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_columns = {column['name'] for column in inspector.get_columns('pages')}
+    if 'json_refine_context' not in existing_columns:
+        op.add_column('pages', sa.Column('json_refine_context', sa.Text(), nullable=True))
 
 
 def downgrade() -> None:
-    op.drop_column('pages', 'json_refine_context')
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_columns = {column['name'] for column in inspector.get_columns('pages')}
+    if 'json_refine_context' in existing_columns:
+        op.drop_column('pages', 'json_refine_context')
