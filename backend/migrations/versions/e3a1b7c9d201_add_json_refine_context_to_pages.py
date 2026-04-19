@@ -1,7 +1,7 @@
 """add json refine context to pages
 
 Revision ID: e3a1b7c9d201
-Revises: 5cfd92a42a41
+Revises: 026_merge_canvas_and_json_refine_heads
 Create Date: 2026-04-12 17:25:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'e3a1b7c9d201'
-down_revision = '5cfd92a42a41'
+down_revision = '026_merge_canvas_and_json_refine_heads'
 branch_labels = None
 depends_on = None
 
