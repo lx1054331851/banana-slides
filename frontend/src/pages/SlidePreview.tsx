@@ -5554,7 +5554,7 @@ export const SlidePreview: React.FC = () => {
                               emptyDescription={t('preview.pageAiEmptyDescription')}
                               inputPlaceholder={t('preview.editPromptPlaceholder')}
                               inputHint={t('preview.pageAiInputHint')}
-                              sendTooltip={t('preview.pageAiSendTooltip')}
+                              sendTooltip={useRenovationPreviewForm ? t('preview.generateImage') : t('preview.pageAiSendTooltip')}
                               referencesTitle={t('preview.pageAiReferencesTitle')}
                               referencesEmpty={t('preview.pageAiReferencesEmpty')}
                               descriptionSourcesTitle={t('preview.pageAiDescriptionSourcesTitle')}
@@ -5575,7 +5575,7 @@ export const SlidePreview: React.FC = () => {
                               inputValue={editPrompt}
                               inputRef={pageAiTextareaRef}
                               slashActions={pageAiSlashActions}
-                              sendLabel={t('preview.historyActionEdit')}
+                              sendLabel={useRenovationPreviewForm ? t('preview.generateImage') : t('preview.historyActionEdit')}
                               modelValue={editRunImageModel}
                               modelOptions={PROJECT_SUPPORTED_IMAGE_MODELS}
                               isSubmitting={isPageAiSubmitting}
@@ -5602,7 +5602,13 @@ export const SlidePreview: React.FC = () => {
                               ) : undefined}
                               onInputChange={setEditPrompt}
                               onModelChange={setEditRunImageModel}
-                              onSend={() => void handlePageAiSend()}
+                              onSend={() => {
+                                if (useRenovationPreviewForm) {
+                                  void handleGenerateCurrentPage();
+                                  return;
+                                }
+                                void handlePageAiSend();
+                              }}
                               onToggleRegionSelect={() => {
                                 setIsRegionSelectionMode((prev) => !prev);
                                 setSelectionStart(null);
