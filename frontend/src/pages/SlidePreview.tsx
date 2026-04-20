@@ -2649,18 +2649,14 @@ export const SlidePreview: React.FC = () => {
       clearTimeout(textAutoSaveTimerRef.current);
     }
     textAutoSaveTimerRef.current = setTimeout(() => {
-      void (async () => {
-        try {
-          const hasLocalUpdates = handleSaveOutlineAndDescription({ silent: true });
-          if (hasLocalUpdates) {
-            await saveAllPages();
-          }
-        } catch (error) {
-          console.error('Failed to auto-save page text:', error);
-        }
-      })();
+      try {
+        // 自动保存阶段仅触发本地更新与防抖上送，避免频繁 syncProject 回拉导致编辑光标/输入状态被打断。
+        handleSaveOutlineAndDescription({ silent: true });
+      } catch (error) {
+        console.error('Failed to auto-save page text:', error);
+      }
     }, 900);
-  }, [handleSaveOutlineAndDescription, saveAllPages]);
+  }, [handleSaveOutlineAndDescription]);
 
   useEffect(() => {
     return () => {
