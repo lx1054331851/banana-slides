@@ -6261,7 +6261,7 @@ export const SlidePreview: React.FC = () => {
                   onChange={(e) => setDescriptionRangeStart(e.target.value)}
                   placeholder={t('preview.rangePlaceholderStart')}
                   aria-label={t('preview.rangeStartPage')}
-                  className="w-full h-9 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary px-3 text-sm outline-none focus:ring-2 focus:ring-banana-400"
+                  className="w-20 h-9 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary px-3 text-sm outline-none focus:ring-2 focus:ring-banana-400"
                 />
                 <span className="text-sm text-gray-500 dark:text-foreground-tertiary whitespace-nowrap">
                   {t('preview.rangeSeparator')}
@@ -6274,16 +6274,16 @@ export const SlidePreview: React.FC = () => {
                   onChange={(e) => setDescriptionRangeEnd(e.target.value)}
                   placeholder={t('preview.rangePlaceholderEnd')}
                   aria-label={t('preview.rangeEndPage')}
-                  className="w-full h-9 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary px-3 text-sm outline-none focus:ring-2 focus:ring-banana-400"
+                  className="w-20 h-9 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary px-3 text-sm outline-none focus:ring-2 focus:ring-banana-400"
                 />
+                <Button
+                  variant="secondary"
+                  className="h-9 px-3 whitespace-nowrap"
+                  onClick={handleGenerateDescriptionsByRange}
+                >
+                  {t('preview.generateDescriptionsByRange')}
+                </Button>
               </div>
-              <Button
-                variant="secondary"
-                className="w-full mt-2"
-                onClick={handleGenerateDescriptionsByRange}
-              >
-                {t('preview.generateDescriptionsByRange')}
-              </Button>
             </div>
             <Button
               variant="ghost"
