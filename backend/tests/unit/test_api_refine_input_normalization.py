@@ -126,3 +126,25 @@ def test_single_page_refine_fallbacks_to_first_when_multiple_descriptions_return
 
     data = assert_success_response(response)
     assert data['data']['refined_description'] == '第一条优化结果'
+
+
+def test_single_page_refine_forces_json_output_when_response_mode_json(client, app):
+    project_id, page_id = _create_project_with_page(app)
+    mock_service = MagicMock()
+    mock_service.refine_descriptions.return_value = ['页面标题：普通页\n页面文字：\n- 要点A']
+    mock_service.normalize_renovation_description_text.return_value = '{"type":"图文页","title":"普通页"}'
+
+    with patch('controllers.page_controller.get_ai_service', return_value=mock_service):
+        response = client.post(
+            f'/api/projects/{project_id}/pages/{page_id}/description/refine',
+            json={
+                'user_requirement': '改成更商务',
+                'current_description': '当前描述',
+                'outline_content': {'title': '价格段分布', 'points': ['价格段', '见解']},
+                'response_mode': 'json',
+            },
+        )
+
+    data = assert_success_response(response)
+    assert data['data']['refined_description'] == '{"type":"图文页","title":"普通页"}'
+    mock_service.normalize_renovation_description_text.assert_called_once()

@@ -79,6 +79,34 @@ _OUTLINE_JSON_FORMAT = """\
     }
 ]"""
 
+_PAGE_DETAIL_JSON_OUTPUT_FORMAT = """\
+```json
+{
+  "outline": {
+    "title": "动作标题",
+    "points": ["要点1", "要点2", "要点3"]
+  },
+  "slide": {
+    "type": "图文页",
+    "title": "动作标题",
+    "layout_suggestion": "多栏逻辑",
+    "content": {
+      "headline_summary": "20字内核心结论",
+      "detailed_items": [
+        {
+          "sub_title": "分论点",
+          "body": "业务动作 + 证据 + 结果",
+          "highlight_phrases": ["关键词1", "关键词2"]
+        }
+      ]
+    },
+    "visual_suggestion": "主体 + 隐喻 + 风格 + 重点",
+    "note": "补充假设与边界"
+  }
+}
+```
+"""
+
 
 # --- 辅助函数 ---
 
@@ -148,6 +176,19 @@ def _format_reference_files_xml(reference_files_content: Optional[List[Dict[str,
     xml_parts.append('</uploaded_files>')
     xml_parts.append('')  # Empty line after XML
     return '\n'.join(xml_parts)
+
+
+def _get_page_detail_json_output_requirements() -> str:
+    """返回“从大纲生成页面详情”所使用的标准化 JSON 输出要求文本。"""
+    return dedent(f"""\
+    # 输出格式（严格）
+    {_PAGE_DETAIL_JSON_OUTPUT_FORMAT}
+
+    # 硬约束
+    - 只输出 JSON，不要 markdown 代码块，不要解释文字。
+    - 顶层仅允许 `outline` 与 `slide` 两个键。
+    - 所有字段尽量基于输入信息扩写，不臆造精确数据。
+    - 不允许输出引用来源字段。""")
 
 
 def _try_extract_slide_like_json(text: str) -> Optional[Dict]:
@@ -610,37 +651,7 @@ def get_page_description_json_prompt(project_context: 'ProjectContext', outline:
 - 封面页：优先使用 `headline`、`sub_headline`、`presenter_info`。
 - 结尾页：优先使用 `final_conclusion`、`vision`、`slogan`。
 
-# 输出格式（严格）
-```json
-{{
-  "outline": {{
-    "title": "动作标题",
-    "points": ["要点1", "要点2", "要点3"]
-  }},
-  "slide": {{
-    "type": "图文页",
-    "title": "动作标题",
-    "layout_suggestion": "多栏逻辑",
-    "content": {{
-      "headline_summary": "20字内核心结论",
-      "detailed_items": [
-        {{
-          "sub_title": "分论点",
-          "body": "业务动作 + 证据 + 结果",
-          "highlight_phrases": ["关键词1", "关键词2"]
-        }}
-      ]
-    }},
-    "visual_suggestion": "主体 + 隐喻 + 风格 + 重点",
-    "note": "补充假设与边界"
-  }}
-}}
-```
-
-# 硬约束
-- 只输出 JSON，不要 markdown 代码块，不要解释文字。
-- 所有字段尽量基于输入信息扩写，不臆造精确数据。
-- 不允许输出引用来源字段。
+{_get_page_detail_json_output_requirements()}
 {get_language_instruction(language)}
 """
     return _build_prompt(prompt, project_context.reference_files_content, tag='get_page_description_json_prompt')
@@ -814,11 +825,13 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
     if not has_any_description:
         all_descriptions_text = "当前所有页面的描述：\n\n(当前没有内容，需要基于大纲生成新的描述)\n\n"
 
+    # 单页 AI 文本优化默认走结构化 JSON 模式，和“从大纲生成页面详情”的输出要求保持一致。
+    force_structured_for_single_page = len(current_descriptions or []) == 1
     structured_mode = (
         is_renovation_project
         and structured_count > 0
         and structured_count >= max(1, (len(current_descriptions) + 1) // 2)
-    )
+    ) or force_structured_for_single_page
 
     if structured_mode:
         mckinsey_guidance_block = """【麦肯锡表达约束（统一后端管理）】
@@ -843,10 +856,10 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
 {_get_previous_requirements_text(previous_requirements)}
 **用户现在提出新的要求：{user_requirement}**
 
-【硬约束】
+【数组级硬约束】
 1. 只输出合法 JSON 数组，不要 Markdown，不要解释文字。
 2. 数组长度必须等于输入页面数（{len(current_descriptions)}），顺序保持一致。
-3. 每个元素必须是单页 JSON 对象，优先保留并优化原字段：`type`、`title`、`layout_suggestion`、`content`、`visual_suggestion`、`note`。
+3. 每个元素必须满足“从大纲生成页面详情”的 JSON 输出要求（单页对象顶层仅 `outline` + `slide`）。
 4. 专业术语与品牌名必须保留（例如 OpenClaw、Agent、低代码、经营协同平台）。
 5. 禁止无故降级结构：不要把已存在的结构化 JSON 改成纯文本描述。
 6. `highlight_phrases` 不能整页清空；若原有为空，可按正文补充 2-4 个关键词。
@@ -862,7 +875,9 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
 
 【输出要求】
 1. 返回一个 JSON 数组，数组每个元素是优化后的单页 JSON 对象（不是字符串）。
-2. 如果某页输入缺失 `current_slide`，可基于 `outline_title` 和用户要求补全为合理结构化 JSON。
+2. 每个元素都必须符合以下单页 JSON 要求：
+{_get_page_detail_json_output_requirements()}
+3. 如果某页输入缺失 `current_slide`，可基于 `outline_title` 和用户要求补全为合理结构化 JSON。
 
 现在开始优化，只输出 JSON 数组。
 {get_language_instruction(language)}

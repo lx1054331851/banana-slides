@@ -1047,6 +1047,7 @@ export const SlidePreview: React.FC = () => {
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const settingsSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const textAutoSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [descriptionRequirementsDraft, setDescriptionRequirementsDraft] = useState('');
   const [isSavingDescriptionRequirements, setIsSavingDescriptionRequirements] = useState(false);
   const [pageDrafts, setPageDrafts] = useState<Record<string, PageDraft>>({});
@@ -2538,11 +2539,11 @@ export const SlidePreview: React.FC = () => {
     setIsSelectingRegion(false);
   }, [currentProject, selectedIndex, currentImageVersionId, pageAiContextByVersion]);
 
-  // 保存大纲和描述修改
-  const handleSaveOutlineAndDescription = useCallback(() => {
-    if (!currentProject) return;
+  // 保存大纲和描述修改（支持静默保存，避免自动保存时频繁提示）
+  const handleSaveOutlineAndDescription = useCallback((options?: { silent?: boolean }) => {
+    if (!currentProject) return false;
     const page = currentProject.pages[selectedIndex];
-    if (!page?.id) return;
+    if (!page?.id) return false;
     const nextDescriptionText = currentProject.creation_type === 'ppt_renovation'
       ? toCanonicalRenovationJsonText(editDescription, 4)
       : editDescription;
@@ -2603,9 +2604,40 @@ export const SlidePreview: React.FC = () => {
       if (nextEditorDescriptionText !== editDescription) {
         setEditDescription(nextEditorDescriptionText);
       }
-      show({ message: t('slidePreview.outlineSaved'), type: 'success' });
+      if (!options?.silent) {
+        show({ message: t('slidePreview.outlineSaved'), type: 'success' });
+      }
+      return true;
     }
+    return false;
   }, [currentProject, selectedIndex, editOutlineTitle, editOutlinePoints, editDescription, editExtraFields, editStyleGuideBindings, updatePageLocal, persistCurrentPageDraft, show, t]);
+
+  // 调度页面文本的自动保存，连续输入时只在停顿后触发一次。
+  const scheduleTextAutoSave = useCallback(() => {
+    if (textAutoSaveTimerRef.current) {
+      clearTimeout(textAutoSaveTimerRef.current);
+    }
+    textAutoSaveTimerRef.current = setTimeout(() => {
+      void (async () => {
+        try {
+          const hasLocalUpdates = handleSaveOutlineAndDescription({ silent: true });
+          if (hasLocalUpdates) {
+            await saveAllPages();
+          }
+        } catch (error) {
+          console.error('Failed to auto-save page text:', error);
+        }
+      })();
+    }, 900);
+  }, [handleSaveOutlineAndDescription, saveAllPages]);
+
+  useEffect(() => {
+    return () => {
+      if (textAutoSaveTimerRef.current) {
+        clearTimeout(textAutoSaveTimerRef.current);
+      }
+    };
+  }, []);
 
   const executePageImageGeneration = useCallback(async (options?: {
     prompt?: string;
@@ -2662,11 +2694,6 @@ export const SlidePreview: React.FC = () => {
       throw error;
     }
   }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, projectDefaultImageResolution, projectDefaultImageSource, handleSaveOutlineAndDescription, saveAllPages, show, t]);
-
-  const handleSaveCurrentPage = useCallback(async () => {
-    handleSaveOutlineAndDescription();
-    await saveAllPages();
-  }, [handleSaveOutlineAndDescription, saveAllPages]);
 
   const handleGenerateCurrentPage = useCallback(async () => {
     const pageId = currentProject?.pages[selectedIndex]?.id;
@@ -3700,11 +3727,37 @@ export const SlidePreview: React.FC = () => {
         editDescription,
         selectedPage.outline_content,
         jsonRefineHistory,
+        undefined,
+        'json',
       );
       const refinedText = response.data?.refined_description || '';
       const nextText = toLocalizedRenovationJsonText(refinedText, 4);
+      const nextStoredText = toCanonicalRenovationJsonText(nextText, 4);
       setEditDescription(nextText);
       persistCurrentPageDraft({ description: nextText });
+      // AI 优化成功后立即落库一次，避免仅依赖防抖自动保存导致“文本未保存”状态停留。
+      const nextDescriptionContent: Record<string, any> = {
+        ...(selectedPage.description_content && typeof selectedPage.description_content === 'object'
+          ? selectedPage.description_content as Record<string, any>
+          : {}),
+        text: nextStoredText,
+      };
+      const serializedExtraFields = serializeExtraFields(editExtraFields);
+      const serializedStyleGuideBindings = serializeStyleGuideBindings(editStyleGuideBindings);
+      if (serializedExtraFields) {
+        nextDescriptionContent.extra_fields = serializedExtraFields;
+      } else {
+        delete nextDescriptionContent.extra_fields;
+      }
+      if (serializedStyleGuideBindings) {
+        nextDescriptionContent.style_guide_bindings = serializedStyleGuideBindings;
+      } else {
+        delete nextDescriptionContent.style_guide_bindings;
+      }
+      updatePageLocal(selectedPage.id, {
+        description_content: nextDescriptionContent as DescriptionContent,
+      });
+      await saveAllPages();
       setJsonRefineHistory((prev) => [...prev, requirement]);
       setJsonRefineRequirement('');
       setShowJsonRefineDialog(false);
@@ -3828,6 +3881,7 @@ export const SlidePreview: React.FC = () => {
         delete next[PAGE_STYLE_GUIDE_DEFAULT_BINDING];
       }
       persistCurrentPageDraft({ styleGuideBindings: next });
+      scheduleTextAutoSave();
       return next;
     });
   };
@@ -3839,7 +3893,7 @@ export const SlidePreview: React.FC = () => {
   const editorCanvasContent = (
     <div
       className={`${useRenovationPreviewForm
-        ? `${isMobileView ? 'min-h-[520px]' : 'h-full min-h-0'} overflow-y-auto overscroll-contain pl-2 pr-0 py-2 sm:pl-3 sm:pr-0 sm:py-3 lg:pl-4 lg:pr-0 lg:py-3`
+        ? `${isMobileView ? 'min-h-[520px]' : 'h-full min-h-0'} overflow-hidden pl-2 pr-0 py-2 sm:pl-3 sm:pr-0 sm:py-3 lg:pl-4 lg:pr-0 lg:py-3`
         : 'min-h-[520px] sm:min-h-[560px] lg:min-h-[580px] p-4 sm:p-5 lg:p-6'} w-full min-w-0 ${
         useRenovationPreviewForm
           ? 'bg-transparent'
@@ -3859,6 +3913,7 @@ export const SlidePreview: React.FC = () => {
                 const value = event.target.value;
                 setEditOutlineTitle(value);
                 persistCurrentPageDraft({ title: value });
+                scheduleTextAutoSave();
               }}
               placeholder={t('preview.enterTitle')}
               data-testid="preview-text-title-input"
@@ -3876,6 +3931,7 @@ export const SlidePreview: React.FC = () => {
                 const value = event.target.value;
                 setEditOutlinePoints(value);
                 persistCurrentPageDraft({ points: value });
+                scheduleTextAutoSave();
               }}
               placeholder={t('preview.enterPointsPerLine')}
               data-testid="preview-text-points-input"
@@ -3980,6 +4036,7 @@ export const SlidePreview: React.FC = () => {
               onChange={(value: string) => {
                 setEditDescription(value);
                 persistCurrentPageDraft({ description: value });
+                scheduleTextAutoSave();
               }}
               onPaste={handleDescriptionPaste}
               onFiles={handleDescriptionFiles}
@@ -4094,6 +4151,7 @@ export const SlidePreview: React.FC = () => {
               setEditExtraFields((prev) => {
                 const next = { ...prev, [activeExternalField]: value };
                 persistCurrentPageDraft({ extraFields: next });
+                scheduleTextAutoSave();
                 return next;
               });
             }}
@@ -5317,17 +5375,6 @@ export const SlidePreview: React.FC = () => {
                   )}
                 </div>
 
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  data-testid="preview-primary-save"
-                  icon={<FileText size={16} />}
-                  className="h-9 rounded-xl"
-                  onClick={() => void handleSaveCurrentPage()}
-                  disabled={isPageAiSubmitting}
-                >
-                  仅保存文本
-                </Button>
                 <input
                   ref={importFileRef}
                   type="file"

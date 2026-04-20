@@ -47,6 +47,15 @@ describe('Button Component', () => {
     expect(button.querySelector('svg')).toBeInTheDocument()
   })
 
+  it('keeps loading spinner centered for icon-only button', () => {
+    render(<Button loading aria-label="loading-only" />)
+    const button = screen.getByRole('button', { name: 'loading-only' })
+    const spinner = button.querySelector('svg')
+    expect(spinner).toBeInTheDocument()
+    expect(spinner).not.toHaveClass('-ml-1')
+    expect(spinner).not.toHaveClass('mr-2')
+  })
+
   it('renders with custom className', () => {
     render(<Button className="custom-class">Custom</Button>)
     const button = screen.getByText('Custom')
@@ -59,4 +68,3 @@ describe('Button Component', () => {
     expect(screen.getByTestId('test-icon')).toBeInTheDocument()
   })
 })
-

@@ -273,6 +273,8 @@ def refine_page_description(project_id, page_id):
         user_requirement = normalize_user_text(data.get('user_requirement'))
         if not user_requirement:
             return bad_request("user_requirement is required")
+        response_mode = str(data.get('response_mode') or '').strip().lower()
+        force_json_response = response_mode == 'json'
 
         current_description = data.get('current_description')
         if current_description is None:
@@ -327,11 +329,16 @@ def refine_page_description(project_id, page_id):
                 503,
             )
 
-        normalized_descriptions = [
-            str(item).strip()
-            for item in refined_descriptions
-            if str(item).strip()
-        ]
+        normalized_descriptions = []
+        for item in refined_descriptions:
+            if isinstance(item, str):
+                normalized = item.strip()
+            elif isinstance(item, (dict, list)):
+                normalized = json.dumps(item, ensure_ascii=False).strip()
+            else:
+                normalized = str(item).strip()
+            if normalized:
+                normalized_descriptions.append(normalized)
 
         if len(normalized_descriptions) == 1:
             final_refined_description = normalized_descriptions[0]
@@ -357,7 +364,8 @@ def refine_page_description(project_id, page_id):
                 503,
             )
 
-        if project.creation_type == 'ppt_renovation':
+        # 当请求 JSON 模式时，统一把结果标准化成可渲染单页 JSON，避免模型偶发返回旧文本格式。
+        if project.creation_type == 'ppt_renovation' or force_json_response:
             final_refined_description = ai_service.normalize_renovation_description_text(
                 final_refined_description,
                 page_outline=outline_content,

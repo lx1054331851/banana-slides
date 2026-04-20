@@ -58,6 +58,34 @@ def test_refinement_prompt_uses_structured_json_mode_for_renovation():
 
 def test_refinement_prompt_keeps_legacy_mode_for_non_renovation():
     project_context = _DummyProjectContext(creation_type='idea')
+    current_descriptions = [
+        {
+            "index": 0,
+            "title": "普通页1",
+            "description_content": {"text": "页面标题：普通页1\n页面文字：\n- 要点A"},
+        },
+        {
+            "index": 1,
+            "title": "普通页2",
+            "description_content": {"text": "页面标题：普通页2\n页面文字：\n- 要点B"},
+        },
+    ]
+
+    prompt = prompts.get_descriptions_refinement_prompt(
+        current_descriptions=current_descriptions,
+        user_requirement="精简一点",
+        project_context=project_context,
+        outline=[{"title": "普通页1", "points": ["要点A"]}, {"title": "普通页2", "points": ["要点B"]}],
+        previous_requirements=[],
+        language='zh',
+    )
+
+    assert "You are a helpful assistant that modifies PPT page descriptions based on user requirements." in prompt
+    assert "你是“PPT 页面 JSON 优化器”" not in prompt
+
+
+def test_refinement_prompt_forces_structured_json_mode_for_single_page_non_renovation():
+    project_context = _DummyProjectContext(creation_type='idea')
     current_descriptions = [{
         "index": 0,
         "title": "普通页",
@@ -66,12 +94,12 @@ def test_refinement_prompt_keeps_legacy_mode_for_non_renovation():
 
     prompt = prompts.get_descriptions_refinement_prompt(
         current_descriptions=current_descriptions,
-        user_requirement="精简一点",
+        user_requirement="改成更商务的表达",
         project_context=project_context,
         outline=[{"title": "普通页", "points": ["要点A"]}],
         previous_requirements=[],
         language='zh',
     )
 
-    assert "You are a helpful assistant that modifies PPT page descriptions based on user requirements." in prompt
-    assert "你是“PPT 页面 JSON 优化器”" not in prompt
+    assert "你是“PPT 页面 JSON 优化器”" in prompt
+    assert "顶层仅允许 `outline` 与 `slide` 两个键" in prompt

@@ -705,7 +705,8 @@ export const refineSinglePageDescription = async (
   currentDescription: string,
   outlineContent?: any,
   previousRequirements?: string[],
-  language?: OutputLanguage
+  language?: OutputLanguage,
+  responseMode?: 'json' | 'text'
 ): Promise<ApiResponse<{ refined_description: string; message: string }>> => {
   const lang = language || await getStoredOutputLanguage();
   const payload = {
@@ -714,6 +715,7 @@ export const refineSinglePageDescription = async (
     outline_content: outlineContent,
     previous_requirements: previousRequirements || [],
     language: lang,
+    response_mode: responseMode,
   };
 
   try {
