@@ -304,7 +304,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
               fillHeight
               slashActions={slashActions}
               data-testid="page-ai-input"
-              className="h-full min-h-[128px] border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent [&_[role=textbox]]:min-h-[128px] [&_[role=textbox]]:px-0 [&_[role=textbox]]:py-0 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:text-sm [&_[role=textbox]]:leading-6"
+              className="h-full min-h-[128px] border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent [&_[role=textbox]]:min-h-[128px] [&_[role=textbox]]:px-0 [&_[role=textbox]]:pt-0 [&_[role=textbox]]:pb-2 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:text-sm [&_[role=textbox]]:leading-6"
             />
           </div>
           <div className={cn(
