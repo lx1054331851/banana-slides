@@ -170,6 +170,17 @@ const previewI18n = {
       regenerateAllPages: "重新生成全部 {{count}} 页",
       generateMissingDescriptionsOnly: "仅生成未生成描述的 {{count}} 页",
       regenerateAllDescriptions: "重新生成全部 {{count}} 页描述",
+      generateDescriptionsByRange: "按页码范围生成描述",
+      rangeStartPage: "起始页",
+      rangeEndPage: "结束页",
+      rangeSeparator: "到",
+      rangePlaceholderStart: "如 3",
+      rangePlaceholderEnd: "如 10",
+      rangeInvalidNumber: "请输入有效页码",
+      rangeOutOfBounds: "页码范围应在 1 到 {{max}} 之间",
+      rangeInvalidOrder: "起始页不能大于结束页",
+      rangeNoAvailablePages: "所选范围内没有可生成描述的页面",
+      rangeGeneratingSkipped: "已跳过 {{count}} 页正在生成描述的页面",
       generationFailed: "生成失败",
       disabledExportTip: "还有 {{count}} 页未生成图片，请先生成所有页面图片",
       disabledEditTip: "请先生成该页图片",
@@ -333,6 +344,17 @@ const previewI18n = {
       regenerateAllPages: "Regenerate All ({{count}})",
       generateMissingDescriptionsOnly: "Generate Missing Descriptions ({{count}})",
       regenerateAllDescriptions: "Regenerate All Descriptions ({{count}})",
+      generateDescriptionsByRange: "Generate Descriptions by Range",
+      rangeStartPage: "Start",
+      rangeEndPage: "End",
+      rangeSeparator: "to",
+      rangePlaceholderStart: "e.g. 3",
+      rangePlaceholderEnd: "e.g. 10",
+      rangeInvalidNumber: "Please enter valid page numbers",
+      rangeOutOfBounds: "Page range must be between 1 and {{max}}",
+      rangeInvalidOrder: "Start page cannot be greater than end page",
+      rangeNoAvailablePages: "No pages are available in this range",
+      rangeGeneratingSkipped: "Skipped {{count}} page(s) that are still generating descriptions",
       generationFailed: "Generation failed",
       disabledExportTip: "{{count}} page(s) have no images yet. Please generate all page images first",
       disabledEditTip: "Please generate this page's image first",
@@ -1571,6 +1593,8 @@ export const SlidePreview: React.FC = () => {
     targetPageIds: string[];
     missingPageIds: string[];
   } | null>(null);
+  const [descriptionRangeStart, setDescriptionRangeStart] = useState('');
+  const [descriptionRangeEnd, setDescriptionRangeEnd] = useState('');
   // 页面 AI 上下文按「页面 + 图片版本」缓存，便于切换历史版本时恢复对应输入
   const [pageAiContextByVersion, setPageAiContextByVersion] = useState<Record<string, PageAiContextState>>({});
   const pendingPageAiContextBindingRef = useRef<Record<string, PendingPageAiContextBinding>>({});
@@ -2258,8 +2282,15 @@ export const SlidePreview: React.FC = () => {
     }
 
     let cancelled = false;
-    const pageChanged = imageVersionsPageIdRef.current !== selectedPageForVersionFetch.id;
-    imageVersionsPageIdRef.current = selectedPageForVersionFetch.id;
+    const pageIdForVersionFetch = selectedPageForVersionFetch.id;
+    if (!pageIdForVersionFetch) {
+      imageVersionsPageIdRef.current = null;
+      setImageVersions([]);
+      return;
+    }
+
+    const pageChanged = imageVersionsPageIdRef.current !== pageIdForVersionFetch;
+    imageVersionsPageIdRef.current = pageIdForVersionFetch;
 
     if (pageChanged) {
       setImageVersions([]);
@@ -2267,7 +2298,7 @@ export const SlidePreview: React.FC = () => {
 
     const loadVersions = async () => {
       try {
-        const response = await getPageImageVersions(projectId, selectedPageForVersionFetch.id);
+        const response = await getPageImageVersions(projectId, pageIdForVersionFetch);
         if (!cancelled && response.data?.versions) {
           setImageVersions(response.data.versions);
         }
@@ -2768,6 +2799,8 @@ export const SlidePreview: React.FC = () => {
         targetPageIds,
         missingPageIds,
       });
+      setDescriptionRangeStart('1');
+      setDescriptionRangeEnd(String(totalCount));
       setShowBatchDescriptionGenerateDialog(true);
       return;
     }
@@ -2780,6 +2813,63 @@ export const SlidePreview: React.FC = () => {
       { title: '确认重新生成', variant: 'warning' }
     );
   }, [confirm, currentProject, generateDescriptions, projectId, show, syncProject, t]);
+
+  const handleGenerateDescriptionsByRange = useCallback(async () => {
+    if (!batchDescriptionGenerateContext || !currentProject) return;
+
+    const start = Number(descriptionRangeStart);
+    const end = Number(descriptionRangeEnd);
+    if (!Number.isInteger(start) || !Number.isInteger(end)) {
+      show({ message: t('preview.rangeInvalidNumber'), type: 'error' });
+      return;
+    }
+
+    const maxPage = batchDescriptionGenerateContext.total;
+    if (start < 1 || end < 1 || start > maxPage || end > maxPage) {
+      show({ message: t('preview.rangeOutOfBounds', { max: maxPage }), type: 'error' });
+      return;
+    }
+
+    if (start > end) {
+      show({ message: t('preview.rangeInvalidOrder'), type: 'error' });
+      return;
+    }
+
+    const pageIdsInRange = currentProject.pages
+      .slice(start - 1, end)
+      .filter((page) => page.id)
+      .map((page) => page.id as string);
+    const generatingSet = new Set(
+      currentProject.pages
+        .filter((page) => page.status === 'GENERATING_DESCRIPTION' && page.id)
+        .map((page) => page.id as string)
+    );
+    const executablePageIds = pageIdsInRange.filter((id) => !generatingSet.has(id));
+    const skippedCount = pageIdsInRange.length - executablePageIds.length;
+
+    if (executablePageIds.length === 0) {
+      show({ message: t('preview.rangeNoAvailablePages'), type: 'info' });
+      return;
+    }
+
+    setShowBatchDescriptionGenerateDialog(false);
+    setBatchDescriptionGenerateContext(null);
+    await generateDescriptions(undefined, executablePageIds);
+    await syncProject(projectId);
+    if (skippedCount > 0) {
+      show({ message: t('preview.rangeGeneratingSkipped', { count: skippedCount }), type: 'info' });
+    }
+  }, [
+    batchDescriptionGenerateContext,
+    currentProject,
+    descriptionRangeEnd,
+    descriptionRangeStart,
+    generateDescriptions,
+    projectId,
+    show,
+    syncProject,
+    t,
+  ]);
 
   const handleAiRefineDescriptions = useCallback(async (requirement: string, previousRequirements: string[]) => {
     if (!currentProject || !projectId) return;
@@ -6161,6 +6251,40 @@ export const SlidePreview: React.FC = () => {
                 ? t('preview.regenerateAllDescriptions', { count: batchDescriptionGenerateContext.total })
                 : t('preview.regenerateAllDescriptions', { count: 0 })}
             </Button>
+            <div className="pt-1">
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={batchDescriptionGenerateContext?.total || 1}
+                  value={descriptionRangeStart}
+                  onChange={(e) => setDescriptionRangeStart(e.target.value)}
+                  placeholder={t('preview.rangePlaceholderStart')}
+                  aria-label={t('preview.rangeStartPage')}
+                  className="w-full h-9 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary px-3 text-sm outline-none focus:ring-2 focus:ring-banana-400"
+                />
+                <span className="text-sm text-gray-500 dark:text-foreground-tertiary whitespace-nowrap">
+                  {t('preview.rangeSeparator')}
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={batchDescriptionGenerateContext?.total || 1}
+                  value={descriptionRangeEnd}
+                  onChange={(e) => setDescriptionRangeEnd(e.target.value)}
+                  placeholder={t('preview.rangePlaceholderEnd')}
+                  aria-label={t('preview.rangeEndPage')}
+                  className="w-full h-9 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary px-3 text-sm outline-none focus:ring-2 focus:ring-banana-400"
+                />
+              </div>
+              <Button
+                variant="secondary"
+                className="w-full mt-2"
+                onClick={handleGenerateDescriptionsByRange}
+              >
+                {t('preview.generateDescriptionsByRange')}
+              </Button>
+            </div>
             <Button
               variant="ghost"
               onClick={() => {
