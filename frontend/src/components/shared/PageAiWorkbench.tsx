@@ -239,7 +239,11 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
               cardless ? 'px-2 pt-3 pb-1.5' : 'px-4 py-2',
             )}>
               <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                {references.map((reference) => (
+                {references.map((reference, index) => {
+                  const regionOrder = references
+                    .slice(0, index + 1)
+                    .filter((item) => item.sourceType === 'region').length;
+                  return (
                   <div
                     key={reference.id}
                     className="group relative flex-shrink-0"
@@ -266,13 +270,12 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                           <ImageIcon size={18} />
                         </div>
                       )}
-                      {reference.sourceType === 'region' && (
-                        <span className="absolute bottom-1 left-1 rounded-full bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                          区域
-                        </span>
-                      )}
-                      <span className="absolute left-1 top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900/92 px-1 text-[10px] font-bold text-white ring-2 ring-white/90 shadow-sm">
-                        {references.findIndex((item) => item.id === reference.id) + 1}
+                      <span className={`absolute left-1 top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white px-1 text-[10px] font-bold text-white shadow-sm ${
+                        reference.sourceType === 'region'
+                          ? 'bg-[#1677ff]'
+                          : 'bg-slate-900/92 ring-2 ring-white/90'
+                      }`}>
+                        {reference.sourceType === 'region' ? regionOrder : index + 1}
                       </span>
                     </button>
                     <button
@@ -285,7 +288,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                       <span className="text-sm leading-none">&times;</span>
                     </button>
                   </div>
-                ))}
+                )})}
               </div>
             </div>
           )}

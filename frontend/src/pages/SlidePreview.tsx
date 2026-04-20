@@ -3240,7 +3240,8 @@ export const SlidePreview: React.FC = () => {
         });
       }
     } finally {
-      // 不清理 selectionRect，让选区在界面上持续显示
+      // 新增后由 regionOverlayReferences 统一渲染历史标注，清理临时拖拽框。
+      setSelectionRect(null);
     }
   };
 
@@ -4057,7 +4058,7 @@ export const SlidePreview: React.FC = () => {
           {useRenovationPreviewForm && renovationJsonViewMode === 'text' && (
             <div className="absolute bottom-[-5px] left-0 right-0 z-20 flex items-center justify-end gap-2 px-2 sm:bottom-[-9px]">
               {showJsonRefineDialog && (
-                <div className="min-w-0 flex-1 rounded-xl border border-[#ead6a2] bg-[linear-gradient(120deg,#fff9e8_0%,#fff3d6_54%,#ffefbf_100%)] p-2 shadow-[0_10px_20px_rgba(250,204,21,0.12)] transition-all duration-300 dark:border-[#4a3f2a] dark:bg-[linear-gradient(120deg,#1e1a12_0%,#2a2215_56%,#322816_100%)]">
+                <div className="min-w-0 flex-1 p-0 transition-all duration-300">
                   <div className="flex items-center gap-2">
                     <input
                       ref={jsonRefineInputRef}
@@ -4072,7 +4073,7 @@ export const SlidePreview: React.FC = () => {
                       }}
                       disabled={isJsonRefining}
                       placeholder={t('preview.refineJsonPlaceholder')}
-                      className="h-10 flex-1 rounded-lg border border-[#e8d9b4] bg-white/95 px-3 text-sm text-slate-700 outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-[#b8aa86] focus:border-[#d4b35c] focus:ring-2 focus:ring-[#f2cf76]/35 dark:border-[#5a4e37] dark:bg-[#0f1420] dark:text-[#e2e8f0] dark:placeholder:text-[#66708c] dark:focus:border-[#e6c677] dark:focus:ring-[#d8b259]/30"
+                      className="h-10 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-slate-400 focus:border-banana-400 focus:ring-2 focus:ring-banana-200/50 dark:border-border-primary dark:bg-background-primary dark:text-foreground-primary dark:placeholder:text-foreground-tertiary dark:focus:border-banana-500/70 dark:focus:ring-banana-500/20"
                     />
                     <Button
                       type="button"
@@ -4084,7 +4085,7 @@ export const SlidePreview: React.FC = () => {
                       title={t('preview.refineJson')}
                       aria-label={t('preview.refineJson')}
                       icon={!isJsonRefining ? <Send size={14} /> : undefined}
-                      className="h-10 w-10 rounded-lg px-0 shadow-[0_8px_18px_rgba(250,204,21,0.24)]"
+                      className="h-10 w-10 rounded-lg border border-[#e6ca67] bg-white px-0 text-[#1f2937] shadow-sm hover:bg-[#fffdf2] dark:border-banana-500/50 dark:bg-background-secondary dark:text-foreground-primary dark:hover:bg-background-hover"
                     />
                     <Button
                       type="button"
@@ -4092,14 +4093,14 @@ export const SlidePreview: React.FC = () => {
                       size="sm"
                       disabled={isJsonRefining}
                       onClick={() => setShowJsonRefineDialog(false)}
-                      className="h-10 rounded-lg border border-[#e6dab8] bg-white/60 px-3 text-[#7c6740] hover:bg-white dark:border-[#5a4e37] dark:bg-[#1c2333] dark:text-[#c4d2f3] dark:hover:bg-[#263148]"
+                      className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-slate-500 hover:bg-slate-50 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:bg-background-hover"
                     >
                       <X size={14} />
                     </Button>
                   </div>
                 </div>
               )}
-              <div className="inline-flex items-center gap-1 rounded-lg border border-[#e6dab8] bg-[#fbf7eb] p-1 dark:border-[#3f4962] dark:bg-[#1a2232]">
+              <div className="inline-flex items-center gap-2">
                 <Button
                   type="button"
                   variant="ghost"
@@ -4108,7 +4109,7 @@ export const SlidePreview: React.FC = () => {
                   title={t('preview.refineJsonTooltip')}
                   aria-label={t('preview.refineJsonTooltip')}
                   onClick={() => setShowJsonRefineDialog((prev) => !prev)}
-                  className="h-7 w-7 rounded-md border-0 bg-transparent px-0 text-[#7c6740] hover:bg-[#f7edd2] dark:text-[#c4d2f3] dark:hover:bg-[#222d44]"
+                  className="h-9 w-9 rounded-xl border border-slate-200 bg-white px-0 text-slate-600 shadow-sm hover:border-[#e6ca67] hover:bg-[#fffdf2] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/40 dark:hover:bg-background-hover"
                 />
                 <Button
                   type="button"
@@ -4119,7 +4120,7 @@ export const SlidePreview: React.FC = () => {
                   aria-label={t('preview.generateImage')}
                   onClick={() => void handleGenerateCurrentPage()}
                   disabled={isJsonRefining || isSelectedPageGenerating}
-                  className="h-7 w-7 rounded-md border-0 bg-transparent px-0 text-[#7c6740] hover:bg-[#f7edd2] disabled:opacity-50 dark:text-[#c4d2f3] dark:hover:bg-[#222d44]"
+                  className="h-9 w-9 rounded-xl border border-[#e6ca67] bg-white px-0 text-[#1f2937] shadow-sm hover:bg-[#fffdf2] disabled:opacity-50 dark:border-banana-500/50 dark:bg-background-secondary dark:text-foreground-primary dark:hover:bg-background-hover"
                 />
               </div>
             </div>
@@ -4377,18 +4378,11 @@ export const SlidePreview: React.FC = () => {
     if (reference.sourceType !== 'region' || !reference.regionBounds || !imageRef.current) {
       return;
     }
-    const img = imageRef.current;
-    const rect = img.getBoundingClientRect();
-    setSelectionRect({
-      left: reference.regionBounds.leftRatio * rect.width,
-      top: reference.regionBounds.topRatio * rect.height,
-      width: reference.regionBounds.widthRatio * rect.width,
-      height: reference.regionBounds.heightRatio * rect.height,
-    });
     setIsRegionSelectionMode(false);
     setIsSelectingRegion(false);
     setSelectionStart(null);
-    img.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    setSelectionRect(null);
+    imageRef.current.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
   };
 
   const handlePageAiSend = useCallback(async () => {
@@ -4398,6 +4392,10 @@ export const SlidePreview: React.FC = () => {
   const currentPageDescriptionText = getDescriptionText(selectedPage?.description_content);
   const currentPageExtraFields = getDescriptionExtraFields(selectedPage?.description_content);
   const currentPageStyleGuideBindings = getDescriptionStyleGuideBindings(selectedPage?.description_content);
+  const regionOverlayReferences = selectedContextImages.uploadedReferences.filter(
+    (reference): reference is PageAiUploadedReference & { regionBounds: PageAiRegionBounds } =>
+      reference.sourceType === 'region' && Boolean(reference.regionBounds)
+  );
   const isCurrentPageDirty = Boolean(
     selectedPage && (
       editOutlineTitle !== (selectedPage.outline_content?.title || '') ||
@@ -4475,7 +4473,7 @@ export const SlidePreview: React.FC = () => {
           <Button
             variant="ghost"
             size="sm"
-            icon={<Upload size={16} className="md:w-[18px] md:h-[18px]" />}
+            icon={<LayoutGrid size={16} className="md:w-[18px] md:h-[18px]" />}
             onClick={openTemplateModal}
             className="hidden lg:inline-flex"
           >
@@ -5472,16 +5470,42 @@ export const SlidePreview: React.FC = () => {
                                       >
                                         {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
                                       </button>
+                                      {regionOverlayReferences.map((reference, index) => {
+                                        const isActive = activePreviewReferenceId === reference.id;
+                                        const bounds = reference.regionBounds;
+                                        return (
+                                          <div
+                                            key={reference.id}
+                                            className="pointer-events-none absolute"
+                                            style={{
+                                              left: `${bounds.leftRatio * 100}%`,
+                                              top: `${bounds.topRatio * 100}%`,
+                                              width: `${bounds.widthRatio * 100}%`,
+                                              height: `${bounds.heightRatio * 100}%`,
+                                            }}
+                                          >
+                                            <div className={`h-full w-full rounded-[6px] border-2 border-dashed bg-[#2f80ff]/10 shadow-[0_0_0_1px_rgba(255,255,255,0.9)] ${isActive ? 'border-[#005eea]' : 'border-[#2f80ff]'}`} />
+                                            <div className="absolute -bottom-2 -right-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-[#1677ff] px-1 text-xs font-semibold leading-none text-white shadow-sm">
+                                              {index + 1}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
                                       {selectionRect && (
                                         <div
-                                          className="pointer-events-none absolute border-2 border-banana-500 bg-banana-400/10"
+                                          className="pointer-events-none absolute"
                                           style={{
                                             left: selectionRect.left,
                                             top: selectionRect.top,
                                             width: selectionRect.width,
                                             height: selectionRect.height,
                                           }}
-                                        />
+                                        >
+                                          <div className="h-full w-full rounded-[6px] border-2 border-dashed border-[#2f80ff] bg-[#2f80ff]/10 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]" />
+                                          <div className="absolute -bottom-2 -right-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-[#1677ff] px-1 text-xs font-semibold leading-none text-white shadow-sm">
+                                            {regionOverlayReferences.length + 1}
+                                          </div>
+                                        </div>
                                       )}
                                     </>
                                   ) : (
