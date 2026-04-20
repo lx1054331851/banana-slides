@@ -296,6 +296,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
               value={inputValue}
               onChange={onInputChange}
               onFiles={onUploadFiles}
+              resizable={false}
               placeholder={inputPlaceholder}
               rows={4}
               maxHeight="100%"

@@ -486,7 +486,7 @@ const PREVIEW_VISUAL_MIN_WIDTH = 360;
 const PREVIEW_EDITOR_MIN_WIDTH = 420;
 const PREVIEW_EDITOR_VERTICAL_SPLIT_STORAGE_KEY = 'previewEditorVerticalSplitRatio';
 const PREVIEW_EDITOR_VERTICAL_SPLIT_DEFAULT_RATIO = 0.74;
-const PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX = 1;
+const PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX = 10;
 const PREVIEW_EDITOR_CANVAS_MIN_HEIGHT = 260;
 const PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT = 180;
 const FLOATING_FULLSCREEN_BUTTON_SIZE = 44;
@@ -5647,15 +5647,11 @@ export const SlidePreview: React.FC = () => {
                           <div
                             role="separator"
                             aria-orientation="horizontal"
-                            className={`group relative cursor-row-resize ${isResizingEditorVerticalSplit ? 'bg-banana-300/70' : 'bg-transparent'}`}
+                            className={`group relative flex select-none items-center justify-center cursor-row-resize ${isResizingEditorVerticalSplit ? 'bg-banana-300/40' : 'bg-transparent'}`}
                             onMouseDown={handleEditorVerticalSplitResizeStart}
                           >
-                            <button
-                              type="button"
-                              aria-label="调整上下分区"
-                              className="absolute inset-0 z-10 cursor-row-resize bg-transparent"
-                              onMouseDown={handleEditorVerticalSplitResizeStart}
-                            />
+                            <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
+                            <div className="pointer-events-none relative z-10 h-1.5 w-24 rounded-full bg-gray-300/80 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
                             <div
                               role="separator"
                               aria-label="联动调整左右与上下分区"
