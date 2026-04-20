@@ -5563,7 +5563,7 @@ export const SlidePreview: React.FC = () => {
                             <button
                               type="button"
                               aria-label="调整上下分区"
-                              className="absolute inset-x-0 top-1/2 z-10 h-5 -translate-y-1/2 cursor-row-resize bg-transparent"
+                              className="absolute inset-0 z-10 cursor-row-resize bg-transparent"
                               onMouseDown={handleEditorVerticalSplitResizeStart}
                             />
                             <div
