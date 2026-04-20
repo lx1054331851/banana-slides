@@ -73,6 +73,8 @@ interface MarkdownTextareaProps {
     onSelect: () => void;
   }>;
   'data-testid'?: string;
+  /** Fill available parent height when inside flex layouts. Default: false */
+  fillHeight?: boolean;
 }
 
 /** Ref handle for MarkdownTextarea */
@@ -316,6 +318,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   resizable = true,
   slashActions,
   'data-testid': dataTestId,
+  fillHeight = false,
 }, ref) => {
   const t = useT(markdownTextareaI18n);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -834,7 +837,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   }
 
   return (
-    <div className="flex w-full min-h-0 flex-col">
+    <div className={cn('flex w-full min-h-0 flex-col', fillHeight && 'h-full flex-1')}>
       {label && (
         <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
           {label}
@@ -843,6 +846,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
       {/* Outer container — owns the border, focus ring, and toolbar */}
       <div className={cn(
         'flex min-h-0 flex-1 flex-col',
+        fillHeight && 'h-full',
         'rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary',
         'focus-within:ring-2 focus-within:ring-banana-500 focus-within:border-transparent',
         'transition-all',

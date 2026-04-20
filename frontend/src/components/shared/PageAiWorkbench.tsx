@@ -301,6 +301,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
               maxHeight="100%"
               showUploadButton={false}
               showImagePreview={false}
+              fillHeight
               slashActions={slashActions}
               data-testid="page-ai-input"
               className="h-full min-h-[128px] border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent [&_[role=textbox]]:min-h-[128px] [&_[role=textbox]]:px-0 [&_[role=textbox]]:py-0 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:text-sm [&_[role=textbox]]:leading-6"
