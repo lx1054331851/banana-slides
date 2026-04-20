@@ -486,7 +486,7 @@ const PREVIEW_VISUAL_MIN_WIDTH = 360;
 const PREVIEW_EDITOR_MIN_WIDTH = 420;
 const PREVIEW_EDITOR_VERTICAL_SPLIT_STORAGE_KEY = 'previewEditorVerticalSplitRatio';
 const PREVIEW_EDITOR_VERTICAL_SPLIT_DEFAULT_RATIO = 0.74;
-const PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX = 10;
+const PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX = 1;
 const PREVIEW_EDITOR_CANVAS_MIN_HEIGHT = 260;
 const PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT = 180;
 const FLOATING_FULLSCREEN_BUTTON_SIZE = 44;
@@ -1387,7 +1387,7 @@ export const SlidePreview: React.FC = () => {
     };
   }, [isResizingEditorVerticalSplit]);
 
-  const handleEditorVerticalSplitResizeStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+  const handleEditorVerticalSplitResizeStart = useCallback((event: React.MouseEvent<HTMLElement>) => {
     if (isMobileView || !editorVerticalSplitContainerRef.current) return;
     event.preventDefault();
     const containerHeight = editorVerticalSplitContainerRef.current.getBoundingClientRect().height;
@@ -1399,7 +1399,7 @@ export const SlidePreview: React.FC = () => {
     };
     setIsResizingEditorVerticalSplit(true);
   }, [isMobileView, resolvedEditorVerticalSplitRatio]);
-  const handleLinkedSplitResizeStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+  const handleLinkedSplitResizeStart = useCallback((event: React.MouseEvent<HTMLElement>) => {
     if (isMobileView || !previewSplitContainerRef.current || !editorVerticalSplitContainerRef.current) return;
     event.preventDefault();
     event.stopPropagation();
@@ -5647,11 +5647,16 @@ export const SlidePreview: React.FC = () => {
                           <div
                             role="separator"
                             aria-orientation="horizontal"
-                            className={`group relative flex select-none items-center justify-center cursor-row-resize ${isResizingEditorVerticalSplit ? 'bg-banana-300/40' : 'bg-transparent'}`}
+                            className={`group relative flex select-none items-center justify-center cursor-row-resize ${isResizingEditorVerticalSplit ? 'bg-transparent' : 'bg-transparent'}`}
                             onMouseDown={handleEditorVerticalSplitResizeStart}
                           >
                             <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
-                            <div className="pointer-events-none relative z-10 h-1.5 w-24 rounded-full bg-gray-300/80 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
+                            <button
+                              type="button"
+                              aria-label="调整上下分区"
+                              className="relative z-10 h-3 w-28 cursor-row-resize rounded-full bg-transparent hover:bg-banana-200/40"
+                              onMouseDown={handleEditorVerticalSplitResizeStart}
+                            />
                             <div
                               role="separator"
                               aria-label="联动调整左右与上下分区"
@@ -5668,18 +5673,6 @@ export const SlidePreview: React.FC = () => {
                         )}
                         <div className={`${shouldUseEditorVerticalSplit ? 'min-h-0 overflow-hidden' : `${useRenovationPreviewForm ? (isMobileView ? 'mt-0 flex-1 justify-start' : 'mt-0 min-h-0 basis-0 flex-[1] justify-start') : 'mt-2 flex-1 justify-end'} min-h-0 overflow-visible flex flex-col`}`}>
                           <div className={`relative ${useRenovationPreviewForm ? 'min-h-0 h-full' : 'min-h-0'}`}>
-                            {shouldUseEditorVerticalSplit && (
-                              <>
-                                <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-gray-200 dark:bg-border-primary" />
-                                <div
-                                  className="pointer-events-none absolute top-0 z-20 h-px bg-gray-200 dark:bg-border-primary"
-                                  style={{
-                                    left: `-${PREVIEW_SPLIT_DIVIDER_PX + 28}px`,
-                                    width: `${PREVIEW_SPLIT_DIVIDER_PX + 28}px`,
-                                  }}
-                                />
-                              </>
-                            )}
                             <PageAiWorkbench
                               title={t('preview.pageAiTitle')}
                               subtitle={t('preview.pageAiSubtitle')}
