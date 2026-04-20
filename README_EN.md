@@ -502,6 +502,46 @@ The frontend development server will start at `http://localhost:3000`.
 
 Open your browser and visit the URL to use the application.
 
+#### Project Export/Import (Cross-Machine Migration)
+
+If you develop on multiple machines, use the built-in script to migrate a single project quickly (database records + `uploads/<project_id>/` files).
+
+1. **Find project IDs (latest 20)**
+```bash
+python - <<'PY'
+import sqlite3, sys
+sys.path.insert(0, 'backend')
+from config import get_default_sqlite_db_path
+db = get_default_sqlite_db_path()
+conn = sqlite3.connect(db)
+rows = conn.execute("SELECT id, updated_at FROM projects ORDER BY updated_at DESC LIMIT 20").fetchall()
+for r in rows:
+    print(r[0], r[1])
+PY
+```
+
+2. **Export on machine A**
+```bash
+python scripts/project_transfer.py export --project-id <PROJECT_ID> --output ./project-transfer.zip
+```
+
+3. **Import on machine B**
+```bash
+python scripts/project_transfer.py import --archive ./project-transfer.zip
+```
+
+4. **Optional: conflict handling / import with new ID**
+```bash
+# Replace if target project already exists
+python scripts/project_transfer.py import --archive ./project-transfer.zip --on-conflict replace
+
+# Import as a new project ID (avoid conflicts)
+python scripts/project_transfer.py import --archive ./project-transfer.zip --target-project-id <NEW_PROJECT_ID>
+```
+
+> Script path: `scripts/project_transfer.py`  
+> By default, it auto-detects the branch-scoped SQLite database (`backend/instance/database-<branch>.db`) and `uploads` directory. You can also override them with `--db-path` and `--uploads-dir`.
+
 ## 🛠️ Technical Architecture
 
 ### Frontend Tech Stack

@@ -543,6 +543,46 @@ npm run dev
 
 打开浏览器访问即可使用应用。
 
+#### 项目导入/导出（跨电脑迁移）
+
+如果你在多台电脑上开发，可以使用仓库内置脚本快速迁移单个项目（包含数据库记录 + `uploads/<project_id>/` 文件）。
+
+1. **查看项目 ID（取最近 20 个）**
+```bash
+python - <<'PY'
+import sqlite3, sys
+sys.path.insert(0, 'backend')
+from config import get_default_sqlite_db_path
+db = get_default_sqlite_db_path()
+conn = sqlite3.connect(db)
+rows = conn.execute("SELECT id, updated_at FROM projects ORDER BY updated_at DESC LIMIT 20").fetchall()
+for r in rows:
+    print(r[0], r[1])
+PY
+```
+
+2. **在电脑 A 导出项目**
+```bash
+python scripts/project_transfer.py export --project-id <PROJECT_ID> --output ./project-transfer.zip
+```
+
+3. **在电脑 B 导入项目**
+```bash
+python scripts/project_transfer.py import --archive ./project-transfer.zip
+```
+
+4. **可选：冲突处理与重命名导入**
+```bash
+# 如果目标项目已存在，直接覆盖
+python scripts/project_transfer.py import --archive ./project-transfer.zip --on-conflict replace
+
+# 导入为新的项目 ID（避免与本地已有项目冲突）
+python scripts/project_transfer.py import --archive ./project-transfer.zip --target-project-id <NEW_PROJECT_ID>
+```
+
+> 脚本路径：`scripts/project_transfer.py`  
+> 默认会自动读取当前分支对应的 SQLite（`backend/instance/database-<branch>.db`）和 `uploads` 目录；也可通过 `--db-path` 与 `--uploads-dir` 显式指定。
+
 
 ## 🛠️ 技术架构
 
