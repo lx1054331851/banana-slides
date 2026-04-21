@@ -5915,9 +5915,9 @@ export const SlidePreview: React.FC = () => {
         isOpen={isOutlineQuickEditOpen}
         onClose={() => setIsOutlineQuickEditOpen(false)}
         title={`${t('preview.outlineQuickEditTitle')} · ${t('preview.page', { num: selectedIndex + 1 })}`}
-        size="wide"
+        size="wide75"
       >
-        <div className="space-y-5 px-1">
+        <div className="flex min-h-[56vh] flex-col space-y-5 px-1">
           <div className="space-y-2">
             <div className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{t('preview.enterTitle')}</div>
             <input
@@ -5933,12 +5933,12 @@ export const SlidePreview: React.FC = () => {
             <textarea
               value={editOutlinePoints}
               onChange={(event) => setEditOutlinePoints(event.target.value)}
-              rows={12}
+              rows={16}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
               placeholder={t('preview.enterPointsPerLine')}
             />
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="mt-auto flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setIsOutlineQuickEditOpen(false)}>
               {t('common.cancel')}
             </Button>
