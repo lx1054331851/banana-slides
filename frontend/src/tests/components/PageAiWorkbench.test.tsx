@@ -45,12 +45,19 @@ const baseProps = {
 }
 
 describe('PageAiWorkbench', () => {
-  it('keeps generate button available even when input is empty', () => {
+  it('disables generate button when input is empty', () => {
     render(<PageAiWorkbench {...baseProps} />)
 
     const sendButton = screen.getByTestId('page-ai-send')
-    expect(sendButton).toBeEnabled()
+    expect(sendButton).toBeDisabled()
     expect(screen.getByText('生成图片')).toBeInTheDocument()
+  })
+
+  it('enables generate button when input has content', () => {
+    render(<PageAiWorkbench {...baseProps} inputValue="把标题放大一些" />)
+
+    const sendButton = screen.getByTestId('page-ai-send')
+    expect(sendButton).toBeEnabled()
   })
 
   it('does not submit on Enter', () => {
