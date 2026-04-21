@@ -5923,7 +5923,11 @@ export const SlidePreview: React.FC = () => {
             <input
               type="text"
               value={editOutlineTitle}
-              onChange={(event) => setEditOutlineTitle(event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setEditOutlineTitle(value);
+                persistCurrentPageDraft({ title: value });
+              }}
               className="h-12 w-full rounded-xl border border-gray-200 px-4 text-base outline-none focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
               placeholder={t('preview.enterTitle')}
             />
@@ -5933,7 +5937,11 @@ export const SlidePreview: React.FC = () => {
             <div className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{t('preview.pointsPerLine')}</div>
             <textarea
               value={editOutlinePoints}
-              onChange={(event) => setEditOutlinePoints(event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setEditOutlinePoints(value);
+                persistCurrentPageDraft({ points: value });
+              }}
               className="h-full min-h-[300px] w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-base leading-8 outline-none focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
               placeholder={t('preview.enterPointsPerLine')}
             />
