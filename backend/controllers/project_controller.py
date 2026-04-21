@@ -72,6 +72,7 @@ def _recover_stale_generation_state(project: Project) -> None:
         'STYLE_PREVIEW_REGENERATE',
     }
     image_task_types = {'GENERATE_IMAGES', 'GENERATE_PAGE_IMAGE', 'EDIT_PAGE_IMAGE'}
+    description_task_types = {'GENERATE_DESCRIPTIONS'}
     now = datetime.utcnow()
     stale_timeout = int(current_app.config.get('TASK_STALE_TIMEOUT_SECONDS', 1800) or 0)
 
@@ -123,10 +124,28 @@ def _recover_stale_generation_state(project: Project) -> None:
             page.updated_at = now
             changed = True
 
-    # 3) If project was stuck in GENERATING_IMAGES, recover to a terminal/consistent status.
-    if changed and project.status == 'GENERATING_IMAGES':
+    # 3) If there is no active description-generation task, release stuck page statuses.
+    has_active_description_task = any(
+        task.status in running_statuses
+        and task.completed_at is None
+        and task.task_type in description_task_types
+        and task_manager.is_task_active(task.id)
+        for task in project.tasks
+    )
+
+    if not has_active_description_task:
+        for page in project.pages:
+            if page.status != 'GENERATING_DESCRIPTION':
+                continue
+            # 有旧描述则保持已生成；没有则回退到草稿态，允许重新批量生成。
+            page.status = 'DESCRIPTION_GENERATED' if page.description_content else 'DRAFT'
+            page.updated_at = now
+            changed = True
+
+    # 4) If project was stuck in generating state, recover to a terminal/consistent status.
+    if changed and project.status in ('GENERATING_IMAGES', 'GENERATING_DESCRIPTIONS'):
         pages = list(project.pages or [])
-        if pages and all(p.status == 'COMPLETED' for p in pages):
+        if project.status == 'GENERATING_IMAGES' and pages and all(p.status == 'COMPLETED' for p in pages):
             project.status = 'COMPLETED'
         else:
             has_any_desc = any(bool(p.description_content) for p in pages)
@@ -1787,6 +1806,23 @@ def get_task_status(project_id, task_id):
                         if not p.generated_image_path:
                             p.status = 'FAILED'
                             p.updated_at = datetime.utcnow()
+                elif task.task_type == 'GENERATE_DESCRIPTIONS':
+                    stuck_pages = Page.query.filter(
+                        Page.project_id == project_id,
+                        Page.status == 'GENERATING_DESCRIPTION'
+                    ).all()
+                    for p in stuck_pages:
+                        p.status = 'DESCRIPTION_GENERATED' if p.description_content else 'DRAFT'
+                        p.updated_at = datetime.utcnow()
+
+                    project = Project.query.get(project_id)
+                    if project:
+                        has_any_desc = Page.query.filter(
+                            Page.project_id == project_id,
+                            Page.description_content.isnot(None)
+                        ).first() is not None
+                        project.status = 'DESCRIPTIONS_GENERATED' if has_any_desc else 'OUTLINE_GENERATED'
+                        project.updated_at = datetime.utcnow()
 
                 db.session.commit()
         
