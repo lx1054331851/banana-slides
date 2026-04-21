@@ -637,6 +637,13 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
       }
     }
 
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      // Keep editor focus and insert visual indentation in markdown text.
+      insertContentAtCursor('  ');
+      return;
+    }
+
     if (e.key === 'Backspace') {
       const selected = editorRef.current.querySelector('.' + CHIP_SELECTED_CLASS) as HTMLElement | null;
       if (selected) {
