@@ -84,6 +84,7 @@ const previewI18n = {
       versions: "版本", version: "版本", current: "当前", editPage: "编辑页面",
       outlineQuickEditTitle: "快速编辑本页大纲",
       outlineQuickEditSave: "保存大纲",
+      outlineQuickEditGenerateDescription: "生成描述",
       regionSelect: "区域选图", endRegionSelect: "结束区域选图",
       pageOutline: "页面大纲（可编辑）", pageDescription: "页面描述（可编辑）",
       pageJson: "页面 JSON",
@@ -260,6 +261,7 @@ const previewI18n = {
       versions: "Versions", version: "Version", current: "Current", editPage: "Edit Page",
       outlineQuickEditTitle: "Quick Edit Page Outline",
       outlineQuickEditSave: "Save Outline",
+      outlineQuickEditGenerateDescription: "Generate Description",
       regionSelect: "Region Select", endRegionSelect: "End Region Select",
       pageOutline: "Page Outline (Editable)", pageDescription: "Page Description (Editable)",
       pageJson: "Page JSON",
@@ -1526,6 +1528,7 @@ export const SlidePreview: React.FC = () => {
   // 素材生成模态开关（模块本身可复用，这里只是示例入口）
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
   const [isOutlineQuickEditOpen, setIsOutlineQuickEditOpen] = useState(false);
+  const [isOutlineQuickGeneratingDescription, setIsOutlineQuickGeneratingDescription] = useState(false);
   // 素材选择器模态开关
   const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([]);
   const [isMaterialSelectorOpen, setIsMaterialSelectorOpen] = useState(false);
@@ -2836,6 +2839,39 @@ export const SlidePreview: React.FC = () => {
     show,
     syncProject,
     t,
+  ]);
+
+  const handleGenerateDescriptionForCurrentPage = useCallback(async () => {
+    if (!currentProject) return;
+    const pageId = currentProject.pages[selectedIndex]?.id;
+    if (!pageId) return;
+
+    try {
+      setIsOutlineQuickGeneratingDescription(true);
+      handleSaveOutlineAndDescription();
+      await saveAllPages();
+      await generateDescriptions(undefined, [pageId]);
+      await syncProject(projectId);
+      setIsOutlineQuickEditOpen(false);
+    } catch (error: any) {
+      const errorMessage =
+        error?.response?.data?.error?.message ||
+        error?.message ||
+        t('slidePreview.unknownError');
+      show({ message: errorMessage, type: 'error' });
+    } finally {
+      setIsOutlineQuickGeneratingDescription(false);
+    }
+  }, [
+    currentProject,
+    selectedIndex,
+    handleSaveOutlineAndDescription,
+    saveAllPages,
+    generateDescriptions,
+    syncProject,
+    projectId,
+    t,
+    show,
   ]);
 
   const handleAiRefineDescriptions = useCallback(async (requirement: string, previousRequirements: string[]) => {
@@ -5879,9 +5915,9 @@ export const SlidePreview: React.FC = () => {
         isOpen={isOutlineQuickEditOpen}
         onClose={() => setIsOutlineQuickEditOpen(false)}
         title={`${t('preview.outlineQuickEditTitle')} · ${t('preview.page', { num: selectedIndex + 1 })}`}
-        size="md"
+        size="wide"
       >
-        <div className="space-y-4">
+        <div className="space-y-5 px-1">
           <div className="space-y-2">
             <div className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{t('preview.enterTitle')}</div>
             <input
@@ -5897,7 +5933,7 @@ export const SlidePreview: React.FC = () => {
             <textarea
               value={editOutlinePoints}
               onChange={(event) => setEditOutlinePoints(event.target.value)}
-              rows={8}
+              rows={12}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
               placeholder={t('preview.enterPointsPerLine')}
             />
@@ -5905,6 +5941,13 @@ export const SlidePreview: React.FC = () => {
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setIsOutlineQuickEditOpen(false)}>
               {t('common.cancel')}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => void handleGenerateDescriptionForCurrentPage()}
+              disabled={isOutlineQuickGeneratingDescription}
+            >
+              {isOutlineQuickGeneratingDescription ? t('preview.descriptionGenerating') : t('preview.outlineQuickEditGenerateDescription')}
             </Button>
             <Button
               variant="primary"
