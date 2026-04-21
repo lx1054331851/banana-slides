@@ -2755,60 +2755,20 @@ export const SlidePreview: React.FC = () => {
     const generatingCount = generatingPages.length;
     const missingCount = missingPageIds.length;
 
-    const executeGenerate = async (pageIdsOverride?: string[]) => {
-      setDescriptionGenerationError(null);
-      try {
-        await generateDescriptions(undefined, pageIdsOverride);
-        await syncProject(projectId);
-        return true;
-      } catch (error: any) {
-        const errorMessage = normalizeErrorMessage(
-          error?.response?.data?.error?.message ||
-          error?.response?.data?.message ||
-          error?.message ||
-          t('preview.generationFailed')
-        );
-        setDescriptionGenerationError(errorMessage);
-        show({ message: errorMessage, type: 'error', duration: 0 });
-        return false;
-      }
-    };
-
     if (totalCount === 0) return;
 
-    if (generatedCount === 0 && generatingCount === 0) {
-      await executeGenerate(targetPageIds);
-      return;
-    }
-
-    if (generatingCount > 0 && missingCount === 0) {
-      show({ message: t('preview.descriptionGeneratingInProgress', { count: generatingCount }), type: 'info' });
-      return;
-    }
-
-    if (generatedCount < totalCount) {
-      setBatchDescriptionGenerateContext({
-        total: totalCount,
-        generated: generatedCount,
-        generating: generatingCount,
-        missing: missingCount,
-        targetPageIds,
-        missingPageIds,
-      });
-      setDescriptionRangeStart('1');
-      setDescriptionRangeEnd(String(totalCount));
-      setShowBatchDescriptionGenerateDialog(true);
-      return;
-    }
-
-    confirm(
-      '部分页面已有描述，重新生成将覆盖，确定继续吗？',
-      () => {
-        void executeGenerate(targetPageIds);
-      },
-      { title: '确认重新生成', variant: 'warning' }
-    );
-  }, [confirm, currentProject, generateDescriptions, projectId, show, syncProject, t]);
+    setBatchDescriptionGenerateContext({
+      total: totalCount,
+      generated: generatedCount,
+      generating: generatingCount,
+      missing: missingCount,
+      targetPageIds,
+      missingPageIds,
+    });
+    setDescriptionRangeStart('1');
+    setDescriptionRangeEnd(String(totalCount));
+    setShowBatchDescriptionGenerateDialog(true);
+  }, [currentProject]);
 
   const handleGenerateDescriptionsByRange = useCallback(async () => {
     if (!batchDescriptionGenerateContext || !currentProject) return;
@@ -6210,7 +6170,7 @@ export const SlidePreview: React.FC = () => {
           setBatchDescriptionGenerateContext(null);
         }}
         title={t('preview.confirmPartialDescriptionGenerateTitle')}
-        size="sm"
+        size="md"
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-700 dark:text-foreground-secondary">
@@ -6232,6 +6192,7 @@ export const SlidePreview: React.FC = () => {
           <div className="flex flex-col gap-2">
             <Button
               variant="primary"
+              disabled={!batchDescriptionGenerateContext || batchDescriptionGenerateContext.missing === 0}
               onClick={async () => {
                 if (!batchDescriptionGenerateContext) return;
                 setShowBatchDescriptionGenerateDialog(false);
