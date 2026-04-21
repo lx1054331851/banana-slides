@@ -505,13 +505,23 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                 raise ValueError("No pages found for project")
 
             pages_data_by_index = {i: pd for i, pd in enumerate(pages_data)}
-            page_jobs = [
-                {
+            # 关键修复：不要用 order_index 直接映射 outline 下标。
+            # order_index 可能存在断号（删除/插入后未重排），会导致页内容错位。
+            all_project_pages = get_filtered_pages(project_id, None)
+            page_sequence_by_id = {
+                page.id: idx for idx, page in enumerate(all_project_pages)
+            }
+            page_jobs = []
+            for i, page in enumerate(pages):
+                sequence_index = page_sequence_by_id.get(page.id)
+                if sequence_index is None:
+                    # 兜底：极端情况下按当前筛选结果顺序回退
+                    sequence_index = i
+                page_jobs.append({
                     'page_id': page.id,
                     'order_index': page.order_index,
-                }
-                for page in pages
-            ]
+                    'sequence_index': sequence_index,
+                })
 
             is_renovation = (project_context.creation_type == 'ppt_renovation')
             page_source_image_by_id: Dict[str, str] = {}
@@ -635,8 +645,8 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                     executor.submit(
                         generate_single_desc,
                         job['page_id'],
-                        pages_data_by_index.get(job['order_index'], {}),
-                        (job['order_index'] + 1) if job['order_index'] is not None else i,
+                        pages_data_by_index.get(job['sequence_index'], {}),
+                        job['sequence_index'] + 1,
                     )
                     for i, job in enumerate(page_jobs, 1)
                 ]
@@ -758,13 +768,20 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
             # Get pages for this project (filtered by page_ids if provided)
             pages = get_filtered_pages(project_id, page_ids)
             all_pages_data = ai_service.flatten_outline(outline)
-            page_jobs = [
-                {
+            all_project_pages = get_filtered_pages(project_id, None)
+            page_sequence_by_id = {
+                page.id: idx for idx, page in enumerate(all_project_pages)
+            }
+            page_jobs = []
+            for i, page in enumerate(pages):
+                sequence_index = page_sequence_by_id.get(page.id)
+                if sequence_index is None:
+                    sequence_index = i
+                page_jobs.append({
                     'page_id': page.id,
                     'order_index': page.order_index,
-                }
-                for page in pages
-            ]
+                    'sequence_index': sequence_index,
+                })
 
             if _generation_logs_enabled():
                 logger.info(
@@ -774,8 +791,7 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                     len(all_pages_data),
                 )
 
-            # Build mapping from order_index to page_data so filtered pages
-            # get matched to the correct outline entry (not just first N)
+            # Build mapping from outline sequence index to page_data.
             pages_data_by_index = {i: pd for i, pd in enumerate(all_pages_data)}
             
             # 注意：不在任务开始时获取模板路径，而是在每个子线程中动态获取
@@ -959,8 +975,8 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                     executor.submit(
                         generate_single_image,
                         job['page_id'],
-                        pages_data_by_index.get(job['order_index'], {}),
-                        (job['order_index'] + 1) if job['order_index'] is not None else i,
+                        pages_data_by_index.get(job['sequence_index'], {}),
+                        job['sequence_index'] + 1,
                     )
                     for i, job in enumerate(page_jobs, 1)
                 ]

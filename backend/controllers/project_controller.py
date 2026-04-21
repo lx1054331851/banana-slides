@@ -39,6 +39,7 @@ from services.task_manager import (
     generate_images_task,
     process_ppt_renovation_task,
     get_renovation_original_page_images,
+    _generation_logs_enabled,
 )
 from services.style_preview_service import (
     generate_style_recommendations_and_previews_task,
@@ -1153,6 +1154,20 @@ def generate_descriptions(project_id):
         pages = get_filtered_pages(project_id, selected_page_ids if selected_page_ids else None)
         if not pages:
             return bad_request("No pages found for selected page_ids")
+        if _generation_logs_enabled():
+            logger.info(
+                "[Generate Descriptions Request] project=%s selected_page_ids=%s resolved_pages=%s",
+                project_id,
+                selected_page_ids if selected_page_ids else 'all',
+                [
+                    {
+                        'id': page.id,
+                        'order_index': page.order_index,
+                        'title': (page.outline_content or {}).get('title', 'Untitled'),
+                    }
+                    for page in pages
+                ],
+            )
 
         # Reconstruct outline from all pages so selected-page generation still has full deck context.
         outline = _reconstruct_outline_from_pages(all_pages)
