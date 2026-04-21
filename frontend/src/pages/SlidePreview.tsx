@@ -82,6 +82,8 @@ const previewI18n = {
       historyActionEdit: "修改图片",
       fullscreen: "全屏查看", exitFullscreen: "退出全屏",
       versions: "版本", version: "版本", current: "当前", editPage: "编辑页面",
+      outlineQuickEditTitle: "快速编辑本页大纲",
+      outlineQuickEditSave: "保存大纲",
       regionSelect: "区域选图", endRegionSelect: "结束区域选图",
       pageOutline: "页面大纲（可编辑）", pageDescription: "页面描述（可编辑）",
       pageJson: "页面 JSON",
@@ -256,6 +258,8 @@ const previewI18n = {
       historyActionEdit: "Edit Image",
       fullscreen: "Fullscreen", exitFullscreen: "Exit Fullscreen",
       versions: "Versions", version: "Version", current: "Current", editPage: "Edit Page",
+      outlineQuickEditTitle: "Quick Edit Page Outline",
+      outlineQuickEditSave: "Save Outline",
       regionSelect: "Region Select", endRegionSelect: "End Region Select",
       pageOutline: "Page Outline (Editable)", pageDescription: "Page Description (Editable)",
       pageJson: "Page JSON",
@@ -1521,6 +1525,7 @@ export const SlidePreview: React.FC = () => {
   const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
   // 素材生成模态开关（模块本身可复用，这里只是示例入口）
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
+  const [isOutlineQuickEditOpen, setIsOutlineQuickEditOpen] = useState(false);
   // 素材选择器模态开关
   const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([]);
   const [isMaterialSelectorOpen, setIsMaterialSelectorOpen] = useState(false);
@@ -2564,23 +2569,17 @@ export const SlidePreview: React.FC = () => {
 
   const handleEditPage = useCallback((targetIndex?: number) => {
     const nextIndex = typeof targetIndex === 'number' ? targetIndex : selectedIndex;
-    pendingOutlineFocusIndexRef.current = nextIndex;
-    if (nextIndex !== selectedIndex) {
-      setSelectedIndex(nextIndex);
-    } else if (canQuickEditOutlineInPreview) {
-      requestAnimationFrame(() => {
-        const input = outlineTitleInputRef.current;
-        if (!input) return;
-        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        input.focus();
-        input.select();
-      });
-    }
+    if (!currentProject?.pages[nextIndex]) return;
+    const targetPage = currentProject.pages[nextIndex];
+    setSelectedIndex(nextIndex);
+    setEditOutlineTitle(targetPage.outline_content?.title || '');
+    setEditOutlinePoints(targetPage.outline_content?.points?.join('\n') || '');
+    setIsOutlineQuickEditOpen(true);
     setIsRegionSelectionMode(false);
     setSelectionStart(null);
     setSelectionRect(null);
     setIsSelectingRegion(false);
-  }, [selectedIndex, canQuickEditOutlineInPreview]);
+  }, [selectedIndex, currentProject]);
 
   // 保存大纲和描述修改（支持静默保存，避免自动保存时频繁提示）
   const handleSaveOutlineAndDescription = useCallback((options?: { silent?: boolean }) => {
@@ -5875,6 +5874,50 @@ export const SlidePreview: React.FC = () => {
         onSubmit={handleAiRefineDescriptions}
       />
       <FilePreviewModal fileId={previewFileId} onClose={() => setPreviewFileId(null)} />
+
+      <Modal
+        isOpen={isOutlineQuickEditOpen}
+        onClose={() => setIsOutlineQuickEditOpen(false)}
+        title={`${t('preview.outlineQuickEditTitle')} · ${t('preview.page', { num: selectedIndex + 1 })}`}
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{t('preview.enterTitle')}</div>
+            <input
+              type="text"
+              value={editOutlineTitle}
+              onChange={(event) => setEditOutlineTitle(event.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
+              placeholder={t('preview.enterTitle')}
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{t('preview.pointsPerLine')}</div>
+            <textarea
+              value={editOutlinePoints}
+              onChange={(event) => setEditOutlinePoints(event.target.value)}
+              rows={8}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
+              placeholder={t('preview.enterPointsPerLine')}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setIsOutlineQuickEditOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                handleSaveOutlineAndDescription();
+                setIsOutlineQuickEditOpen(false);
+              }}
+            >
+              {t('preview.outlineQuickEditSave')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* 模板选择 Modal */}
       <Modal
