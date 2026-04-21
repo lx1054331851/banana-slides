@@ -4049,15 +4049,13 @@ export const SlidePreview: React.FC = () => {
                     onClick={() => setShowRunModelMenu((prev) => !prev)}
                     title={`${t('preview.editRunImageModelLabel')}：${editRunImageModel}`}
                     aria-label={t('preview.editRunImageModelLabel')}
-                    className={`inline-flex h-8 max-w-[320px] items-center gap-1.5 rounded-lg border px-2.5 text-xs shadow-sm transition-all ${
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm transition-all ${
                       showRunModelMenu
                         ? 'border-banana-300 bg-[#fff7d9] text-slate-900 dark:border-banana-500/60 dark:bg-banana-500/10 dark:text-banana'
                         : 'border-[#e8d9b4] bg-[#fff9ec] text-[#8a7750] hover:border-[#d1be8b] hover:bg-[#fff6e2] dark:border-[#3c4762] dark:bg-[#1a2335] dark:text-[#9eaccf] dark:hover:border-[#4b5a7b] dark:hover:bg-[#202b3f]'
                     }`}
                   >
                     <Settings2 size={14} />
-                    <span className="max-w-[220px] truncate">{editRunImageModel}</span>
-                    <ChevronDown size={12} className={`transition-transform ${showRunModelMenu ? 'rotate-180' : ''}`} />
                   </button>
                   {showRunModelMenu && (
                     <div className="absolute right-0 top-full z-40 mt-2 w-[300px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated dark:shadow-[0_18px_40px_rgba(0,0,0,0.36)]">
