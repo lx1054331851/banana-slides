@@ -137,6 +137,8 @@ const previewI18n = {
       saveOutlineOnly: "仅保存大纲/描述", generateImage: "生成图片",
       collapseSidebar: "收起左侧导航",
       expandSidebar: "展开左侧导航",
+      collapseRightPanel: "收起右侧面板",
+      expandRightPanel: "展开右侧面板",
       addPage: "添加页面",
       addFirstPage: "添加第一页",
       insertAfterPage: "在此页后新增页面",
@@ -314,6 +316,8 @@ const previewI18n = {
       saveOutlineOnly: "Save Outline/Description Only", generateImage: "Generate Image",
       collapseSidebar: "Collapse sidebar",
       expandSidebar: "Expand sidebar",
+      collapseRightPanel: "Collapse right panel",
+      expandRightPanel: "Expand right panel",
       addPage: "Add Page",
       addFirstPage: "Add First Page",
       insertAfterPage: "Insert page after this one",
@@ -487,6 +491,7 @@ import {
 } from '@/config/projectAiDefaults';
 const DEFAULT_EXTRA_FIELDS = ['视觉元素', '视觉焦点', '排版布局', '演讲者备注'];
 const PREVIEW_SPLIT_STORAGE_KEY = 'previewSplitRatio';
+const PREVIEW_EDITOR_COLLAPSED_STORAGE_KEY = 'previewEditorPaneCollapsed';
 const PREVIEW_SPLIT_DEFAULT_RATIO = 0.45;
 const PREVIEW_SPLIT_DIVIDER_PX = 12;
 const PREVIEW_VISUAL_MIN_WIDTH = 360;
@@ -1046,6 +1051,13 @@ export const SlidePreview: React.FC = () => {
   const [isResizingPreviewSplit, setIsResizingPreviewSplit] = useState(false);
   const previewSplitContainerRef = useRef<HTMLDivElement | null>(null);
   const previewSplitResizeRef = useRef<{ startX: number; startWidth: number; availableWidth: number } | null>(null);
+  const [isEditorPaneCollapsed, setIsEditorPaneCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(PREVIEW_EDITOR_COLLAPSED_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   const [editorVerticalSplitRatio, setEditorVerticalSplitRatio] = useState(() => {
     if (typeof window === 'undefined') return PREVIEW_EDITOR_VERTICAL_SPLIT_DEFAULT_RATIO;
     const stored = Number(window.localStorage.getItem(PREVIEW_EDITOR_VERTICAL_SPLIT_STORAGE_KEY));
@@ -1196,6 +1208,14 @@ export const SlidePreview: React.FC = () => {
       // ignore storage errors
     }
   }, [previewSplitRatio]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PREVIEW_EDITOR_COLLAPSED_STORAGE_KEY, isEditorPaneCollapsed ? '1' : '0');
+    } catch {
+      // ignore storage errors
+    }
+  }, [isEditorPaneCollapsed]);
 
   useEffect(() => {
     try {
@@ -4008,6 +4028,7 @@ export const SlidePreview: React.FC = () => {
     ? 'grid h-full min-h-0 gap-2 grid-rows-[minmax(0,1fr)] lg:gap-3 lg:grid-rows-[minmax(0,1fr)]'
     : 'grid h-full min-h-0 gap-3 grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-4 lg:grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]';
   const shouldUseEditorVerticalSplit = useRenovationPreviewForm && !isMobileView;
+  const isEditorPaneHidden = !isMobileView && isEditorPaneCollapsed;
 
   const editorCanvasContent = (
     <div
@@ -5577,16 +5598,30 @@ export const SlidePreview: React.FC = () => {
             <>
               <div className={`flex-1 min-h-0 overflow-hidden ${useRenovationPreviewForm ? 'px-2 pt-0 pb-0 md:px-3 md:pt-0 md:pb-0' : 'px-2 py-3 md:px-3 md:py-4'}`}>
                 <div className="flex h-full w-full flex-col gap-4">
-                  <div
-                    ref={previewSplitContainerRef}
-                    data-testid="preview-main-split"
-                    className={`min-h-0 flex-1 ${isMobileView ? 'flex flex-col gap-4 overflow-y-auto' : 'grid overflow-hidden'}`}
-                    style={!isMobileView
-                      ? {
-                        gridTemplateColumns: `minmax(${PREVIEW_VISUAL_MIN_WIDTH}px, ${Math.max(resolvedPreviewSplitRatio * 100, 1)}fr) ${PREVIEW_SPLIT_DIVIDER_PX}px minmax(${PREVIEW_EDITOR_MIN_WIDTH}px, ${Math.max((1 - resolvedPreviewSplitRatio) * 100, 1)}fr)`,
-                      }
-                      : undefined}
-                  >
+                  <div className="relative min-h-0 flex-1">
+                    {!isMobileView && (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditorPaneCollapsed((prev) => !prev)}
+                        aria-label={isEditorPaneHidden ? t('preview.expandRightPanel') : t('preview.collapseRightPanel')}
+                        title={isEditorPaneHidden ? t('preview.expandRightPanel') : t('preview.collapseRightPanel')}
+                        className="absolute right-2 top-2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#d9c99d] bg-[#f9f2df] text-[#7c6840] shadow-sm transition-colors hover:bg-[#f6ebcf] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:bg-background-hover"
+                      >
+                        {isEditorPaneHidden ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+                      </button>
+                    )}
+                    <div
+                      ref={previewSplitContainerRef}
+                      data-testid="preview-main-split"
+                      className={`min-h-0 h-full ${isMobileView ? 'flex flex-col gap-4 overflow-y-auto' : 'grid overflow-hidden'}`}
+                      style={!isMobileView
+                        ? {
+                          gridTemplateColumns: isEditorPaneHidden
+                            ? 'minmax(0,1fr) 0px 0px'
+                            : `minmax(${PREVIEW_VISUAL_MIN_WIDTH}px, ${Math.max(resolvedPreviewSplitRatio * 100, 1)}fr) ${PREVIEW_SPLIT_DIVIDER_PX}px minmax(${PREVIEW_EDITOR_MIN_WIDTH}px, ${Math.max((1 - resolvedPreviewSplitRatio) * 100, 1)}fr)`,
+                        }
+                        : undefined}
+                    >
                     <section
                       data-testid="preview-visual-pane"
                       className="min-w-0 overflow-hidden"
@@ -5711,7 +5746,7 @@ export const SlidePreview: React.FC = () => {
                       </div>
                     </section>
 
-                    {!isMobileView && (
+                    {!isMobileView && !isEditorPaneHidden && (
                       <div
                         data-testid="preview-split-divider"
                         role="separator"
@@ -5725,7 +5760,8 @@ export const SlidePreview: React.FC = () => {
 
                     <section
                       data-testid="preview-editor-pane"
-                      className={`min-h-0 min-w-0 ${isMobileView ? 'overflow-visible' : (useRenovationPreviewForm ? 'overflow-x-visible overflow-y-hidden' : 'overflow-x-visible overflow-y-auto overscroll-contain')}`}
+                      className={`min-h-0 min-w-0 ${isEditorPaneHidden ? 'pointer-events-none opacity-0' : ''} ${isMobileView ? 'overflow-visible' : (useRenovationPreviewForm ? 'overflow-x-visible overflow-y-hidden' : 'overflow-x-visible overflow-y-auto overscroll-contain')}`}
+                      aria-hidden={isEditorPaneHidden}
                     >
                       <div
                         ref={shouldUseEditorVerticalSplit ? editorVerticalSplitContainerRef : undefined}
@@ -5849,6 +5885,7 @@ export const SlidePreview: React.FC = () => {
                     </section>
                   </div>
                 </div>
+              </div>
               </div>
 
               <div
