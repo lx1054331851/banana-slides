@@ -1003,6 +1003,7 @@ export const SlidePreview: React.FC = () => {
   const isExporting = activeExportTasks.length > 0;
 
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const selectedPageIdRef = useRef<string | null>(null);
   const [isMobileView, setIsMobileView] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth < 768;
@@ -1154,6 +1155,11 @@ export const SlidePreview: React.FC = () => {
     setEditExtraFields(getDescriptionExtraFields(page.description_content));
     setEditStyleGuideBindings(getDescriptionStyleGuideBindings(page.description_content));
   }, [currentProject, selectedIndex, pageDrafts, formatDescriptionForEditor]);
+
+  useEffect(() => {
+    const pageId = currentProject?.pages?.[selectedIndex]?.id || null;
+    selectedPageIdRef.current = pageId;
+  }, [currentProject, selectedIndex]);
 
   useEffect(() => {
     if (!currentProject) {
@@ -1969,6 +1975,14 @@ export const SlidePreview: React.FC = () => {
     });
   }, [currentProject, selectedIndex]);
 
+  const handleSelectPageByIndex = useCallback((index: number) => {
+    const pageId = currentProject?.pages?.[index]?.id;
+    if (pageId) {
+      selectedPageIdRef.current = pageId;
+    }
+    setSelectedIndex(index);
+  }, [currentProject]);
+
   const clearPageDraftsByIds = useCallback((pageIds: string[]) => {
     if (!pageIds.length) return;
     const targetIds = new Set(pageIds);
@@ -2147,15 +2161,27 @@ export const SlidePreview: React.FC = () => {
   const pageCount = currentProject?.pages?.length ?? 0;
 
   const goPrevPage = useCallback(() => {
-    setSelectedIndex((prev) => Math.max(0, prev - 1));
-  }, []);
+    setSelectedIndex((prev) => {
+      const nextIndex = Math.max(0, prev - 1);
+      const nextPageId = currentProject?.pages?.[nextIndex]?.id;
+      if (nextPageId) {
+        selectedPageIdRef.current = nextPageId;
+      }
+      return nextIndex;
+    });
+  }, [currentProject]);
 
   const goNextPage = useCallback(() => {
     setSelectedIndex((prev) => {
       const maxIndex = Math.max(0, pageCount - 1);
-      return Math.min(maxIndex, prev + 1);
+      const nextIndex = Math.min(maxIndex, prev + 1);
+      const nextPageId = currentProject?.pages?.[nextIndex]?.id;
+      if (nextPageId) {
+        selectedPageIdRef.current = nextPageId;
+      }
+      return nextIndex;
     });
-  }, [pageCount]);
+  }, [currentProject, pageCount]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -2624,6 +2650,7 @@ export const SlidePreview: React.FC = () => {
     const nextIndex = typeof targetIndex === 'number' ? targetIndex : selectedIndex;
     if (!currentProject?.pages[nextIndex]) return;
     const targetPage = currentProject.pages[nextIndex];
+    selectedPageIdRef.current = targetPage.id || targetPage.page_id || null;
     setSelectedIndex(nextIndex);
     setEditOutlineTitle(targetPage.outline_content?.title || '');
     setEditOutlinePoints(targetPage.outline_content?.points?.join('\n') || '');
@@ -2787,7 +2814,12 @@ export const SlidePreview: React.FC = () => {
   }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, projectDefaultImageResolution, projectDefaultImageSource, handleSaveOutlineAndDescription, saveAllPages, show, t]);
 
   const handleGenerateCurrentPage = useCallback(async () => {
-    const pageId = currentProject?.pages[selectedIndex]?.id;
+    const preferredPageId = selectedPageIdRef.current;
+    const pageId = (
+      preferredPageId && currentProject?.pages?.some((page) => page.id === preferredPageId)
+        ? preferredPageId
+        : currentProject?.pages[selectedIndex]?.id
+    );
     if (!pageId) return;
 
     await checkResolutionAndExecute(async () => {
@@ -2897,7 +2929,12 @@ export const SlidePreview: React.FC = () => {
 
   const handleGenerateDescriptionForCurrentPage = useCallback(async () => {
     if (!currentProject) return;
-    const pageId = currentProject.pages[selectedIndex]?.id;
+    const preferredPageId = selectedPageIdRef.current;
+    const pageId = (
+      preferredPageId && currentProject.pages.some((page) => page.id === preferredPageId)
+        ? preferredPageId
+        : currentProject.pages[selectedIndex]?.id
+    );
     if (!pageId) return;
     setIsOutlineQuickEditOpen(false);
 
@@ -4926,7 +4963,7 @@ export const SlidePreview: React.FC = () => {
                             if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                               togglePageSelection(page.id);
                             } else {
-                              setSelectedIndex(index);
+                              handleSelectPageByIndex(index);
                             }
                           }}
                           title={`${t('preview.page', { num: index + 1 })} · ${t('preview.reorderPage')}`}
@@ -4960,7 +4997,7 @@ export const SlidePreview: React.FC = () => {
                         if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                           togglePageSelection(page.id);
                         } else {
-                          setSelectedIndex(index);
+                          handleSelectPageByIndex(index);
                         }
                       }}
                       title={t('preview.page', { num: index + 1 })}
@@ -5061,7 +5098,7 @@ export const SlidePreview: React.FC = () => {
                                   if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                                     togglePageSelection(page.id);
                                   } else {
-                                    setSelectedIndex(index);
+                                    handleSelectPageByIndex(index);
                                   }
                                 }}
                                 title={`${t('preview.page', { num: index + 1 })} · ${t('preview.reorderPage')}`}
@@ -5150,7 +5187,7 @@ export const SlidePreview: React.FC = () => {
                               if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                                 togglePageSelection(page.id);
                               } else {
-                                setSelectedIndex(index);
+                                handleSelectPageByIndex(index);
                               }
                             }}
                             className={`w-full overflow-hidden rounded-lg bg-white dark:bg-background-secondary shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all ${selectedIndex === index
@@ -5246,7 +5283,7 @@ export const SlidePreview: React.FC = () => {
                                   if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                                     togglePageSelection(page.id);
                                   } else {
-                                    setSelectedIndex(index);
+                                    handleSelectPageByIndex(index);
                                   }
                                 }}
                                 className={`h-14 w-20 rounded bg-white dark:bg-background-secondary shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all ${selectedIndex === index
@@ -5305,7 +5342,7 @@ export const SlidePreview: React.FC = () => {
                                   if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                                     togglePageSelection(page.id);
                                   } else {
-                                    setSelectedIndex(index);
+                                    handleSelectPageByIndex(index);
                                   }
                                 }}
                                 onEdit={() => {
@@ -5346,7 +5383,7 @@ export const SlidePreview: React.FC = () => {
                               if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                                 togglePageSelection(page.id);
                               } else {
-                                setSelectedIndex(index);
+                                handleSelectPageByIndex(index);
                               }
                             }}
                             className={`h-14 w-20 rounded bg-white dark:bg-background-secondary shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all ${selectedIndex === index
@@ -5405,7 +5442,7 @@ export const SlidePreview: React.FC = () => {
                               if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                                 togglePageSelection(page.id);
                               } else {
-                                setSelectedIndex(index);
+                                handleSelectPageByIndex(index);
                               }
                             }}
                             onEdit={() => {
