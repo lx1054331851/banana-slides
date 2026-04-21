@@ -6007,6 +6007,7 @@ export const SlidePreview: React.FC = () => {
         onClose={() => setIsOutlineQuickEditOpen(false)}
         title={`${t('preview.outlineQuickEditTitle')} · ${t('preview.page', { num: selectedIndex + 1 })}`}
         size="wide75"
+        closeOnOverlayClick={false}
       >
         <div className="mx-auto flex h-[72vh] max-h-[78vh] w-full max-w-[980px] flex-col">
           <div className="shrink-0 space-y-2">

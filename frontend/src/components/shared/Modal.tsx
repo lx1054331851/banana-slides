@@ -10,6 +10,7 @@ interface ModalProps {
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'wide' | 'wide75' | 'full';
   showCloseButton?: boolean;
+  closeOnOverlayClick?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -19,6 +20,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   size = 'md',
   showCloseButton = true,
+  closeOnOverlayClick = true,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -56,10 +58,10 @@ export const Modal: React.FC<ModalProps> = ({
   }, [isOpen, onClose]);
 
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
+    if (closeOnOverlayClick && e.target === e.currentTarget) {
       onClose();
     }
-  }, [onClose]);
+  }, [closeOnOverlayClick, onClose]);
 
   if (!isVisible) return null;
 
@@ -83,7 +85,7 @@ export const Modal: React.FC<ModalProps> = ({
           'backdrop-blur-md',
           isAnimating ? 'opacity-100' : 'opacity-0'
         )}
-        onClick={onClose}
+        onClick={closeOnOverlayClick ? onClose : undefined}
         aria-hidden="true"
       />
 
