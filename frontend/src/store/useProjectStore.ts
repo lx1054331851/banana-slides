@@ -30,6 +30,8 @@ const storeI18n = {
       generateDescFailed: '生成描述失败',
       generateDescTimeout: '生成描述失败：轮询超时',
       imageTaskTimeout: '图片生成超时，请重试',
+      imageTaskPollingDelayed: '状态同步有延迟，后台可能仍在生成中，请稍候自动刷新',
+      pagesStillGenerating: '{{count}} 页仍在生成中，已阻止重复提交',
       startGenerationFailed: '启动生成任务失败',
       regenerateFailed: '重新生成失败',
       batchGenerateFailed: '批量生成失败',
@@ -63,6 +65,8 @@ const storeI18n = {
       generateDescFailed: 'Failed to generate description',
       generateDescTimeout: 'Failed to generate description: polling timeout',
       imageTaskTimeout: 'Image generation timed out, please retry',
+      imageTaskPollingDelayed: 'Status sync is delayed. Generation may still be running in the background.',
+      pagesStillGenerating: '{{count}} page(s) are still generating. Duplicate submission blocked.',
       startGenerationFailed: 'Failed to start generation task',
       regenerateFailed: 'Failed to regenerate',
       batchGenerateFailed: 'Batch generation failed',
@@ -1105,6 +1109,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     );
     if (alreadyGenerating.length > 0) {
       devLog(`[批量生成] ${alreadyGenerating.length} 个页面正在生成中，跳过`);
+      set({ warningMessage: t('store.pagesStillGenerating', { count: String(alreadyGenerating.length) }) });
       // 过滤掉已经在生成的页面
       const newPageIds = targetPageIds.filter(
         id => !pageGeneratingTasks[id] && pageStatusMap.get(id) !== 'GENERATING'
@@ -1174,18 +1179,13 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       return newTasks;
     };
 
-    const markTargetPagesFailedLocally = () => {
+    const areAllTargetPagesTerminal = () => {
       const { currentProject: latestProject } = get();
-      if (!latestProject) return;
+      if (!latestProject) return false;
       const targetSet = new Set(pageIds);
-      const patchedPages = latestProject.pages.map((page) => {
-        if (!page.id || !targetSet.has(page.id)) return page;
-        if (page.status === 'QUEUED' || page.status === 'GENERATING') {
-          return { ...page, status: 'FAILED' as const };
-        }
-        return page;
-      });
-      set({ currentProject: { ...latestProject, pages: patchedPages } });
+      const targets = latestProject.pages.filter((page) => page.id && targetSet.has(page.id));
+      if (targets.length === 0) return false;
+      return targets.every((page) => page.status === 'COMPLETED' || page.status === 'FAILED');
     };
 
     const poll = async () => {
@@ -1200,9 +1200,14 @@ export const useProjectStore = create<ProjectState>((set, get) => {
             setTimeout(poll, 2000);
             return;
           }
-          // 长时间拿不到任务数据时，释放前端“生成中”标记，并强制同步一次页面状态
-          set({ pageGeneratingTasks: clearPageTaskMappings() });
+          // 长时间拿不到任务数据时，不直接判失败；先同步并继续轮询，避免误导用户重复提交
           await get().syncProject();
+          if (areAllTargetPagesTerminal()) {
+            set({ pageGeneratingTasks: clearPageTaskMappings() });
+            return;
+          }
+          set({ warningMessage: t('store.imageTaskPollingDelayed') });
+          setTimeout(poll, 5000);
           return;
         }
         consecutiveErrors = 0;
@@ -1268,7 +1273,6 @@ export const useProjectStore = create<ProjectState>((set, get) => {
           });
           // 刷新项目数据以更新页面状态
           await get().syncProject();
-          markTargetPagesFailedLocally();
         } else if (task.status === 'PENDING' || task.status === 'PROCESSING' || task.status === 'RUNNING') {
           consecutiveUnknownStatuses = 0;
           // 检查警告消息
@@ -1310,9 +1314,15 @@ export const useProjectStore = create<ProjectState>((set, get) => {
             setTimeout(poll, 2000);
             return;
           }
-          // 长时间未知状态时，释放任务映射并同步页面，避免 UI 卡住
-          set({ pageGeneratingTasks: clearPageTaskMappings() });
+          // 长时间未知状态时，不直接失败；后台可能仍在运行
           await get().syncProject();
+          if (areAllTargetPagesTerminal()) {
+            set({ pageGeneratingTasks: clearPageTaskMappings() });
+            return;
+          }
+          set({ warningMessage: t('store.imageTaskPollingDelayed') });
+          setTimeout(poll, 5000);
+          return;
         }
       } catch (error: any) {
         console.error('[批量轮询] 轮询错误:', error);
@@ -1322,10 +1332,15 @@ export const useProjectStore = create<ProjectState>((set, get) => {
           setTimeout(poll, 2000);
           return;
         }
-        // 多次失败后释放前端“生成中”标记，并同步页面真实状态
-        set({ pageGeneratingTasks: clearPageTaskMappings() });
-        markTargetPagesFailedLocally();
+        // 多次失败后不直接标失败，先同步并继续轮询，防止后端仍在处理时误导用户重复生成
         await get().syncProject();
+        if (areAllTargetPagesTerminal()) {
+          set({ pageGeneratingTasks: clearPageTaskMappings() });
+          return;
+        }
+        set({ warningMessage: t('store.imageTaskPollingDelayed') });
+        setTimeout(poll, 5000);
+        return;
       }
     };
 
