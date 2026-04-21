@@ -330,6 +330,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   const isInternalRef = useRef(false);
   const isComposingRef = useRef(false);
   const pendingEmitRef = useRef(false);
+  const pendingExternalValueRef = useRef<string | null>(null);
   const prevCollapsedRef = useRef(collapsed);
   const [isDragging, setIsDragging] = useState(false);
   const [editingChip, setEditingChip] = useState<{ chip: HTMLElement; rect: DOMRect } | null>(null);
@@ -358,6 +359,14 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     }
   }, []);
 
+  const applyExternalValue = useCallback((nextValue: string) => {
+    if (!editorRef.current || nextValue === lastValueRef.current) return;
+    if (!patchChips(editorRef.current, lastValueRef.current, nextValue, chipTooltipsRef.current)) {
+      buildDOM(editorRef.current, parseSegments(nextValue), chipTooltipsRef.current);
+    }
+    lastValueRef.current = nextValue;
+  }, []);
+
   // Sync from external value changes — incremental patch when possible
   useEffect(() => {
     if (isInternalRef.current) {
@@ -365,23 +374,25 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
       // Even when skipping internal edits, check for external changes
       // batched in the same render (e.g. upload completion while typing)
       if (editorRef.current && value !== lastValueRef.current) {
-        if (!patchChips(editorRef.current, lastValueRef.current, value, chipTooltipsRef.current)) {
-          buildDOM(editorRef.current, parseSegments(value), chipTooltipsRef.current);
+        const isEditorActive = document.activeElement === editorRef.current;
+        if (isEditorActive || isComposingRef.current) {
+          pendingExternalValueRef.current = value;
+          return;
         }
-        lastValueRef.current = value;
+        applyExternalValue(value);
       }
       return;
     }
     if (editorRef.current && value !== lastValueRef.current) {
-      // Try incremental update first (preserves cursor position)
-      const patched = patchChips(editorRef.current, lastValueRef.current, value, chipTooltipsRef.current);
-      if (!patched) {
-        // Structure changed — full rebuild (e.g. new placeholder inserted)
-        buildDOM(editorRef.current, parseSegments(value), chipTooltipsRef.current);
+      const isEditorActive = document.activeElement === editorRef.current;
+      if (isEditorActive || isComposingRef.current) {
+        pendingExternalValueRef.current = value;
+        return;
       }
-      lastValueRef.current = value;
+      // Try incremental update first (preserves cursor position)
+      applyExternalValue(value);
     }
-  }, [value]);
+  }, [value, applyExternalValue]);
 
   // Rebuild editor only when expanding from collapsed -> expanded
   useEffect(() => {
@@ -688,6 +699,15 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     requestAnimationFrame(() => emitChange());
   }, [emitChange]);
 
+  const handleBlur = useCallback(() => {
+    const pending = pendingExternalValueRef.current;
+    if (pending !== null && !isComposingRef.current) {
+      applyExternalValue(pending);
+      pendingExternalValueRef.current = null;
+    }
+    onBlur?.();
+  }, [applyExternalValue, onBlur]);
+
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
     onPaste?.(e);
     if (e.defaultPrevented) return;
@@ -877,7 +897,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
               onDragLeave={handleDragLeave}
               onDragOver={handleDragOver}
               onDrop={handleDrop}
-              onBlur={onBlur}
+              onBlur={handleBlur}
               onFocus={onFocus}
               style={editorStyle}
               className={cn(
