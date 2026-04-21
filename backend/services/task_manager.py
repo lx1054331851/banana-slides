@@ -485,10 +485,6 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
             db.session.commit()
             logger.info(f"Task {task_id} status updated to PROCESSING")
             
-            # Flatten full outline then map requested pages by order_index so filtered runs still
-            # preserve original page context while only generating selected pages.
-            pages_data = ai_service.flatten_outline(outline)
-
             # Get pages for this project (filtered by page_ids if provided)
             pages = get_filtered_pages(project_id, page_ids)
 
@@ -498,19 +494,36 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                     task_id,
                     project_id,
                     len(pages),
-                    len(pages_data),
+                    len(ai_service.flatten_outline(outline)),
                 )
 
             if not pages:
                 raise ValueError("No pages found for project")
 
-            pages_data_by_index = {i: pd for i, pd in enumerate(pages_data)}
             # 关键修复：不要用 order_index 直接映射 outline 下标。
             # order_index 可能存在断号（删除/插入后未重排），会导致页内容错位。
             all_project_pages = get_filtered_pages(project_id, None)
             page_sequence_by_id = {
                 page.id: idx for idx, page in enumerate(all_project_pages)
             }
+
+            def _build_page_outline_snapshot(page: Page, sequence_index: int) -> Dict:
+                outline_content = page.get_outline_content() or {}
+                title = outline_content.get('title')
+                if not title:
+                    title = f'第{sequence_index + 1}页'
+                points = outline_content.get('points')
+                if not isinstance(points, list):
+                    points = []
+                page_outline = {
+                    'title': title,
+                    'points': points,
+                }
+                part = page.part or outline_content.get('part')
+                if part:
+                    page_outline['part'] = part
+                return page_outline
+
             page_jobs = []
             for i, page in enumerate(pages):
                 sequence_index = page_sequence_by_id.get(page.id)
@@ -521,6 +534,7 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                     'page_id': page.id,
                     'order_index': page.order_index,
                     'sequence_index': sequence_index,
+                    'page_outline': _build_page_outline_snapshot(page, sequence_index),
                 })
 
             is_renovation = (project_context.creation_type == 'ppt_renovation')
@@ -645,7 +659,7 @@ def generate_descriptions_task(task_id: str, project_id: str, ai_service,
                     executor.submit(
                         generate_single_desc,
                         job['page_id'],
-                        pages_data_by_index.get(job['sequence_index'], {}),
+                        job['page_outline'],
                         job['sequence_index'] + 1,
                     )
                     for i, job in enumerate(page_jobs, 1)

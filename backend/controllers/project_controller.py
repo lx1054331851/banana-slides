@@ -1273,16 +1273,33 @@ def generate_descriptions_stream(project_id):
                     return
 
                 outline = _reconstruct_outline_from_pages(all_pages)
-                flat_pages_all = ai_service.flatten_outline(outline)
-                flat_pages_by_index = {i: pd for i, pd in enumerate(flat_pages_all)}
-                flat_pages = [
-                    flat_pages_by_index.get(page.order_index, {})
-                    for page in pages
-                ]
-                page_numbers = [
-                    ((page.order_index or 0) + 1)
-                    for page in pages
-                ]
+                page_sequence_by_id = {
+                    page.id: idx for idx, page in enumerate(all_pages)
+                }
+
+                def _build_page_outline_snapshot(page: Page, sequence_index: int) -> dict:
+                    outline_content = page.get_outline_content() or {}
+                    title = outline_content.get('title')
+                    if not title:
+                        title = f'第{sequence_index + 1}页'
+                    points = outline_content.get('points')
+                    if not isinstance(points, list):
+                        points = []
+                    page_outline = {
+                        'title': title,
+                        'points': points,
+                    }
+                    part = page.part or outline_content.get('part')
+                    if part:
+                        page_outline['part'] = part
+                    return page_outline
+
+                flat_pages = []
+                page_numbers = []
+                for idx, page in enumerate(pages):
+                    sequence_index = page_sequence_by_id.get(page.id, idx)
+                    flat_pages.append(_build_page_outline_snapshot(page, sequence_index))
+                    page_numbers.append(sequence_index + 1)
 
                 # Set selected pages to GENERATING_DESCRIPTION
                 for page in pages:
