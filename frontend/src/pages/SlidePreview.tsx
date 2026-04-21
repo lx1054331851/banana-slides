@@ -1554,6 +1554,7 @@ export const SlidePreview: React.FC = () => {
   // 素材生成模态开关（模块本身可复用，这里只是示例入口）
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
   const [isOutlineQuickEditOpen, setIsOutlineQuickEditOpen] = useState(false);
+  const [outlineQuickEditPageId, setOutlineQuickEditPageId] = useState<string | null>(null);
   const [isOutlineQuickGeneratingDescription, setIsOutlineQuickGeneratingDescription] = useState(false);
   // 素材选择器模态开关
   const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([]);
@@ -2650,7 +2651,9 @@ export const SlidePreview: React.FC = () => {
     const nextIndex = typeof targetIndex === 'number' ? targetIndex : selectedIndex;
     if (!currentProject?.pages[nextIndex]) return;
     const targetPage = currentProject.pages[nextIndex];
-    selectedPageIdRef.current = targetPage.id || targetPage.page_id || null;
+    const targetPageId = targetPage.id || targetPage.page_id || null;
+    selectedPageIdRef.current = targetPageId;
+    setOutlineQuickEditPageId(targetPageId);
     setSelectedIndex(nextIndex);
     setEditOutlineTitle(targetPage.outline_content?.title || '');
     setEditOutlinePoints(targetPage.outline_content?.points?.join('\n') || '');
@@ -2660,6 +2663,45 @@ export const SlidePreview: React.FC = () => {
     setSelectionRect(null);
     setIsSelectingRegion(false);
   }, [selectedIndex, currentProject]);
+
+  const outlineQuickEditPageIndex = useMemo(() => {
+    if (!currentProject?.pages?.length || !outlineQuickEditPageId) return -1;
+    return currentProject.pages.findIndex((page) => page.id === outlineQuickEditPageId);
+  }, [currentProject?.pages, outlineQuickEditPageId]);
+
+  const handleSaveOutlineForQuickEditTarget = useCallback((options?: { silent?: boolean }) => {
+    if (!currentProject) return null;
+    const fallbackPage = currentProject.pages[selectedIndex];
+    const targetPage = outlineQuickEditPageId
+      ? currentProject.pages.find((page) => page.id === outlineQuickEditPageId) || fallbackPage
+      : fallbackPage;
+    if (!targetPage?.id) return null;
+
+    const originalTitle = targetPage.outline_content?.title || '';
+    const originalPoints = targetPage.outline_content?.points?.join('\n') || '';
+    if (editOutlineTitle !== originalTitle || editOutlinePoints !== originalPoints) {
+      updatePageLocal(targetPage.id, {
+        outline_content: {
+          title: editOutlineTitle,
+          points: editOutlinePoints.split('\n').filter((p) => p.trim()),
+        },
+      });
+    }
+
+    if (!options?.silent) {
+      show({ message: t('slidePreview.outlineSaved'), type: 'success' });
+    }
+    return targetPage.id;
+  }, [
+    currentProject,
+    selectedIndex,
+    outlineQuickEditPageId,
+    editOutlineTitle,
+    editOutlinePoints,
+    updatePageLocal,
+    show,
+    t,
+  ]);
 
   // 保存大纲和描述修改（支持静默保存，避免自动保存时频繁提示）
   const handleSaveOutlineAndDescription = useCallback((options?: { silent?: boolean }) => {
@@ -2929,18 +2971,12 @@ export const SlidePreview: React.FC = () => {
 
   const handleGenerateDescriptionForCurrentPage = useCallback(async () => {
     if (!currentProject) return;
-    const preferredPageId = selectedPageIdRef.current;
-    const pageId = (
-      preferredPageId && currentProject.pages.some((page) => page.id === preferredPageId)
-        ? preferredPageId
-        : currentProject.pages[selectedIndex]?.id
-    );
+    const pageId = handleSaveOutlineForQuickEditTarget({ silent: true });
     if (!pageId) return;
     setIsOutlineQuickEditOpen(false);
 
     try {
       setIsOutlineQuickGeneratingDescription(true);
-      handleSaveOutlineAndDescription();
       await saveAllPages();
       await generateDescriptions(undefined, [pageId]);
       await syncProject(projectId);
@@ -2954,11 +2990,11 @@ export const SlidePreview: React.FC = () => {
       show({ message: errorMessage, type: 'error' });
     } finally {
       setIsOutlineQuickGeneratingDescription(false);
+      setOutlineQuickEditPageId(null);
     }
   }, [
     currentProject,
-    selectedIndex,
-    handleSaveOutlineAndDescription,
+    handleSaveOutlineForQuickEditTarget,
     saveAllPages,
     generateDescriptions,
     clearPageDraftsByIds,
@@ -6041,8 +6077,11 @@ export const SlidePreview: React.FC = () => {
 
       <Modal
         isOpen={isOutlineQuickEditOpen}
-        onClose={() => setIsOutlineQuickEditOpen(false)}
-        title={`${t('preview.outlineQuickEditTitle')} · ${t('preview.page', { num: selectedIndex + 1 })}`}
+        onClose={() => {
+          setIsOutlineQuickEditOpen(false);
+          setOutlineQuickEditPageId(null);
+        }}
+        title={`${t('preview.outlineQuickEditTitle')} · ${t('preview.page', { num: (outlineQuickEditPageIndex >= 0 ? outlineQuickEditPageIndex : selectedIndex) + 1 })}`}
         size="wide75"
         closeOnOverlayClick={false}
       >
@@ -6077,7 +6116,13 @@ export const SlidePreview: React.FC = () => {
           </div>
 
           <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-gray-100 pt-4 dark:border-border-primary">
-            <Button variant="ghost" onClick={() => setIsOutlineQuickEditOpen(false)}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setIsOutlineQuickEditOpen(false);
+                setOutlineQuickEditPageId(null);
+              }}
+            >
               {t('common.cancel')}
             </Button>
             <Button
@@ -6090,8 +6135,9 @@ export const SlidePreview: React.FC = () => {
             <Button
               variant="primary"
               onClick={() => {
-                handleSaveOutlineAndDescription();
+                handleSaveOutlineForQuickEditTarget();
                 setIsOutlineQuickEditOpen(false);
+                setOutlineQuickEditPageId(null);
               }}
             >
               {t('preview.outlineQuickEditSave')}
