@@ -5599,7 +5599,7 @@ export const SlidePreview: React.FC = () => {
               <div className={`flex-1 min-h-0 overflow-hidden ${useRenovationPreviewForm ? 'px-2 pt-0 pb-0 md:px-3 md:pt-0 md:pb-0' : 'px-2 py-3 md:px-3 md:py-4'}`}>
                 <div className="flex h-full w-full flex-col gap-4">
                   <div className="relative min-h-0 flex-1">
-                    {!isMobileView && (
+                    {!isMobileView && isEditorPaneHidden && (
                       <button
                         type="button"
                         onClick={() => setIsEditorPaneCollapsed((prev) => !prev)}
@@ -5755,6 +5755,16 @@ export const SlidePreview: React.FC = () => {
                         onMouseDown={handlePreviewSplitResizeStart}
                       >
                         <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
+                        <button
+                          type="button"
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={() => setIsEditorPaneCollapsed((prev) => !prev)}
+                          aria-label={t('preview.collapseRightPanel')}
+                          title={t('preview.collapseRightPanel')}
+                          className="absolute left-full top-2 z-20 -translate-x-1/2 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#d9c99d] bg-[#f9f2df] text-[#7c6840] shadow-sm transition-colors hover:bg-[#f6ebcf] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:bg-background-hover"
+                        >
+                          <ChevronRight size={16} />
+                        </button>
                       </div>
                     )}
 
