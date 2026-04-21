@@ -402,6 +402,7 @@ import {
   Copy,
   Send,
   Info,
+  Settings2,
 } from 'lucide-react';
 import {
   Button,
@@ -1068,6 +1069,8 @@ export const SlidePreview: React.FC = () => {
   });
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const fileMenuRef = useRef<HTMLDivElement>(null);
+  const [showRunModelMenu, setShowRunModelMenu] = useState(false);
+  const runModelMenuRef = useRef<HTMLDivElement | null>(null);
   const settingsSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const textAutoSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [descriptionRequirementsDraft, setDescriptionRequirementsDraft] = useState('');
@@ -1737,15 +1740,18 @@ export const SlidePreview: React.FC = () => {
       if (fileMenuRef.current && !fileMenuRef.current.contains(event.target as Node)) {
         setFileMenuOpen(false);
       }
+      if (runModelMenuRef.current && !runModelMenuRef.current.contains(event.target as Node)) {
+        setShowRunModelMenu(false);
+      }
       if (externalFieldPopoverRef.current && !externalFieldPopoverRef.current.contains(event.target as Node)) {
         setActiveExternalField(null);
       }
     };
-    if (fileMenuOpen || activeExternalField) {
+    if (fileMenuOpen || showRunModelMenu || activeExternalField) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [fileMenuOpen, activeExternalField]);
+  }, [fileMenuOpen, showRunModelMenu, activeExternalField]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -4037,23 +4043,50 @@ export const SlidePreview: React.FC = () => {
             </div>
             {useRenovationPreviewForm && (
               <div className="flex items-center gap-2">
-                <div className="inline-flex items-center gap-1.5 rounded-lg border border-[#e8d9b4] bg-[#fff9ec] px-2 py-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
-                  <span className="text-[11px] font-medium text-[#8a7750] dark:text-[#9eaccf]">
-                    {t('preview.editRunImageModelLabel')}
-                  </span>
-                  <select
-                    value={editRunImageModel}
-                    onChange={(event) => setEditRunImageModel(event.target.value)}
-                    title={t('preview.editRunImageModelHint')}
+                <div className="relative" ref={runModelMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowRunModelMenu((prev) => !prev)}
+                    title={`${t('preview.editRunImageModelLabel')}：${editRunImageModel}`}
                     aria-label={t('preview.editRunImageModelLabel')}
-                    className="h-7 rounded-md border border-[#e1d2ac] bg-white px-2 text-xs text-[#6f5f3d] outline-none transition-colors hover:border-[#d1be8b] focus:border-banana-400 dark:border-[#465372] dark:bg-[#121b2c] dark:text-[#d7def1]"
+                    className={`inline-flex h-8 max-w-[320px] items-center gap-1.5 rounded-lg border px-2.5 text-xs shadow-sm transition-all ${
+                      showRunModelMenu
+                        ? 'border-banana-300 bg-[#fff7d9] text-slate-900 dark:border-banana-500/60 dark:bg-banana-500/10 dark:text-banana'
+                        : 'border-[#e8d9b4] bg-[#fff9ec] text-[#8a7750] hover:border-[#d1be8b] hover:bg-[#fff6e2] dark:border-[#3c4762] dark:bg-[#1a2335] dark:text-[#9eaccf] dark:hover:border-[#4b5a7b] dark:hover:bg-[#202b3f]'
+                    }`}
                   >
-                    {PROJECT_SUPPORTED_IMAGE_MODELS.map((model) => (
-                      <option key={model} value={model}>
-                        {model}
-                      </option>
-                    ))}
-                  </select>
+                    <Settings2 size={14} />
+                    <span className="max-w-[220px] truncate">{editRunImageModel}</span>
+                    <ChevronDown size={12} className={`transition-transform ${showRunModelMenu ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showRunModelMenu && (
+                    <div className="absolute right-0 top-full z-40 mt-2 w-[300px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated dark:shadow-[0_18px_40px_rgba(0,0,0,0.36)]">
+                      <div className="max-h-[320px] overflow-y-auto">
+                        {PROJECT_SUPPORTED_IMAGE_MODELS.map((model) => {
+                          const selected = model === editRunImageModel;
+                          return (
+                            <button
+                              key={model}
+                              type="button"
+                              onClick={() => {
+                                setEditRunImageModel(model);
+                                setShowRunModelMenu(false);
+                              }}
+                              className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                                selected
+                                  ? 'bg-[#fff7d9] text-slate-900 dark:bg-banana-500/10 dark:text-banana'
+                                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-foreground-secondary dark:hover:bg-background-hover dark:hover:text-foreground-primary'
+                              }`}
+                              title={model}
+                            >
+                              <span className="min-w-0 truncate">{model}</span>
+                              {selected && <Check size={16} className="flex-shrink-0 text-banana-600" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="inline-flex items-center rounded-lg border border-[#e8d9b4] bg-[#fff9ec] p-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
                   <button
