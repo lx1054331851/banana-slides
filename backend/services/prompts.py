@@ -95,8 +95,8 @@ _PAGE_DETAIL_JSON_OUTPUT_FORMAT = """\
       "detailed_items": [
         {
           "sub_title": "分论点",
-          "body": "业务动作 + 证据 + 结果",
-          "highlight_phrases": ["关键词1", "关键词2"]
+          "body": "先做订单字段识别与进度查询，再做跨系统问数，持续降低报表与对账工时。",
+          "highlight_phrases": ["订单字段识别", "跨系统问数", "对账工时"]
         }
       ]
     },
@@ -188,7 +188,9 @@ def _get_page_detail_json_output_requirements() -> str:
     - 只输出 JSON，不要 markdown 代码块，不要解释文字。
     - 顶层仅允许 `outline` 与 `slide` 两个键。
     - 所有字段尽量基于输入信息扩写，不臆造精确数据。
-    - 不允许输出引用来源字段。""")
+    - 不允许输出引用来源字段。
+    - `highlight_phrases` 必须与对应正文严格对齐：图文页每个 `detailed_items[i].highlight_phrases[*]` 必须是该 `detailed_items[i].body` 的连续原文子串；图表页 `highlight_phrases[*]` 必须是 `key_takeaway` 的连续原文子串。
+    - 禁止写入正文中未出现的概念同义词/泛化词（例如正文没有“订单跟踪”，就不能放进 `highlight_phrases`）。""")
 
 
 def _try_extract_slide_like_json(text: str) -> Optional[Dict]:
@@ -650,6 +652,7 @@ def get_page_description_json_prompt(project_context: 'ProjectContext', outline:
 - 图表页：必须提供 `chart_type`、`chart_data`、`key_takeaway`、`highlight_phrases`。
 - 封面页：优先使用 `headline`、`sub_headline`、`presenter_info`。
 - 结尾页：优先使用 `final_conclusion`、`vision`、`slogan`。
+- `highlight_phrases` 取值必须“可回指”：每个短语都要能在对应 `body`（图文页）或 `key_takeaway`（图表页）中逐字匹配到，不得改写、概括或替换同义词。
 
 {_get_page_detail_json_output_requirements()}
 {get_language_instruction(language)}
@@ -862,7 +865,7 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
 3. 每个元素必须满足“从大纲生成页面详情”的 JSON 输出要求（单页对象顶层仅 `outline` + `slide`）。
 4. 专业术语与品牌名必须保留（例如 OpenClaw、Agent、低代码、经营协同平台）。
 5. 禁止无故降级结构：不要把已存在的结构化 JSON 改成纯文本描述。
-6. `highlight_phrases` 不能整页清空；若原有为空，可按正文补充 2-4 个关键词。
+6. `highlight_phrases` 不能整页清空；若原有为空，可按正文补充 2-4 个关键词；所有高亮词必须是对应 `body` 或 `key_takeaway` 的连续原文子串，禁止新增正文里不存在的概念词。
 7. `visual_suggestion` 不能无故置空，应保留或增强为“主体 + 隐喻 + 风格 + 重点”。
 
 {mckinsey_guidance_block}
