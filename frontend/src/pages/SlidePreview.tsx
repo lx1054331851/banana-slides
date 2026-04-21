@@ -1497,6 +1497,7 @@ export const SlidePreview: React.FC = () => {
   const [isSavingRequirements, setIsSavingRequirements] = useState(false);
   const isEditingRequirements = useRef(false); // 跟踪用户是否正在编辑额外要求
   const [templateStyle, setTemplateStyle] = useState<string>('');
+  const canQuickEditOutlineInPreview = currentProject?.creation_type !== 'ppt_renovation';
 
   useEffect(() => {
     focusMainDescriptionField();
@@ -1504,7 +1505,7 @@ export const SlidePreview: React.FC = () => {
   useEffect(() => {
     if (pendingOutlineFocusIndexRef.current !== selectedIndex) return;
     pendingOutlineFocusIndexRef.current = null;
-    if (useRenovationPreviewForm) return;
+    if (!canQuickEditOutlineInPreview) return;
 
     requestAnimationFrame(() => {
       const input = outlineTitleInputRef.current;
@@ -1513,7 +1514,7 @@ export const SlidePreview: React.FC = () => {
       input.focus();
       input.select();
     });
-  }, [selectedIndex, useRenovationPreviewForm]);
+  }, [selectedIndex, canQuickEditOutlineInPreview]);
   const [isSavingTemplateStyle, setIsSavingTemplateStyle] = useState(false);
   const isEditingTemplateStyle = useRef(false); // 跟踪用户是否正在编辑风格描述
   const lastProjectId = useRef<string | null>(null); // 跟踪上一次的项目ID
@@ -2566,7 +2567,7 @@ export const SlidePreview: React.FC = () => {
     pendingOutlineFocusIndexRef.current = nextIndex;
     if (nextIndex !== selectedIndex) {
       setSelectedIndex(nextIndex);
-    } else if (!useRenovationPreviewForm) {
+    } else if (canQuickEditOutlineInPreview) {
       requestAnimationFrame(() => {
         const input = outlineTitleInputRef.current;
         if (!input) return;
@@ -2579,7 +2580,7 @@ export const SlidePreview: React.FC = () => {
     setSelectionStart(null);
     setSelectionRect(null);
     setIsSelectingRegion(false);
-  }, [selectedIndex, useRenovationPreviewForm]);
+  }, [selectedIndex, canQuickEditOutlineInPreview]);
 
   // 保存大纲和描述修改（支持静默保存，避免自动保存时频繁提示）
   const handleSaveOutlineAndDescription = useCallback((options?: { silent?: boolean }) => {
