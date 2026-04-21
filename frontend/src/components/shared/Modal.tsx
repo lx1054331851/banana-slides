@@ -8,7 +8,7 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   children: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl' | 'wide' | 'full';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'wide' | 'wide75' | 'full';
   showCloseButton?: boolean;
 }
 
@@ -69,6 +69,7 @@ export const Modal: React.FC<ModalProps> = ({
     lg: 'max-w-[640px]',
     xl: 'max-w-[800px]',
     wide: 'max-w-[min(1480px,calc(100vw-3rem))]',
+    wide75: 'max-w-[min(1110px,calc(100vw-3rem))]',
     full: 'max-w-[calc(100vw-2rem)] sm:max-w-[calc(100vw-4rem)]',
   };
 
