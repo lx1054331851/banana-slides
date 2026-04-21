@@ -5684,6 +5684,7 @@ export const SlidePreview: React.FC = () => {
                               sendLabel={t('preview.generateImage')}
                               modelValue={editRunImageModel}
                               modelOptions={PROJECT_SUPPORTED_IMAGE_MODELS}
+                              modelControlPlacement="top"
                               isSubmitting={isPageAiSubmitting}
                               isRegionSelectionActive={isRegionSelectionMode}
                               headerActions={!useRenovationPreviewForm ? (
