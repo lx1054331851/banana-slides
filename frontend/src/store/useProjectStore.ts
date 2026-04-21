@@ -29,6 +29,7 @@ const storeI18n = {
       noTaskId: '未收到任务ID',
       generateDescFailed: '生成描述失败',
       generateDescTimeout: '生成描述失败：轮询超时',
+      generateDescPollingDelayed: '描述状态同步有延迟，后台可能仍在生成中，请稍候自动刷新',
       imageTaskTimeout: '图片生成超时，请重试',
       imageTaskPollingDelayed: '状态同步有延迟，后台可能仍在生成中，请稍候自动刷新',
       pagesStillGenerating: '{{count}} 页仍在生成中，已阻止重复提交',
@@ -64,6 +65,7 @@ const storeI18n = {
       noTaskId: 'No task ID received',
       generateDescFailed: 'Failed to generate description',
       generateDescTimeout: 'Failed to generate description: polling timeout',
+      generateDescPollingDelayed: 'Description status sync is delayed. It may still be generating in the background.',
       imageTaskTimeout: 'Image generation timed out, please retry',
       imageTaskPollingDelayed: 'Status sync is delayed. Generation may still be running in the background.',
       pagesStillGenerating: '{{count}} page(s) are still generating. Duplicate submission blocked.',
@@ -946,6 +948,18 @@ export const useProjectStore = create<ProjectState>((set, get) => {
         }
 
         let pollErrors = 0;
+        const targetPageIdSet = pageIds && pageIds.length > 0 ? new Set(pageIds) : null;
+        const areTargetPagesTerminal = () => {
+          const { currentProject: latestProject } = get();
+          if (!latestProject) return false;
+          const targets = latestProject.pages.filter((page) =>
+            page.id && (!targetPageIdSet || targetPageIdSet.has(page.id))
+          );
+          if (targets.length === 0) return false;
+          return targets.every((page) =>
+            page.status !== 'GENERATING_DESCRIPTION'
+          );
+        };
         const pollAndSync = async () => {
           try {
             const taskResponse = await api.getTaskStatus(projectId, taskId);
@@ -969,22 +983,30 @@ export const useProjectStore = create<ProjectState>((set, get) => {
                   error: normalizeErrorMessage(task.error_message || task.error || t('store.generateDescFailed'))
                 });
                 await get().syncProject();
-              } else if (task.status === 'PENDING' || task.status === 'PROCESSING') {
+              } else if (task.status === 'PENDING' || task.status === 'PROCESSING' || task.status === 'RUNNING') {
                 setTimeout(pollAndSync, 2000);
+              } else {
+                await get().syncProject();
+                if (areTargetPagesTerminal()) {
+                  set({ taskProgress: null, activeTaskId: null, isDescriptionStreaming: false });
+                  return;
+                }
+                set({ warningMessage: t('store.generateDescPollingDelayed') });
+                setTimeout(pollAndSync, 5000);
               }
             }
           } catch (error: any) {
             console.error('[生成描述] 轮询错误:', error);
             pollErrors++;
             if (pollErrors >= 10) {
-              console.error('[生成描述] 轮询错误次数过多，停止轮询');
-              set({
-                taskProgress: null,
-                activeTaskId: null,
-                isDescriptionStreaming: false,
-                error: normalizeErrorMessage(error.message || t('store.generateDescTimeout'))
-              });
               await get().syncProject();
+              if (areTargetPagesTerminal()) {
+                set({ taskProgress: null, activeTaskId: null, isDescriptionStreaming: false });
+                return;
+              }
+              set({ warningMessage: t('store.generateDescPollingDelayed') });
+              pollErrors = 0;
+              setTimeout(pollAndSync, 5000);
               return;
             }
             await get().syncProject();
