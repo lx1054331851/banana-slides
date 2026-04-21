@@ -1437,6 +1437,8 @@ export const SlidePreview: React.FC = () => {
   const [editDescription, setEditDescription] = useState('');
   const [editStyleGuideBindings, setEditStyleGuideBindings] = useState<StyleGuideBindings>({});
   const [renovationJsonViewMode, setRenovationJsonViewMode] = useState<RenovationJsonViewMode>('text');
+  const outlineTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingOutlineFocusIndexRef = useRef<number | null>(null);
   const descriptionTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const activeDescriptionSetContent = useRef<(updater: (prev: string) => string) => void>(setEditDescription);
   const activeDescriptionInsertAtCursor = useRef<((markdown: string) => void) | undefined>(undefined);
@@ -1499,6 +1501,19 @@ export const SlidePreview: React.FC = () => {
   useEffect(() => {
     focusMainDescriptionField();
   }, [focusMainDescriptionField, selectedIndex]);
+  useEffect(() => {
+    if (pendingOutlineFocusIndexRef.current !== selectedIndex) return;
+    pendingOutlineFocusIndexRef.current = null;
+    if (useRenovationPreviewForm) return;
+
+    requestAnimationFrame(() => {
+      const input = outlineTitleInputRef.current;
+      if (!input) return;
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      input.focus();
+      input.select();
+    });
+  }, [selectedIndex, useRenovationPreviewForm]);
   const [isSavingTemplateStyle, setIsSavingTemplateStyle] = useState(false);
   const isEditingTemplateStyle = useRef(false); // 跟踪用户是否正在编辑风格描述
   const lastProjectId = useRef<string | null>(null); // 跟踪上一次的项目ID
@@ -2546,35 +2561,25 @@ export const SlidePreview: React.FC = () => {
     return matches;
   };
 
-  const handleEditPage = useCallback(() => {
-    if (!currentProject) return;
-    const page = currentProject.pages[selectedIndex];
-    const pageId = page?.id;
-    if (pageId) {
-      const versionScopedKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
-      const fallbackKey = buildPageAiContextStoreKey(pageId, null);
-      const cached = pageAiContextByVersion[versionScopedKey] || pageAiContextByVersion[fallbackKey];
-      if (!cached) {
-        setIsRegionSelectionMode(false);
-        setSelectionStart(null);
-        setSelectionRect(null);
-        setIsSelectingRegion(false);
-        return;
-      }
-      setEditPrompt(cached.draftInput);
-      setPageAiMessages(cached.messages);
-      setEditRunImageModel(cached.model);
-      setSelectedContextImages({
-        useTemplate: cached.contextImages.useTemplate,
-        descImageUrls: [...cached.contextImages.descImageUrls],
-        uploadedReferences: [...cached.contextImages.uploadedReferences],
+  const handleEditPage = useCallback((targetIndex?: number) => {
+    const nextIndex = typeof targetIndex === 'number' ? targetIndex : selectedIndex;
+    pendingOutlineFocusIndexRef.current = nextIndex;
+    if (nextIndex !== selectedIndex) {
+      setSelectedIndex(nextIndex);
+    } else if (!useRenovationPreviewForm) {
+      requestAnimationFrame(() => {
+        const input = outlineTitleInputRef.current;
+        if (!input) return;
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        input.focus();
+        input.select();
       });
     }
     setIsRegionSelectionMode(false);
     setSelectionStart(null);
     setSelectionRect(null);
     setIsSelectingRegion(false);
-  }, [currentProject, selectedIndex, currentImageVersionId, pageAiContextByVersion]);
+  }, [selectedIndex, useRenovationPreviewForm]);
 
   // 保存大纲和描述修改（支持静默保存，避免自动保存时频繁提示）
   const handleSaveOutlineAndDescription = useCallback((options?: { silent?: boolean }) => {
@@ -3960,6 +3965,7 @@ export const SlidePreview: React.FC = () => {
           <div className="rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 dark:border-[#2d3447] dark:bg-[#151a26]">
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">标题</div>
             <input
+              ref={outlineTitleInputRef}
               type="text"
               value={editOutlineTitle}
               onChange={(event) => {
@@ -5203,8 +5209,7 @@ export const SlidePreview: React.FC = () => {
                                   }
                                 }}
                                 onEdit={() => {
-                                  setSelectedIndex(index);
-                                  handleEditPage();
+                                  handleEditPage(index);
                                 }}
                                 onDelete={() => handleDeletePage(page)}
                                 showDelete={!isMultiSelectMode}
@@ -5303,8 +5308,7 @@ export const SlidePreview: React.FC = () => {
                               }
                             }}
                             onEdit={() => {
-                              setSelectedIndex(index);
-                              handleEditPage();
+                              handleEditPage(index);
                             }}
                             onDelete={() => handleDeletePage(page)}
                             showDelete={!isMultiSelectMode}
