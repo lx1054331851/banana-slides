@@ -1936,6 +1936,23 @@ export const SlidePreview: React.FC = () => {
     });
   }, [currentProject, selectedIndex]);
 
+  const clearPageDraftsByIds = useCallback((pageIds: string[]) => {
+    if (!pageIds.length) return;
+    const targetIds = new Set(pageIds);
+    setPageDrafts((prev) => {
+      let changed = false;
+      const next: Record<string, PageDraft> = {};
+      Object.entries(prev).forEach(([key, draft]) => {
+        if (targetIds.has(key)) {
+          changed = true;
+          return;
+        }
+        next[key] = draft;
+      });
+      return changed ? next : prev;
+    });
+  }, []);
+
   const hydrateSelectedPageEditor = useCallback((project?: Project | null) => {
     const page = project?.pages?.[selectedIndex];
     if (!page) {
@@ -2826,6 +2843,8 @@ export const SlidePreview: React.FC = () => {
     setBatchDescriptionGenerateContext(null);
     await generateDescriptions(undefined, executablePageIds);
     await syncProject(projectId);
+    clearPageDraftsByIds(executablePageIds);
+    hydrateSelectedPageEditor(useProjectStore.getState().currentProject);
     if (skippedCount > 0) {
       show({ message: t('preview.rangeGeneratingSkipped', { count: skippedCount }), type: 'info' });
     }
@@ -2834,7 +2853,9 @@ export const SlidePreview: React.FC = () => {
     currentProject,
     descriptionRangeEnd,
     descriptionRangeStart,
+    clearPageDraftsByIds,
     generateDescriptions,
+    hydrateSelectedPageEditor,
     projectId,
     show,
     syncProject,
@@ -2853,6 +2874,8 @@ export const SlidePreview: React.FC = () => {
       await saveAllPages();
       await generateDescriptions(undefined, [pageId]);
       await syncProject(projectId);
+      clearPageDraftsByIds([pageId]);
+      hydrateSelectedPageEditor(useProjectStore.getState().currentProject);
     } catch (error: any) {
       const errorMessage =
         error?.response?.data?.error?.message ||
@@ -2868,6 +2891,8 @@ export const SlidePreview: React.FC = () => {
     handleSaveOutlineAndDescription,
     saveAllPages,
     generateDescriptions,
+    clearPageDraftsByIds,
+    hydrateSelectedPageEditor,
     syncProject,
     projectId,
     t,
@@ -6352,6 +6377,8 @@ export const SlidePreview: React.FC = () => {
                 setBatchDescriptionGenerateContext(null);
                 await generateDescriptions(undefined, context.missingPageIds);
                 await syncProject(projectId);
+                clearPageDraftsByIds(context.missingPageIds);
+                hydrateSelectedPageEditor(useProjectStore.getState().currentProject);
               }}
             >
               {batchDescriptionGenerateContext
@@ -6367,6 +6394,8 @@ export const SlidePreview: React.FC = () => {
                 setBatchDescriptionGenerateContext(null);
                 await generateDescriptions(undefined, context.targetPageIds);
                 await syncProject(projectId);
+                clearPageDraftsByIds(context.targetPageIds);
+                hydrateSelectedPageEditor(useProjectStore.getState().currentProject);
               }}
             >
               {batchDescriptionGenerateContext
