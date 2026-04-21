@@ -4036,49 +4036,29 @@ export const SlidePreview: React.FC = () => {
               )}
             </div>
             {useRenovationPreviewForm && (
-              <div className="flex items-center gap-2">
-                <label
-                  className="inline-flex h-8 max-w-[240px] items-center gap-2 rounded-lg border border-[#e8d9b4] bg-[#fff9ec] px-2 text-xs text-[#8a7750] dark:border-[#3c4762] dark:bg-[#1a2335] dark:text-[#9eaccf]"
-                  title={t('preview.editRunImageModelHint')}
+              <div className="inline-flex items-center rounded-lg border border-[#e8d9b4] bg-[#fff9ec] p-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
+                <button
+                  type="button"
+                  onClick={() => setRenovationJsonViewMode('text')}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    renovationJsonViewMode === 'text'
+                      ? 'bg-banana-500 text-black shadow-sm'
+                      : 'text-[#8a7750] hover:bg-[#f7edd2] dark:text-[#9eaccf] dark:hover:bg-[#232f47]'
+                  }`}
                 >
-                  <span className="whitespace-nowrap text-[11px] font-semibold">{t('preview.editRunImageModelLabel')}</span>
-                  <select
-                    value={editRunImageModel}
-                    onChange={(event) => setEditRunImageModel(event.target.value)}
-                    className="min-w-0 max-w-[130px] flex-1 appearance-none bg-transparent text-[11px] font-medium text-[#6f5f3d] outline-none dark:text-[#d7def1]"
-                    aria-label={t('preview.editRunImageModelLabel')}
-                  >
-                    {PROJECT_SUPPORTED_IMAGE_MODELS.map((model) => (
-                      <option key={model} value={model}>
-                        {model}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="inline-flex items-center rounded-lg border border-[#e8d9b4] bg-[#fff9ec] p-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
-                  <button
-                    type="button"
-                    onClick={() => setRenovationJsonViewMode('text')}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                      renovationJsonViewMode === 'text'
-                        ? 'bg-banana-500 text-black shadow-sm'
-                        : 'text-[#8a7750] hover:bg-[#f7edd2] dark:text-[#9eaccf] dark:hover:bg-[#232f47]'
-                    }`}
-                  >
-                    {t('preview.jsonTextTab')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRenovationJsonViewMode('styleGuide')}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                      renovationJsonViewMode === 'styleGuide'
-                        ? 'bg-banana-500 text-black shadow-sm'
-                        : 'text-[#8a7750] hover:bg-[#f7edd2] dark:text-[#9eaccf] dark:hover:bg-[#232f47]'
-                    }`}
-                  >
-                    {t('preview.jsonStyleGuideTab')}
-                  </button>
-                </div>
+                  {t('preview.jsonTextTab')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRenovationJsonViewMode('styleGuide')}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    renovationJsonViewMode === 'styleGuide'
+                      ? 'bg-banana-500 text-black shadow-sm'
+                      : 'text-[#8a7750] hover:bg-[#f7edd2] dark:text-[#9eaccf] dark:hover:bg-[#232f47]'
+                  }`}
+                >
+                  {t('preview.jsonStyleGuideTab')}
+                </button>
               </div>
             )}
           </div>
@@ -5704,7 +5684,6 @@ export const SlidePreview: React.FC = () => {
                               sendLabel={t('preview.generateImage')}
                               modelValue={editRunImageModel}
                               modelOptions={PROJECT_SUPPORTED_IMAGE_MODELS}
-                              showModelPickerControl={false}
                               isSubmitting={isPageAiSubmitting}
                               isRegionSelectionActive={isRegionSelectionMode}
                               headerActions={!useRenovationPreviewForm ? (
