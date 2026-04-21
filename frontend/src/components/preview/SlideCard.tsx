@@ -10,7 +10,7 @@ const slideCardI18n = {
   zh: {
     slideCard: {
       notGenerated: "未生成",
-      editPage: "编辑页面",
+      editPage: "编辑并重生成当前页图片",
       confirmDeletePage: "确定要删除这一页吗？",
       confirmDeleteTitle: "确认删除",
       coverPage: "封面",
@@ -20,7 +20,7 @@ const slideCardI18n = {
   en: {
     slideCard: {
       notGenerated: "Not Generated",
-      editPage: "Edit Page",
+      editPage: "Edit and regenerate current page image",
       confirmDeletePage: "Are you sure you want to delete this page?",
       confirmDeleteTitle: "Confirm Delete",
       coverPage: "Cover",
