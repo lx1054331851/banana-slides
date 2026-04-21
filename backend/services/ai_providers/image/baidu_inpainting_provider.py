@@ -28,7 +28,7 @@ class BaiduInpaintingProvider:
     - 快速响应，适合批量处理
     """
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, timeout: int = 300):
         """
         初始化百度图像修复 Provider
 
@@ -36,6 +36,7 @@ class BaiduInpaintingProvider:
             api_key: 百度API Key（BCEv3格式：bce-v3/ALTAK-...）或Access Token
         """
         self.api_key = api_key
+        self.timeout = timeout
         self.api_url = "https://aip.baidubce.com/rest/2.0/image-process/v1/inpainting"
 
         if api_key.startswith('bce-v3/'):
@@ -146,7 +147,7 @@ class BaiduInpaintingProvider:
                 url, 
                 headers=headers, 
                 json=request_body, 
-                timeout=60
+                timeout=self.timeout
             )
             response.raise_for_status()
             
@@ -252,5 +253,6 @@ def create_baidu_inpainting_provider(
         logger.warning("⚠️ 未配置百度API Key (BAIDU_API_KEY), 跳过百度图像修复")
         return None
 
-    return BaiduInpaintingProvider(api_key)
+    timeout = getattr(Config, 'BAIDU_INPAINTING_TIMEOUT', 300)
+    return BaiduInpaintingProvider(api_key, timeout=timeout)
 

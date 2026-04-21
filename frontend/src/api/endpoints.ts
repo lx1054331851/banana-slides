@@ -11,6 +11,8 @@ import type {
 } from '@/types';
 import type { Settings } from '../types/index';
 
+const IMAGE_OPERATION_TIMEOUT_MS = 300000; // 5 minutes
+
 // ===== 访问口令 API =====
 
 export const checkAccessCode = async (): Promise<ApiResponse<{ enabled: boolean }>> => {
@@ -555,7 +557,8 @@ export const generateImages = async (
       language: lang,
       page_ids: pageIds,
       ...(generationOverride ? { generation_override: generationOverride } : {}),
-    }
+    },
+    { timeout: IMAGE_OPERATION_TIMEOUT_MS }
   );
   return response.data;
 };
@@ -577,7 +580,8 @@ export const generatePageImage = async (
       force_regenerate: forceRegenerate,
       language: lang,
       ...(generationOverride ? { generation_override: generationOverride } : {}),
-    }
+    },
+    { timeout: IMAGE_OPERATION_TIMEOUT_MS }
   );
   return response.data;
 };
@@ -614,7 +618,8 @@ export const editPageImage = async (
 
     const response = await apiClient.post<ApiResponse>(
       `/api/projects/${projectId}/pages/${pageId}/edit/image`,
-      formData
+      formData,
+      { timeout: IMAGE_OPERATION_TIMEOUT_MS }
     );
     return response.data;
   } else {
@@ -628,7 +633,8 @@ export const editPageImage = async (
           desc_image_urls: contextImages?.descImageUrls || [],
         },
         ...(generationOverride ? { generation_override: generationOverride } : {}),
-      }
+      },
+      { timeout: IMAGE_OPERATION_TIMEOUT_MS }
     );
     return response.data;
   }

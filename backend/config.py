@@ -205,7 +205,7 @@ class Config:
     # 火山引擎配置
     VOLCENGINE_ACCESS_KEY = os.getenv('VOLCENGINE_ACCESS_KEY', '')
     VOLCENGINE_SECRET_KEY = os.getenv('VOLCENGINE_SECRET_KEY', '')
-    VOLCENGINE_INPAINTING_TIMEOUT = int(os.getenv('VOLCENGINE_INPAINTING_TIMEOUT', '60'))  # Inpainting 超时时间（秒）
+    VOLCENGINE_INPAINTING_TIMEOUT = int(os.getenv('VOLCENGINE_INPAINTING_TIMEOUT', '300'))  # Inpainting 超时时间（秒）
     VOLCENGINE_INPAINTING_MAX_RETRIES = int(os.getenv('VOLCENGINE_INPAINTING_MAX_RETRIES', '3'))  # 最大重试次数
 
     # Inpainting Provider 配置（用于 InpaintingService 的单张图片修复）
@@ -215,6 +215,7 @@ class Config:
 
     # 百度 API 配置（用于 OCR 和图像修复）
     BAIDU_API_KEY = os.getenv('BAIDU_API_KEY', '') or os.getenv('BAIDU_OCR_API_KEY', '')
+    BAIDU_INPAINTING_TIMEOUT = int(os.getenv('BAIDU_INPAINTING_TIMEOUT', '300'))
 
 
 class DevelopmentConfig(Config):
