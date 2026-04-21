@@ -4904,7 +4904,7 @@ export const SlidePreview: React.FC = () => {
           </div>
 
           {isSidebarCollapsed && !isMobileView ? (
-            <div className="flex-1 overflow-y-auto py-3 flex flex-col items-center gap-2 min-h-0">
+            <div className="flex-1 overflow-y-auto py-3 pb-8 md:pb-10 flex flex-col items-center gap-2 min-h-0">
               {canReorderPreviewPages ? (
                 <DndContext
                   sensors={previewThumbnailSensors}
@@ -4986,7 +4986,7 @@ export const SlidePreview: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto md:overflow-y-auto overflow-x-auto md:overflow-x-visible p-3 md:p-4 min-h-0">
+            <div className="flex-1 overflow-y-auto md:overflow-y-auto overflow-x-auto md:overflow-x-visible p-3 md:p-4 pb-10 md:pb-12 min-h-0">
               <div className="flex items-center gap-2 text-xs mb-3">
                 {isSidebarCompact ? (
                   <button
