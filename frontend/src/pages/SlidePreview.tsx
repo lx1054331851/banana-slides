@@ -5761,7 +5761,7 @@ export const SlidePreview: React.FC = () => {
                           onClick={() => setIsEditorPaneCollapsed((prev) => !prev)}
                           aria-label={t('preview.collapseRightPanel')}
                           title={t('preview.collapseRightPanel')}
-                          className="absolute left-full top-2 z-20 -translate-x-1/2 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#d9c99d] bg-[#f9f2df] text-[#7c6840] shadow-sm transition-colors hover:bg-[#f6ebcf] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:bg-background-hover"
+                          className="absolute left-1/2 top-2 z-20 -translate-x-1/2 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#d9c99d] bg-[#f9f2df] text-[#7c6840] shadow-sm transition-colors hover:bg-[#f6ebcf] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:bg-background-hover"
                         >
                           <ChevronRight size={16} />
                         </button>
