@@ -2845,6 +2845,7 @@ export const SlidePreview: React.FC = () => {
     if (!currentProject) return;
     const pageId = currentProject.pages[selectedIndex]?.id;
     if (!pageId) return;
+    setIsOutlineQuickEditOpen(false);
 
     try {
       setIsOutlineQuickGeneratingDescription(true);
@@ -2852,7 +2853,6 @@ export const SlidePreview: React.FC = () => {
       await saveAllPages();
       await generateDescriptions(undefined, [pageId]);
       await syncProject(projectId);
-      setIsOutlineQuickEditOpen(false);
     } catch (error: any) {
       const errorMessage =
         error?.response?.data?.error?.message ||
