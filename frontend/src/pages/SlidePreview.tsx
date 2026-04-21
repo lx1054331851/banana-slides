@@ -5917,28 +5917,29 @@ export const SlidePreview: React.FC = () => {
         title={`${t('preview.outlineQuickEditTitle')} · ${t('preview.page', { num: selectedIndex + 1 })}`}
         size="wide75"
       >
-        <div className="flex min-h-[56vh] flex-col space-y-5 px-1">
-          <div className="space-y-2">
+        <div className="mx-auto flex h-[72vh] max-h-[78vh] w-full max-w-[980px] flex-col">
+          <div className="shrink-0 space-y-2">
             <div className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{t('preview.enterTitle')}</div>
             <input
               type="text"
               value={editOutlineTitle}
               onChange={(event) => setEditOutlineTitle(event.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
+              className="h-12 w-full rounded-xl border border-gray-200 px-4 text-base outline-none focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
               placeholder={t('preview.enterTitle')}
             />
           </div>
-          <div className="space-y-2">
+
+          <div className="mt-4 min-h-0 flex-1 space-y-2">
             <div className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{t('preview.pointsPerLine')}</div>
             <textarea
               value={editOutlinePoints}
               onChange={(event) => setEditOutlinePoints(event.target.value)}
-              rows={16}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
+              className="h-full min-h-[300px] w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-base leading-8 outline-none focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
               placeholder={t('preview.enterPointsPerLine')}
             />
           </div>
-          <div className="mt-auto flex justify-end gap-2">
+
+          <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-gray-100 pt-4 dark:border-border-primary">
             <Button variant="ghost" onClick={() => setIsOutlineQuickEditOpen(false)}>
               {t('common.cancel')}
             </Button>
