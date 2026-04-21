@@ -1881,6 +1881,7 @@ export const SlidePreview: React.FC = () => {
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
   const [selectionRect, setSelectionRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
+  const pendingInsertedScrollIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     exportTasks
@@ -1929,8 +1930,20 @@ export const SlidePreview: React.FC = () => {
       show({ message: t('preview.addPageFailed'), type: 'error' });
       return;
     }
-    setSelectedIndex(Math.max(0, fallbackIndex + 1));
+    const nextIndex = Math.max(0, fallbackIndex + 1);
+    pendingInsertedScrollIndexRef.current = nextIndex;
+    setSelectedIndex(nextIndex);
   }, [insertPageAt, show, t]);
+
+  useEffect(() => {
+    const pendingIndex = pendingInsertedScrollIndexRef.current;
+    if (pendingIndex == null || pendingIndex !== selectedIndex) return;
+    const candidates = Array.from(document.querySelectorAll(`[data-preview-page-index="${pendingIndex}"]`)) as HTMLElement[];
+    const target = candidates.find((item) => item.offsetParent !== null) ?? candidates[0];
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    pendingInsertedScrollIndexRef.current = null;
+  }, [currentProject?.pages?.length, selectedIndex]);
 
   const persistCurrentPageDraft = useCallback((updates: Partial<PageDraft>) => {
     if (!currentProject) return;
@@ -4908,6 +4921,7 @@ export const SlidePreview: React.FC = () => {
                         className="relative"
                       >
                         <button
+                          data-preview-page-index={index}
                           onClick={() => {
                             if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                               togglePageSelection(page.id);
@@ -4941,6 +4955,7 @@ export const SlidePreview: React.FC = () => {
                 currentProject.pages.map((page, index) => (
                   <div key={page.id || `collapsed-${index}`} className="relative">
                     <button
+                      data-preview-page-index={index}
                       onClick={() => {
                         if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                           togglePageSelection(page.id);
@@ -5041,6 +5056,7 @@ export const SlidePreview: React.FC = () => {
                               className="relative group"
                             >
                               <button
+                                data-preview-page-index={index}
                                 onClick={() => {
                                   if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                                     togglePageSelection(page.id);
@@ -5129,6 +5145,7 @@ export const SlidePreview: React.FC = () => {
                       return (
                         <div key={page.id || `grid-${index}`} className="relative group">
                           <button
+                            data-preview-page-index={index}
                             onClick={() => {
                               if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                                 togglePageSelection(page.id);
@@ -5224,6 +5241,7 @@ export const SlidePreview: React.FC = () => {
                             {/* 移动端：简化缩略图 */}
                             <div className="md:hidden relative">
                               <button
+                                data-preview-page-index={index}
                                 onClick={() => {
                                   if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                                     togglePageSelection(page.id);
@@ -5264,7 +5282,7 @@ export const SlidePreview: React.FC = () => {
                               )}
                             </div>
                             {/* 桌面端：完整卡片 */}
-                            <div className="hidden md:block relative">
+                            <div className="hidden md:block relative" data-preview-page-index={index}>
                               {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
                                 <button
                                   onClick={(e) => {
@@ -5323,6 +5341,7 @@ export const SlidePreview: React.FC = () => {
                         {/* 移动端：简化缩略图 */}
                         <div className="md:hidden relative">
                           <button
+                            data-preview-page-index={index}
                             onClick={() => {
                               if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
                                 togglePageSelection(page.id);
@@ -5363,7 +5382,7 @@ export const SlidePreview: React.FC = () => {
                           )}
                         </div>
                         {/* 桌面端：完整卡片 */}
-                        <div className="hidden md:block relative">
+                        <div className="hidden md:block relative" data-preview-page-index={index}>
                           {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
                             <button
                               onClick={(e) => {
