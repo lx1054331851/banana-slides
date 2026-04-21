@@ -2648,9 +2648,23 @@ export const SlidePreview: React.FC = () => {
     return matches;
   };
 
-  const handleEditPage = useCallback((targetIndex?: number) => {
-    const nextIndex = typeof targetIndex === 'number' ? targetIndex : selectedIndex;
-    if (!currentProject?.pages[nextIndex]) return;
+  const handleEditPage = useCallback((targetPageKey?: string | null, targetIndex?: number) => {
+    if (!currentProject?.pages?.length) return;
+
+    let nextIndex = -1;
+    if (targetPageKey) {
+      nextIndex = currentProject.pages.findIndex(
+        (page) => (page.id || page.page_id) === targetPageKey
+      );
+    }
+    if (nextIndex < 0 && typeof targetIndex === 'number') {
+      nextIndex = targetIndex;
+    }
+    if (nextIndex < 0) {
+      nextIndex = selectedIndex;
+    }
+    if (!currentProject.pages[nextIndex]) return;
+
     const targetPage = currentProject.pages[nextIndex];
     const targetPageId = targetPage.id || targetPage.page_id || null;
     selectedPageIdRef.current = targetPageId;
@@ -2667,14 +2681,18 @@ export const SlidePreview: React.FC = () => {
 
   const outlineQuickEditPageIndex = useMemo(() => {
     if (!currentProject?.pages?.length || !outlineQuickEditPageId) return -1;
-    return currentProject.pages.findIndex((page) => page.id === outlineQuickEditPageId);
+    return currentProject.pages.findIndex(
+      (page) => (page.id || page.page_id) === outlineQuickEditPageId
+    );
   }, [currentProject?.pages, outlineQuickEditPageId]);
 
   const handleSaveOutlineForQuickEditTarget = useCallback((options?: { silent?: boolean }) => {
     if (!currentProject) return null;
     const fallbackPage = currentProject.pages[selectedIndex];
     const targetPage = outlineQuickEditPageId
-      ? currentProject.pages.find((page) => page.id === outlineQuickEditPageId) || fallbackPage
+      ? currentProject.pages.find(
+        (page) => (page.id || page.page_id) === outlineQuickEditPageId
+      ) || fallbackPage
       : fallbackPage;
     if (!targetPage?.id) return null;
 
@@ -5383,7 +5401,7 @@ export const SlidePreview: React.FC = () => {
                                   }
                                 }}
                                 onEdit={() => {
-                                  handleEditPage(index);
+                                  handleEditPage(page.id || page.page_id, index);
                                 }}
                                 onDelete={() => handleDeletePage(page)}
                                 showDelete={!isMultiSelectMode}
@@ -5483,7 +5501,7 @@ export const SlidePreview: React.FC = () => {
                               }
                             }}
                             onEdit={() => {
-                              handleEditPage(index);
+                              handleEditPage(page.id || page.page_id, index);
                             }}
                             onDelete={() => handleDeletePage(page)}
                             showDelete={!isMultiSelectMode}
