@@ -6222,7 +6222,7 @@ export const SlidePreview: React.FC = () => {
                 : t('preview.regenerateAllDescriptions', { count: 0 })}
             </Button>
             <div className="pt-1">
-              <div className="flex items-center gap-2">
+              <div className="grid grid-cols-[5rem_auto_5rem_1fr] items-center gap-2">
                 <input
                   type="number"
                   min={1}
@@ -6231,9 +6231,9 @@ export const SlidePreview: React.FC = () => {
                   onChange={(e) => setDescriptionRangeStart(e.target.value)}
                   placeholder={t('preview.rangePlaceholderStart')}
                   aria-label={t('preview.rangeStartPage')}
-                  className="w-20 h-9 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary px-3 text-sm outline-none focus:ring-2 focus:ring-banana-400"
+                  className="h-9 w-20 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary px-3 text-sm outline-none focus:ring-2 focus:ring-banana-400"
                 />
-                <span className="text-sm text-gray-500 dark:text-foreground-tertiary whitespace-nowrap">
+                <span className="inline-flex h-9 items-center justify-center whitespace-nowrap text-sm text-gray-500 dark:text-foreground-tertiary">
                   {t('preview.rangeSeparator')}
                 </span>
                 <input
@@ -6244,11 +6244,11 @@ export const SlidePreview: React.FC = () => {
                   onChange={(e) => setDescriptionRangeEnd(e.target.value)}
                   placeholder={t('preview.rangePlaceholderEnd')}
                   aria-label={t('preview.rangeEndPage')}
-                  className="w-20 h-9 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary px-3 text-sm outline-none focus:ring-2 focus:ring-banana-400"
+                  className="h-9 w-20 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary px-3 text-sm outline-none focus:ring-2 focus:ring-banana-400"
                 />
                 <Button
                   variant="secondary"
-                  className="h-9 px-3 whitespace-nowrap"
+                  className="h-9 justify-self-start whitespace-nowrap px-3"
                   onClick={handleGenerateDescriptionsByRange}
                 >
                   {t('preview.generateDescriptionsByRange')}
