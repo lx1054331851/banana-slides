@@ -2663,7 +2663,7 @@ export const SlidePreview: React.FC = () => {
         extraFields: editExtraFields,
         styleGuideBindings: editStyleGuideBindings,
       });
-      if (nextEditorDescriptionText !== editDescription) {
+      if (!options?.silent && nextEditorDescriptionText !== editDescription) {
         setEditDescription(nextEditorDescriptionText);
       }
       if (!options?.silent) {
