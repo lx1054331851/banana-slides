@@ -67,6 +67,7 @@ interface PageAiWorkbenchProps {
   }>;
   modelValue: string;
   modelOptions: readonly string[];
+  showModelPickerControl?: boolean;
   isSubmitting: boolean;
   isRegionSelectionActive: boolean;
   headerActions?: React.ReactNode;
@@ -105,6 +106,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   slashActions,
   modelValue,
   modelOptions,
+  showModelPickerControl = true,
   isSubmitting,
   isRegionSelectionActive,
   headerActions,
@@ -389,21 +391,23 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                 </div>
               )}
 
-              <div className="relative" ref={modelPickerRef}>
-                <button
-                  ref={modelPickerButtonRef}
-                  type="button"
-                  onClick={() => setShowModelPicker((prev) => !prev)}
-                  className={cn(
-                    'inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-[#e6ca67] hover:bg-[#fffdf2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/40 dark:hover:bg-background-hover',
-                    showModelPicker && 'border-banana-300 bg-[#fff7d9] text-slate-900 dark:border-banana-500/60 dark:bg-banana-500/10 dark:text-banana',
-                  )}
-                  title={`${modelLabel}：${modelValue}`}
-                  aria-label={modelLabel}
-                >
-                  <Settings2 size={16} />
-                </button>
-              </div>
+              {showModelPickerControl && (
+                <div className="relative" ref={modelPickerRef}>
+                  <button
+                    ref={modelPickerButtonRef}
+                    type="button"
+                    onClick={() => setShowModelPicker((prev) => !prev)}
+                    className={cn(
+                      'inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-[#e6ca67] hover:bg-[#fffdf2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/40 dark:hover:bg-background-hover',
+                      showModelPicker && 'border-banana-300 bg-[#fff7d9] text-slate-900 dark:border-banana-500/60 dark:bg-banana-500/10 dark:text-banana',
+                    )}
+                    title={`${modelLabel}：${modelValue}`}
+                    aria-label={modelLabel}
+                  >
+                    <Settings2 size={16} />
+                  </button>
+                </div>
+              )}
 
               <div className="ml-auto flex items-center gap-2">
                 <button
@@ -482,7 +486,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
         </div>,
         document.body
       )}
-      {showModelPicker && modelPickerPosition && typeof document !== 'undefined' && createPortal(
+      {showModelPickerControl && showModelPicker && modelPickerPosition && typeof document !== 'undefined' && createPortal(
         <div
           ref={modelPickerMenuRef}
           className="fixed z-[120] overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated dark:shadow-[0_18px_40px_rgba(0,0,0,0.36)]"
