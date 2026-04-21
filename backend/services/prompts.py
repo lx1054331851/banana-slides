@@ -189,6 +189,8 @@ def _get_page_detail_json_output_requirements() -> str:
     - 顶层仅允许 `outline` 与 `slide` 两个键。
     - 所有字段尽量基于输入信息扩写，不臆造精确数据。
     - 不允许输出引用来源字段。
+    - `visual_suggestion` 按需给出，用于解释抽象概念或增强情感共鸣；禁止平铺直叙的配图建议，优先使用视觉隐喻（如锁、迷雾晶体、桥梁、罗盘等意象）。
+    - `visual_suggestion` 必须同时描述：画面主体、意境/隐喻意图、风格氛围、视觉重点；不能只写名词列表。
     - `highlight_phrases` 必须与对应正文严格对齐：图文页每个 `detailed_items[i].highlight_phrases[*]` 必须是该 `detailed_items[i].body` 的连续原文子串；图表页 `highlight_phrases[*]` 必须是 `key_takeaway` 的连续原文子串。
     - 禁止写入正文中未出现的概念同义词/泛化词（例如正文没有“订单跟踪”，就不能放进 `highlight_phrases`）。""")
 
@@ -653,6 +655,7 @@ def get_page_description_json_prompt(project_context: 'ProjectContext', outline:
 - 封面页：优先使用 `headline`、`sub_headline`、`presenter_info`。
 - 结尾页：优先使用 `final_conclusion`、`vision`、`slogan`。
 - `highlight_phrases` 取值必须“可回指”：每个短语都要能在对应 `body`（图文页）或 `key_takeaway`（图表页）中逐字匹配到，不得改写、概括或替换同义词。
+- `visual_suggestion` 优先使用视觉隐喻，不要平铺直叙；并且必须写清主体、意境、风格、画面重点。
 
 {_get_page_detail_json_output_requirements()}
 {get_language_instruction(language)}
@@ -866,7 +869,7 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
 4. 专业术语与品牌名必须保留（例如 OpenClaw、Agent、低代码、经营协同平台）。
 5. 禁止无故降级结构：不要把已存在的结构化 JSON 改成纯文本描述。
 6. `highlight_phrases` 不能整页清空；若原有为空，可按正文补充 2-4 个关键词；所有高亮词必须是对应 `body` 或 `key_takeaway` 的连续原文子串，禁止新增正文里不存在的概念词。
-7. `visual_suggestion` 不能无故置空，应保留或增强为“主体 + 隐喻 + 风格 + 重点”。
+7. `visual_suggestion` 不能无故置空，应保留或增强为“主体 + 隐喻 + 风格 + 重点”；禁止退化为平铺直叙的配图名词。
 
 {mckinsey_guidance_block}
 
@@ -1475,6 +1478,7 @@ def get_ppt_page_content_extraction_prompt(markdown_text: str, language: str = N
 - 隐喻意图
 - 风格氛围
 - 视觉重点
+- 禁止平铺直叙的配图建议，优先使用具象视觉隐喻（如锁、桥梁、罗盘等）。
 
 # Output Schema（严格遵守）
 返回一个 JSON 对象，且只能有两个顶层键：`outline` 和 `slide`。
@@ -1566,6 +1570,7 @@ def get_ppt_page_content_extraction_from_image_prompt(page_outline: Optional[Dic
 
 # Visual Metaphor
 `visual_suggestion` 必须描述主体、隐喻意图、风格氛围、视觉重点，不能只写名词。
+- 禁止平铺直叙的配图建议，优先使用具象视觉隐喻（如锁、桥梁、罗盘等）。
 
 # Output Schema（严格遵守）
 返回一个 JSON 对象，且只能有两个顶层键：`outline` 和 `slide`。
