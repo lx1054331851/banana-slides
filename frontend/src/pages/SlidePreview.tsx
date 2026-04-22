@@ -85,6 +85,10 @@ const previewI18n = {
       outlineQuickEditTitle: "快速编辑本页大纲",
       outlineQuickEditSave: "保存大纲",
       outlineQuickEditGenerateDescription: "生成描述",
+      outlineQuickGeneratePromptTitle: "生成描述补充提示（可选）",
+      outlineQuickGeneratePromptPlaceholder: "例如：必须覆盖大纲中的每一条要点，不能遗漏关键术语和数字",
+      outlineQuickGeneratePromptHint: "该提示词仅作用于本次从大纲生成详细描述，不会保存到项目设置。",
+      outlineQuickGeneratePromptConfirm: "确认生成",
       quickEditModeEdit: "编辑",
       quickEditModePreview: "预览",
       regionSelect: "区域选图", endRegionSelect: "结束区域选图",
@@ -266,6 +270,10 @@ const previewI18n = {
       outlineQuickEditTitle: "Quick Edit Page Outline",
       outlineQuickEditSave: "Save Outline",
       outlineQuickEditGenerateDescription: "Generate Description",
+      outlineQuickGeneratePromptTitle: "Extra Prompt For Description (Optional)",
+      outlineQuickGeneratePromptPlaceholder: "e.g. Cover every outline bullet without missing key terms or numbers",
+      outlineQuickGeneratePromptHint: "This prompt applies only to the current outline-to-description generation and will not be saved to project settings.",
+      outlineQuickGeneratePromptConfirm: "Generate",
       quickEditModeEdit: "Edit",
       quickEditModePreview: "Preview",
       regionSelect: "Region Select", endRegionSelect: "End Region Select",
@@ -1598,6 +1606,8 @@ export const SlidePreview: React.FC = () => {
   const [isOutlineQuickEditOpen, setIsOutlineQuickEditOpen] = useState(false);
   const [outlineQuickEditPageId, setOutlineQuickEditPageId] = useState<string | null>(null);
   const [outlineQuickEditMode, setOutlineQuickEditMode] = useState<'edit' | 'preview'>('edit');
+  const [isOutlineQuickGeneratePromptOpen, setIsOutlineQuickGeneratePromptOpen] = useState(false);
+  const [outlineQuickGeneratePrompt, setOutlineQuickGeneratePrompt] = useState('');
   const [isOutlineQuickGeneratingDescription, setIsOutlineQuickGeneratingDescription] = useState(false);
   // 素材选择器模态开关
   const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([]);
@@ -3043,16 +3053,17 @@ export const SlidePreview: React.FC = () => {
     t,
   ]);
 
-  const handleGenerateDescriptionForCurrentPage = useCallback(async () => {
+  const handleGenerateDescriptionForCurrentPage = useCallback(async (descriptionRequirementsOverride?: string) => {
     if (!currentProject) return;
     const pageId = handleSaveOutlineForQuickEditTarget({ silent: true });
     if (!pageId) return;
     setIsOutlineQuickEditOpen(false);
+    setIsOutlineQuickGeneratePromptOpen(false);
 
     try {
       setIsOutlineQuickGeneratingDescription(true);
       await saveAllPages();
-      await generateDescriptions(undefined, [pageId]);
+      await generateDescriptions(undefined, [pageId], descriptionRequirementsOverride);
       await syncProject(projectId);
       clearPageDraftsByIds([pageId]);
       hydrateSelectedPageEditor(useProjectStore.getState().currentProject);
@@ -3065,6 +3076,8 @@ export const SlidePreview: React.FC = () => {
     } finally {
       setIsOutlineQuickGeneratingDescription(false);
       setOutlineQuickEditPageId(null);
+      setOutlineQuickEditMode('edit');
+      setOutlineQuickGeneratePrompt('');
     }
   }, [
     currentProject,
@@ -6155,6 +6168,8 @@ export const SlidePreview: React.FC = () => {
           setIsOutlineQuickEditOpen(false);
           setOutlineQuickEditPageId(null);
           setOutlineQuickEditMode('edit');
+          setIsOutlineQuickGeneratePromptOpen(false);
+          setOutlineQuickGeneratePrompt('');
         }}
         title={`${t('preview.outlineQuickEditTitle')} · ${t('preview.page', { num: (outlineQuickEditPageIndex >= 0 ? outlineQuickEditPageIndex : selectedIndex) + 1 })}`}
         size="wide75"
@@ -6239,13 +6254,18 @@ export const SlidePreview: React.FC = () => {
                 setIsOutlineQuickEditOpen(false);
                 setOutlineQuickEditPageId(null);
                 setOutlineQuickEditMode('edit');
+                setIsOutlineQuickGeneratePromptOpen(false);
+                setOutlineQuickGeneratePrompt('');
               }}
             >
               {t('common.cancel')}
             </Button>
             <Button
               variant="secondary"
-              onClick={() => void handleGenerateDescriptionForCurrentPage()}
+              onClick={() => {
+                setOutlineQuickGeneratePrompt('');
+                setIsOutlineQuickGeneratePromptOpen(true);
+              }}
               disabled={isOutlineQuickGeneratingDescription}
             >
               {isOutlineQuickGeneratingDescription ? t('preview.descriptionGenerating') : t('preview.outlineQuickEditGenerateDescription')}
@@ -6257,9 +6277,50 @@ export const SlidePreview: React.FC = () => {
                 setIsOutlineQuickEditOpen(false);
                 setOutlineQuickEditPageId(null);
                 setOutlineQuickEditMode('edit');
+                setIsOutlineQuickGeneratePromptOpen(false);
+                setOutlineQuickGeneratePrompt('');
               }}
             >
               {t('preview.outlineQuickEditSave')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isOutlineQuickGeneratePromptOpen}
+        onClose={() => {
+          if (isOutlineQuickGeneratingDescription) return;
+          setIsOutlineQuickGeneratePromptOpen(false);
+        }}
+        title={t('preview.outlineQuickGeneratePromptTitle')}
+        size="md"
+        closeOnOverlayClick={!isOutlineQuickGeneratingDescription}
+      >
+        <div className="space-y-4">
+          <textarea
+            value={outlineQuickGeneratePrompt}
+            onChange={(event) => setOutlineQuickGeneratePrompt(event.target.value)}
+            placeholder={t('preview.outlineQuickGeneratePromptPlaceholder')}
+            className="h-36 w-full resize-none rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
+          />
+          <div className="text-xs text-gray-500 dark:text-foreground-tertiary">
+            {t('preview.outlineQuickGeneratePromptHint')}
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button
+              variant="ghost"
+              onClick={() => setIsOutlineQuickGeneratePromptOpen(false)}
+              disabled={isOutlineQuickGeneratingDescription}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => void handleGenerateDescriptionForCurrentPage(outlineQuickGeneratePrompt)}
+              disabled={isOutlineQuickGeneratingDescription}
+            >
+              {isOutlineQuickGeneratingDescription ? t('preview.descriptionGenerating') : t('preview.outlineQuickGeneratePromptConfirm')}
             </Button>
           </div>
         </div>

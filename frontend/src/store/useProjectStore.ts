@@ -123,7 +123,7 @@ interface ProjectState {
   generateOutline: () => Promise<void>;
   generateOutlineStream: (lockPageCount?: boolean) => Promise<{ complete: boolean } | undefined>;
   generateFromDescription: () => Promise<void>;
-  generateDescriptions: (detailLevel?: string, pageIds?: string[]) => Promise<void>;
+  generateDescriptions: (detailLevel?: string, pageIds?: string[], descriptionRequirementsOverride?: string) => Promise<void>;
   generatePageDescription: (pageId: string, detailLevel?: string) => Promise<void>;
   regenerateRenovationPage: (pageId: string, keepLayout?: boolean) => Promise<void>;
   generateImages: (pageIds?: string[], generationOverride?: GenerationOverride) => Promise<void>;
@@ -812,7 +812,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
   },
 
   // 生成描述（根据设置选择流式或并行模式）
-  generateDescriptions: async (detailLevel?: string, pageIds?: string[]) => {
+  generateDescriptions: async (detailLevel?: string, pageIds?: string[], descriptionRequirementsOverride?: string) => {
     const { currentProject } = get();
     if (!currentProject || !currentProject.id) return;
 
@@ -889,7 +889,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
             set({ error: normalizeErrorMessage(message) });
             streamDone = true;
           },
-        }, undefined, detailLevel, pageIds);
+        }, undefined, detailLevel, pageIds, descriptionRequirementsOverride);
 
         streamDone = true;
         await renderPromise;
@@ -940,7 +940,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
           throw new Error(t('store.projectIdMissing'));
         }
 
-        const response = await api.generateDescriptions(projectId, undefined, detailLevel, pageIds);
+        const response = await api.generateDescriptions(projectId, undefined, detailLevel, pageIds, descriptionRequirementsOverride);
         const taskId = response.data?.task_id;
 
         if (!taskId) {

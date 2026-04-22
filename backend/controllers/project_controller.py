@@ -55,6 +55,18 @@ logger = logging.getLogger(__name__)
 project_bp = Blueprint('projects', __name__, url_prefix='/api/projects')
 
 
+def _merge_description_requirements(base_requirements: str | None, override_requirements: str | None) -> str | None:
+    """
+    Merge project-level description requirements with request-level override requirements.
+    Request-level override is treated as an additive hint for this generation request only.
+    """
+    base = normalize_user_text(base_requirements)
+    override = normalize_user_text(override_requirements)
+    if base and override:
+        return f"{base}\n\n{override}"
+    return override or base
+
+
 def _recover_stale_generation_state(project: Project) -> None:
     """
     Recover stale task/page statuses for a project.
@@ -1150,6 +1162,7 @@ def generate_descriptions(project_id):
         max_workers = data.get('max_workers', current_app.config.get('MAX_DESCRIPTION_WORKERS', 5))
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
         detail_level = data.get('detail_level', 'default')
+        description_requirements_override = data.get('description_requirements_override')
         selected_page_ids = parse_page_ids_from_body(data)
         pages = get_filtered_pages(project_id, selected_page_ids if selected_page_ids else None)
         if not pages:
@@ -1192,7 +1205,13 @@ def generate_descriptions(project_id):
         
         # Get reference files content and create project context
         reference_files_content = _get_project_reference_files_content(project_id)
-        project_context = ProjectContext(project, reference_files_content)
+        merged_description_requirements = _merge_description_requirements(
+            project.description_requirements,
+            description_requirements_override,
+        )
+        project_context_payload = project.to_dict()
+        project_context_payload['description_requirements'] = merged_description_requirements
+        project_context = ProjectContext(project_context_payload, reference_files_content)
         
         # Get app instance for background task
         app = current_app._get_current_object()
@@ -1250,6 +1269,7 @@ def generate_descriptions_stream(project_id):
     data = request.get_json() or {}
     language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
     detail_level = data.get('detail_level', 'default')
+    description_requirements_override = data.get('description_requirements_override')
     selected_page_ids = parse_page_ids_from_body(data)
 
     app = current_app._get_current_object()
@@ -1260,7 +1280,13 @@ def generate_descriptions_stream(project_id):
                 proj = db.session.get(Project, project_id)
                 ai_service = get_ai_service()
                 reference_files_content = _get_project_reference_files_content(project_id)
-                project_context = ProjectContext(proj, reference_files_content)
+                merged_description_requirements = _merge_description_requirements(
+                    proj.description_requirements if proj else None,
+                    description_requirements_override,
+                )
+                project_context_payload = proj.to_dict() if proj else {}
+                project_context_payload['description_requirements'] = merged_description_requirements
+                project_context = ProjectContext(project_context_payload, reference_files_content)
 
                 all_pages = Page.query.filter_by(project_id=project_id).order_by(Page.order_index).all()
                 if not all_pages:

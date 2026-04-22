@@ -341,14 +341,17 @@ export const generateDescriptions = async (
   language?: OutputLanguage,
   detailLevel?: string,
   pageIds?: string[],
+  descriptionRequirementsOverride?: string,
 ): Promise<ApiResponse> => {
   const lang = language || await getStoredOutputLanguage();
+  const trimmedOverride = (descriptionRequirementsOverride || '').trim();
   const response = await apiClient.post<ApiResponse>(
     `/api/projects/${projectId}/generate/descriptions`,
     {
       language: lang,
       detail_level: detailLevel || 'default',
       ...(pageIds && pageIds.length > 0 ? { page_ids: pageIds } : {}),
+      ...(trimmedOverride ? { description_requirements_override: trimmedOverride } : {}),
     }
   );
   return response.data;
@@ -376,9 +379,11 @@ export const generateDescriptionsStream = async (
   language?: OutputLanguage,
   detailLevel?: string,
   pageIds?: string[],
+  descriptionRequirementsOverride?: string,
 ): Promise<void> => {
   const lang = language || await getStoredOutputLanguage();
   const accessCode = localStorage.getItem('banana-access-code');
+  const trimmedOverride = (descriptionRequirementsOverride || '').trim();
 
   const response = await fetch(`/api/projects/${projectId}/generate/descriptions/stream`, {
     method: 'POST',
@@ -390,6 +395,7 @@ export const generateDescriptionsStream = async (
       language: lang,
       detail_level: detailLevel || 'default',
       ...(pageIds && pageIds.length > 0 ? { page_ids: pageIds } : {}),
+      ...(trimmedOverride ? { description_requirements_override: trimmedOverride } : {}),
     }),
   });
 
