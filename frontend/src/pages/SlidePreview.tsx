@@ -6160,7 +6160,7 @@ export const SlidePreview: React.FC = () => {
         size="wide75"
         closeOnOverlayClick={false}
       >
-        <div className="mx-auto flex h-[72vh] max-h-[78vh] w-full max-w-[980px] flex-col">
+        <div className="mx-auto flex h-[min(72vh,780px)] max-h-[78vh] w-full max-w-[980px] flex-col">
           <div className="shrink-0 space-y-2">
             <div className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{t('preview.enterTitle')}</div>
             <input
