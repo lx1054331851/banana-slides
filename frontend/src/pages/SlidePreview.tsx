@@ -4452,9 +4452,9 @@ export const SlidePreview: React.FC = () => {
             />
           )}
           {useRenovationPreviewForm && renovationJsonViewMode === 'text' && (
-            <div className="absolute bottom-[-5px] left-0 right-0 z-20 flex items-center justify-end gap-2 px-2 sm:bottom-[-9px]">
+            <div className="pointer-events-none absolute bottom-[-5px] left-0 right-0 z-20 flex items-center justify-end gap-2 px-2 sm:bottom-[-9px]">
               {showJsonRefineDialog && (
-                <div className="min-w-0 flex-1 p-0 transition-all duration-300">
+                <div className="pointer-events-auto min-w-0 flex-1 p-0 transition-all duration-300">
                   <div className="flex items-center gap-2">
                     <input
                       ref={jsonRefineInputRef}
@@ -4496,7 +4496,7 @@ export const SlidePreview: React.FC = () => {
                   </div>
                 </div>
               )}
-              <div className="inline-flex items-center gap-2">
+              <div className="pointer-events-auto inline-flex items-center gap-2">
                 <Button
                   type="button"
                   variant="ghost"
