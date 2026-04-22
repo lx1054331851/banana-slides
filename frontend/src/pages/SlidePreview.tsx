@@ -1563,6 +1563,7 @@ export const SlidePreview: React.FC = () => {
   const pendingOutlineFocusIndexRef = useRef<number | null>(null);
   const descriptionTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const styleGuideTextareaRef = useRef<MarkdownTextareaRef | null>(null);
+  const editorJsonContainerRef = useRef<HTMLDivElement | null>(null);
   const outlineQuickPointsTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const activeDescriptionSetContent = useRef<(updater: (prev: string) => string) => void>(setEditDescription);
   const activeDescriptionInsertAtCursor = useRef<((markdown: string) => void) | undefined>(undefined);
@@ -4271,6 +4272,24 @@ export const SlidePreview: React.FC = () => {
     : 'grid h-full min-h-0 gap-3 grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-4 lg:grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]';
   const shouldUseEditorVerticalSplit = useRenovationPreviewForm && !isMobileView;
   const isEditorPaneHidden = !isMobileView && isEditorPaneCollapsed;
+  const focusJsonEditorField = useCallback((mode: 'text' | 'styleGuide') => {
+    if (mode === 'styleGuide') {
+      styleGuideTextareaRef.current?.focus();
+    } else {
+      descriptionTextareaRef.current?.focus();
+    }
+
+    const testId = mode === 'styleGuide' ? 'preview-style-guide-input' : 'preview-text-description-input';
+    const container = editorJsonContainerRef.current;
+    if (!container) return;
+
+    const root = container.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null;
+    const textbox = root?.getAttribute('role') === 'textbox'
+      ? root
+      : (root?.querySelector('[role="textbox"]') as HTMLElement | null);
+    textbox?.focus();
+  }, []);
+
   const handleEditorContainerMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement | null;
     if (!target) return;
@@ -4281,12 +4300,11 @@ export const SlidePreview: React.FC = () => {
     if (shouldSkipFocus) return;
 
     if (useRenovationPreviewForm && renovationJsonViewMode === 'styleGuide') {
-      styleGuideTextareaRef.current?.focus();
+      focusJsonEditorField('styleGuide');
       return;
     }
-    console.log('focus description textarea', styleGuideTextareaRef.current);
-    descriptionTextareaRef.current?.focus();
-  }, [useRenovationPreviewForm, renovationJsonViewMode]);
+    focusJsonEditorField('text');
+  }, [focusJsonEditorField, useRenovationPreviewForm, renovationJsonViewMode]);
 
   const editorCanvasContent = (
     <div
@@ -4340,6 +4358,7 @@ export const SlidePreview: React.FC = () => {
         )}
 
         <div
+          ref={editorJsonContainerRef}
           className={`relative min-h-0 flex flex-col ${
             useRenovationPreviewForm
               ? ''
