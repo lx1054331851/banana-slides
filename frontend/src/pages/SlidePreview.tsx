@@ -1147,6 +1147,8 @@ export const SlidePreview: React.FC = () => {
   const runModelMenuRef = useRef<HTMLDivElement | null>(null);
   const settingsSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const textAutoSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const textChangesPendingPersistRef = useRef(false);
+  const textPersistInFlightRef = useRef(false);
   const [descriptionRequirementsDraft, setDescriptionRequirementsDraft] = useState('');
   const [isSavingDescriptionRequirements, setIsSavingDescriptionRequirements] = useState(false);
   const [pageDrafts, setPageDrafts] = useState<Record<string, PageDraft>>({});
@@ -2900,6 +2902,7 @@ export const SlidePreview: React.FC = () => {
 
   // 调度页面文本的自动保存，连续输入时只在停顿后触发一次。
   const scheduleTextAutoSave = useCallback(() => {
+    textChangesPendingPersistRef.current = true;
     if (textAutoSaveTimerRef.current) {
       clearTimeout(textAutoSaveTimerRef.current);
     }
@@ -2912,6 +2915,31 @@ export const SlidePreview: React.FC = () => {
       }
     }, 900);
   }, [handleSaveOutlineAndDescription]);
+
+  const persistTextEditsNow = useCallback((options?: { silent?: boolean }) => {
+    if (textAutoSaveTimerRef.current) {
+      clearTimeout(textAutoSaveTimerRef.current);
+      textAutoSaveTimerRef.current = undefined;
+    }
+
+    handleSaveOutlineAndDescription({ silent: options?.silent ?? true });
+
+    if (!textChangesPendingPersistRef.current || textPersistInFlightRef.current) {
+      return;
+    }
+
+    textPersistInFlightRef.current = true;
+    void (async () => {
+      try {
+        await saveAllPages();
+        textChangesPendingPersistRef.current = false;
+      } catch (error) {
+        console.error('Failed to persist page text on blur:', error);
+      } finally {
+        textPersistInFlightRef.current = false;
+      }
+    })();
+  }, [handleSaveOutlineAndDescription, saveAllPages]);
 
   useEffect(() => {
     return () => {
@@ -4108,6 +4136,7 @@ export const SlidePreview: React.FC = () => {
         description_content: nextDescriptionContent as DescriptionContent,
       });
       await saveAllPages();
+      textChangesPendingPersistRef.current = false;
       setJsonRefineHistory((prev) => [...prev, requirement]);
       setJsonRefineRequirement('');
       setShowJsonRefineDialog(false);
@@ -4416,6 +4445,7 @@ export const SlidePreview: React.FC = () => {
             <MarkdownTextarea
               value={resolvedStyleGuideText}
               onChange={(value: string) => handleStyleGuideTextChange(value)}
+              onBlur={() => persistTextEditsNow({ silent: true })}
               placeholder={t('preview.jsonStyleGuidePlaceholder')}
               data-testid="preview-style-guide-input"
               rows={14}
@@ -4438,6 +4468,7 @@ export const SlidePreview: React.FC = () => {
               onPaste={handleDescriptionPaste}
               onFiles={handleDescriptionFiles}
               onFocus={focusMainDescriptionField}
+              onBlur={() => persistTextEditsNow({ silent: true })}
               placeholder={useRenovationPreviewForm ? t('preview.enterPageJson') : t('preview.enterDescription')}
               data-testid="preview-text-description-input"
               rows={useRenovationPreviewForm ? 14 : 8}
