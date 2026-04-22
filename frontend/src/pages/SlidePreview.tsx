@@ -1100,7 +1100,13 @@ export const SlidePreview: React.FC = () => {
   const [previewSplitContainerWidth, setPreviewSplitContainerWidth] = useState(0);
   const [isResizingPreviewSplit, setIsResizingPreviewSplit] = useState(false);
   const previewSplitContainerRef = useRef<HTMLDivElement | null>(null);
-  const previewSplitResizeRef = useRef<{ startX: number; startWidth: number; availableWidth: number } | null>(null);
+  const previewSplitResizeRef = useRef<{
+    startX: number;
+    startWidth: number;
+    availableWidth: number;
+    visualMinWidth: number;
+    editorMinWidth: number;
+  } | null>(null);
   const [isEditorPaneCollapsed, setIsEditorPaneCollapsed] = useState(() => {
     try {
       return localStorage.getItem(PREVIEW_EDITOR_COLLAPSED_STORAGE_KEY) === '1';
@@ -1360,17 +1366,43 @@ export const SlidePreview: React.FC = () => {
     return () => observer.disconnect();
   }, [sidebarWidthPx, isMobileView, currentProject?.id]);
 
+  const resolvePreviewSplitMinWidths = useCallback((availableWidth: number) => {
+    const desiredTotalMinWidth = PREVIEW_VISUAL_MIN_WIDTH + PREVIEW_EDITOR_MIN_WIDTH;
+    if (availableWidth >= desiredTotalMinWidth) {
+      return {
+        visualMinWidth: PREVIEW_VISUAL_MIN_WIDTH,
+        editorMinWidth: PREVIEW_EDITOR_MIN_WIDTH,
+      };
+    }
+    const visualRatio = PREVIEW_VISUAL_MIN_WIDTH / desiredTotalMinWidth;
+    const visualMinWidth = Math.max(0, Math.floor(availableWidth * visualRatio));
+    const editorMinWidth = Math.max(0, availableWidth - visualMinWidth);
+    return { visualMinWidth, editorMinWidth };
+  }, []);
+
   const resolvedPreviewSplitRatio = useMemo(() => {
     if (isMobileView) return PREVIEW_SPLIT_DEFAULT_RATIO;
     if (!previewSplitContainerWidth) return previewSplitRatio;
 
     const availableWidth = Math.max(1, previewSplitContainerWidth - PREVIEW_SPLIT_DIVIDER_PX);
-    const minRatio = PREVIEW_VISUAL_MIN_WIDTH / availableWidth;
-    const maxRatio = (availableWidth - PREVIEW_EDITOR_MIN_WIDTH) / availableWidth;
-    const clampedMin = Math.min(Math.max(minRatio, 0.2), 0.8);
-    const clampedMax = Math.max(clampedMin, Math.min(maxRatio, 0.8));
+    const { visualMinWidth, editorMinWidth } = resolvePreviewSplitMinWidths(availableWidth);
+    const minRatio = visualMinWidth / availableWidth;
+    const maxRatio = (availableWidth - editorMinWidth) / availableWidth;
+    const clampedMin = Math.min(Math.max(minRatio, 0), 1);
+    const clampedMax = Math.max(clampedMin, Math.min(maxRatio, 1));
     return Math.min(Math.max(previewSplitRatio, clampedMin), clampedMax);
-  }, [isMobileView, previewSplitContainerWidth, previewSplitRatio]);
+  }, [isMobileView, previewSplitContainerWidth, previewSplitRatio, resolvePreviewSplitMinWidths]);
+
+  const resolvedPreviewSplitMinWidths = useMemo(() => {
+    if (isMobileView || !previewSplitContainerWidth) {
+      return {
+        visualMinWidth: PREVIEW_VISUAL_MIN_WIDTH,
+        editorMinWidth: PREVIEW_EDITOR_MIN_WIDTH,
+      };
+    }
+    const availableWidth = Math.max(1, previewSplitContainerWidth - PREVIEW_SPLIT_DIVIDER_PX);
+    return resolvePreviewSplitMinWidths(availableWidth);
+  }, [isMobileView, previewSplitContainerWidth, resolvePreviewSplitMinWidths]);
 
   useEffect(() => {
     if (!isResizingPreviewSplit) return;
@@ -1380,8 +1412,8 @@ export const SlidePreview: React.FC = () => {
       if (!resizeState) return;
       const nextWidth = resizeState.startWidth + (event.clientX - resizeState.startX);
       const clampedWidth = Math.min(
-        Math.max(nextWidth, PREVIEW_VISUAL_MIN_WIDTH),
-        Math.max(PREVIEW_VISUAL_MIN_WIDTH, resizeState.availableWidth - PREVIEW_EDITOR_MIN_WIDTH)
+        Math.max(nextWidth, resizeState.visualMinWidth),
+        Math.max(resizeState.visualMinWidth, resizeState.availableWidth - resizeState.editorMinWidth)
       );
       setPreviewSplitRatio(clampedWidth / resizeState.availableWidth);
     };
@@ -1407,13 +1439,16 @@ export const SlidePreview: React.FC = () => {
     event.preventDefault();
     const containerWidth = previewSplitContainerRef.current.getBoundingClientRect().width;
     const availableWidth = Math.max(1, containerWidth - PREVIEW_SPLIT_DIVIDER_PX);
+    const { visualMinWidth, editorMinWidth } = resolvePreviewSplitMinWidths(availableWidth);
     previewSplitResizeRef.current = {
       startX: event.clientX,
       startWidth: availableWidth * resolvedPreviewSplitRatio,
       availableWidth,
+      visualMinWidth,
+      editorMinWidth,
     };
     setIsResizingPreviewSplit(true);
-  }, [isMobileView, resolvedPreviewSplitRatio]);
+  }, [isMobileView, resolvedPreviewSplitRatio, resolvePreviewSplitMinWidths]);
 
   useEffect(() => {
     const node = editorVerticalSplitContainerRef.current;
@@ -1490,10 +1525,13 @@ export const SlidePreview: React.FC = () => {
 
     const previewContainerWidth = previewSplitContainerRef.current.getBoundingClientRect().width;
     const previewAvailableWidth = Math.max(1, previewContainerWidth - PREVIEW_SPLIT_DIVIDER_PX);
+    const { visualMinWidth, editorMinWidth } = resolvePreviewSplitMinWidths(previewAvailableWidth);
     previewSplitResizeRef.current = {
       startX: event.clientX,
       startWidth: previewAvailableWidth * resolvedPreviewSplitRatio,
       availableWidth: previewAvailableWidth,
+      visualMinWidth,
+      editorMinWidth,
     };
 
     const editorContainerHeight = editorVerticalSplitContainerRef.current.getBoundingClientRect().height;
@@ -1506,7 +1544,7 @@ export const SlidePreview: React.FC = () => {
 
     setIsResizingPreviewSplit(true);
     setIsResizingEditorVerticalSplit(true);
-  }, [isMobileView, resolvedPreviewSplitRatio, resolvedEditorVerticalSplitRatio]);
+  }, [isMobileView, resolvedPreviewSplitRatio, resolvedEditorVerticalSplitRatio, resolvePreviewSplitMinWidths]);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [activeTemplateTab, setActiveTemplateTab] = useState<TemplateSelectorTab>('image');
   const [draftTemplateSelection, setDraftTemplateSelection] = useState<TemplateSelection | null>(null);
@@ -5797,7 +5835,7 @@ export const SlidePreview: React.FC = () => {
                         ? {
                           gridTemplateColumns: isEditorPaneHidden
                             ? 'minmax(0,1fr) 0px 0px'
-                            : `minmax(${PREVIEW_VISUAL_MIN_WIDTH}px, ${Math.max(resolvedPreviewSplitRatio * 100, 1)}fr) ${PREVIEW_SPLIT_DIVIDER_PX}px minmax(${PREVIEW_EDITOR_MIN_WIDTH}px, ${Math.max((1 - resolvedPreviewSplitRatio) * 100, 1)}fr)`,
+                            : `minmax(${resolvedPreviewSplitMinWidths.visualMinWidth}px, ${Math.max(resolvedPreviewSplitRatio * 100, 1)}fr) ${PREVIEW_SPLIT_DIVIDER_PX}px minmax(${resolvedPreviewSplitMinWidths.editorMinWidth}px, ${Math.max((1 - resolvedPreviewSplitRatio) * 100, 1)}fr)`,
                         }
                         : undefined}
                     >
