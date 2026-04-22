@@ -4272,7 +4272,7 @@ export const SlidePreview: React.FC = () => {
     : 'grid h-full min-h-0 gap-3 grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-4 lg:grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]';
   const shouldUseEditorVerticalSplit = useRenovationPreviewForm && !isMobileView;
   const isEditorPaneHidden = !isMobileView && isEditorPaneCollapsed;
-  const focusJsonEditorField = useCallback((mode: 'text' | 'styleGuide') => {
+  const focusJsonEditorField = (mode: 'text' | 'styleGuide') => {
     if (mode === 'styleGuide') {
       styleGuideTextareaRef.current?.focus();
     } else {
@@ -4288,9 +4288,9 @@ export const SlidePreview: React.FC = () => {
       ? root
       : (root?.querySelector('[role="textbox"]') as HTMLElement | null);
     textbox?.focus();
-  }, []);
+  };
 
-  const handleEditorContainerMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+  const handleEditorContainerMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement | null;
     if (!target) return;
 
@@ -4304,7 +4304,7 @@ export const SlidePreview: React.FC = () => {
       return;
     }
     focusJsonEditorField('text');
-  }, [focusJsonEditorField, useRenovationPreviewForm, renovationJsonViewMode]);
+  };
 
   const editorCanvasContent = (
     <div
