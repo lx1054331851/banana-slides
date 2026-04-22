@@ -1561,6 +1561,7 @@ export const SlidePreview: React.FC = () => {
   const outlineTitleInputRef = useRef<HTMLInputElement | null>(null);
   const pendingOutlineFocusIndexRef = useRef<number | null>(null);
   const descriptionTextareaRef = useRef<MarkdownTextareaRef | null>(null);
+  const styleGuideTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const outlineQuickPointsTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const activeDescriptionSetContent = useRef<(updater: (prev: string) => string) => void>(setEditDescription);
   const activeDescriptionInsertAtCursor = useRef<((markdown: string) => void) | undefined>(undefined);
@@ -4269,6 +4270,21 @@ export const SlidePreview: React.FC = () => {
     : 'grid h-full min-h-0 gap-3 grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-4 lg:grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]';
   const shouldUseEditorVerticalSplit = useRenovationPreviewForm && !isMobileView;
   const isEditorPaneHidden = !isMobileView && isEditorPaneCollapsed;
+  const handleEditorContainerMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
+    const shouldSkipFocus = Boolean(
+      target.closest('button, a, input, textarea, select, [role="button"], [role="textbox"], [contenteditable="true"]')
+    );
+    if (shouldSkipFocus) return;
+
+    if (useRenovationPreviewForm && renovationJsonViewMode === 'styleGuide') {
+      styleGuideTextareaRef.current?.focus();
+      return;
+    }
+    descriptionTextareaRef.current?.focus();
+  }, [useRenovationPreviewForm, renovationJsonViewMode]);
 
   const editorCanvasContent = (
     <div
@@ -4327,6 +4343,7 @@ export const SlidePreview: React.FC = () => {
               ? ''
               : 'overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 dark:border-[#2d3447] dark:bg-[#151a26]'
           }`}
+          onMouseDown={handleEditorContainerMouseDown}
         >
           <div className={`mb-2 shrink-0 ${useRenovationPreviewForm ? 'flex items-center justify-between gap-2' : ''}`}>
             <div className={`${useRenovationPreviewForm ? 'flex min-w-0 items-center gap-3' : ''}`}>
@@ -4443,6 +4460,7 @@ export const SlidePreview: React.FC = () => {
           </div>
           {useRenovationPreviewForm && renovationJsonViewMode === 'styleGuide' ? (
             <MarkdownTextarea
+              ref={styleGuideTextareaRef}
               value={resolvedStyleGuideText}
               onChange={(value: string) => handleStyleGuideTextChange(value)}
               onBlur={() => persistTextEditsNow({ silent: true })}
