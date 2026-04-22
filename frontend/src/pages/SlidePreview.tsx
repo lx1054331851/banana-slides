@@ -85,6 +85,8 @@ const previewI18n = {
       outlineQuickEditTitle: "快速编辑本页大纲",
       outlineQuickEditSave: "保存大纲",
       outlineQuickEditGenerateDescription: "生成描述",
+      quickEditModeEdit: "编辑",
+      quickEditModePreview: "预览",
       regionSelect: "区域选图", endRegionSelect: "结束区域选图",
       pageOutline: "页面大纲（可编辑）", pageDescription: "页面描述（可编辑）",
       pageJson: "页面 JSON",
@@ -264,6 +266,8 @@ const previewI18n = {
       outlineQuickEditTitle: "Quick Edit Page Outline",
       outlineQuickEditSave: "Save Outline",
       outlineQuickEditGenerateDescription: "Generate Description",
+      quickEditModeEdit: "Edit",
+      quickEditModePreview: "Preview",
       regionSelect: "Region Select", endRegionSelect: "End Region Select",
       pageOutline: "Page Outline (Editable)", pageDescription: "Page Description (Editable)",
       pageJson: "Page JSON",
@@ -417,6 +421,7 @@ import {
 import {
   Button,
   Loading,
+  Markdown,
   MarkdownTextarea,
   Modal,
   useToast,
@@ -1592,6 +1597,7 @@ export const SlidePreview: React.FC = () => {
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
   const [isOutlineQuickEditOpen, setIsOutlineQuickEditOpen] = useState(false);
   const [outlineQuickEditPageId, setOutlineQuickEditPageId] = useState<string | null>(null);
+  const [outlineQuickEditMode, setOutlineQuickEditMode] = useState<'edit' | 'preview'>('edit');
   const [isOutlineQuickGeneratingDescription, setIsOutlineQuickGeneratingDescription] = useState(false);
   // 素材选择器模态开关
   const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([]);
@@ -2708,6 +2714,7 @@ export const SlidePreview: React.FC = () => {
     setSelectedIndex(nextIndex);
     setEditOutlineTitle(targetPage.outline_content?.title || '');
     setEditOutlinePoints(targetPage.outline_content?.points?.join('\n') || '');
+    setOutlineQuickEditMode('edit');
     setIsOutlineQuickEditOpen(true);
     setIsRegionSelectionMode(false);
     setSelectionStart(null);
@@ -6147,6 +6154,7 @@ export const SlidePreview: React.FC = () => {
         onClose={() => {
           setIsOutlineQuickEditOpen(false);
           setOutlineQuickEditPageId(null);
+          setOutlineQuickEditMode('edit');
         }}
         title={`${t('preview.outlineQuickEditTitle')} · ${t('preview.page', { num: (outlineQuickEditPageIndex >= 0 ? outlineQuickEditPageIndex : selectedIndex) + 1 })}`}
         size="wide75"
@@ -6171,23 +6179,55 @@ export const SlidePreview: React.FC = () => {
           <div className="mt-4 min-h-0 flex-1 space-y-2">
             <div className="flex items-center justify-between gap-3">
               <div className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{t('preview.pointsPerLine')}</div>
-              <div className="text-xs text-gray-400 dark:text-foreground-tertiary">{t('preview.quickEditMarkdownHint')}</div>
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-gray-400 dark:text-foreground-tertiary">{t('preview.quickEditMarkdownHint')}</div>
+                <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 dark:border-border-primary dark:bg-background-secondary">
+                  <button
+                    type="button"
+                    onClick={() => setOutlineQuickEditMode('edit')}
+                    className={`rounded-md px-2 py-1 text-xs transition-colors ${
+                      outlineQuickEditMode === 'edit'
+                        ? 'bg-banana-100 text-banana-900 dark:bg-banana-500/20 dark:text-banana'
+                        : 'text-gray-500 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:bg-background-hover'
+                    }`}
+                  >
+                    {t('preview.quickEditModeEdit')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOutlineQuickEditMode('preview')}
+                    className={`rounded-md px-2 py-1 text-xs transition-colors ${
+                      outlineQuickEditMode === 'preview'
+                        ? 'bg-banana-100 text-banana-900 dark:bg-banana-500/20 dark:text-banana'
+                        : 'text-gray-500 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:bg-background-hover'
+                    }`}
+                  >
+                    {t('preview.quickEditModePreview')}
+                  </button>
+                </div>
+              </div>
             </div>
-            <MarkdownTextarea
-              ref={outlineQuickPointsTextareaRef}
-              value={editOutlinePoints}
-              onChange={(value) => {
-                setEditOutlinePoints(value);
-                persistCurrentPageDraft({ points: value });
-              }}
-              onPaste={handleOutlineQuickPointsPaste}
-              placeholder={t('preview.enterPointsPerLine')}
-              className="h-full min-h-[300px] rounded-xl"
-              fillHeight
-              showUploadButton={false}
-              showImagePreview={false}
-              resizable={false}
-            />
+            {outlineQuickEditMode === 'edit' ? (
+              <MarkdownTextarea
+                ref={outlineQuickPointsTextareaRef}
+                value={editOutlinePoints}
+                onChange={(value) => {
+                  setEditOutlinePoints(value);
+                  persistCurrentPageDraft({ points: value });
+                }}
+                onPaste={handleOutlineQuickPointsPaste}
+                placeholder={t('preview.enterPointsPerLine')}
+                className="h-full min-h-[300px] rounded-xl"
+                fillHeight
+                showUploadButton={false}
+                showImagePreview={false}
+                resizable={false}
+              />
+            ) : (
+              <div className="h-full min-h-[300px] overflow-auto rounded-xl border border-gray-200 bg-white p-4 dark:border-border-primary dark:bg-background-secondary">
+                <Markdown>{editOutlinePoints || ' '}</Markdown>
+              </div>
+            )}
           </div>
 
           <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-gray-100 pt-4 dark:border-border-primary">
@@ -6196,6 +6236,7 @@ export const SlidePreview: React.FC = () => {
               onClick={() => {
                 setIsOutlineQuickEditOpen(false);
                 setOutlineQuickEditPageId(null);
+                setOutlineQuickEditMode('edit');
               }}
             >
               {t('common.cancel')}
@@ -6213,6 +6254,7 @@ export const SlidePreview: React.FC = () => {
                 handleSaveOutlineForQuickEditTarget();
                 setIsOutlineQuickEditOpen(false);
                 setOutlineQuickEditPageId(null);
+                setOutlineQuickEditMode('edit');
               }}
             >
               {t('preview.outlineQuickEditSave')}
