@@ -105,7 +105,7 @@ const previewI18n = {
       refineDescription: "AI 优化", refineDescriptionTooltip: "AI 优化当前页描述",
       refinePlaceholder: "例如：让描述更具体，突出核心结论，改成更适合商务汇报的语气... · Enter 提交，Shift+Enter 换行",
       refineApplied: "AI 优化已应用到当前描述草稿", refineFailed: "页面描述优化失败，请稍后重试",
-      enterTitle: "输入页面标题", pointsPerLine: "要点（每行一个）",
+      enterTitle: "输入页面标题", pointsPerLine: "要点（每行一个）", quickEditMarkdownHint: "支持 Markdown；粘贴多行内容会自动格式化",
       enterPointsPerLine: "每行输入一个要点", enterDescription: "输入页面的详细描述内容",
       enterPageJson: "输入页面结构化 JSON 内容",
       selectContextImages: "选择上下文图片（可选）", useTemplateImage: "使用模板图片",
@@ -284,7 +284,7 @@ const previewI18n = {
       refineDescription: "AI Refine", refineDescriptionTooltip: "Refine current page description with AI",
       refinePlaceholder: "e.g., Make the description more specific, highlight the key conclusion, and use a business presentation tone... · Enter to submit, Shift+Enter for newline",
       refineApplied: "AI refinement applied to the current draft", refineFailed: "Failed to refine page description",
-      enterTitle: "Enter page title", pointsPerLine: "Key Points (one per line)",
+      enterTitle: "Enter page title", pointsPerLine: "Key Points (one per line)", quickEditMarkdownHint: "Markdown supported; pasted multi-line content will be auto-formatted",
       enterPointsPerLine: "Enter one key point per line", enterDescription: "Enter detailed page description",
       enterPageJson: "Enter structured page JSON",
       selectContextImages: "Select Context Images (Optional)", useTemplateImage: "Use Template Image",
@@ -417,7 +417,6 @@ import {
 import {
   Button,
   Loading,
-  Markdown,
   MarkdownTextarea,
   Modal,
   useToast,
@@ -510,6 +509,42 @@ type PageDraft = {
   description: string;
   extraFields: Record<string, string>;
   styleGuideBindings: StyleGuideBindings;
+};
+
+const MARKDOWN_BLOCK_PREFIXES = ['#', '-', '*', '>', '`', '|'];
+
+const looksLikeMarkdownLine = (line: string) => {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  if (MARKDOWN_BLOCK_PREFIXES.some((prefix) => trimmed.startsWith(prefix))) return true;
+  return /^\d+\.\s+/.test(trimmed);
+};
+
+const normalizeOutlinePasteToMarkdown = (raw: string) => {
+  const normalized = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+  if (!normalized || !normalized.includes('\n')) return raw;
+
+  const lines = normalized
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 2) return raw;
+  if (lines.some((line) => looksLikeMarkdownLine(line))) return normalized;
+
+  const stepPattern = /^(?:第[一二三四五六七八九十百零两\d]+(?:步|阶段|节|部分)[：:、.\s-]*|\d+[、.．)\s-]+)\s*(.+)$/;
+  const stepItems = lines
+    .map((line) => {
+      const match = line.match(stepPattern);
+      if (!match) return null;
+      return match[1]?.trim() || line;
+    })
+    .filter((item): item is string => !!item);
+
+  if (stepItems.length === lines.length) {
+    return stepItems.map((item, idx) => `${idx + 1}. ${item}`).join('\n');
+  }
+
+  return lines.map((line) => `- ${line}`).join('\n');
 };
 
 const SortablePreviewThumbnail: React.FC<{
@@ -1473,6 +1508,7 @@ export const SlidePreview: React.FC = () => {
   const outlineTitleInputRef = useRef<HTMLInputElement | null>(null);
   const pendingOutlineFocusIndexRef = useRef<number | null>(null);
   const descriptionTextareaRef = useRef<MarkdownTextareaRef | null>(null);
+  const outlineQuickPointsTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const activeDescriptionSetContent = useRef<(updater: (prev: string) => string) => void>(setEditDescription);
   const activeDescriptionInsertAtCursor = useRef<((markdown: string) => void) | undefined>(undefined);
   const [editExtraFields, setEditExtraFields] = useState<Record<string, string>>({});
@@ -2678,6 +2714,18 @@ export const SlidePreview: React.FC = () => {
     setSelectionRect(null);
     setIsSelectingRegion(false);
   }, [selectedIndex, currentProject]);
+
+  const handleOutlineQuickPointsPaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented) return;
+    const plainText = event.clipboardData.getData('text/plain');
+    if (!plainText) return;
+
+    const formatted = normalizeOutlinePasteToMarkdown(plainText);
+    if (!formatted || formatted === plainText) return;
+
+    event.preventDefault();
+    outlineQuickPointsTextareaRef.current?.insertAtCursor(formatted);
+  }, []);
 
   const outlineQuickEditPageIndex = useMemo(() => {
     if (!currentProject?.pages?.length || !outlineQuickEditPageId) return -1;
@@ -6121,26 +6169,25 @@ export const SlidePreview: React.FC = () => {
           </div>
 
           <div className="mt-4 min-h-0 flex-1 space-y-2">
-            <div className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{t('preview.pointsPerLine')}</div>
-            <div className="grid h-full min-h-0 gap-3 md:grid-cols-2">
-              <MarkdownTextarea
-                value={editOutlinePoints}
-                onChange={(value) => {
-                  setEditOutlinePoints(value);
-                  persistCurrentPageDraft({ points: value });
-                }}
-                placeholder={t('preview.enterPointsPerLine')}
-                className="h-full min-h-[300px] rounded-xl"
-                fillHeight
-                showUploadButton={false}
-                showImagePreview={false}
-                resizable={false}
-              />
-              <div className="h-full min-h-[300px] overflow-auto rounded-xl border border-gray-200 bg-white p-4 dark:border-border-primary dark:bg-background-secondary">
-                <div className="mb-2 text-xs font-medium text-gray-500 dark:text-foreground-tertiary">Markdown 预览</div>
-                <Markdown>{editOutlinePoints || ' '}</Markdown>
-              </div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{t('preview.pointsPerLine')}</div>
+              <div className="text-xs text-gray-400 dark:text-foreground-tertiary">{t('preview.quickEditMarkdownHint')}</div>
             </div>
+            <MarkdownTextarea
+              ref={outlineQuickPointsTextareaRef}
+              value={editOutlinePoints}
+              onChange={(value) => {
+                setEditOutlinePoints(value);
+                persistCurrentPageDraft({ points: value });
+              }}
+              onPaste={handleOutlineQuickPointsPaste}
+              placeholder={t('preview.enterPointsPerLine')}
+              className="h-full min-h-[300px] rounded-xl"
+              fillHeight
+              showUploadButton={false}
+              showImagePreview={false}
+              resizable={false}
+            />
           </div>
 
           <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-gray-100 pt-4 dark:border-border-primary">
