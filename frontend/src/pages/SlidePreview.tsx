@@ -6176,7 +6176,7 @@ export const SlidePreview: React.FC = () => {
             />
           </div>
 
-          <div className="mt-4 min-h-0 flex-1 space-y-2">
+          <div className="mt-4 flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden">
             <div className="flex items-center justify-between gap-3">
               <div className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{t('preview.pointsPerLine')}</div>
               <div className="flex items-center gap-2">
@@ -6207,30 +6207,32 @@ export const SlidePreview: React.FC = () => {
                 </div>
               </div>
             </div>
-            {outlineQuickEditMode === 'edit' ? (
-              <MarkdownTextarea
-                ref={outlineQuickPointsTextareaRef}
-                value={editOutlinePoints}
-                onChange={(value) => {
-                  setEditOutlinePoints(value);
-                  persistCurrentPageDraft({ points: value });
-                }}
-                onPaste={handleOutlineQuickPointsPaste}
-                placeholder={t('preview.enterPointsPerLine')}
-                className="h-full min-h-[300px] rounded-xl"
-                fillHeight
-                showUploadButton={false}
-                showImagePreview={false}
-                resizable={false}
-              />
-            ) : (
-              <div className="h-full min-h-[300px] overflow-auto rounded-xl border border-gray-200 bg-white p-4 dark:border-border-primary dark:bg-background-secondary">
-                <Markdown>{editOutlinePoints || ' '}</Markdown>
-              </div>
-            )}
+            <div className="min-h-0 flex-1 overflow-hidden">
+              {outlineQuickEditMode === 'edit' ? (
+                <MarkdownTextarea
+                  ref={outlineQuickPointsTextareaRef}
+                  value={editOutlinePoints}
+                  onChange={(value) => {
+                    setEditOutlinePoints(value);
+                    persistCurrentPageDraft({ points: value });
+                  }}
+                  onPaste={handleOutlineQuickPointsPaste}
+                  placeholder={t('preview.enterPointsPerLine')}
+                  className="min-h-[300px] rounded-xl"
+                  fillHeight
+                  showUploadButton={false}
+                  showImagePreview={false}
+                  resizable={false}
+                />
+              ) : (
+                <div className="h-full min-h-[300px] overflow-auto rounded-xl border border-gray-200 bg-white p-4 dark:border-border-primary dark:bg-background-secondary">
+                  <Markdown>{editOutlinePoints || ' '}</Markdown>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-gray-100 pt-4 dark:border-border-primary">
+          <div className="mt-4 flex shrink-0 justify-end gap-2 pt-4 dark:border-border-primary">
             <Button
               variant="ghost"
               onClick={() => {
