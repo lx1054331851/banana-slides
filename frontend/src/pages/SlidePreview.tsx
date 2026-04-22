@@ -506,7 +506,8 @@ const DEFAULT_EXTRA_FIELDS = ['视觉元素', '视觉焦点', '排版布局', '�
 const PREVIEW_SPLIT_STORAGE_KEY = 'previewSplitRatio';
 const PREVIEW_EDITOR_COLLAPSED_STORAGE_KEY = 'previewEditorPaneCollapsed';
 const PREVIEW_SPLIT_DEFAULT_RATIO = 0.45;
-const PREVIEW_SPLIT_DIVIDER_PX = 12;
+const PREVIEW_SPLIT_DIVIDER_PX = 1;
+const PREVIEW_SPLIT_HIT_AREA_PX = 12;
 const PREVIEW_VISUAL_MIN_WIDTH = 360;
 const PREVIEW_EDITOR_MIN_WIDTH = 420;
 const PREVIEW_EDITOR_VERTICAL_SPLIT_STORAGE_KEY = 'previewEditorVerticalSplitRatio';
@@ -4283,6 +4284,7 @@ export const SlidePreview: React.FC = () => {
       styleGuideTextareaRef.current?.focus();
       return;
     }
+    console.log('focus description textarea', styleGuideTextareaRef.current);
     descriptionTextareaRef.current?.focus();
   }, [useRenovationPreviewForm, renovationJsonViewMode]);
 
@@ -6017,9 +6019,13 @@ export const SlidePreview: React.FC = () => {
                         data-testid="preview-split-divider"
                         role="separator"
                         aria-orientation="vertical"
-                        className={`group relative cursor-col-resize ${isResizingPreviewSplit ? 'bg-banana-300/70' : 'bg-transparent'}`}
-                        onMouseDown={handlePreviewSplitResizeStart}
+                        className="group relative"
                       >
+                        <div
+                          className={`absolute inset-y-0 left-1/2 z-10 -translate-x-1/2 cursor-col-resize ${isResizingPreviewSplit ? 'bg-banana-300/70' : 'bg-transparent'}`}
+                          style={{ width: `${PREVIEW_SPLIT_HIT_AREA_PX}px` }}
+                          onMouseDown={handlePreviewSplitResizeStart}
+                        />
                         <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
                         <button
                           type="button"
