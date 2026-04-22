@@ -4053,6 +4053,14 @@ export const SlidePreview: React.FC = () => {
     setActivePreviewReferenceId(null);
   }, [selectedIndex]);
 
+  useEffect(() => {
+    if (!showJsonRefineDialog) return;
+    const timer = window.setTimeout(() => {
+      jsonRefineInputRef.current?.focus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [showJsonRefineDialog]);
+
   if (!currentProject) {
     return <Loading fullscreen message={t('preview.messages.loadingProject')} />;
   }
@@ -4086,13 +4094,6 @@ export const SlidePreview: React.FC = () => {
   }
 
   const selectedPage = currentProject.pages[selectedIndex];
-  useEffect(() => {
-    if (!showJsonRefineDialog) return;
-    const timer = window.setTimeout(() => {
-      jsonRefineInputRef.current?.focus();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [showJsonRefineDialog]);
 
   const handleSubmitJsonRefine = async () => {
     if (!projectId || !selectedPage?.id) return;
@@ -4243,10 +4244,10 @@ export const SlidePreview: React.FC = () => {
   const isTextGenerationPreviewProject = currentProject?.creation_type !== 'ppt_renovation';
   const useRenovationPreviewForm = isPptRenovationProject || isTextGenerationPreviewProject;
   const activeStyleGuideBindingKey = buildStyleGuideBindingKey(currentImageVersionId);
-  const projectStyleGuideJson = useMemo(() => {
+  const projectStyleGuideJson = (() => {
     if (!useRenovationPreviewForm) return '';
     return formatJsonForEditor(currentProject?.template_style_json || '');
-  }, [useRenovationPreviewForm, currentProject?.template_style_json]);
+  })();
   const currentImageBoundStyleGuide = editStyleGuideBindings[activeStyleGuideBindingKey] || '';
   const pageDefaultStyleGuide = editStyleGuideBindings[PAGE_STYLE_GUIDE_DEFAULT_BINDING] || '';
   const resolvedStyleGuideText = currentImageBoundStyleGuide || pageDefaultStyleGuide || projectStyleGuideJson || '';
@@ -4652,10 +4653,7 @@ export const SlidePreview: React.FC = () => {
     </div>
   );
 
-  const pageAiInlineImageUrls = useMemo(
-    () => extractImageUrlsFromDescription(editPrompt),
-    [editPrompt]
-  );
+  const pageAiInlineImageUrls = extractImageUrlsFromDescription(editPrompt);
   const selectedPageAiReferences: PageAiReference[] = (() => {
     const references: PageAiReference[] = [];
     const uploadedMarkdownUrls = new Set(
@@ -4685,7 +4683,7 @@ export const SlidePreview: React.FC = () => {
     return references;
   })();
 
-  const buildPageAiPayload = useCallback(() => {
+  const buildPageAiPayload = () => {
     const uploadedMarkdownUrls = new Set(
       selectedContextImages.uploadedReferences
         .map((reference) => reference.markdownUrl)
@@ -4698,9 +4696,9 @@ export const SlidePreview: React.FC = () => {
       inlineImageUrls,
       uploadedReferences: selectedContextImages.uploadedReferences,
     };
-  }, [editPrompt, selectedContextImages.uploadedReferences]);
+  };
 
-  const handleSubmitCurrentPageGeneration = useCallback(async (options?: {
+  const handleSubmitCurrentPageGeneration = async (options?: {
     appendPageAiMessages?: boolean;
   }) => {
     if (!currentProject) return;
@@ -4793,20 +4791,7 @@ export const SlidePreview: React.FC = () => {
     } finally {
       setIsPageAiSubmitting(false);
     }
-  }, [
-    currentProject,
-    selectedIndex,
-    currentImageVersionId,
-    editPrompt,
-    buildPageAiPayload,
-    selectedPageAiReferences,
-    pageAiMessages,
-    selectedContextImages,
-    t,
-    runGenerateFlow,
-    executePageImageGeneration,
-    editRunImageModel,
-  ]);
+  };
 
   const handleToggleTemplateReference = () => {
     setSelectedContextImages((prev) => ({
@@ -4851,9 +4836,9 @@ export const SlidePreview: React.FC = () => {
     imageRef.current.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
   };
 
-  const handlePageAiSend = useCallback(async () => {
+  const handlePageAiSend = async () => {
     await handleSubmitCurrentPageGeneration({ appendPageAiMessages: true });
-  }, [handleSubmitCurrentPageGeneration]);
+  };
 
   const currentPageDescriptionText = getDescriptionText(selectedPage?.description_content);
   const currentPageExtraFields = getDescriptionExtraFields(selectedPage?.description_content);
