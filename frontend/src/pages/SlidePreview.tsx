@@ -4,424 +4,76 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useT } from '@/hooks/useT';
 import { devLog } from '@/utils/logger';
 import {
-  DndContext,
   PointerSensor,
-  closestCenter,
-  useDndContext,
   useSensor,
   useSensors,
-  type DragEndEvent,
 } from '@dnd-kit/core';
-import {
-  SortableContext,
-  arrayMove,
-  rectSortingStrategy,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
 // 组件内翻译
-const previewI18n = {
-  zh: {
-    home: { title: '蕉幻' },
-    nav: { home: '主页', materialGenerate: '素材生成' },
-    slidePreview: {
-      pageGenerating: "该页面正在生成中，请稍候...", generationStarted: "已开始生成图片，请稍候...",
-      versionSwitched: "已切换到该版本", outlineSaved: "大纲和描述已保存",
-      materialsAdded: "已添加 {{count}} 个素材", exportStarted: "导出任务已开始，可在导出任务面板查看进度",
-      cannotRefresh: "无法刷新：缺少项目ID", refreshSuccess: "刷新成功",
-      extraRequirementsSaved: "额外要求已保存", styleDescSaved: "风格描述已保存",
-      exportSettingsSaved: "导出设置已保存", aspectRatioSaved: "画面比例已保存", loadTemplateFailed: "加载模版失败", templateChanged: "模版已更新",
-      saveFailed: "保存失败: {{error}}", refreshFailed: "刷新失败，请稍后重试",
-      loadMaterialFailed: "加载素材失败: {{error}}", templateChangeFailed: "选择模版失败: {{error}}",
-      versionSwitchFailed: "切换失败: {{error}}", unknownError: "未知错误",
-      regionCropSuccess: "已将选中区域添加到页面级 AI 引用，可继续输入修改要求后发送",
-      regionCropFailed: "无法从当前图片裁剪区域（浏览器安全限制）。可以尝试手动上传参考图片。"
-    },
-    preview: {
-      title: "预览", pageCount: "共 {{count}} 页", export: "导出",
-      exportPptx: "导出为 PPTX", exportPdf: "导出为 PDF",
-      exportEditablePptx: "导出可编辑 PPTX（Beta）", exportImages: "导出为图片",
-      exportSelectedPages: "将导出选中的 {{count}} 页",
-      regenerate: "重新生成", regenerating: "生成中...",
-      editMode: "编辑模式", viewMode: "查看模式", page: "第 {{num}} 页",
-      projectSettings: "项目设置", changeTemplate: "选择模版", refresh: "刷新",
-      globalAiOpen: "打开 AI 助手",
-      globalAiTitle: "AI 文档助手",
-      globalAiSubtitle: "作为全局工具，统一修改整套页面描述与表达风格",
-      globalAiWelcomeTitle: "让 AI 直接改整套文档",
-      globalAiWelcomeDescription: "你可以用自然语言告诉我如何改写整个项目，例如统一语气、删除冗余页面重点、加强业务结论，或让内容更适合汇报场景。",
-      globalAiSuggestionTone: "把整体改得更像高管汇报，语气更专业，结论更前置",
-      globalAiSuggestionTrim: "删除重复表述，压缩每页文字长度，并突出关键指标",
-      globalAiSuggestionFlow: "重写页面描述，让逻辑更连贯，页与页之间过渡更自然",
-      globalAiPlaceholder: "例如：让全部页面更像董事会汇报，删除第 2 页冗余要点，强调成本收益和落地路径...",
-      globalAiLoading: "正在更新整个项目的页面描述...",
-      globalAiResponseFallback: "已根据你的要求更新整套文档描述，你可以继续追加修改。",
-      globalAiErrorFallback: "修改失败，请稍后重试。",
-      descriptionGenerating: "正在生成描述...",
-      descriptionGeneratingProgress: "正在生成描述 {{completed}}/{{total}}",
-      globalAiSubmitTooltip: "发送指令",
-      globalAiInputHint: "Enter 发送，Shift+Enter 换行",
-      batchGenerate: "批量生成图片 ({{count}})", generateSelected: "生成选中页面 ({{count}})",
-      multiSelect: "多选", cancelMultiSelect: "取消多选", pagesUnit: "页",
-      noPages: "还没有页面", noPagesHint: "可直接在本页添加页面，或返回编辑页继续完善内容", backToEdit: "返回编辑",
-      generating: "正在生成中...", notGenerated: "尚未生成图片", generateThisPage: "生成此页",
-      prevPage: "上一页", nextPage: "下一页", historyVersions: "历史版本",
-      historyButton: "历史",
-      historyModalTitle: "历史记录",
-      historyModalEmpty: "当前页面还没有历史记录",
-      historyPromptTitle: "发送给 nano banana 的请求快照（末尾为最终提示词）",
-      historyPromptMissing: "这个历史版本生成于旧数据结构，未记录完整提示词。",
-      historyCopyPrompt: "复制提示词",
-      historyPromptCopied: "提示词已复制",
-      historyCreatedAt: "修改时间",
-      historySwitchToVersion: "切换到此版本",
-      historyActionGenerate: "首次生成",
-      historyActionRegenerate: "重新生成",
-      historyActionEdit: "修改图片",
-      fullscreen: "全屏查看", exitFullscreen: "退出全屏",
-      versions: "版本", version: "版本", current: "当前", editPage: "编辑页面",
-      outlineQuickEditTitle: "快速编辑本页大纲",
-      outlineQuickEditSave: "保存大纲",
-      outlineQuickEditGenerateDescription: "生成描述",
-      outlineQuickGeneratePromptTitle: "生成描述补充提示（可选）",
-      outlineQuickGeneratePromptPlaceholder: "例如：必须覆盖大纲中的每一条要点，不能遗漏关键术语和数字",
-      outlineQuickGeneratePromptHint: "该提示词仅作用于本次从大纲生成详细描述，不会保存到项目设置。",
-      outlineQuickGeneratePromptConfirm: "确认生成",
-      quickEditModeEdit: "编辑",
-      quickEditModePreview: "预览",
-      regionSelect: "区域选图", endRegionSelect: "结束区域选图",
-      pageOutline: "页面大纲（可编辑）", pageDescription: "页面描述（可编辑）",
-      pageJson: "页面 JSON",
-      jsonTextTab: "页面内容",
-      jsonStyleGuideTab: "风格指导",
-      jsonStyleGuideHint: "可编辑：保存后将为当前页（及当前图片版本）创建独立风格指导覆盖",
-      jsonStyleGuidePlaceholder: "请输入当前页风格指导 JSON；留空表示继续引用全局风格指导",
-      jsonStyleGuideSourceImage: "当前图片版本已绑定独立风格指导",
-      jsonStyleGuideSourcePage: "当前页已绑定独立风格指导（未细分到图片版本）",
-      jsonStyleGuideSourceGlobal: "当前页正在引用项目全局风格指导",
-      jsonStyleGuideReset: "恢复全局引用",
-      jsonStyleGuideEmpty: "当前页和项目均未配置风格指导 JSON",
-      refineJson: "AI 优化 JSON",
-      refineJsonTooltip: "优化当前页 JSON",
-      refineJsonDialogTitle: "AI 优化当前页 JSON",
-      refineJsonPlaceholder: "例如：保持原有结构，精简文案，突出结论，并增强可视化表达（系统将自动附加麦肯锡风格指导Prompt）",
-      refineJsonInlineHint: "Enter 发送，Shift+Enter 换行",
-      refineDescription: "AI 优化", refineDescriptionTooltip: "AI 优化当前页描述",
-      refinePlaceholder: "例如：让描述更具体，突出核心结论，改成更适合商务汇报的语气... · Enter 提交，Shift+Enter 换行",
-      refineApplied: "AI 优化已应用到当前描述草稿", refineFailed: "页面描述优化失败，请稍后重试",
-      enterTitle: "输入页面标题", pointsPerLine: "要点（每行一个）", quickEditMarkdownHint: "支持 Markdown；粘贴多行内容会自动格式化",
-      enterPointsPerLine: "每行输入一个要点", enterDescription: "输入页面的详细描述内容",
-      enterPageJson: "输入页面结构化 JSON 内容",
-      selectContextImages: "选择上下文图片（可选）", useTemplateImage: "使用模板图片",
-      imagesInDescription: "描述中的图片", uploadImages: "上传图片",
-      selectFromMaterials: "从素材库选择", upload: "上传",
-      editRunImageModelLabel: "本次生成模型",
-      editRunImageModelHint: "仅对本次生成生效，不会保存到项目设置",
-      editPromptLabel: "输入修改指令",
-      editPromptPlaceholder: "例如：将框选区域内的素材移除、把背景改成蓝色、增大标题字号、更改文本框样式为虚线...",
-      descriptionSlashUpload: "从本地上传",
-      descriptionSlashUploadDesc: "选择本地图片并插入到当前光标位置",
-      descriptionSlashMaterials: "从素材库选择",
-      descriptionSlashMaterialsDesc: "从已有素材中选择并插入到当前光标位置",
-      pageAiTitle: "页面级 AI 优化",
-      pageAiSubtitle: "仅作用于当前页图片编辑，只会携带当前页图片、引用图片和修改指令。",
-      pageAiEmptyTitle: "先补充修改意图，再让 AI 处理当前页",
-      pageAiEmptyDescription: "你可以引用框选区域、上传图片、素材库图片、模板图或描述内图片，再配合文字一起发送。",
-      pageAiReferencesTitle: "当前引用",
-      pageAiReferencesEmpty: "还没有引用内容。可先区域选图、上传图片，或从下方可用来源里加入引用。",
-      pageAiDescriptionSourcesTitle: "描述内可用图片",
-      pageAiTemplateReference: "模板图",
-      pageAiMaterialReference: "素材库",
-      pageAiUploadReference: "上传图片",
-      pageAiLoading: "正在处理当前页图片...",
-      pageAiSendTooltip: "编辑当前页图片",
-      pageAiInputHint: "Enter 发送，Shift+Enter 换行",
-      pageAiResponseFallback: "已开始处理当前页图片，请稍候查看最新结果。",
-      pageAiReferenceOnlyFallback: "请参考这些引用修改当前页图片。",
-      saveOutlineOnly: "仅保存大纲/描述", generateImage: "生成图片",
-      collapseSidebar: "收起左侧导航",
-      expandSidebar: "展开左侧导航",
-      collapseRightPanel: "收起右侧面板",
-      expandRightPanel: "展开右侧面板",
-      addPage: "添加页面",
-      addFirstPage: "添加第一页",
-      insertAfterPage: "在此页后新增页面",
-      reorderPage: "拖动调整顺序",
-      addPageFailed: "新增页面失败",
-      sidebarView: { list: "列表", grid: "网格" },
-      gridZoomLabel: "网格缩放",
-      gridZoomSmall: "小",
-      gridZoomLarge: "大",
-      templateModalDesc: "选择一个新的模版将应用到后续 PPT 页面生成，不影响已经生成的页面。",
-      styleSaved: "风格描述已保存",
-      uploadingTemplate: "正在上传模板...",
-      resolution1KWarning: "1K分辨率警告",
-      resolution1KWarningText: "当前使用 1K 分辨率 生成图片，可能导致渲染的文字乱码或模糊。",
-      resolution1KWarningHint: "建议在「系统设置」中切换到 2K 或 4K 分辨率以获得更清晰的效果。",
-      dontShowAgain: "不再提示", generateAnyway: "仍然生成",
-      confirmRegenerateSelected: "将重新生成选中的 {{count}} 页（历史记录将会保存），确定继续吗？",
-      confirmRegenerateAll: "将重新生成所有页面（历史记录将会保存），确定继续吗？",
-      confirmRegenerateTitle: "确认重新生成",
-      confirmGenerateAllTitle: "确认生成",
-      confirmGenerateAll: "尚未生成任何图片，将生成全部 {{count}} 页。确定继续吗？",
-      confirmPartialGenerateTitle: "选择生成范围",
-      confirmPartialGenerateMessage: "已生成 {{generated}}/{{total}} 页图片。请选择仅生成未生成的 {{missing}} 页，或重新生成全部 {{total}} 页（历史记录将会保存）。",
-      confirmPartialGenerateWithGeneratingMessage: "已生成 {{generated}}/{{total}} 页图片，另有 {{generating}} 页正在生成中。请选择仅生成未生成的 {{missing}} 页，或重新生成全部 {{total}} 页（历史记录将会保存）。",
-      generatingInProgress: "已有 {{count}} 页正在生成中，请稍候...",
-      confirmPartialDescriptionGenerateTitle: "选择描述生成范围",
-      confirmPartialDescriptionGenerateMessage: "已有 {{generated}}/{{total}} 页生成过描述。请选择仅生成未生成的 {{missing}} 页，或重新生成全部 {{total}} 页。",
-      confirmPartialDescriptionGenerateWithGeneratingMessage: "已有 {{generated}}/{{total}} 页生成过描述，另有 {{generating}} 页正在生成描述。请选择仅生成未生成的 {{missing}} 页，或重新生成全部 {{total}} 页。",
-      descriptionGeneratingInProgress: "已有 {{count}} 页正在生成描述，请稍候...",
-      deleteFailed: "删除页面失败",
-      confirmDeletePage: "确定要删除这一页吗？",
-      confirmDeleteTitle: "确认删除",
-      generateMissingOnly: "仅生成未生成的 {{count}} 页",
-      regenerateAllPages: "重新生成全部 {{count}} 页",
-      generateMissingDescriptionsOnly: "仅生成未生成描述的 {{count}} 页",
-      regenerateAllDescriptions: "重新生成全部 {{count}} 页描述",
-      generateDescriptionsByRange: "按页码范围生成描述",
-      rangeStartPage: "起始页",
-      rangeEndPage: "结束页",
-      rangeSeparator: "到",
-      rangePlaceholderStart: "如 3",
-      rangePlaceholderEnd: "如 10",
-      rangeInvalidNumber: "请输入有效页码",
-      rangeOutOfBounds: "页码范围应在 1 到 {{max}} 之间",
-      rangeInvalidOrder: "起始页不能大于结束页",
-      rangeNoAvailablePages: "所选范围内没有可生成描述的页面",
-      rangeGeneratingSkipped: "已跳过 {{count}} 页正在生成描述的页面",
-      generationFailed: "生成失败",
-      disabledExportTip: "还有 {{count}} 页未生成图片，请先生成所有页面图片",
-      disabledEditTip: "请先生成该页图片",
-      messages: {
-        exportSuccess: "导出成功", exportFailed: "导出失败",
-        regenerateSuccess: "重新生成完成", regenerateFailed: "重新生成失败",
-        loadingProject: "加载项目中...", processing: "处理中...",
-        generatingBackgrounds: "正在生成干净背景...", creatingPdf: "正在创建PDF...",
-        parsingContent: "正在解析内容...", creatingPptx: "正在创建可编辑PPTX...", complete: "完成！"
-      }
-    },
-    outline: {
-      titleLabel: "标题",
-      keyPoints: "要点"
-    }
-  },
-  en: {
-    home: { title: 'Banana Slides' },
-    nav: { home: 'Home', materialGenerate: 'Generate Material' },
-    slidePreview: {
-      pageGenerating: "This page is generating, please wait...", generationStarted: "Image generation started, please wait...",
-      versionSwitched: "Switched to this version", outlineSaved: "Outline and description saved",
-      materialsAdded: "Added {{count}} material(s)", exportStarted: "Export task started, check progress in export tasks panel",
-      cannotRefresh: "Cannot refresh: Missing project ID", refreshSuccess: "Refresh successful",
-      extraRequirementsSaved: "Extra requirements saved", styleDescSaved: "Style description saved",
-      exportSettingsSaved: "Export settings saved", aspectRatioSaved: "Aspect ratio saved", loadTemplateFailed: "Failed to load template", templateChanged: "Template updated",
-      saveFailed: "Save failed: {{error}}", refreshFailed: "Refresh failed, please try again later",
-      loadMaterialFailed: "Failed to load material: {{error}}", templateChangeFailed: "Failed to select template: {{error}}",
-      versionSwitchFailed: "Switch failed: {{error}}", unknownError: "Unknown error",
-      regionCropSuccess: "Selected region added to page-level AI references. You can continue typing and send it.",
-      regionCropFailed: "Cannot crop from current image (browser security restriction). Try uploading a reference image manually."
-    },
-    preview: {
-      title: "Preview", pageCount: "{{count}} pages", export: "Export",
-      exportPptx: "Export as PPTX", exportPdf: "Export as PDF",
-      exportEditablePptx: "Export Editable PPTX (Beta)", exportImages: "Export as Images",
-      exportSelectedPages: "Will export {{count}} selected page(s)",
-      regenerate: "Regenerate", regenerating: "Generating...",
-      editMode: "Edit Mode", viewMode: "View Mode", page: "Page {{num}}",
-      projectSettings: "Project Settings", changeTemplate: "Select Template", refresh: "Refresh",
-      globalAiOpen: "Open AI Assistant",
-      globalAiTitle: "AI Document Assistant",
-      globalAiSubtitle: "A global tool to refine the full deck's descriptions and narrative style",
-      globalAiWelcomeTitle: "Let AI rewrite the whole deck",
-      globalAiWelcomeDescription: "Use natural language to revise the project globally, such as aligning tone, removing redundant points, strengthening business conclusions, or making the content more presentation-ready.",
-      globalAiSuggestionTone: "Rewrite the deck in a more executive presentation tone with conclusions first",
-      globalAiSuggestionTrim: "Remove repetitive wording, shorten each page, and highlight the key metrics",
-      globalAiSuggestionFlow: "Rewrite the page descriptions so the story flows more naturally from page to page",
-      globalAiPlaceholder: "e.g. Make the whole deck sound more executive, remove redundant points from page 2, and emphasize ROI and delivery path...",
-      globalAiLoading: "Updating descriptions across the whole project...",
-      globalAiResponseFallback: "The deck descriptions have been updated based on your request. You can keep refining.",
-      globalAiErrorFallback: "Update failed. Please try again.",
-      descriptionGenerating: "Generating descriptions...",
-      descriptionGeneratingProgress: "Generating descriptions {{completed}}/{{total}}",
-      globalAiSubmitTooltip: "Send instruction",
-      globalAiInputHint: "Enter to send, Shift+Enter for newline",
-      batchGenerate: "Batch Generate Images ({{count}})", generateSelected: "Generate Selected ({{count}})",
-      multiSelect: "Multi-select", cancelMultiSelect: "Cancel Multi-select", pagesUnit: " pages",
-      noPages: "No pages yet", noPagesHint: "You can add pages directly here, or go back to editor", backToEdit: "Back to Editor",
-      generating: "Generating...", notGenerated: "Image not generated yet", generateThisPage: "Generate This Page",
-      prevPage: "Previous", nextPage: "Next", historyVersions: "History Versions",
-      historyButton: "History",
-      historyModalTitle: "History",
-      historyModalEmpty: "No history for this page yet",
-      historyPromptTitle: "Request snapshot sent to nano banana (final prompt at the end)",
-      historyPromptMissing: "This older version was created before prompt history was recorded.",
-      historyCopyPrompt: "Copy Prompt",
-      historyPromptCopied: "Prompt copied",
-      historyCreatedAt: "Edited at",
-      historySwitchToVersion: "Switch to this version",
-      historyActionGenerate: "Initial Generate",
-      historyActionRegenerate: "Regenerate",
-      historyActionEdit: "Edit Image",
-      fullscreen: "Fullscreen", exitFullscreen: "Exit Fullscreen",
-      versions: "Versions", version: "Version", current: "Current", editPage: "Edit Page",
-      outlineQuickEditTitle: "Quick Edit Page Outline",
-      outlineQuickEditSave: "Save Outline",
-      outlineQuickEditGenerateDescription: "Generate Description",
-      outlineQuickGeneratePromptTitle: "Extra Prompt For Description (Optional)",
-      outlineQuickGeneratePromptPlaceholder: "e.g. Cover every outline bullet without missing key terms or numbers",
-      outlineQuickGeneratePromptHint: "This prompt applies only to the current outline-to-description generation and will not be saved to project settings.",
-      outlineQuickGeneratePromptConfirm: "Generate",
-      quickEditModeEdit: "Edit",
-      quickEditModePreview: "Preview",
-      regionSelect: "Region Select", endRegionSelect: "End Region Select",
-      pageOutline: "Page Outline (Editable)", pageDescription: "Page Description (Editable)",
-      pageJson: "Page JSON",
-      jsonTextTab: "Page Content",
-      jsonStyleGuideTab: "Style Guide",
-      jsonStyleGuideHint: "Editable: once saved, this becomes a page/image-level override instead of global style",
-      jsonStyleGuidePlaceholder: "Enter style guide JSON for this page. Leave empty to keep using the global style guide",
-      jsonStyleGuideSourceImage: "Current image version is using a dedicated style guide override",
-      jsonStyleGuideSourcePage: "Current page is using a page-level style guide override",
-      jsonStyleGuideSourceGlobal: "Current page is using the project global style guide",
-      jsonStyleGuideReset: "Revert To Global",
-      jsonStyleGuideEmpty: "No style guide JSON is configured for this page or project",
-      refineJson: "AI Refine JSON",
-      refineJsonTooltip: "Refine current page JSON",
-      refineJsonDialogTitle: "AI Refine Current Page JSON",
-      refineJsonPlaceholder: "e.g., Keep the schema, tighten wording, highlight conclusions, and improve visual clarity (McKinsey-style guidance prompt is auto-attached)",
-      refineJsonInlineHint: "Enter to send, Shift+Enter for newline",
-      refineDescription: "AI Refine", refineDescriptionTooltip: "Refine current page description with AI",
-      refinePlaceholder: "e.g., Make the description more specific, highlight the key conclusion, and use a business presentation tone... · Enter to submit, Shift+Enter for newline",
-      refineApplied: "AI refinement applied to the current draft", refineFailed: "Failed to refine page description",
-      enterTitle: "Enter page title", pointsPerLine: "Key Points (one per line)", quickEditMarkdownHint: "Markdown supported; pasted multi-line content will be auto-formatted",
-      enterPointsPerLine: "Enter one key point per line", enterDescription: "Enter detailed page description",
-      enterPageJson: "Enter structured page JSON",
-      selectContextImages: "Select Context Images (Optional)", useTemplateImage: "Use Template Image",
-      imagesInDescription: "Images in Description", uploadImages: "Upload Images",
-      selectFromMaterials: "Select from Materials", upload: "Upload",
-      editRunImageModelLabel: "Model For This Run",
-      editRunImageModelHint: "Only applies to this generation and will not be saved to project settings.",
-      editPromptLabel: "Enter edit instructions",
-      editPromptPlaceholder: "e.g., Remove elements in selected area, change background to blue, increase title font size, change text box style to dashed...",
-      descriptionSlashUpload: "Upload From Device",
-      descriptionSlashUploadDesc: "Choose a local image and insert it at the current cursor position",
-      descriptionSlashMaterials: "Insert From Materials",
-      descriptionSlashMaterialsDesc: "Choose existing materials and insert them at the current cursor position",
-      pageAiTitle: "Page AI Optimize",
-      pageAiSubtitle: "Only edits the current page image and sends just the current image, references, and edit instructions.",
-      pageAiEmptyTitle: "Add intent, then let AI work on this page",
-      pageAiEmptyDescription: "Reference a selected region, uploaded image, material library image, template image, or description image, then send them with text.",
-      pageAiReferencesTitle: "Current References",
-      pageAiReferencesEmpty: "No references yet. Select a region, upload an image, or add one from the available sources below.",
-      pageAiDescriptionSourcesTitle: "Images From Description",
-      pageAiTemplateReference: "Template Image",
-      pageAiMaterialReference: "Materials",
-      pageAiUploadReference: "Upload Image",
-      pageAiLoading: "Processing the current page image...",
-      pageAiSendTooltip: "Edit current page image",
-      pageAiInputHint: "Enter to send, Shift+Enter for newline",
-      pageAiResponseFallback: "Started processing the current page image. Please check back shortly.",
-      pageAiReferenceOnlyFallback: "Please update the current page image using these references.",
-      saveOutlineOnly: "Save Outline/Description Only", generateImage: "Generate Image",
-      collapseSidebar: "Collapse sidebar",
-      expandSidebar: "Expand sidebar",
-      collapseRightPanel: "Collapse right panel",
-      expandRightPanel: "Expand right panel",
-      addPage: "Add Page",
-      addFirstPage: "Add First Page",
-      insertAfterPage: "Insert page after this one",
-      reorderPage: "Drag to reorder",
-      addPageFailed: "Failed to add page",
-      sidebarView: { list: "List", grid: "Grid" },
-      gridZoomLabel: "Grid Zoom",
-      gridZoomSmall: "Small",
-      gridZoomLarge: "Large",
-      templateModalDesc: "Selecting a new template will apply to future PPT page generation without affecting pages that already exist.",
-      styleSaved: "Style description saved",
-      uploadingTemplate: "Uploading template...",
-      resolution1KWarning: "1K Resolution Warning",
-      resolution1KWarningText: "Currently using 1K resolution for image generation, which may cause garbled or blurry text.",
-      resolution1KWarningHint: "It's recommended to switch to 2K or 4K resolution in \"Settings\" for clearer results.",
-      dontShowAgain: "Don't show again", generateAnyway: "Generate Anyway",
-      confirmRegenerateSelected: "Will regenerate {{count}} selected page(s) (history will be saved). Continue?",
-      confirmRegenerateAll: "Will regenerate all pages (history will be saved). Continue?",
-      confirmRegenerateTitle: "Confirm Regenerate",
-      confirmGenerateAllTitle: "Confirm Generate",
-      confirmGenerateAll: "No images have been generated yet. Generate all {{count}} page(s)?",
-      confirmPartialGenerateTitle: "Choose Scope",
-      confirmPartialGenerateMessage: "{{generated}}/{{total}} page(s) already have images. Generate only the {{missing}} missing page(s), or regenerate all {{total}} page(s) (history will be saved).",
-      confirmPartialGenerateWithGeneratingMessage: "{{generated}}/{{total}} page(s) already have images, and {{generating}} page(s) are still generating. Generate only the {{missing}} missing page(s), or regenerate all {{total}} page(s) (history will be saved).",
-      generatingInProgress: "{{count}} page(s) are generating. Please wait...",
-      confirmPartialDescriptionGenerateTitle: "Choose Description Scope",
-      confirmPartialDescriptionGenerateMessage: "{{generated}}/{{total}} page(s) already have descriptions. Generate only the {{missing}} missing page(s), or regenerate all {{total}} page(s).",
-      confirmPartialDescriptionGenerateWithGeneratingMessage: "{{generated}}/{{total}} page(s) already have descriptions, and {{generating}} page(s) are still generating descriptions. Generate only the {{missing}} missing page(s), or regenerate all {{total}} page(s).",
-      descriptionGeneratingInProgress: "{{count}} page(s) are generating descriptions. Please wait...",
-      deleteFailed: "Failed to delete page",
-      confirmDeletePage: "Are you sure you want to delete this page?",
-      confirmDeleteTitle: "Confirm Delete",
-      generateMissingOnly: "Generate Missing ({{count}})",
-      regenerateAllPages: "Regenerate All ({{count}})",
-      generateMissingDescriptionsOnly: "Generate Missing Descriptions ({{count}})",
-      regenerateAllDescriptions: "Regenerate All Descriptions ({{count}})",
-      generateDescriptionsByRange: "Generate Descriptions by Range",
-      rangeStartPage: "Start",
-      rangeEndPage: "End",
-      rangeSeparator: "to",
-      rangePlaceholderStart: "e.g. 3",
-      rangePlaceholderEnd: "e.g. 10",
-      rangeInvalidNumber: "Please enter valid page numbers",
-      rangeOutOfBounds: "Page range must be between 1 and {{max}}",
-      rangeInvalidOrder: "Start page cannot be greater than end page",
-      rangeNoAvailablePages: "No pages are available in this range",
-      rangeGeneratingSkipped: "Skipped {{count}} page(s) that are still generating descriptions",
-      generationFailed: "Generation failed",
-      disabledExportTip: "{{count}} page(s) have no images yet. Please generate all page images first",
-      disabledEditTip: "Please generate this page's image first",
-      messages: {
-        exportSuccess: "Export successful", exportFailed: "Export failed",
-        regenerateSuccess: "Regeneration complete", regenerateFailed: "Failed to regenerate",
-        loadingProject: "Loading project...", processing: "Processing...",
-        generatingBackgrounds: "Generating clean backgrounds...", creatingPdf: "Creating PDF...",
-        parsingContent: "Parsing content...", creatingPptx: "Creating editable PPTX...", complete: "Complete!"
-      }
-    },
-    outline: {
-      titleLabel: "Title",
-      keyPoints: "Key Points"
-    }
-  }
-};
+import { previewI18n } from './SlidePreview.i18n';
 import {
-  Home,
+  DEFAULT_EXTRA_FIELDS,
+  PREVIEW_SPLIT_DIVIDER_PX,
+  PREVIEW_SPLIT_HIT_AREA_PX,
+} from './SlidePreview.constants';
+import {
+  type RenovationJsonViewMode,
+  type StyleGuideBindings,
+  normalizeOutlinePasteToMarkdown,
+  isSupportedDescriptionImageUrl,
+  PAGE_STYLE_GUIDE_DEFAULT_BINDING,
+  buildStyleGuideBindingKey,
+  getDescriptionStyleGuideBindings,
+  serializeStyleGuideBindings,
+  areStyleGuideBindingsEqual,
+  formatImageVersionTimestamp,
+  getDescriptionExtraFields,
+  serializeExtraFields,
+  areStringRecordsEqual,
+  formatJsonForEditor,
+  toCanonicalRenovationJsonText,
+  toLocalizedRenovationJsonText,
+} from './SlidePreview.utils';
+import {
+  type PageAiUploadedReference,
+  type MaterialSelectorMode,
+} from './SlidePreview.pageAi';
+import { PreviewStatusBar } from './components/PreviewStatusBar';
+import { SlidePreviewHeader } from './components/SlidePreviewHeader';
+import { SlidePreviewSidebarShell } from './components/SlidePreviewSidebarShell';
+import { SlidePreviewSidebarContent } from './components/SlidePreviewSidebarContent';
+import { SlidePreviewEditorToolbar } from './components/SlidePreviewEditorToolbar';
+import { SlidePreviewEmptyState } from './components/SlidePreviewEmptyState';
+import { SlidePreviewVisualPane } from './components/SlidePreviewVisualPane';
+import { SlidePreviewSplitDivider } from './components/SlidePreviewSplitDivider';
+import { SlidePreviewEditorPane } from './components/SlidePreviewEditorPane';
+import { SlidePreviewTopOverlays } from './components/SlidePreviewTopOverlays';
+import { SlidePreviewDialogs } from './components/SlidePreviewDialogs';
+import { SlidePreviewMainPanel } from './components/SlidePreviewMainPanel';
+import { useSlidePreviewLayout } from './hooks/useSlidePreviewLayout';
+import { useSlidePreviewGeneration } from './hooks/useSlidePreviewGeneration';
+import { useSlidePreviewDrafts } from './hooks/useSlidePreviewDrafts';
+import { useSlidePreviewHistoryVersions } from './hooks/useSlidePreviewHistoryVersions';
+import { useSlidePreviewTemplateSelection } from './hooks/useSlidePreviewTemplateSelection';
+import { useSlidePreviewMultiSelect } from './hooks/useSlidePreviewMultiSelect';
+import { useSlidePreviewExport } from './hooks/useSlidePreviewExport';
+import { useSlidePreviewProjectSettings } from './hooks/useSlidePreviewProjectSettings';
+import { useSlidePreviewTemplateApply } from './hooks/useSlidePreviewTemplateApply';
+import { useSlidePreviewPageAiReferences } from './hooks/useSlidePreviewPageAiReferences';
+import { useSlidePreviewPageAiContext } from './hooks/useSlidePreviewPageAiContext';
+import { useSlidePreviewPageAiSubmit } from './hooks/useSlidePreviewPageAiSubmit';
+import { useSlidePreviewMaterials } from './hooks/useSlidePreviewMaterials';
+import { useSlidePreviewReorder } from './hooks/useSlidePreviewReorder';
+import { useSlidePreviewJsonRefine } from './hooks/useSlidePreviewJsonRefine';
+import { useSlidePreviewRegionSelection } from './hooks/useSlidePreviewRegionSelection';
+import { useSlidePreviewHistoryActions } from './hooks/useSlidePreviewHistoryActions';
+import {
   ArrowLeft,
-  Download,
-  RefreshCw,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
-  ChevronDown,
   X,
-  Trash2,
-  Upload,
-  ImagePlus,
-  Settings,
-  CheckSquare,
-  Square,
   Check,
-  Loader2,
-  Maximize2,
-  Minimize2,
-  Plus,
-  List,
-  LayoutGrid,
-  FileText,
-  ArrowUpDown,
   History,
-  Clock3,
-  Copy,
   Send,
   Info,
   Settings2,
@@ -431,53 +83,27 @@ import {
   Loading,
   Markdown,
   MarkdownTextarea,
-  Modal,
   useToast,
   useConfirm,
-  MaterialSelector,
-  ProjectSettingsModal,
-  ExportTasksPanel,
-  FilePreviewModal,
   ReferenceFileList,
-  GlobalAiAssistantDrawer,
-  PageAiWorkbench,
 } from '@/components/shared';
 import type { MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
-import { MaterialGeneratorModal } from '@/components/shared/MaterialGeneratorModal';
-import {
-  TemplateSelector,
-  getTemplateFile,
-  type TemplateSource,
-  type TemplateSelectorTab,
-  type TemplateSelection,
-  type AppliedTemplateSelection,
-} from '@/components/shared/TemplateSelector';
 import { listUserTemplates, type UserTemplate } from '@/api/endpoints';
-import { materialUrlToFile } from '@/components/shared/MaterialSelector';
-import type { Material } from '@/api/endpoints';
 import { SlideCard } from '@/components/preview/SlideCard';
 import { useProjectStore } from '@/store/useProjectStore';
-import { useExportTasksStore, type ExportTaskType } from '@/store/useExportTasksStore';
-import { getImageUrl, getPageImageUrl } from '@/api/client';
+import { useExportTasksStore } from '@/store/useExportTasksStore';
+import { getPageImageUrl } from '@/api/client';
 import { useImagePaste } from '@/hooks/useImagePaste';
 import {
-  getPageImageVersions,
   setCurrentImageVersion,
   updateProject,
-  uploadTemplate,
-  exportPPTXTask as apiExportPPTXTask,
-  exportPDFTask as apiExportPDFTask,
-  exportImagesTask as apiExportImagesTask,
-  exportEditablePPTX as apiExportEditablePPTX,
   getSettings,
   refineDescriptions,
-  refineSinglePageDescription,
   addPage,
   getTaskStatus,
   updateSettings,
 } from '@/api/endpoints';
 import type {
-  ImageVersion,
   DescriptionContent,
   ExportExtractorMethod,
   ExportInpaintMethod,
@@ -502,502 +128,6 @@ import {
   normalizeProjectDefaultImageModel,
   normalizeProjectDefaultImageResolution,
 } from '@/config/projectAiDefaults';
-const DEFAULT_EXTRA_FIELDS = ['视觉元素', '视觉焦点', '排版布局', '演讲者备注'];
-const PREVIEW_SPLIT_STORAGE_KEY = 'previewSplitRatio';
-const PREVIEW_EDITOR_COLLAPSED_STORAGE_KEY = 'previewEditorPaneCollapsed';
-const PREVIEW_SPLIT_DEFAULT_RATIO = 0.45;
-const PREVIEW_SPLIT_DIVIDER_PX = 1;
-const PREVIEW_SPLIT_HIT_AREA_PX = 12;
-const PREVIEW_VISUAL_MIN_WIDTH = 360;
-const PREVIEW_EDITOR_MIN_WIDTH = 420;
-const PREVIEW_EDITOR_VERTICAL_SPLIT_STORAGE_KEY = 'previewEditorVerticalSplitRatio';
-const PREVIEW_EDITOR_VERTICAL_SPLIT_DEFAULT_RATIO = 0.74;
-const PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX = 1;
-const PREVIEW_EDITOR_CANVAS_MIN_HEIGHT = 260;
-const PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT = 180;
-const FLOATING_FULLSCREEN_BUTTON_SIZE = 44;
-
-type PageDraft = {
-  title: string;
-  points: string;
-  description: string;
-  extraFields: Record<string, string>;
-  styleGuideBindings: StyleGuideBindings;
-};
-
-const MARKDOWN_BLOCK_PREFIXES = ['#', '-', '*', '>', '`', '|'];
-
-const looksLikeMarkdownLine = (line: string) => {
-  const trimmed = line.trim();
-  if (!trimmed) return false;
-  if (MARKDOWN_BLOCK_PREFIXES.some((prefix) => trimmed.startsWith(prefix))) return true;
-  return /^\d+\.\s+/.test(trimmed);
-};
-
-const normalizeOutlinePasteToMarkdown = (raw: string) => {
-  const normalized = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
-  if (!normalized || !normalized.includes('\n')) return raw;
-
-  const lines = normalized
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-  if (lines.length < 2) return raw;
-  if (lines.some((line) => looksLikeMarkdownLine(line))) return normalized;
-
-  const stepPattern = /^(?:第[一二三四五六七八九十百零两\d]+(?:步|阶段|节|部分)[：:、.\s-]*|\d+[、.．)\s-]+)\s*(.+)$/;
-  const stepItems = lines
-    .map((line) => {
-      const match = line.match(stepPattern);
-      if (!match) return null;
-      return match[1]?.trim() || line;
-    })
-    .filter((item): item is string => !!item);
-
-  if (stepItems.length === lines.length) {
-    return stepItems.map((item, idx) => `${idx + 1}. ${item}`).join('\n');
-  }
-
-  return lines.map((line) => `- ${line}`).join('\n');
-};
-
-const SortablePreviewThumbnail: React.FC<{
-  id: string;
-  itemIndex: number;
-  getItemIndex: (id: string) => number;
-  layoutMode?: 'vertical' | 'grid';
-  className?: string;
-  children: React.ReactNode;
-}> = ({ id, itemIndex, getItemIndex, layoutMode = 'vertical', className, children }) => {
-  const { active, over } = useDndContext();
-  const { attributes, setNodeRef, transform, transition, isDragging, listeners } = useSortable({ id });
-
-  const activeId = active?.id ? String(active.id) : '';
-  const overId = over?.id ? String(over.id) : '';
-  const activeIndex = activeId ? getItemIndex(activeId) : -1;
-  const isDropTarget = !isDragging && !!overId && overId === id && activeId !== id && activeIndex >= 0;
-  const activeRect = active?.rect.current.translated || active?.rect.current.initial;
-  const overRect = over?.rect || null;
-
-  let dropIndicator: 'none' | 'above' | 'below' | 'left' | 'right' = 'none';
-
-  if (isDropTarget) {
-    if (layoutMode === 'grid' && activeRect && overRect) {
-      const activeCenterX = activeRect.left + activeRect.width / 2;
-      const activeCenterY = activeRect.top + activeRect.height / 2;
-      const overCenterX = overRect.left + overRect.width / 2;
-      const overCenterY = overRect.top + overRect.height / 2;
-      const deltaX = activeCenterX - overCenterX;
-      const deltaY = activeCenterY - overCenterY;
-
-      dropIndicator = Math.abs(deltaX) > Math.abs(deltaY)
-        ? (deltaX < 0 ? 'left' : 'right')
-        : (deltaY < 0 ? 'above' : 'below');
-    } else {
-      dropIndicator = activeIndex > itemIndex ? 'above' : 'below';
-    }
-  }
-
-  const showDropLineAbove = dropIndicator === 'above';
-  const showDropLineBelow = dropIndicator === 'below';
-  const showDropLineLeft = dropIndicator === 'left';
-  const showDropLineRight = dropIndicator === 'right';
-
-  const style: React.CSSProperties = {
-    transform: transform ? CSS.Translate.toString(transform) : undefined,
-    transition: isDragging ? undefined : transition,
-    zIndex: isDragging ? 30 : undefined,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`${className || ''} select-none cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-90' : ''}`}
-      {...attributes}
-      {...listeners}
-    >
-      {showDropLineAbove && (
-        <div className="pointer-events-none absolute -top-2 left-2 right-2 z-40 flex items-center">
-          <span className="h-2.5 w-2.5 rounded-full bg-banana-500 shadow-[0_0_0_2px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_2px_rgba(17,24,39,0.9)]" />
-          <span className="h-0.5 flex-1 rounded-full bg-banana-500 shadow-[0_0_10px_rgba(245,158,11,0.45)]" />
-        </div>
-      )}
-      {showDropLineBelow && (
-        <div className="pointer-events-none absolute -bottom-2 left-2 right-2 z-40 flex items-center">
-          <span className="h-2.5 w-2.5 rounded-full bg-banana-500 shadow-[0_0_0_2px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_2px_rgba(17,24,39,0.9)]" />
-          <span className="h-0.5 flex-1 rounded-full bg-banana-500 shadow-[0_0_10px_rgba(245,158,11,0.45)]" />
-        </div>
-      )}
-      {showDropLineLeft && (
-        <div className="pointer-events-none absolute -left-2 top-2 bottom-2 z-40 flex flex-col items-center">
-          <span className="h-2.5 w-2.5 rounded-full bg-banana-500 shadow-[0_0_0_2px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_2px_rgba(17,24,39,0.9)]" />
-          <span className="w-0.5 flex-1 rounded-full bg-banana-500 shadow-[0_0_10px_rgba(245,158,11,0.45)]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-banana-500 shadow-[0_0_0_2px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_2px_rgba(17,24,39,0.9)]" />
-        </div>
-      )}
-      {showDropLineRight && (
-        <div className="pointer-events-none absolute -right-2 top-2 bottom-2 z-40 flex flex-col items-center">
-          <span className="h-2.5 w-2.5 rounded-full bg-banana-500 shadow-[0_0_0_2px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_2px_rgba(17,24,39,0.9)]" />
-          <span className="w-0.5 flex-1 rounded-full bg-banana-500 shadow-[0_0_10px_rgba(245,158,11,0.45)]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-banana-500 shadow-[0_0_0_2px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_2px_rgba(17,24,39,0.9)]" />
-        </div>
-      )}
-      {children}
-    </div>
-  );
-};
-
-type PageAiUploadedReference = {
-  id: string;
-  sourceType: 'region' | 'upload' | 'material';
-  file: File;
-  previewUrl: string;
-  label: string;
-  markdownUrl?: string;
-  regionBounds?: PageAiRegionBounds;
-};
-
-type PageAiContextState = {
-  draftInput: string;
-  messages: PageAiMessage[];
-  model: string;
-  contextImages: {
-    useTemplate: boolean;
-    descImageUrls: string[];
-    uploadedReferences: PageAiUploadedReference[];
-  };
-};
-
-type PendingPageAiContextBinding = {
-  sourceVersionId: string | null;
-  context: PageAiContextState;
-};
-
-type MaterialSelectorMode = 'pageAi' | 'pageAiInline' | 'description';
-
-const isSupportedDescriptionImageUrl = (url: string): boolean => {
-  return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/files/');
-};
-
-const escapeMarkdownText = (text: string): string => text.replace(/[[\]()]/g, '\\$&');
-const DESCRIPTION_UPLOAD_ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg';
-type RenovationJsonViewMode = 'text' | 'styleGuide';
-const PAGE_STYLE_GUIDE_DEFAULT_BINDING = '__page_default__';
-const PAGE_AI_DEFAULT_BINDING = '__page_default__';
-
-type StyleGuideBindings = Record<string, string>;
-
-const buildStyleGuideBindingKey = (imageVersionId?: string | null): string => (
-  imageVersionId ? `image_version:${imageVersionId}` : PAGE_STYLE_GUIDE_DEFAULT_BINDING
-);
-
-const buildPageAiContextBindingKey = (imageVersionId?: string | null): string => (
-  imageVersionId ? `image_version:${imageVersionId}` : PAGE_AI_DEFAULT_BINDING
-);
-
-const buildPageAiContextStoreKey = (pageId: string, imageVersionId?: string | null): string => (
-  `${pageId}:${buildPageAiContextBindingKey(imageVersionId)}`
-);
-
-const normalizeStyleGuideBindings = (raw: unknown): StyleGuideBindings => {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return {};
-  }
-  return Object.entries(raw as Record<string, unknown>).reduce<StyleGuideBindings>((acc, [key, value]) => {
-    if (!key || typeof value !== 'string') return acc;
-    if (!value.trim()) return acc;
-    acc[key] = value;
-    return acc;
-  }, {});
-};
-
-const getDescriptionStyleGuideBindings = (
-  descriptionContent?: DescriptionContent | null
-): StyleGuideBindings => {
-  if (!descriptionContent || typeof descriptionContent !== 'object') {
-    return {};
-  }
-  return normalizeStyleGuideBindings((descriptionContent as any).style_guide_bindings);
-};
-
-const serializeStyleGuideBindings = (bindings: StyleGuideBindings): StyleGuideBindings | undefined => {
-  const normalized = normalizeStyleGuideBindings(bindings);
-  return Object.keys(normalized).length > 0 ? normalized : undefined;
-};
-
-const areStyleGuideBindingsEqual = (left: StyleGuideBindings, right: StyleGuideBindings): boolean => {
-  const leftEntries = Object.entries(normalizeStyleGuideBindings(left)).sort(([a], [b]) => a.localeCompare(b));
-  const rightEntries = Object.entries(normalizeStyleGuideBindings(right)).sort(([a], [b]) => a.localeCompare(b));
-  if (leftEntries.length !== rightEntries.length) return false;
-  return leftEntries.every(([key, value], index) => {
-    const [rightKey, rightValue] = rightEntries[index];
-    return key === rightKey && value.trim() === rightValue.trim();
-  });
-};
-
-const getMaterialMarkdownLabel = (material: Material): string => {
-  return (
-    material.prompt?.trim() ||
-    material.name?.trim() ||
-    material.original_filename?.trim() ||
-    material.source_filename?.trim() ||
-    material.filename?.trim() ||
-    'image'
-  );
-};
-
-const createPageAiMessage = (
-  role: PageAiMessage['role'],
-  content: string,
-  attachments: PageAiReference[] = [],
-  tone: PageAiMessage['tone'] = 'default',
-): PageAiMessage => ({
-  id: `${role}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-  role,
-  content,
-  tone,
-  attachments,
-});
-
-const createUploadedReference = (
-  file: File,
-  sourceType: PageAiUploadedReference['sourceType'],
-  label: string = file.name,
-  meta?: Pick<PageAiUploadedReference, 'regionBounds' | 'markdownUrl'>,
-): PageAiUploadedReference => {
-  const previewUrl = URL.createObjectURL(file);
-  return {
-    id: `${sourceType}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    sourceType,
-    file,
-    previewUrl,
-    label,
-    markdownUrl: meta?.markdownUrl ?? previewUrl,
-    regionBounds: meta?.regionBounds,
-  };
-};
-
-const stripMarkdownImages = (text: string): string => (
-  text
-    .replace(/!\[.*?\]\((.*?)\)/g, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-);
-
-const removeMarkdownImageByUrl = (text: string, url: string): string => {
-  if (!url) return text;
-  const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`!?\\[[^\\]]*\\]\\(${escapedUrl}\\)\\n?`, 'g');
-  return text.replace(pattern, '').replace(/\n{3,}/g, '\n\n').trim();
-};
-
-const getPageDraftKey = (page?: Page | null, index = 0): string | null => {
-  if (!page) return null;
-  return page.id || page.page_id || `index-${index}`;
-};
-
-const formatImageVersionTimestamp = (createdAt?: string): string => {
-  if (!createdAt) return '-';
-  const parsed = new Date(createdAt);
-  if (Number.isNaN(parsed.getTime())) return createdAt;
-  return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(parsed);
-};
-
-const getDescriptionExtraFields = (
-  descriptionContent?: DescriptionContent | null
-): Record<string, string> => {
-  if (!descriptionContent || !descriptionContent.extra_fields) {
-    return {};
-  }
-  return Object.entries(descriptionContent.extra_fields).reduce<Record<string, string>>((acc, [key, value]) => {
-    acc[key] = typeof value === 'string' ? value : '';
-    return acc;
-  }, {});
-};
-
-const serializeExtraFields = (fields: Record<string, string>): Record<string, string> | undefined => {
-  const entries = Object.entries(fields)
-    .map(([key, value]) => [key.trim(), value.trim()] as const)
-    .filter(([key, value]) => key && value);
-  if (entries.length === 0) return undefined;
-  return Object.fromEntries(entries);
-};
-
-const areStringRecordsEqual = (left: Record<string, string>, right: Record<string, string>): boolean => {
-  const leftKeys = Object.keys(left).filter((key) => left[key]?.trim());
-  const rightKeys = Object.keys(right).filter((key) => right[key]?.trim());
-  if (leftKeys.length !== rightKeys.length) return false;
-  return leftKeys.every((key) => (left[key] || '').trim() === (right[key] || '').trim());
-};
-
-const formatJsonForEditor = (text: string, indent = 4): string => {
-  const raw = (text || '').trim();
-  if (!raw) return text || '';
-  try {
-    const parsed = JSON.parse(raw);
-    return JSON.stringify(parsed, null, indent);
-  } catch {
-    return text || '';
-  }
-};
-
-const SLIDE_KEY_EN_TO_ZH: Record<string, string> = {
-  type: '页面类型',
-  title: '页面标题',
-  layout_suggestion: '排版建议',
-  content: '内容',
-  visual_suggestion: '视觉建议',
-  note: '备注',
-  headline_summary: '核心结论',
-  detailed_items: '详细条目',
-  sub_title: '小标题',
-  body: '正文',
-  highlight_phrases: '高亮短语',
-  key_takeaway: '关键结论',
-  chart_type: '图表类型',
-  chart_data: '图表数据',
-  labels: '标签',
-  datasets: '数据集',
-  label: '系列名',
-  data: '数据',
-  headline: '主标题',
-  sub_headline: '副标题',
-  sections: '章节列表',
-  final_conclusion: '最终结论',
-  vision: '愿景',
-  slogan: '口号',
-  qa_text: '问答文本',
-  presenter_info: '汇报信息',
-  contact_info: '联系信息',
-};
-const SLIDE_KEY_ZH_TO_EN = Object.fromEntries(
-  Object.entries(SLIDE_KEY_EN_TO_ZH).map(([en, zh]) => [zh, en]),
-) as Record<string, string>;
-
-const SLIDE_TYPE_EN_TO_ZH: Record<string, string> = {
-  cover: '封面页',
-  catalog: '目录页',
-  section_header: '章节页',
-  detail_chart: '图表页',
-  detail_text_split: '图文页',
-  closing: '结尾页',
-};
-const SLIDE_TYPE_ZH_TO_EN: Record<string, string> = {
-  封面: 'cover',
-  封面页: 'cover',
-  目录: 'catalog',
-  目录页: 'catalog',
-  章节页: 'section_header',
-  章节过渡页: 'section_header',
-  图表页: 'detail_chart',
-  图文页: 'detail_text_split',
-  详情页: 'detail_text_split',
-  文本页: 'detail_text_split',
-  结尾: 'closing',
-  结尾页: 'closing',
-};
-
-const LAYOUT_EN_TO_ZH: Record<string, string> = {
-  split_comparison: '左右对比',
-  multi_column_logic: '多栏逻辑',
-  dashboard_style: '看板布局',
-  pyramid_hierarchy: '金字塔层级',
-};
-const LAYOUT_ZH_TO_EN: Record<string, string> = {
-  左右对比: 'split_comparison',
-  多栏逻辑: 'multi_column_logic',
-  看板布局: 'dashboard_style',
-  金字塔层级: 'pyramid_hierarchy',
-};
-
-const isReferenceFieldKey = (rawKey: string, normalizedKey?: string): boolean => {
-  const compactRaw = (rawKey || '').trim().toLowerCase().replace(/-/g, '_');
-  if (rawKey === '来源页' || rawKey === '来源' || compactRaw.endsWith('_ref')) {
-    return true;
-  }
-  const compactNormalized = (normalizedKey || '').trim().toLowerCase().replace(/-/g, '_');
-  return compactNormalized.endsWith('_ref');
-};
-
-const canonicalizeSlideJsonValue = (value: unknown): unknown => {
-  if (Array.isArray(value)) {
-    return value.map((item) => canonicalizeSlideJsonValue(item));
-  }
-  if (value && typeof value === 'object') {
-    const next: Record<string, unknown> = {};
-    Object.entries(value as Record<string, unknown>).forEach(([rawKey, rawValue]) => {
-      const key = SLIDE_KEY_ZH_TO_EN[rawKey] || rawKey;
-      if (isReferenceFieldKey(rawKey, key)) return;
-      let normalizedValue = canonicalizeSlideJsonValue(rawValue);
-      if (key === 'type' && typeof normalizedValue === 'string') {
-        normalizedValue = SLIDE_TYPE_ZH_TO_EN[normalizedValue.trim()] || normalizedValue.trim();
-      }
-      if (key === 'layout_suggestion' && typeof normalizedValue === 'string') {
-        normalizedValue = LAYOUT_ZH_TO_EN[normalizedValue.trim()] || normalizedValue.trim();
-      }
-      next[key] = normalizedValue;
-    });
-    return next;
-  }
-  return value;
-};
-
-const localizeSlideJsonValue = (value: unknown): unknown => {
-  if (Array.isArray(value)) {
-    return value.map((item) => localizeSlideJsonValue(item));
-  }
-  if (value && typeof value === 'object') {
-    const next: Record<string, unknown> = {};
-    Object.entries(value as Record<string, unknown>).forEach(([rawKey, rawValue]) => {
-      const canonicalKey = SLIDE_KEY_ZH_TO_EN[rawKey] || rawKey;
-      if (isReferenceFieldKey(rawKey, canonicalKey)) return;
-      let localizedValue = localizeSlideJsonValue(rawValue);
-      if (canonicalKey === 'type' && typeof localizedValue === 'string') {
-        localizedValue = SLIDE_TYPE_EN_TO_ZH[localizedValue.trim()] || localizedValue.trim();
-      }
-      if (canonicalKey === 'layout_suggestion' && typeof localizedValue === 'string') {
-        localizedValue = LAYOUT_EN_TO_ZH[localizedValue.trim()] || localizedValue.trim();
-      }
-      const outputKey = SLIDE_KEY_EN_TO_ZH[canonicalKey] || rawKey;
-      next[outputKey] = localizedValue;
-    });
-    return next;
-  }
-  return value;
-};
-
-const toCanonicalRenovationJsonText = (text: string, indent = 4): string => {
-  const raw = (text || '').trim();
-  if (!raw) return text || '';
-  try {
-    const parsed = JSON.parse(raw);
-    const normalized = canonicalizeSlideJsonValue(parsed);
-    return JSON.stringify(normalized, null, indent);
-  } catch {
-    return text || '';
-  }
-};
-
-const toLocalizedRenovationJsonText = (text: string, indent = 4): string => {
-  const raw = (text || '').trim();
-  if (!raw) return text || '';
-  try {
-    const parsed = JSON.parse(raw);
-    const normalized = canonicalizeSlideJsonValue(parsed);
-    const localized = localizeSlideJsonValue(normalized);
-    return JSON.stringify(localized, null, indent);
-  } catch {
-    return text || '';
-  }
-};
 
 export const SlidePreview: React.FC = () => {
   const navigate = useNavigate();
@@ -1054,79 +184,44 @@ export const SlidePreview: React.FC = () => {
 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const selectedPageIdRef = useRef<string | null>(null);
-  const [isMobileView, setIsMobileView] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth < 768;
+  const {
+    isMobileView,
+    isSidebarCollapsed,
+    setIsSidebarCollapsed,
+    sidebarViewMode,
+    setSidebarViewMode,
+    sidebarGridThumbMaxWidthPx,
+    setSidebarGridThumbMaxWidthPx,
+    isResizingSidebar,
+    setSidebarWidthPxExpanded,
+    sidebarWidthPx,
+    handleSidebarResizeStart,
+    previewSplitContainerRef,
+    resolvedPreviewSplitRatio,
+    resolvedPreviewSplitMinWidths,
+    isResizingPreviewSplit,
+    handlePreviewSplitResizeStart,
+    isEditorPaneCollapsed,
+    setIsEditorPaneCollapsed,
+    editorVerticalSplitContainerRef,
+    resolvedEditorVerticalSplitRatio,
+    isResizingEditorVerticalSplit,
+    handleEditorVerticalSplitResizeStart,
+    handleLinkedSplitResizeStart,
+    previewContainerRef,
+    isFullscreen,
+    floatingFullscreenButtonPosition,
+    isDraggingFloatingFullscreenButton,
+    handleFloatingFullscreenButtonMouseDown,
+    handleFloatingFullscreenButtonClick,
+  } = useSlidePreviewLayout({
+    currentProjectId: currentProject?.id,
+    selectedIndex,
+    sidebarDefaultWidth,
+    sidebarGridThumbMinPx,
+    sidebarGridThumbMaxPx,
+    sidebarGridThumbDefaultPx,
   });
-  const [viewportWidth, setViewportWidth] = useState(() => {
-    if (typeof window === 'undefined') return 1200;
-    return window.innerWidth;
-  });
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [sidebarViewMode, setSidebarViewMode] = useState<'list' | 'grid'>(() => {
-    try {
-      const stored = localStorage.getItem('previewSidebarViewMode');
-      return stored === 'grid' ? 'grid' : 'list';
-    } catch {
-      return 'list';
-    }
-  });
-  const [sidebarGridThumbMaxWidthPx, setSidebarGridThumbMaxWidthPx] = useState(() => {
-    try {
-      const stored = Number(localStorage.getItem('previewSidebarGridThumbMaxWidthPx'));
-      if (Number.isFinite(stored) && stored >= sidebarGridThumbMinPx && stored <= sidebarGridThumbMaxPx) {
-        return stored;
-      }
-    } catch {
-      // ignore storage errors
-    }
-    return sidebarGridThumbDefaultPx;
-  });
-  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
-  const [sidebarWidthPxExpanded, setSidebarWidthPxExpanded] = useState(sidebarDefaultWidth);
-  const sidebarResizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
-  const sidebarResizeRafRef = useRef<number | null>(null);
-  const sidebarResizePendingRef = useRef<number | null>(null);
-  const [previewSplitRatio, setPreviewSplitRatio] = useState(() => {
-    try {
-      const stored = Number(localStorage.getItem(PREVIEW_SPLIT_STORAGE_KEY));
-      if (Number.isFinite(stored) && stored > 0.2 && stored < 0.8) {
-        return stored;
-      }
-    } catch {
-      // ignore storage errors
-    }
-    return PREVIEW_SPLIT_DEFAULT_RATIO;
-  });
-  const [previewSplitContainerWidth, setPreviewSplitContainerWidth] = useState(0);
-  const [isResizingPreviewSplit, setIsResizingPreviewSplit] = useState(false);
-  const previewSplitContainerRef = useRef<HTMLDivElement | null>(null);
-  const previewSplitResizeRef = useRef<{
-    startX: number;
-    startWidth: number;
-    availableWidth: number;
-    visualMinWidth: number;
-    editorMinWidth: number;
-  } | null>(null);
-  const [isEditorPaneCollapsed, setIsEditorPaneCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem(PREVIEW_EDITOR_COLLAPSED_STORAGE_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
-  const [editorVerticalSplitRatio, setEditorVerticalSplitRatio] = useState(() => {
-    if (typeof window === 'undefined') return PREVIEW_EDITOR_VERTICAL_SPLIT_DEFAULT_RATIO;
-    const stored = Number(window.localStorage.getItem(PREVIEW_EDITOR_VERTICAL_SPLIT_STORAGE_KEY));
-    if (Number.isFinite(stored) && stored > 0.15 && stored < 0.9) {
-      return stored;
-    }
-    return PREVIEW_EDITOR_VERTICAL_SPLIT_DEFAULT_RATIO;
-  });
-  const [editorVerticalSplitContainerHeight, setEditorVerticalSplitContainerHeight] = useState(0);
-  const [isResizingEditorVerticalSplit, setIsResizingEditorVerticalSplit] = useState(false);
-  const editorVerticalSplitContainerRef = useRef<HTMLDivElement | null>(null);
-  const editorVerticalSplitResizeRef = useRef<{ startY: number; startHeight: number; availableHeight: number } | null>(null);
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
   const [isRenovationProcessing, setIsRenovationProcessing] = useState(false);
@@ -1151,8 +246,6 @@ export const SlidePreview: React.FC = () => {
   const textChangesPendingPersistRef = useRef(false);
   const textPersistInFlightRef = useRef(false);
   const [descriptionRequirementsDraft, setDescriptionRequirementsDraft] = useState('');
-  const [isSavingDescriptionRequirements, setIsSavingDescriptionRequirements] = useState(false);
-  const [pageDrafts, setPageDrafts] = useState<Record<string, PageDraft>>({});
   const formatDescriptionForEditor = useCallback((descriptionText: string, project?: Project | null) => {
     if ((project || currentProject)?.creation_type !== 'ppt_renovation') return descriptionText;
     return toLocalizedRenovationJsonText(descriptionText, 4);
@@ -1163,395 +256,10 @@ export const SlidePreview: React.FC = () => {
   }, [restoreActiveTasks]);
 
   useEffect(() => {
-    const handleResize = () => {
-      setViewportWidth(window.innerWidth);
-      setIsMobileView(window.innerWidth < 768);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    if (isMobileView && isSidebarCollapsed) {
-      setSidebarWidthPxExpanded(sidebarDefaultWidth);
-      setIsSidebarCollapsed(false);
-    }
-  }, [isMobileView, isSidebarCollapsed, sidebarDefaultWidth]);
-
-  useEffect(() => {
-    if (!currentProject) return;
-    const page = currentProject.pages[selectedIndex];
-    if (!page) {
-      if (lastSelectedPageKeyRef.current !== null) {
-        lastSelectedPageKeyRef.current = null;
-        setEditOutlineTitle('');
-        setEditOutlinePoints('');
-        setEditDescription('');
-        setEditExtraFields({});
-        setEditStyleGuideBindings({});
-      }
-      return;
-    }
-
-    const pageKey = getPageDraftKey(page, selectedIndex);
-    if (!pageKey) return;
-    lastSelectedPageKeyRef.current = pageKey;
-
-    const pageDraft = pageDrafts[pageKey];
-    if (pageDraft) {
-      setEditOutlineTitle(pageDraft.title);
-      setEditOutlinePoints(pageDraft.points);
-      setEditDescription(pageDraft.description);
-      setEditExtraFields(pageDraft.extraFields);
-      setEditStyleGuideBindings(pageDraft.styleGuideBindings || {});
-      return;
-    }
-
-    setEditOutlineTitle(page.outline_content?.title || '');
-    setEditOutlinePoints(page.outline_content?.points?.join('\n') || '');
-    setEditDescription(formatDescriptionForEditor(getDescriptionText(page.description_content), currentProject));
-    setEditExtraFields(getDescriptionExtraFields(page.description_content));
-    setEditStyleGuideBindings(getDescriptionStyleGuideBindings(page.description_content));
-  }, [currentProject, selectedIndex, pageDrafts, formatDescriptionForEditor]);
-
-  useEffect(() => {
     const pageId = currentProject?.pages?.[selectedIndex]?.id || null;
     selectedPageIdRef.current = pageId;
   }, [currentProject, selectedIndex]);
 
-  useEffect(() => {
-    if (!currentProject) {
-      setJsonRefineRequirement('');
-      setJsonRefineHistory([]);
-      return;
-    }
-
-    const page = currentProject.pages[selectedIndex];
-    const pageId = page?.id;
-    if (!pageId) {
-      setJsonRefineRequirement('');
-      setJsonRefineHistory([]);
-      return;
-    }
-
-    const context = page.json_refine_context || {};
-    const requirementDraft = typeof context.requirement_draft === 'string' ? context.requirement_draft : '';
-    const history = Array.isArray(context.history)
-      ? context.history.filter((item): item is string => typeof item === 'string')
-      : [];
-
-    setJsonRefineRequirement(requirementDraft);
-    setJsonRefineHistory(history);
-  }, [currentProject, selectedIndex]);
-
-  const sidebarCollapsedWidth = 72;
-  const sidebarMinWidth = sidebarCollapsedWidth;
-  const sidebarMaxWidth = Math.round(viewportWidth * (2 / 3));
-  const sidebarWidthPx = isSidebarCollapsed ? sidebarCollapsedWidth : sidebarWidthPxExpanded;
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('previewSidebarViewMode', sidebarViewMode);
-    } catch {
-      // ignore storage errors
-    }
-  }, [sidebarViewMode]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('previewSidebarGridThumbMaxWidthPx', String(sidebarGridThumbMaxWidthPx));
-    } catch {
-      // ignore storage errors
-    }
-  }, [sidebarGridThumbMaxWidthPx]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(PREVIEW_SPLIT_STORAGE_KEY, String(previewSplitRatio));
-    } catch {
-      // ignore storage errors
-    }
-  }, [previewSplitRatio]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(PREVIEW_EDITOR_COLLAPSED_STORAGE_KEY, isEditorPaneCollapsed ? '1' : '0');
-    } catch {
-      // ignore storage errors
-    }
-  }, [isEditorPaneCollapsed]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(PREVIEW_EDITOR_VERTICAL_SPLIT_STORAGE_KEY, String(editorVerticalSplitRatio));
-    } catch {
-      // ignore storage errors
-    }
-  }, [editorVerticalSplitRatio]);
-
-  useEffect(() => {
-    if (!viewportWidth) return;
-    setSidebarWidthPxExpanded((prev) =>
-      Math.min(Math.max(prev, sidebarMinWidth), sidebarMaxWidth)
-    );
-  }, [viewportWidth, sidebarMinWidth, sidebarMaxWidth]);
-
-  useEffect(() => {
-    if (!isResizingSidebar) return;
-    const handleMove = (e: MouseEvent) => {
-      if (!sidebarResizeStartRef.current) return;
-      const delta = e.clientX - sidebarResizeStartRef.current.startX;
-      const nextWidth = sidebarResizeStartRef.current.startWidth + delta;
-      sidebarResizePendingRef.current = nextWidth;
-      if (sidebarResizeRafRef.current !== null) return;
-      sidebarResizeRafRef.current = window.requestAnimationFrame(() => {
-        sidebarResizeRafRef.current = null;
-        const pendingWidth = sidebarResizePendingRef.current;
-        sidebarResizePendingRef.current = null;
-        if (pendingWidth === null) return;
-        const clampedWidth = Math.min(
-          Math.max(pendingWidth, sidebarMinWidth),
-          sidebarMaxWidth
-        );
-        if (clampedWidth <= sidebarCollapsedWidth) {
-          if (!isSidebarCollapsed) {
-            setIsSidebarCollapsed(true);
-          }
-        } else if (isSidebarCollapsed) {
-          setIsSidebarCollapsed(false);
-        }
-        setSidebarWidthPxExpanded((prev) => (prev === clampedWidth ? prev : clampedWidth));
-      });
-    };
-    const handleUp = () => {
-      setIsResizingSidebar(false);
-    };
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-    document.body.style.userSelect = 'none';
-    return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-      document.body.style.userSelect = '';
-      if (sidebarResizeRafRef.current !== null) {
-        cancelAnimationFrame(sidebarResizeRafRef.current);
-        sidebarResizeRafRef.current = null;
-      }
-      sidebarResizePendingRef.current = null;
-    };
-  }, [
-    isResizingSidebar,
-    sidebarMinWidth,
-    sidebarMaxWidth,
-    isSidebarCollapsed,
-  ]);
-
-  const handleSidebarResizeStart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    sidebarResizeStartRef.current = {
-      startX: e.clientX,
-      startWidth: isSidebarCollapsed ? sidebarCollapsedWidth : sidebarWidthPxExpanded,
-    };
-    setIsResizingSidebar(true);
-  };
-
-  useEffect(() => {
-    const node = previewSplitContainerRef.current;
-    if (!node || typeof ResizeObserver === 'undefined') return;
-
-    const updateWidth = () => {
-      setPreviewSplitContainerWidth(node.getBoundingClientRect().width);
-    };
-
-    updateWidth();
-    const observer = new ResizeObserver(updateWidth);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [sidebarWidthPx, isMobileView, currentProject?.id]);
-
-  const resolvePreviewSplitMinWidths = useCallback((availableWidth: number) => {
-    const desiredTotalMinWidth = PREVIEW_VISUAL_MIN_WIDTH + PREVIEW_EDITOR_MIN_WIDTH;
-    if (availableWidth >= desiredTotalMinWidth) {
-      return {
-        visualMinWidth: PREVIEW_VISUAL_MIN_WIDTH,
-        editorMinWidth: PREVIEW_EDITOR_MIN_WIDTH,
-      };
-    }
-    const visualRatio = PREVIEW_VISUAL_MIN_WIDTH / desiredTotalMinWidth;
-    const visualMinWidth = Math.max(0, Math.floor(availableWidth * visualRatio));
-    const editorMinWidth = Math.max(0, availableWidth - visualMinWidth);
-    return { visualMinWidth, editorMinWidth };
-  }, []);
-
-  const resolvedPreviewSplitRatio = useMemo(() => {
-    if (isMobileView) return PREVIEW_SPLIT_DEFAULT_RATIO;
-    if (!previewSplitContainerWidth) return previewSplitRatio;
-
-    const availableWidth = Math.max(1, previewSplitContainerWidth - PREVIEW_SPLIT_DIVIDER_PX);
-    const { visualMinWidth, editorMinWidth } = resolvePreviewSplitMinWidths(availableWidth);
-    const minRatio = visualMinWidth / availableWidth;
-    const maxRatio = (availableWidth - editorMinWidth) / availableWidth;
-    const clampedMin = Math.min(Math.max(minRatio, 0), 1);
-    const clampedMax = Math.max(clampedMin, Math.min(maxRatio, 1));
-    return Math.min(Math.max(previewSplitRatio, clampedMin), clampedMax);
-  }, [isMobileView, previewSplitContainerWidth, previewSplitRatio, resolvePreviewSplitMinWidths]);
-
-  const resolvedPreviewSplitMinWidths = useMemo(() => {
-    if (isMobileView || !previewSplitContainerWidth) {
-      return {
-        visualMinWidth: PREVIEW_VISUAL_MIN_WIDTH,
-        editorMinWidth: PREVIEW_EDITOR_MIN_WIDTH,
-      };
-    }
-    const availableWidth = Math.max(1, previewSplitContainerWidth - PREVIEW_SPLIT_DIVIDER_PX);
-    return resolvePreviewSplitMinWidths(availableWidth);
-  }, [isMobileView, previewSplitContainerWidth, resolvePreviewSplitMinWidths]);
-
-  useEffect(() => {
-    if (!isResizingPreviewSplit) return;
-
-    const handleMove = (event: MouseEvent) => {
-      const resizeState = previewSplitResizeRef.current;
-      if (!resizeState) return;
-      const nextWidth = resizeState.startWidth + (event.clientX - resizeState.startX);
-      const clampedWidth = Math.min(
-        Math.max(nextWidth, resizeState.visualMinWidth),
-        Math.max(resizeState.visualMinWidth, resizeState.availableWidth - resizeState.editorMinWidth)
-      );
-      setPreviewSplitRatio(clampedWidth / resizeState.availableWidth);
-    };
-
-    const handleUp = () => {
-      setIsResizingPreviewSplit(false);
-      previewSplitResizeRef.current = null;
-    };
-
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-    document.body.style.userSelect = 'none';
-
-    return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-      document.body.style.userSelect = '';
-    };
-  }, [isResizingPreviewSplit]);
-
-  const handlePreviewSplitResizeStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (isMobileView || !previewSplitContainerRef.current) return;
-    event.preventDefault();
-    const containerWidth = previewSplitContainerRef.current.getBoundingClientRect().width;
-    const availableWidth = Math.max(1, containerWidth - PREVIEW_SPLIT_DIVIDER_PX);
-    const { visualMinWidth, editorMinWidth } = resolvePreviewSplitMinWidths(availableWidth);
-    previewSplitResizeRef.current = {
-      startX: event.clientX,
-      startWidth: availableWidth * resolvedPreviewSplitRatio,
-      availableWidth,
-      visualMinWidth,
-      editorMinWidth,
-    };
-    setIsResizingPreviewSplit(true);
-  }, [isMobileView, resolvedPreviewSplitRatio, resolvePreviewSplitMinWidths]);
-
-  useEffect(() => {
-    const node = editorVerticalSplitContainerRef.current;
-    if (!node || typeof ResizeObserver === 'undefined') return;
-
-    const updateHeight = () => {
-      setEditorVerticalSplitContainerHeight(node.getBoundingClientRect().height);
-    };
-
-    updateHeight();
-    const observer = new ResizeObserver(updateHeight);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [isMobileView, currentProject?.id, selectedIndex]);
-
-  const resolvedEditorVerticalSplitRatio = useMemo(() => {
-    if (isMobileView) return PREVIEW_EDITOR_VERTICAL_SPLIT_DEFAULT_RATIO;
-    if (!editorVerticalSplitContainerHeight) return editorVerticalSplitRatio;
-
-    const availableHeight = Math.max(1, editorVerticalSplitContainerHeight - PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX);
-    const minRatio = PREVIEW_EDITOR_CANVAS_MIN_HEIGHT / availableHeight;
-    const maxRatio = (availableHeight - PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT) / availableHeight;
-    const clampedMin = Math.min(Math.max(minRatio, 0.2), 0.85);
-    const clampedMax = Math.max(clampedMin, Math.min(maxRatio, 0.85));
-    return Math.min(Math.max(editorVerticalSplitRatio, clampedMin), clampedMax);
-  }, [isMobileView, editorVerticalSplitContainerHeight, editorVerticalSplitRatio]);
-
-  useEffect(() => {
-    if (!isResizingEditorVerticalSplit) return;
-
-    const handleMove = (event: MouseEvent) => {
-      const resizeState = editorVerticalSplitResizeRef.current;
-      if (!resizeState) return;
-      const nextHeight = resizeState.startHeight + (event.clientY - resizeState.startY);
-      const clampedHeight = Math.min(
-        Math.max(nextHeight, PREVIEW_EDITOR_CANVAS_MIN_HEIGHT),
-        Math.max(PREVIEW_EDITOR_CANVAS_MIN_HEIGHT, resizeState.availableHeight - PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT)
-      );
-      setEditorVerticalSplitRatio(clampedHeight / resizeState.availableHeight);
-    };
-
-    const handleUp = () => {
-      setIsResizingEditorVerticalSplit(false);
-      editorVerticalSplitResizeRef.current = null;
-    };
-
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-    document.body.style.userSelect = 'none';
-
-    return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-      document.body.style.userSelect = '';
-    };
-  }, [isResizingEditorVerticalSplit]);
-
-  const handleEditorVerticalSplitResizeStart = useCallback((event: React.MouseEvent<HTMLElement>) => {
-    if (isMobileView || !editorVerticalSplitContainerRef.current) return;
-    event.preventDefault();
-    const containerHeight = editorVerticalSplitContainerRef.current.getBoundingClientRect().height;
-    const availableHeight = Math.max(1, containerHeight - PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX);
-    editorVerticalSplitResizeRef.current = {
-      startY: event.clientY,
-      startHeight: availableHeight * resolvedEditorVerticalSplitRatio,
-      availableHeight,
-    };
-    setIsResizingEditorVerticalSplit(true);
-  }, [isMobileView, resolvedEditorVerticalSplitRatio]);
-  const handleLinkedSplitResizeStart = useCallback((event: React.MouseEvent<HTMLElement>) => {
-    if (isMobileView || !previewSplitContainerRef.current || !editorVerticalSplitContainerRef.current) return;
-    event.preventDefault();
-    event.stopPropagation();
-
-    const previewContainerWidth = previewSplitContainerRef.current.getBoundingClientRect().width;
-    const previewAvailableWidth = Math.max(1, previewContainerWidth - PREVIEW_SPLIT_DIVIDER_PX);
-    const { visualMinWidth, editorMinWidth } = resolvePreviewSplitMinWidths(previewAvailableWidth);
-    previewSplitResizeRef.current = {
-      startX: event.clientX,
-      startWidth: previewAvailableWidth * resolvedPreviewSplitRatio,
-      availableWidth: previewAvailableWidth,
-      visualMinWidth,
-      editorMinWidth,
-    };
-
-    const editorContainerHeight = editorVerticalSplitContainerRef.current.getBoundingClientRect().height;
-    const editorAvailableHeight = Math.max(1, editorContainerHeight - PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX);
-    editorVerticalSplitResizeRef.current = {
-      startY: event.clientY,
-      startHeight: editorAvailableHeight * resolvedEditorVerticalSplitRatio,
-      availableHeight: editorAvailableHeight,
-    };
-
-    setIsResizingPreviewSplit(true);
-    setIsResizingEditorVerticalSplit(true);
-  }, [isMobileView, resolvedPreviewSplitRatio, resolvedEditorVerticalSplitRatio, resolvePreviewSplitMinWidths]);
-  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
-  const [activeTemplateTab, setActiveTemplateTab] = useState<TemplateSelectorTab>('image');
-  const [draftTemplateSelection, setDraftTemplateSelection] = useState<TemplateSelection | null>(null);
-  const [appliedTemplateSelection, setAppliedTemplateSelection] = useState<AppliedTemplateSelection | null>(null);
   const [editPrompt, setEditPrompt] = useState('');
   // 大纲和描述编辑状态
   const [editOutlineTitle, setEditOutlineTitle] = useState('');
@@ -1582,30 +290,24 @@ export const SlidePreview: React.FC = () => {
     };
   }, []);
   const [isGlobalAiDrawerOpen, setIsGlobalAiDrawerOpen] = useState(false);
-  const lastSelectedPageKeyRef = useRef<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showExportTasksPanel, setShowExportTasksPanel] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement | null>(null);
   const exportTasksPanelRef = useRef<HTMLDivElement | null>(null);
   const externalFieldPopoverRef = useRef<HTMLDivElement | null>(null);
   const generateFlowLockRef = useRef(false);
-  // 多选导出相关状态
-  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-  const [selectedPageIds, setSelectedPageIds] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [floatingFullscreenButtonPosition, setFloatingFullscreenButtonPosition] = useState({ x: 0.92, y: 0.1 });
-  const [imageVersions, setImageVersions] = useState<ImageVersion[]>([]);
-  const currentImageVersionId = useMemo(
-    () => imageVersions.find((version) => version.is_current)?.version_id || null,
-    [imageVersions]
-  );
-  const imageVersionsPageIdRef = useRef<string | null>(null);
+  const selectedPageForVersionFetch = currentProject?.pages?.[selectedIndex] || null;
+  const {
+    imageVersions,
+    currentImageVersionId,
+    selectedHistoryVersionId,
+    setSelectedHistoryVersionId,
+  } = useSlidePreviewHistoryVersions({
+    projectId,
+    selectedPage: selectedPageForVersionFetch,
+  });
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-  const [selectedHistoryVersionId, setSelectedHistoryVersionId] = useState<string | null>(null);
-  const [copiedHistoryVersionId, setCopiedHistoryVersionId] = useState<string | null>(null);
-  const historyCopyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isUploadingTemplate, setIsUploadingTemplate] = useState(false);
   const [selectedContextImages, setSelectedContextImages] = useState<{
     useTemplate: boolean;
     descImageUrls: string[];
@@ -1615,14 +317,55 @@ export const SlidePreview: React.FC = () => {
     descImageUrls: [],
     uploadedReferences: [],
   });
+  const {
+    imageRef,
+    isRegionSelectionMode,
+    setIsRegionSelectionMode,
+    selectionRect,
+    handleSelectionMouseDown,
+    handleSelectionMouseMove,
+    handleSelectionMouseUp,
+    clearSelectionPreview,
+  } = useSlidePreviewRegionSelection({
+    setSelectedContextImages,
+    show,
+    t,
+  });
   const [activePreviewReferenceId, setActivePreviewReferenceId] = useState<string | null>(null);
   const [pageAiMessages, setPageAiMessages] = useState<PageAiMessage[]>([]);
-  const [isPageAiSubmitting, setIsPageAiSubmitting] = useState(false);
   const [extraRequirements, setExtraRequirements] = useState<string>('');
-  const [isSavingRequirements, setIsSavingRequirements] = useState(false);
   const isEditingRequirements = useRef(false); // 跟踪用户是否正在编辑额外要求
   const [templateStyle, setTemplateStyle] = useState<string>('');
   const canQuickEditOutlineInPreview = currentProject?.creation_type !== 'ppt_renovation';
+  const {
+    persistCurrentPageDraft,
+    clearPageDraftsByIds,
+    hydrateSelectedPageEditor,
+    resetPageDrafts,
+  } = useSlidePreviewDrafts({
+    currentProject,
+    selectedIndex,
+    formatDescriptionForEditor,
+    setEditOutlineTitle,
+    setEditOutlinePoints,
+    setEditDescription,
+    setEditExtraFields,
+    setEditStyleGuideBindings,
+  });
+  const {
+    isTemplateModalOpen,
+    activeTemplateTab,
+    setActiveTemplateTab,
+    draftTemplateSelection,
+    setDraftTemplateSelection,
+    appliedTemplateSelection,
+    persistAppliedTemplateSelection,
+    closeTemplateModal,
+    openTemplateModal,
+  } = useSlidePreviewTemplateSelection({
+    projectId,
+    templateStyleJson: currentProject?.template_style_json,
+  });
 
   useEffect(() => {
     focusMainDescriptionField();
@@ -1640,7 +383,6 @@ export const SlidePreview: React.FC = () => {
       input.select();
     });
   }, [selectedIndex, canQuickEditOutlineInPreview]);
-  const [isSavingTemplateStyle, setIsSavingTemplateStyle] = useState(false);
   const isEditingTemplateStyle = useRef(false); // 跟踪用户是否正在编辑风格描述
   const lastProjectId = useRef<string | null>(null); // 跟踪上一次的项目ID
   const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
@@ -1678,13 +420,10 @@ export const SlidePreview: React.FC = () => {
   const [exportCompressPngQuantizeEnabled, setExportCompressPngQuantizeEnabled] = useState<boolean>(
     currentProject?.export_compress_png_quantize_enabled || false
   );
-  const [isSavingExportSettings, setIsSavingExportSettings] = useState(false);
   // 画面比例
   const [aspectRatio, setAspectRatio] = useState<string>(
     currentProject?.image_aspect_ratio || '16:9'
   );
-  const [isSavingAspectRatio, setIsSavingAspectRatio] = useState(false);
-  const [isSavingGenerationDefaults, setIsSavingGenerationDefaults] = useState(false);
   const [projectDefaultImageSource, setProjectDefaultImageSource] = useState<string>(PROJECT_DEFAULT_IMAGE_SOURCE);
   const [projectDefaultImageModel, setProjectDefaultImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   const [projectDefaultImageResolution, setProjectDefaultImageResolution] = useState<string>(PROJECT_DEFAULT_IMAGE_RESOLUTION);
@@ -1714,115 +453,36 @@ export const SlidePreview: React.FC = () => {
     }
     return '16/9';
   }, [aspectRatio]);
-  // 1K分辨率警告对话框状态
-  const [show1KWarningDialog, setShow1KWarningDialog] = useState(false);
-  const [skip1KWarningChecked, setSkip1KWarningChecked] = useState(false);
-  const [pending1KAction, setPending1KAction] = useState<(() => Promise<void>) | null>(null);
-  const [showBatchDescriptionGenerateDialog, setShowBatchDescriptionGenerateDialog] = useState(false);
-  const [showBatchGenerateDialog, setShowBatchGenerateDialog] = useState(false);
-  const [showJsonRefineDialog, setShowJsonRefineDialog] = useState(false);
-  const [jsonRefineRequirement, setJsonRefineRequirement] = useState('');
-  const [jsonRefineHistory, setJsonRefineHistory] = useState<string[]>([]);
   const [descriptionGenerationError, setDescriptionGenerationError] = useState<string | null>(null);
-  const [isJsonRefining, setIsJsonRefining] = useState(false);
-  const jsonRefineInputRef = useRef<HTMLInputElement | null>(null);
   const pageAiTextareaRef = useRef<MarkdownTextareaRef | null>(null);
-  const [batchGenerateContext, setBatchGenerateContext] = useState<{
-    total: number;
-    generated: number;
-    generating: number;
-    missing: number;
-    targetPageIds: string[];
-    missingPageIds: string[];
-  } | null>(null);
-  const [batchDescriptionGenerateContext, setBatchDescriptionGenerateContext] = useState<{
-    total: number;
-    generated: number;
-    generating: number;
-    missing: number;
-    targetPageIds: string[];
-    missingPageIds: string[];
-  } | null>(null);
-  const [descriptionRangeStart, setDescriptionRangeStart] = useState('');
-  const [descriptionRangeEnd, setDescriptionRangeEnd] = useState('');
-  // 页面 AI 上下文按「页面 + 图片版本」缓存，便于切换历史版本时恢复对应输入
-  const [pageAiContextByVersion, setPageAiContextByVersion] = useState<Record<string, PageAiContextState>>({});
-  const pendingPageAiContextBindingRef = useRef<Record<string, PendingPageAiContextBinding>>({});
-  const floatingFullscreenDragRef = useRef<{ moved: boolean } | null>(null);
-  const [isDraggingFloatingFullscreenButton, setIsDraggingFloatingFullscreenButton] = useState(false);
-  const suppressFloatingFullscreenClickRef = useRef(false);
-
-  useEffect(() => {
-    if (!currentProject) return;
-    const page = currentProject.pages[selectedIndex];
-    const pageId = page?.id;
-    if (!pageId) {
-      setEditPrompt('');
-      setPageAiMessages([]);
-      setEditRunImageModel(PROJECT_DEFAULT_IMAGE_MODEL);
-      setSelectedContextImages({
-        useTemplate: false,
-        descImageUrls: [],
-        uploadedReferences: [],
-      });
-      return;
-    }
-
-    const versionScopedKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
-    const fallbackKey = buildPageAiContextStoreKey(pageId, null);
-    const pendingBoundContext = pendingPageAiContextBindingRef.current[pageId]?.context;
-    const cached = pageAiContextByVersion[versionScopedKey]
-      || pendingBoundContext
-      || pageAiContextByVersion[fallbackKey];
-    if (!cached) {
-      setEditPrompt('');
-      setPageAiMessages([]);
-      setEditRunImageModel(PROJECT_DEFAULT_IMAGE_MODEL);
-      setSelectedContextImages({
-        useTemplate: false,
-        descImageUrls: [],
-        uploadedReferences: [],
-      });
-      return;
-    }
-
-    setEditPrompt(cached.draftInput);
-    setPageAiMessages(cached.messages);
-    setEditRunImageModel(cached.model);
-    setSelectedContextImages({
-      useTemplate: cached.contextImages.useTemplate,
-      descImageUrls: [...cached.contextImages.descImageUrls],
-      uploadedReferences: [...cached.contextImages.uploadedReferences],
-    });
-  }, [currentProject?.id, selectedIndex, currentImageVersionId]);
-
-  useEffect(() => {
-    if (!currentProject) return;
-    const page = currentProject.pages[selectedIndex];
-    const pageId = page?.id;
-    if (!pageId || !currentImageVersionId) return;
-
-    const pendingBinding = pendingPageAiContextBindingRef.current[pageId];
-    if (!pendingBinding || pendingBinding.sourceVersionId === currentImageVersionId) {
-      return;
-    }
-
-    const versionScopedKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
-    setPageAiContextByVersion((prev) => ({
-      ...prev,
-      [versionScopedKey]: {
-        draftInput: pendingBinding.context.draftInput,
-        messages: [...pendingBinding.context.messages],
-        model: pendingBinding.context.model,
-        contextImages: {
-          useTemplate: pendingBinding.context.contextImages.useTemplate,
-          descImageUrls: [...pendingBinding.context.contextImages.descImageUrls],
-          uploadedReferences: [...pendingBinding.context.contextImages.uploadedReferences],
-        },
-      },
-    }));
-    delete pendingPageAiContextBindingRef.current[pageId];
-  }, [currentProject, selectedIndex, currentImageVersionId]);
+  const {
+    showJsonRefineDialog,
+    setShowJsonRefineDialog,
+    jsonRefineRequirement,
+    setJsonRefineRequirement,
+    isJsonRefining,
+    jsonRefineInputRef,
+    handleSubmitJsonRefine,
+  } = useSlidePreviewJsonRefine({
+    currentProject,
+    selectedIndex,
+    projectId,
+    selectedPageId: currentProject?.pages?.[selectedIndex]?.id,
+    selectedPageOutlineContent: currentProject?.pages?.[selectedIndex]?.outline_content,
+    editDescription,
+    editExtraFields,
+    editStyleGuideBindings,
+    setEditDescription,
+    persistCurrentPageDraft,
+    updatePageLocal,
+    saveAllPages,
+    selectedPageDescriptionContent: currentProject?.pages?.[selectedIndex]?.description_content,
+    t,
+    show,
+    onApplied: () => {
+      textChangesPendingPersistRef.current = false;
+    },
+  });
 
   useEffect(() => {
     void (async () => {
@@ -1978,12 +638,6 @@ export const SlidePreview: React.FC = () => {
   }, [showExportMenu, showExportTasksPanel]);
 
   // 预览图矩形选择状态（编辑弹窗内）
-  const imageRef = useRef<HTMLImageElement | null>(null);
-  const [isRegionSelectionMode, setIsRegionSelectionMode] = useState(false);
-  const [isSelectingRegion, setIsSelectingRegion] = useState(false);
-  const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
-  const [selectionRect, setSelectionRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
-  const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const pendingInsertedScrollIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -2048,30 +702,6 @@ export const SlidePreview: React.FC = () => {
     pendingInsertedScrollIndexRef.current = null;
   }, [currentProject?.pages?.length, selectedIndex]);
 
-  const persistCurrentPageDraft = useCallback((updates: Partial<PageDraft>) => {
-    if (!currentProject) return;
-    const page = currentProject.pages[selectedIndex];
-    const pageKey = getPageDraftKey(page, selectedIndex);
-    if (!pageKey) return;
-
-    setPageDrafts((prev) => {
-      const baseDraft = prev[pageKey] || {
-        title: page?.outline_content?.title || '',
-        points: page?.outline_content?.points?.join('\n') || '',
-        description: formatDescriptionForEditor(getDescriptionText(page?.description_content), currentProject),
-        extraFields: getDescriptionExtraFields(page?.description_content),
-        styleGuideBindings: getDescriptionStyleGuideBindings(page?.description_content),
-      };
-      return {
-        ...prev,
-        [pageKey]: {
-          ...baseDraft,
-          ...updates,
-        },
-      };
-    });
-  }, [currentProject, selectedIndex]);
-
   const handleSelectPageByIndex = useCallback((index: number) => {
     const pageId = currentProject?.pages?.[index]?.id;
     if (pageId) {
@@ -2080,180 +710,110 @@ export const SlidePreview: React.FC = () => {
     setSelectedIndex(index);
   }, [currentProject]);
 
-  const clearPageDraftsByIds = useCallback((pageIds: string[]) => {
-    if (!pageIds.length) return;
-    const targetIds = new Set(pageIds);
-    setPageDrafts((prev) => {
-      let changed = false;
-      const next: Record<string, PageDraft> = {};
-      Object.entries(prev).forEach(([key, draft]) => {
-        if (targetIds.has(key)) {
-          changed = true;
-          return;
-        }
-        next[key] = draft;
-      });
-      return changed ? next : prev;
-    });
-  }, []);
-
-  const hydrateSelectedPageEditor = useCallback((project?: Project | null) => {
-    const page = project?.pages?.[selectedIndex];
-    if (!page) {
-      lastSelectedPageKeyRef.current = null;
-      setEditOutlineTitle('');
-      setEditOutlinePoints('');
-      setEditDescription('');
-      setEditExtraFields({});
-      setEditStyleGuideBindings({});
-      return;
-    }
-
-    lastSelectedPageKeyRef.current = getPageDraftKey(page, selectedIndex);
-    setEditOutlineTitle(page.outline_content?.title || '');
-    setEditOutlinePoints(page.outline_content?.points?.join('\n') || '');
-    setEditDescription(formatDescriptionForEditor(getDescriptionText(page.description_content), project));
-    setEditExtraFields(getDescriptionExtraFields(page.description_content));
-    setEditStyleGuideBindings(getDescriptionStyleGuideBindings(page.description_content));
-  }, [selectedIndex, formatDescriptionForEditor]);
-
   // Memoize pages with generated images to avoid re-computing in multiple places
   const pagesWithImages = useMemo(() => {
     return currentProject?.pages.filter(p => p.id && (p.generated_image_path || p.preview_image_path)) || [];
   }, [currentProject?.pages]);
+  const {
+    isMultiSelectMode,
+    selectedPageIds,
+    togglePageSelection,
+    selectAllPages,
+    deselectAllPages,
+    toggleMultiSelectMode,
+    getSelectedPageIdsForExport,
+  } = useSlidePreviewMultiSelect({ pagesWithImages });
+  const { handleExport } = useSlidePreviewExport({
+    projectId,
+    t,
+    show,
+    addTask,
+    pollExportTask,
+    setShowExportMenu,
+    setShowExportTasksPanel,
+    getSelectedPageIdsForExport,
+  });
+  const {
+    isSavingRequirements,
+    isSavingTemplateStyle,
+    isSavingDescriptionRequirements,
+    isSavingGenerationDefaults,
+    isSavingExportSettings,
+    isSavingAspectRatio,
+    handleSaveExtraRequirements,
+    handleSaveTemplateStyle,
+    handleSaveDescriptionRequirements,
+    handleSaveGenerationDefaults,
+    handleSaveExportSettings,
+    handleSaveAspectRatio,
+  } = useSlidePreviewProjectSettings({
+    currentProject,
+    projectId,
+    extraRequirements,
+    templateStyle,
+    descriptionRequirementsDraft,
+    projectDefaultImageModel,
+    projectDefaultImageResolution,
+    exportExtractorMethod,
+    exportInpaintMethod,
+    exportAllowPartial,
+    exportCompressEnabled,
+    exportCompressFormat,
+    exportCompressQuality,
+    exportCompressPngQuantizeEnabled,
+    aspectRatio,
+    isEditingRequirementsRef: isEditingRequirements,
+    isEditingTemplateStyleRef: isEditingTemplateStyle,
+    syncProject,
+    show,
+    t,
+  });
+  const { isApplyingSelection: isUploadingTemplate, handleApplyTemplateSelection } = useSlidePreviewTemplateApply({
+    projectId,
+    userTemplates,
+    closeTemplateModal,
+    persistAppliedTemplateSelection,
+    syncProject,
+    show,
+    t,
+  });
+  const {
+    selectedPageAiReferences,
+    handleFileUpload,
+    appendPageAiFiles,
+    buildPageAiPayload,
+    handleToggleTemplateReference,
+    handleToggleDescriptionImage,
+    handleRemovePageAiReference,
+  } = useSlidePreviewPageAiReferences({
+    editPrompt,
+    setEditPrompt,
+    selectedContextImages,
+    setSelectedContextImages,
+    pageAiTextareaRef,
+    activePreviewReferenceId,
+    setActivePreviewReferenceId,
+    t,
+  });
+  const { pageAiContextByVersion, bindPendingPageAiContext } = useSlidePreviewPageAiContext({
+    currentProject,
+    selectedIndex,
+    currentImageVersionId,
+    defaultModel: PROJECT_DEFAULT_IMAGE_MODEL,
+    editPrompt,
+    setEditPrompt,
+    pageAiMessages,
+    setPageAiMessages,
+    editRunImageModel,
+    setEditRunImageModel,
+    selectedContextImages,
+    setSelectedContextImages,
+  });
 
   const hasImages = useMemo(
     () => currentProject?.pages?.some(p => p.generated_image_path || p.preview_image_path) ?? false,
     [currentProject?.pages]
   );
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const handleFullscreenChange = () => {
-      const fullscreenElement =
-        document.fullscreenElement ||
-        (document as any).webkitFullscreenElement ||
-        (document as any).msFullscreenElement ||
-        null;
-      setIsFullscreen(fullscreenElement === previewContainerRef.current);
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener);
-    document.addEventListener('msfullscreenchange', handleFullscreenChange as EventListener);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener);
-      document.removeEventListener('msfullscreenchange', handleFullscreenChange as EventListener);
-    };
-  }, []);
-
-  const requestFullscreen = useCallback(async () => {
-    const target = previewContainerRef.current;
-    if (!target) return;
-    const request =
-      target.requestFullscreen ||
-      (target as any).webkitRequestFullscreen ||
-      (target as any).msRequestFullscreen;
-    if (!request) return;
-    try {
-      await request.call(target);
-    } catch (error) {
-      console.warn('Failed to enter fullscreen:', error);
-    }
-  }, []);
-
-  const exitFullscreen = useCallback(async () => {
-    if (typeof document === 'undefined') return;
-    const exit =
-      document.exitFullscreen ||
-      (document as any).webkitExitFullscreen ||
-      (document as any).msExitFullscreen;
-    if (!exit) return;
-    try {
-      await exit.call(document);
-    } catch (error) {
-      console.warn('Failed to exit fullscreen:', error);
-    }
-  }, []);
-
-  const toggleFullscreen = useCallback(() => {
-    if (typeof document === 'undefined') return;
-    const fullscreenElement =
-      document.fullscreenElement ||
-      (document as any).webkitFullscreenElement ||
-      (document as any).msFullscreenElement ||
-      null;
-    if (fullscreenElement) {
-      void exitFullscreen();
-    } else {
-      void requestFullscreen();
-    }
-  }, [exitFullscreen, requestFullscreen]);
-
-  useEffect(() => {
-    if (!isDraggingFloatingFullscreenButton) return;
-
-    const handleMove = (event: MouseEvent) => {
-      const container = previewContainerRef.current;
-      const dragState = floatingFullscreenDragRef.current;
-      if (!container || !dragState) return;
-
-      const rect = container.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-
-      const nextX = (event.clientX - rect.left) / rect.width;
-      const nextY = (event.clientY - rect.top) / rect.height;
-      const xPadding = FLOATING_FULLSCREEN_BUTTON_SIZE / (2 * rect.width);
-      const yPadding = FLOATING_FULLSCREEN_BUTTON_SIZE / (2 * rect.height);
-
-      const clampedX = Math.min(Math.max(nextX, xPadding), 1 - xPadding);
-      const clampedY = Math.min(Math.max(nextY, yPadding), 1 - yPadding);
-
-      if (!dragState.moved) {
-        dragState.moved =
-          Math.abs(event.movementX) > 1 ||
-          Math.abs(event.movementY) > 1;
-      }
-
-      setFloatingFullscreenButtonPosition({ x: clampedX, y: clampedY });
-    };
-
-    const handleUp = () => {
-      if (floatingFullscreenDragRef.current?.moved) {
-        suppressFloatingFullscreenClickRef.current = true;
-      }
-      floatingFullscreenDragRef.current = null;
-      setIsDraggingFloatingFullscreenButton(false);
-      document.body.style.userSelect = '';
-    };
-
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-    document.body.style.userSelect = 'none';
-
-    return () => {
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-      document.body.style.userSelect = '';
-    };
-  }, [isDraggingFloatingFullscreenButton]);
-
-  const handleFloatingFullscreenButtonMouseDown = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    floatingFullscreenDragRef.current = { moved: false };
-    setIsDraggingFloatingFullscreenButton(true);
-  }, []);
-
-  const handleFloatingFullscreenButtonClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (suppressFloatingFullscreenClickRef.current) {
-      suppressFloatingFullscreenClickRef.current = false;
-      return;
-    }
-    toggleFullscreen();
-  }, [toggleFullscreen]);
 
   const pageCount = currentProject?.pages?.length ?? 0;
 
@@ -2409,185 +969,6 @@ export const SlidePreview: React.FC = () => {
     }
   }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.description_requirements, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality, currentProject?.export_compress_png_quantize_enabled, currentProject?.generation_defaults]);
 
-  const templateSelectionStorageKey = useMemo(
-    () => (projectId ? `preview-template-selection:${projectId}` : null),
-    [projectId]
-  );
-
-  useEffect(() => {
-    if (!templateSelectionStorageKey) {
-      setAppliedTemplateSelection(null);
-      return;
-    }
-    try {
-      const raw = sessionStorage.getItem(templateSelectionStorageKey);
-      if (!raw) {
-        setAppliedTemplateSelection(null);
-        return;
-      }
-      const parsed = JSON.parse(raw) as AppliedTemplateSelection;
-      if (
-        parsed &&
-        typeof parsed === 'object' &&
-        typeof parsed.kind === 'string' &&
-        typeof parsed.id === 'string'
-      ) {
-        setAppliedTemplateSelection(parsed);
-        return;
-      }
-    } catch (error) {
-      console.warn('Failed to restore applied template selection:', error);
-    }
-    setAppliedTemplateSelection(null);
-  }, [templateSelectionStorageKey]);
-
-  const persistAppliedTemplateSelection = useCallback((selection: AppliedTemplateSelection | null) => {
-    setAppliedTemplateSelection(selection);
-    if (!templateSelectionStorageKey) return;
-    if (!selection) {
-      sessionStorage.removeItem(templateSelectionStorageKey);
-      return;
-    }
-    sessionStorage.setItem(templateSelectionStorageKey, JSON.stringify(selection));
-  }, [templateSelectionStorageKey]);
-
-  const closeTemplateModal = useCallback(() => {
-    setDraftTemplateSelection(null);
-    setIsTemplateModalOpen(false);
-  }, []);
-
-  const openTemplateModal = useCallback(() => {
-    setDraftTemplateSelection(null);
-    const nextTab: TemplateSelectorTab = currentProject?.template_style_json
-      ? 'json'
-      : appliedTemplateSelection?.kind === 'material'
-        ? 'material'
-        : 'image';
-    setActiveTemplateTab(nextTab);
-    setIsTemplateModalOpen(true);
-  }, [appliedTemplateSelection?.kind, currentProject?.template_style_json]);
-
-  const selectedPageForVersionFetch = currentProject?.pages?.[selectedIndex] || null;
-  const selectedPageVersionFetchKey = selectedPageForVersionFetch?.id
-    ? [
-      selectedPageForVersionFetch.id,
-      selectedPageForVersionFetch.generated_image_path || '',
-      selectedPageForVersionFetch.preview_image_path || '',
-    ].join(':')
-    : null;
-
-  // 加载当前页面的历史版本
-  useEffect(() => {
-    if (!projectId || !selectedPageForVersionFetch?.id || !selectedPageVersionFetchKey) {
-      imageVersionsPageIdRef.current = null;
-      setImageVersions([]);
-      return;
-    }
-
-    let cancelled = false;
-    const pageIdForVersionFetch = selectedPageForVersionFetch.id;
-    if (!pageIdForVersionFetch) {
-      imageVersionsPageIdRef.current = null;
-      setImageVersions([]);
-      return;
-    }
-
-    const pageChanged = imageVersionsPageIdRef.current !== pageIdForVersionFetch;
-    imageVersionsPageIdRef.current = pageIdForVersionFetch;
-
-    if (pageChanged) {
-      setImageVersions([]);
-    }
-
-    const loadVersions = async () => {
-      try {
-        const response = await getPageImageVersions(projectId, pageIdForVersionFetch);
-        if (!cancelled && response.data?.versions) {
-          setImageVersions(response.data.versions);
-        }
-      } catch (error) {
-        console.error('Failed to load image versions:', error);
-        if (!cancelled && pageChanged) {
-          setImageVersions([]);
-        }
-      }
-    };
-
-    void loadVersions();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, selectedPageForVersionFetch?.id, selectedPageVersionFetchKey]);
-
-  useEffect(() => {
-    if (imageVersions.length === 0) {
-      setSelectedHistoryVersionId(null);
-      return;
-    }
-
-    setSelectedHistoryVersionId((prev) => {
-      if (prev && imageVersions.some((version) => version.version_id === prev)) {
-        return prev;
-      }
-      const currentVersion = imageVersions.find((version) => version.is_current);
-      if (currentVersion) return currentVersion.version_id;
-      return [...imageVersions].sort((a, b) => b.version_number - a.version_number)[0]?.version_id || null;
-    });
-  }, [imageVersions]);
-
-  useEffect(() => () => {
-    if (historyCopyResetTimerRef.current) {
-      clearTimeout(historyCopyResetTimerRef.current);
-    }
-  }, []);
-
-  // 检查是否需要显示1K分辨率警告
-  const checkResolutionAndExecute = useCallback(async (action: () => Promise<void>) => {
-    // 检查 localStorage 中是否已跳过警告
-    const skipWarning = localStorage.getItem('skip1KResolutionWarning') === 'true';
-    if (skipWarning) {
-      await action();
-      return true;
-    }
-
-    const resolution = currentImageGenerationOverride.image?.resolution;
-
-    // 如果是1K分辨率，显示警告对话框
-    if (resolution === '1K') {
-      setPending1KAction(() => action);
-      setSkip1KWarningChecked(false);
-      setShow1KWarningDialog(true);
-      return false;
-    } else {
-      // 未配置/获取失败/非1K时都直接执行
-      await action();
-      return true;
-    }
-  }, [currentImageGenerationOverride]);
-
-  // 确认1K分辨率警告后执行
-  const handleConfirm1KWarning = useCallback(async () => {
-    // 如果勾选了"不再提示"，保存到 localStorage
-    if (skip1KWarningChecked) {
-      localStorage.setItem('skip1KResolutionWarning', 'true');
-    }
-
-    setShow1KWarningDialog(false);
-
-    // 执行待处理的操作
-    if (pending1KAction) {
-      await pending1KAction();
-      setPending1KAction(null);
-    }
-  }, [skip1KWarningChecked, pending1KAction]);
-
-  // 取消1K分辨率警告
-  const handleCancel1KWarning = useCallback(() => {
-    setShow1KWarningDialog(false);
-    setPending1KAction(null);
-  }, []);
-
   const handleBatchGenerate = useCallback(async (pageIds?: string[]) => {
     try {
       await generateImages(pageIds, currentImageGenerationOverride);
@@ -2627,6 +1008,45 @@ export const SlidePreview: React.FC = () => {
       });
     }
   }, [generateImages, currentImageGenerationOverride, show, t]);
+
+  const {
+    show1KWarningDialog,
+    skip1KWarningChecked,
+    setSkip1KWarningChecked,
+    handleConfirm1KWarning,
+    handleCancel1KWarning,
+    showBatchDescriptionGenerateDialog,
+    showBatchGenerateDialog,
+    setShowBatchGenerateDialog,
+    batchGenerateContext,
+    setBatchGenerateContext,
+    batchDescriptionGenerateContext,
+    descriptionRangeStart,
+    setDescriptionRangeStart,
+    descriptionRangeEnd,
+    setDescriptionRangeEnd,
+    checkResolutionAndExecute,
+    handleGenerateDescriptions,
+    handleGenerateDescriptionsByRange,
+    closeBatchGenerateDialog,
+    closeBatchDescriptionGenerateDialog,
+    handleGenerateMissingImagesFromDialog,
+    handleRegenerateAllImagesFromDialog,
+    handleGenerateMissingDescriptionsFromDialog,
+    handleRegenerateAllDescriptionsFromDialog,
+  } = useSlidePreviewGeneration({
+    currentProject,
+    currentImageGenerationOverride,
+    projectId,
+    t,
+    show,
+    generateDescriptions,
+    syncProject,
+    clearPageDraftsByIds,
+    hydrateSelectedPageEditor,
+    getLatestProject: () => useProjectStore.getState().currentProject,
+    handleBatchGenerate,
+  });
 
   const handleGenerateAll = async () => {
     // 先检查分辨率，如果是1K则显示警告
@@ -2770,9 +1190,7 @@ export const SlidePreview: React.FC = () => {
     setOutlineQuickEditMode('edit');
     setIsOutlineQuickEditOpen(true);
     setIsRegionSelectionMode(false);
-    setSelectionStart(null);
-    setSelectionRect(null);
-    setIsSelectingRegion(false);
+    clearSelectionPreview();
   }, [selectedIndex, currentProject]);
 
   const handleOutlineQuickPointsPaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
@@ -3031,97 +1449,6 @@ export const SlidePreview: React.FC = () => {
     handleBatchGenerate,
   ]);
 
-  const handleGenerateDescriptions = useCallback(async () => {
-    if (!currentProject) return;
-    const pagesToGenerate = currentProject.pages.filter((page) => page.id);
-    const generatedPages = pagesToGenerate.filter((page) => page.status !== 'GENERATING_DESCRIPTION' && Boolean(page.description_content));
-    const generatingPages = pagesToGenerate.filter((page) => page.status === 'GENERATING_DESCRIPTION');
-    const targetPageIds = pagesToGenerate.map((page) => page.id!).filter(Boolean);
-    const missingPageIds = pagesToGenerate
-      .filter((page) => page.status !== 'GENERATING_DESCRIPTION' && !page.description_content)
-      .map((page) => page.id!)
-      .filter(Boolean);
-    const totalCount = targetPageIds.length;
-    const generatedCount = generatedPages.length;
-    const generatingCount = generatingPages.length;
-    const missingCount = missingPageIds.length;
-
-    if (totalCount === 0) return;
-
-    setBatchDescriptionGenerateContext({
-      total: totalCount,
-      generated: generatedCount,
-      generating: generatingCount,
-      missing: missingCount,
-      targetPageIds,
-      missingPageIds,
-    });
-    setDescriptionRangeStart('1');
-    setDescriptionRangeEnd(String(totalCount));
-    setShowBatchDescriptionGenerateDialog(true);
-  }, [currentProject]);
-
-  const handleGenerateDescriptionsByRange = useCallback(async () => {
-    if (!batchDescriptionGenerateContext || !currentProject) return;
-
-    const start = Number(descriptionRangeStart);
-    const end = Number(descriptionRangeEnd);
-    if (!Number.isInteger(start) || !Number.isInteger(end)) {
-      show({ message: t('preview.rangeInvalidNumber'), type: 'error' });
-      return;
-    }
-
-    const maxPage = batchDescriptionGenerateContext.total;
-    if (start < 1 || end < 1 || start > maxPage || end > maxPage) {
-      show({ message: t('preview.rangeOutOfBounds', { max: maxPage }), type: 'error' });
-      return;
-    }
-
-    if (start > end) {
-      show({ message: t('preview.rangeInvalidOrder'), type: 'error' });
-      return;
-    }
-
-    const pageIdsInRange = currentProject.pages
-      .slice(start - 1, end)
-      .filter((page) => page.id)
-      .map((page) => page.id as string);
-    const generatingSet = new Set(
-      currentProject.pages
-        .filter((page) => page.status === 'GENERATING_DESCRIPTION' && page.id)
-        .map((page) => page.id as string)
-    );
-    const executablePageIds = pageIdsInRange.filter((id) => !generatingSet.has(id));
-    const skippedCount = pageIdsInRange.length - executablePageIds.length;
-
-    if (executablePageIds.length === 0) {
-      show({ message: t('preview.rangeNoAvailablePages'), type: 'info' });
-      return;
-    }
-
-    setShowBatchDescriptionGenerateDialog(false);
-    setBatchDescriptionGenerateContext(null);
-    await generateDescriptions(undefined, executablePageIds);
-    await syncProject(projectId);
-    clearPageDraftsByIds(executablePageIds);
-    hydrateSelectedPageEditor(useProjectStore.getState().currentProject);
-    if (skippedCount > 0) {
-      show({ message: t('preview.rangeGeneratingSkipped', { count: skippedCount }), type: 'info' });
-    }
-  }, [
-    batchDescriptionGenerateContext,
-    currentProject,
-    descriptionRangeEnd,
-    descriptionRangeStart,
-    clearPageDraftsByIds,
-    generateDescriptions,
-    hydrateSelectedPageEditor,
-    projectId,
-    show,
-    syncProject,
-    t,
-  ]);
-
   const handleGenerateDescriptionForCurrentPage = useCallback(async (descriptionRequirementsOverride?: string) => {
     if (!currentProject) return;
     const pageId = handleSaveOutlineForQuickEditTarget({ silent: true });
@@ -3167,8 +1494,7 @@ export const SlidePreview: React.FC = () => {
       handleSaveOutlineAndDescription();
       await saveAllPages();
       const response = await refineDescriptions(projectId, requirement, previousRequirements);
-      setPageDrafts({});
-      lastSelectedPageKeyRef.current = null;
+      resetPageDrafts();
       await syncProject(projectId);
       hydrateSelectedPageEditor(useProjectStore.getState().currentProject);
       const successMessage = response.data?.message || '页面描述修改成功';
@@ -3185,7 +1511,7 @@ export const SlidePreview: React.FC = () => {
       show({ message: errorMessage, type: 'error' });
       throw new Error(errorMessage);
     }
-  }, [currentProject, projectId, handleSaveOutlineAndDescription, saveAllPages, show, syncProject, hydrateSelectedPageEditor]);
+  }, [currentProject, projectId, handleSaveOutlineAndDescription, saveAllPages, show, syncProject, hydrateSelectedPageEditor, resetPageDrafts]);
 
   const handleExportDescriptions = useCallback(() => {
     if (!currentProject) return;
@@ -3254,56 +1580,6 @@ export const SlidePreview: React.FC = () => {
     }
   }, [currentProject, selectedIndex, show, checkResolutionAndExecute]);
 
-  const handleFileUpload = useCallback((files: File[]) => {
-    setSelectedContextImages((prev) => ({
-      ...prev,
-      uploadedReferences: [
-        ...prev.uploadedReferences,
-        ...files.map((file) => createUploadedReference(file, 'upload')),
-      ],
-    }));
-  }, []);
-
-  const appendPageAiFiles = useCallback((files: File[], options?: {
-    sourceType?: PageAiUploadedReference['sourceType'];
-    labels?: string[];
-    insertIntoPrompt?: boolean;
-  }) => {
-    const nextReferences = files.map((file, index) => createUploadedReference(
-      file,
-      options?.sourceType || 'upload',
-      options?.labels?.[index] || file.name,
-    ));
-    setSelectedContextImages((prev) => ({
-      ...prev,
-      uploadedReferences: [...prev.uploadedReferences, ...nextReferences],
-    }));
-
-    if (options?.insertIntoPrompt) {
-      nextReferences.forEach((reference) => {
-        pageAiTextareaRef.current?.insertAtCursor(
-          `![${escapeMarkdownText(reference.label)}](${reference.markdownUrl || reference.previewUrl})\n`
-        );
-      });
-      pageAiTextareaRef.current?.focus();
-    }
-
-    return nextReferences;
-  }, []);
-
-  const removeUploadedReference = useCallback((referenceId: string) => {
-    setSelectedContextImages((prev) => {
-      const target = prev.uploadedReferences.find((reference) => reference.id === referenceId);
-      if (target?.markdownUrl) {
-        setEditPrompt((current) => removeMarkdownImageByUrl(current, target.markdownUrl!));
-      }
-      return {
-        ...prev,
-        uploadedReferences: prev.uploadedReferences.filter((reference) => reference.id !== referenceId),
-      };
-    });
-  }, []);
-
   const uploadedReferenceCleanupRef = useRef<PageAiUploadedReference[]>([]);
   useEffect(() => {
     const combined = [
@@ -3321,416 +1597,19 @@ export const SlidePreview: React.FC = () => {
     };
   }, []);
 
-  const handleSelectMaterials = async (materials: Material[]) => {
-    if (materialSelectorMode === 'description') {
-      const markdown = materials
-        .map((material) => `![${escapeMarkdownText(getMaterialMarkdownLabel(material))}](${material.url})`)
-        .join('\n');
-      if (markdown) {
-        activeDescriptionInsertAtCursor.current?.(`${markdown}\n`);
-        show({ message: t('slidePreview.materialsAdded', { count: materials.length }), type: 'success' });
-      }
-      return;
-    }
-
-    if (materialSelectorMode === 'pageAiInline') {
-      const markdown = materials
-        .map((material) => `![${escapeMarkdownText(getMaterialMarkdownLabel(material))}](${material.url})`)
-        .join('\n');
-      if (markdown) {
-        pageAiTextareaRef.current?.insertAtCursor(`${markdown}\n`);
-        pageAiTextareaRef.current?.focus();
-        show({ message: t('slidePreview.materialsAdded', { count: materials.length }), type: 'success' });
-      }
-      return;
-    }
-
-    try {
-      const files = await Promise.all(
-        materials.map((material) => materialUrlToFile(material))
-      );
-      appendPageAiFiles(files, {
-        sourceType: 'material',
-        labels: materials.map((material) => material.name || material.filename || getMaterialMarkdownLabel(material)),
-      });
-      show({ message: t('slidePreview.materialsAdded', { count: materials.length }), type: 'success' });
-    } catch (error: any) {
-      console.error('加载素材失败:', error);
-      show({
-        message: t('slidePreview.loadMaterialFailed', { error: error.message || t('slidePreview.unknownError') }),
-        type: 'error',
-      });
-    }
-  };
-
-  const descriptionSlashActions = useMemo(() => {
-    const actions = [
-      {
-        id: 'upload-local',
-        label: t('preview.descriptionSlashUpload'),
-        description: t('preview.descriptionSlashUploadDesc'),
-        onSelect: () => {
-          descriptionTextareaRef.current?.focus();
-          const input = document.createElement('input');
-          input.type = 'file';
-          input.accept = DESCRIPTION_UPLOAD_ACCEPT;
-          input.multiple = true;
-          input.style.position = 'fixed';
-          input.style.left = '-9999px';
-          document.body.appendChild(input);
-          input.oncancel = () => {
-            input.remove();
-          };
-          input.onchange = () => {
-            const files = Array.from(input.files || []);
-            input.remove();
-            if (files.length > 0) {
-              void handleDescriptionFiles(files);
-            }
-          };
-          input.click();
-        },
-      },
-    ];
-
-    if (projectId) {
-      actions.push({
-        id: 'select-material',
-        label: t('preview.descriptionSlashMaterials'),
-        description: t('preview.descriptionSlashMaterialsDesc'),
-        onSelect: () => {
-          setMaterialSelectorMode('description');
-          setIsMaterialSelectorOpen(true);
-        },
-      });
-    }
-
-    return actions;
-  }, [handleDescriptionFiles, projectId, t]);
-
-  const pageAiSlashActions = useMemo(() => {
-    const actions = [
-      {
-        id: 'upload-local',
-        label: t('preview.descriptionSlashUpload'),
-        description: t('preview.descriptionSlashUploadDesc'),
-        onSelect: () => {
-          pageAiTextareaRef.current?.focus();
-          const input = document.createElement('input');
-          input.type = 'file';
-          input.accept = DESCRIPTION_UPLOAD_ACCEPT;
-          input.multiple = true;
-          input.style.position = 'fixed';
-          input.style.left = '-9999px';
-          document.body.appendChild(input);
-          input.oncancel = () => {
-            input.remove();
-          };
-          input.onchange = () => {
-            const files = Array.from(input.files || []);
-            input.remove();
-            if (files.length > 0) {
-              appendPageAiFiles(files, { sourceType: 'upload', insertIntoPrompt: true });
-            }
-          };
-          input.click();
-        },
-      },
-    ];
-
-    if (projectId) {
-      actions.push({
-        id: 'select-material',
-        label: t('preview.descriptionSlashMaterials'),
-        description: t('preview.descriptionSlashMaterialsDesc'),
-        onSelect: () => {
-          setMaterialSelectorMode('pageAiInline');
-          setIsMaterialSelectorOpen(true);
-        },
-      });
-    }
-
-    return actions;
-  }, [appendPageAiFiles, projectId, t]);
-
-  useEffect(() => {
-    if (!currentProject) return;
-    const page = currentProject.pages[selectedIndex];
-    const pageId = page?.id;
-    if (!pageId) return;
-
-    const contextKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
-    setPageAiContextByVersion((prev) => ({
-      ...prev,
-      [contextKey]: {
-        draftInput: editPrompt,
-        messages: pageAiMessages,
-        model: editRunImageModel,
-        contextImages: {
-          useTemplate: selectedContextImages.useTemplate,
-          descImageUrls: [...selectedContextImages.descImageUrls],
-          uploadedReferences: [...selectedContextImages.uploadedReferences],
-        },
-      },
-    }));
-  }, [currentProject, selectedIndex, currentImageVersionId, editPrompt, selectedContextImages, pageAiMessages, editRunImageModel]);
-
-  useEffect(() => {
-    if (!currentProject) return;
-    const page = currentProject.pages[selectedIndex];
-    const pageId = page?.id;
-    if (!pageId) return;
-
-    const context = page.json_refine_context || {};
-    const requirementDraft = typeof context.requirement_draft === 'string' ? context.requirement_draft : '';
-    const history = Array.isArray(context.history)
-      ? context.history.filter((item): item is string => typeof item === 'string')
-      : [];
-    const sameRequirement = requirementDraft === jsonRefineRequirement;
-    const sameHistory = history.length === jsonRefineHistory.length
-      && history.every((item, index) => item === jsonRefineHistory[index]);
-
-    if (sameRequirement && sameHistory) {
-      return;
-    }
-
-    updatePageLocal(pageId, {
-      json_refine_context: {
-        requirement_draft: jsonRefineRequirement,
-        history: [...jsonRefineHistory],
-      },
-    });
-  }, [currentProject, selectedIndex, jsonRefineRequirement, jsonRefineHistory, updatePageLocal]);
-
-  // ========== 预览图矩形选择相关逻辑（编辑弹窗内） ==========
-  const handleSelectionMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isRegionSelectionMode || !imageRef.current) return;
-    const rect = imageRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    if (x < 0 || y < 0 || x > rect.width || y > rect.height) return;
-    setIsSelectingRegion(true);
-    setSelectionStart({ x, y });
-    setSelectionRect(null);
-  };
-
-  const handleSelectionMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isRegionSelectionMode || !isSelectingRegion || !selectionStart || !imageRef.current) return;
-    const rect = imageRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    const clampedX = Math.max(0, Math.min(x, rect.width));
-    const clampedY = Math.max(0, Math.min(y, rect.height));
-
-    const left = Math.min(selectionStart.x, clampedX);
-    const top = Math.min(selectionStart.y, clampedY);
-    const width = Math.abs(clampedX - selectionStart.x);
-    const height = Math.abs(clampedY - selectionStart.y);
-
-    setSelectionRect({ left, top, width, height });
-  };
-
-  const handleSelectionMouseUp = async () => {
-    if (!isRegionSelectionMode || !isSelectingRegion || !selectionRect || !imageRef.current) {
-      setIsSelectingRegion(false);
-      setSelectionStart(null);
-      return;
-    }
-
-    // 结束拖拽，但保留选中的矩形，直到用户手动退出区域选图模式
-    setIsSelectingRegion(false);
-    setSelectionStart(null);
-
-    try {
-      const img = imageRef.current;
-      const { left, top, width, height } = selectionRect;
-      if (width < 10 || height < 10) {
-        // 选区太小，忽略
-        return;
-      }
-
-      // 将选区从展示尺寸映射到原始图片尺寸
-      const naturalWidth = img.naturalWidth;
-      const naturalHeight = img.naturalHeight;
-      const displayWidth = img.clientWidth;
-      const displayHeight = img.clientHeight;
-
-      if (!naturalWidth || !naturalHeight || !displayWidth || !displayHeight) return;
-
-      const scaleX = naturalWidth / displayWidth;
-      const scaleY = naturalHeight / displayHeight;
-
-      const sx = left * scaleX;
-      const sy = top * scaleY;
-      const sWidth = width * scaleX;
-      const sHeight = height * scaleY;
-
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(sWidth));
-      canvas.height = Math.max(1, Math.round(sHeight));
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      try {
-        ctx.drawImage(
-          img,
-          sx,
-          sy,
-          sWidth,
-          sHeight,
-          0,
-          0,
-          canvas.width,
-          canvas.height
-        );
-
-        canvas.toBlob((blob) => {
-          if (!blob) return;
-          const file = new File([blob], `crop-${Date.now()}.png`, { type: 'image/png' });
-          setSelectedContextImages((prev) => ({
-            ...prev,
-            uploadedReferences: [
-              ...prev.uploadedReferences,
-              createUploadedReference(
-                file,
-                'region',
-                `框选区域 ${prev.uploadedReferences.filter((item) => item.sourceType === 'region').length + 1}`,
-                {
-                  regionBounds: {
-                    leftRatio: left / displayWidth,
-                    topRatio: top / displayHeight,
-                    widthRatio: width / displayWidth,
-                    heightRatio: height / displayHeight,
-                  },
-                }
-              ),
-            ],
-          }));
-          show({
-            message: t('slidePreview.regionCropSuccess'),
-            type: 'success',
-          });
-        }, 'image/png');
-      } catch (e: any) {
-        console.error('裁剪选中区域失败（可能是跨域图片导致 canvas 被污染）:', e);
-        show({
-          message: t('slidePreview.regionCropFailed'),
-          type: 'error',
-        });
-      }
-    } finally {
-      // 新增后由 regionOverlayReferences 统一渲染历史标注，清理临时拖拽框。
-      setSelectionRect(null);
-    }
-  };
-
-  // 多选相关函数
-  const togglePageSelection = (pageId: string) => {
-    setSelectedPageIds(prev => {
-      const next = new Set(prev);
-      if (next.has(pageId)) {
-        next.delete(pageId);
-      } else {
-        next.add(pageId);
-      }
-      return next;
-    });
-  };
-
-  const selectAllPages = () => {
-    const allPageIds = pagesWithImages.map(p => p.id!);
-    setSelectedPageIds(new Set(allPageIds));
-  };
-
-  const deselectAllPages = () => {
-    setSelectedPageIds(new Set());
-  };
-
-  const toggleMultiSelectMode = () => {
-    setIsMultiSelectMode(prev => {
-      if (prev) {
-        // 退出多选模式时清空选择
-        setSelectedPageIds(new Set());
-      }
-      return !prev;
-    });
-  };
-
-  // 获取有图片的选中页面ID列表
-  const getSelectedPageIdsForExport = (): string[] | undefined => {
-    if (!isMultiSelectMode || selectedPageIds.size === 0) {
-      return undefined; // 导出全部
-    }
-    return Array.from(selectedPageIds);
-  };
-
-  const handleExport = async (type: 'pptx' | 'pdf' | 'editable-pptx' | 'images') => {
-    setShowExportMenu(false);
-    if (!projectId) return;
-
-    const pageIds = getSelectedPageIdsForExport();
-    const exportTaskId = `export-${Date.now()}`;
-
-    try {
-      // Create a local task immediately for instant UI feedback
-      addTask({
-        id: exportTaskId,
-        taskId: '',
-        projectId,
-        type: type as ExportTaskType,
-        status: 'PROCESSING',
-        pageIds: pageIds,
-        progress: { total: 100, completed: 0, percent: 0 },
-      });
-
-      setShowExportTasksPanel(true);
-      show({ message: t('slidePreview.exportStarted'), type: 'success' });
-
-      let response: { data?: { task_id?: string } } | undefined;
-      if (type === 'pptx') {
-        response = await apiExportPPTXTask(projectId, undefined, pageIds);
-      } else if (type === 'pdf') {
-        response = await apiExportPDFTask(projectId, undefined, pageIds);
-      } else if (type === 'images') {
-        response = await apiExportImagesTask(projectId, pageIds);
-      } else if (type === 'editable-pptx') {
-        response = await apiExportEditablePPTX(projectId, undefined, pageIds);
-      }
-
-      const taskId = response?.data?.task_id;
-
-      if (!taskId) {
-        throw new Error('导出任务创建失败');
-      }
-
-      // Update task with real taskId
-      addTask({
-        id: exportTaskId,
-        taskId,
-        projectId,
-        type: type as ExportTaskType,
-        status: 'PROCESSING',
-        pageIds: pageIds,
-        progress: { total: 100, completed: 0, percent: 0 },
-      });
-
-      // Start polling in background (non-blocking)
-      pollExportTask(exportTaskId, projectId, taskId);
-    } catch (error: any) {
-      // Update task as failed
-      addTask({
-        id: exportTaskId,
-        taskId: '',
-        projectId,
-        type: type as ExportTaskType,
-        status: 'FAILED',
-        errorMessage: normalizeErrorMessage(error.message || t('preview.messages.exportFailed')),
-        pageIds: pageIds,
-      });
-      show({ message: normalizeErrorMessage(error.message || t('preview.messages.exportFailed')), type: 'error' });
-    }
-  };
+  const { handleSelectMaterials, descriptionSlashActions, pageAiSlashActions } = useSlidePreviewMaterials({
+    materialSelectorMode,
+    setMaterialSelectorMode,
+    setIsMaterialSelectorOpen,
+    projectId,
+    t,
+    show,
+    handleDescriptionFiles,
+    descriptionTextareaRef,
+    activeDescriptionInsertAtCursor,
+    pageAiTextareaRef,
+    appendPageAiFiles,
+  });
 
   const handleRefresh = useCallback(async () => {
     const targetProjectId = projectId || currentProject?.id;
@@ -3742,8 +1621,7 @@ export const SlidePreview: React.FC = () => {
     setIsRefreshing(true);
     try {
       // 强制刷新：丢弃本地草稿缓存，避免覆盖后端最新内容
-      setPageDrafts({});
-      lastSelectedPageKeyRef.current = null;
+      resetPageDrafts();
       await syncProject(targetProjectId);
       hydrateSelectedPageEditor(useProjectStore.getState().currentProject);
       show({ message: t('slidePreview.refreshSuccess'), type: 'success' });
@@ -3755,218 +1633,7 @@ export const SlidePreview: React.FC = () => {
     } finally {
       setIsRefreshing(false);
     }
-  }, [projectId, currentProject?.id, syncProject, show, hydrateSelectedPageEditor]);
-
-  const handleSaveExtraRequirements = useCallback(async () => {
-    if (!currentProject || !projectId) return;
-
-    setIsSavingRequirements(true);
-    try {
-      await updateProject(projectId, { extra_requirements: extraRequirements || '' });
-      // 保存成功后，标记为不在编辑状态，允许同步更新
-      isEditingRequirements.current = false;
-      // 更新本地项目状态
-      await syncProject(projectId);
-      show({ message: t('slidePreview.extraRequirementsSaved'), type: 'success' });
-    } catch (error: any) {
-      show({
-        message: t('slidePreview.saveFailed', { error: error.message || t('slidePreview.unknownError') }),
-        type: 'error'
-      });
-    } finally {
-      setIsSavingRequirements(false);
-    }
-  }, [currentProject, projectId, extraRequirements, syncProject, show]);
-
-  const handleSaveTemplateStyle = useCallback(async () => {
-    if (!currentProject || !projectId) return;
-
-    setIsSavingTemplateStyle(true);
-    try {
-      await updateProject(projectId, { template_style: templateStyle || '' });
-      // 保存成功后，标记为不在编辑状态，允许同步更新
-      isEditingTemplateStyle.current = false;
-      // 更新本地项目状态
-      await syncProject(projectId);
-      show({ message: t('slidePreview.styleDescSaved'), type: 'success' });
-    } catch (error: any) {
-      show({
-        message: t('slidePreview.saveFailed', { error: error.message || t('slidePreview.unknownError') }),
-        type: 'error'
-      });
-    } finally {
-      setIsSavingTemplateStyle(false);
-    }
-  }, [currentProject, projectId, templateStyle, syncProject, show]);
-
-  const handleSaveDescriptionRequirements = useCallback(async () => {
-    if (!currentProject || !projectId) return;
-    setIsSavingDescriptionRequirements(true);
-    try {
-      await updateProject(projectId, { description_requirements: descriptionRequirementsDraft || '' });
-      await syncProject(projectId);
-      show({ message: '描述生成要求已保存', type: 'success' });
-    } catch (error: any) {
-      show({
-        message: t('slidePreview.saveFailed', { error: error.message || t('slidePreview.unknownError') }),
-        type: 'error',
-      });
-    } finally {
-      setIsSavingDescriptionRequirements(false);
-    }
-  }, [currentProject, projectId, descriptionRequirementsDraft, syncProject, show, t]);
-
-  const handleSaveGenerationDefaults = useCallback(async () => {
-    if (!currentProject || !projectId) return;
-    setIsSavingGenerationDefaults(true);
-    try {
-      const normalizedModel = normalizeProjectDefaultImageModel(projectDefaultImageModel);
-      const normalizedResolution = normalizeProjectDefaultImageResolution(
-        projectDefaultImageResolution,
-        normalizedModel
-      );
-      const imageDefaults: Record<string, string> = {
-        source: PROJECT_DEFAULT_IMAGE_SOURCE,
-        model: normalizedModel,
-        resolution: normalizedResolution,
-      };
-      const generationDefaults: GenerationOverride = { image: imageDefaults };
-      await updateProject(projectId, { generation_defaults: generationDefaults });
-      await syncProject(projectId);
-      show({ message: '项目 AI 默认已保存', type: 'success' });
-    } catch (error: any) {
-      show({
-        message: t('slidePreview.saveFailed', { error: error.message || t('slidePreview.unknownError') }),
-        type: 'error',
-      });
-    } finally {
-      setIsSavingGenerationDefaults(false);
-    }
-  }, [currentProject, projectId, projectDefaultImageModel, projectDefaultImageResolution, syncProject, show, t]);
-
-  const handleSaveExportSettings = useCallback(async () => {
-    if (!currentProject || !projectId) return;
-
-    setIsSavingExportSettings(true);
-    try {
-      await updateProject(projectId, {
-        export_extractor_method: exportExtractorMethod,
-        export_inpaint_method: exportInpaintMethod,
-        export_allow_partial: exportAllowPartial,
-        export_compress_enabled: exportCompressEnabled,
-        export_compress_format: exportCompressFormat,
-        export_compress_quality: exportCompressQuality,
-        export_compress_png_quantize_enabled: exportCompressPngQuantizeEnabled,
-      });
-      // 更新本地项目状态
-      await syncProject(projectId);
-      show({ message: t('slidePreview.exportSettingsSaved'), type: 'success' });
-    } catch (error: any) {
-      show({
-        message: t('slidePreview.saveFailed', { error: error.message || t('slidePreview.unknownError') }),
-        type: 'error'
-      });
-    } finally {
-      setIsSavingExportSettings(false);
-    }
-  }, [currentProject, projectId, exportExtractorMethod, exportInpaintMethod, exportAllowPartial, exportCompressEnabled, exportCompressFormat, exportCompressQuality, exportCompressPngQuantizeEnabled, syncProject, show]);
-
-  const handleSaveAspectRatio = useCallback(async () => {
-    if (!currentProject || !projectId) return;
-
-    setIsSavingAspectRatio(true);
-    try {
-      await updateProject(projectId, { image_aspect_ratio: aspectRatio });
-      await syncProject(projectId);
-      show({ message: t('slidePreview.aspectRatioSaved'), type: 'success' });
-    } catch (error: any) {
-      show({
-        message: t('slidePreview.saveFailed', { error: error.message || t('slidePreview.unknownError') }),
-        type: 'error'
-      });
-    } finally {
-      setIsSavingAspectRatio(false);
-    }
-  }, [currentProject, projectId, aspectRatio, syncProject, show]);
-
-  const handleTemplateSelect = useCallback(async (templateFile: File | null, templateId?: string, source?: TemplateSource) => {
-    if (!projectId) return;
-
-    let file = templateFile;
-    if (templateId && !file) {
-      file = await getTemplateFile(templateId, userTemplates, source === 'preset' ? 'preset' : 'user');
-      if (!file) {
-        show({ message: t('slidePreview.loadTemplateFailed'), type: 'error' });
-        return false;
-      }
-    }
-
-    if (!file) {
-      return false;
-    }
-
-    setIsUploadingTemplate(true);
-    try {
-      await uploadTemplate(projectId, file);
-      await updateProject(projectId, { template_style_json: '' } as any);
-      await syncProject(projectId);
-      show({ message: t('slidePreview.templateChanged'), type: 'success' });
-      return true;
-    } catch (error: any) {
-      show({
-        message: t('slidePreview.templateChangeFailed', { error: error.message || t('slidePreview.unknownError') }),
-        type: 'error'
-      });
-      return false;
-    } finally {
-      setIsUploadingTemplate(false);
-    }
-  }, [projectId, show, syncProject, t, userTemplates]);
-
-  const handleStylePresetSelect = useCallback(async (presetId: string, styleJson: string) => {
-    if (!projectId) return;
-    try {
-      await updateProject(projectId, { template_style_json: styleJson || '' } as any);
-      await syncProject(projectId);
-      show({ message: t('slidePreview.templateChanged'), type: 'success' });
-      return { ok: true, selection: { kind: 'style', id: presetId } as AppliedTemplateSelection };
-    } catch (error: any) {
-      show({
-        message: t('slidePreview.templateChangeFailed', { error: error.message || t('slidePreview.unknownError') }),
-        type: 'error'
-      });
-      return { ok: false, selection: null };
-    }
-  }, [projectId, show, syncProject, t]);
-
-  const handleApplyTemplateSelection = useCallback(async (selection: TemplateSelection) => {
-    if (!projectId) return;
-
-    if (selection.kind === 'style') {
-      const result = await handleStylePresetSelect(selection.presetId, selection.styleJson);
-      if (result?.ok) {
-        persistAppliedTemplateSelection(result.selection);
-        closeTemplateModal();
-      }
-      return;
-    }
-
-    if (selection.kind === 'material') {
-      const file = await materialUrlToFile(selection.material);
-      const applied = await handleTemplateSelect(file, undefined, 'upload');
-      if (applied) {
-        persistAppliedTemplateSelection({ kind: 'material', id: selection.id });
-        closeTemplateModal();
-      }
-      return;
-    }
-
-    const applied = await handleTemplateSelect(null, selection.templateId, selection.kind === 'preset' ? 'preset' : 'user');
-    if (applied) {
-      persistAppliedTemplateSelection({ kind: selection.kind, id: selection.id });
-      closeTemplateModal();
-    }
-  }, [closeTemplateModal, handleStylePresetSelect, handleTemplateSelect, persistAppliedTemplateSelection]);
+  }, [projectId, currentProject?.id, syncProject, show, hydrateSelectedPageEditor, resetPageDrafts]);
 
   const canvasFieldNames = [...new Set([
     ...extraFieldNames,
@@ -3976,51 +1643,19 @@ export const SlidePreview: React.FC = () => {
     () => extractImageUrlsFromDescription(editDescription),
     [editDescription]
   );
-  const previewSortablePageIds = useMemo(
-    () => currentProject?.pages.map((page) => page.id).filter((id): id is string => Boolean(id)) || [],
-    [currentProject?.pages]
-  );
-  const previewSortablePageIndexMap = useMemo(
-    () => Object.fromEntries(previewSortablePageIds.map((id, index) => [id, index])),
-    [previewSortablePageIds]
-  );
-  const getPreviewSortablePageIndex = useCallback(
-    (id: string) => previewSortablePageIndexMap[id] ?? -1,
-    [previewSortablePageIndexMap]
-  );
-  const canReorderPreviewPages = Boolean(
-    !isMobileView &&
-    !isMultiSelectMode &&
-    currentProject &&
-    currentProject.pages.length > 1 &&
-    previewSortablePageIds.length === currentProject.pages.length
-  );
-
-  const handlePreviewThumbnailDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!currentProject || !over || active.id === over.id) return;
-
-    const oldIndex = currentProject.pages.findIndex((page) => page.id === active.id);
-    const newIndex = currentProject.pages.findIndex((page) => page.id === over.id);
-    if (oldIndex < 0 || newIndex < 0) return;
-
-    const reorderedPages = arrayMove(currentProject.pages, oldIndex, newIndex);
-    const selectedPageId = currentProject.pages[selectedIndex]?.id;
-
-    void reorderPages(reorderedPages.map((page) => page.id).filter((id): id is string => Boolean(id)));
-
-    if (selectedPageId) {
-      const nextSelectedIndex = reorderedPages.findIndex((page) => page.id === selectedPageId);
-      if (nextSelectedIndex >= 0 && nextSelectedIndex !== selectedIndex) {
-        setSelectedIndex(nextSelectedIndex);
-      }
-      return;
-    }
-
-    if (selectedIndex === oldIndex) {
-      setSelectedIndex(newIndex);
-    }
-  }, [currentProject, reorderPages, selectedIndex]);
+  const {
+    previewSortablePageIds,
+    getPreviewSortablePageIndex,
+    canReorderPreviewPages,
+    handlePreviewThumbnailDragEnd,
+  } = useSlidePreviewReorder({
+    currentProject,
+    isMobileView,
+    isMultiSelectMode,
+    selectedIndex,
+    setSelectedIndex,
+    reorderPages,
+  });
 
   useEffect(() => {
     if (activeExternalField && !canvasFieldNames.includes(activeExternalField)) {
@@ -4052,14 +1687,6 @@ export const SlidePreview: React.FC = () => {
     setActiveExternalField(null);
     setActivePreviewReferenceId(null);
   }, [selectedIndex]);
-
-  useEffect(() => {
-    if (!showJsonRefineDialog) return;
-    const timer = window.setTimeout(() => {
-      jsonRefineInputRef.current?.focus();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [showJsonRefineDialog]);
 
   if (!currentProject) {
     return <Loading fullscreen message={t('preview.messages.loadingProject')} />;
@@ -4095,67 +1722,6 @@ export const SlidePreview: React.FC = () => {
 
   const selectedPage = currentProject.pages[selectedIndex];
 
-  const handleSubmitJsonRefine = async () => {
-    if (!projectId || !selectedPage?.id) return;
-    const requirement = jsonRefineRequirement.trim();
-    if (!requirement || isJsonRefining) return;
-
-    try {
-      setIsJsonRefining(true);
-      const response = await refineSinglePageDescription(
-        projectId,
-        selectedPage.id,
-        requirement,
-        editDescription,
-        selectedPage.outline_content,
-        jsonRefineHistory,
-        undefined,
-        'json',
-      );
-      const refinedText = response.data?.refined_description || '';
-      const nextText = toLocalizedRenovationJsonText(refinedText, 4);
-      const nextStoredText = toCanonicalRenovationJsonText(nextText, 4);
-      setEditDescription(nextText);
-      persistCurrentPageDraft({ description: nextText });
-      // AI 优化成功后立即落库一次，避免仅依赖防抖自动保存导致“文本未保存”状态停留。
-      const nextDescriptionContent: Record<string, any> = {
-        ...(selectedPage.description_content && typeof selectedPage.description_content === 'object'
-          ? selectedPage.description_content as Record<string, any>
-          : {}),
-        text: nextStoredText,
-      };
-      const serializedExtraFields = serializeExtraFields(editExtraFields);
-      const serializedStyleGuideBindings = serializeStyleGuideBindings(editStyleGuideBindings);
-      if (serializedExtraFields) {
-        nextDescriptionContent.extra_fields = serializedExtraFields;
-      } else {
-        delete nextDescriptionContent.extra_fields;
-      }
-      if (serializedStyleGuideBindings) {
-        nextDescriptionContent.style_guide_bindings = serializedStyleGuideBindings;
-      } else {
-        delete nextDescriptionContent.style_guide_bindings;
-      }
-      updatePageLocal(selectedPage.id, {
-        description_content: nextDescriptionContent as DescriptionContent,
-      });
-      await saveAllPages();
-      textChangesPendingPersistRef.current = false;
-      setJsonRefineHistory((prev) => [...prev, requirement]);
-      setJsonRefineRequirement('');
-      setShowJsonRefineDialog(false);
-      show({ message: t('preview.refineApplied'), type: 'success' });
-    } catch (error: any) {
-      const errorMessage =
-        error?.response?.data?.error?.message ||
-        error?.message ||
-        t('preview.refineFailed');
-      show({ message: errorMessage, type: 'error' });
-    } finally {
-      setIsJsonRefining(false);
-    }
-  };
-
   const imageUrl = getPageImageUrl(selectedPage);
 
   const hasAllImages = currentProject.pages.every(
@@ -4187,46 +1753,20 @@ export const SlidePreview: React.FC = () => {
   const selectedHistoryVersion = historyVersionsDescending.find(
     (version) => version.version_id === selectedHistoryVersionId
   ) || historyVersionsDescending[0] || null;
-  const getHistoryOperationLabel = (version: ImageVersion): string => {
-    switch (version.operation_type) {
-      case 'edit':
-        return t('preview.historyActionEdit');
-      case 'regenerate':
-        return t('preview.historyActionRegenerate');
-      case 'generate':
-        return t('preview.historyActionGenerate');
-      default:
-        return version.version_number > 1 ? t('preview.historyActionRegenerate') : t('preview.historyActionGenerate');
-    }
-  };
-  const handleOpenHistory = () => {
-    if (historyVersionsDescending.length === 0) return;
-    setSelectedHistoryVersionId(
-      imageVersions.find((version) => version.is_current)?.version_id || historyVersionsDescending[0]?.version_id || null
-    );
-    setIsHistoryModalOpen(true);
-  };
-  const handleCopyHistoryPrompt = async () => {
-    if (!selectedHistoryVersion?.prompt_text) return;
-    try {
-      await navigator.clipboard.writeText(selectedHistoryVersion.prompt_text);
-      setCopiedHistoryVersionId(selectedHistoryVersion.version_id);
-      if (historyCopyResetTimerRef.current) {
-        clearTimeout(historyCopyResetTimerRef.current);
-      }
-      historyCopyResetTimerRef.current = setTimeout(() => {
-        setCopiedHistoryVersionId(null);
-      }, 2000);
-      show({ message: t('preview.historyPromptCopied'), type: 'success' });
-    } catch (error) {
-      show({
-        message: normalizeErrorMessage(
-          error instanceof Error ? error.message : t('slidePreview.unknownError')
-        ),
-        type: 'error',
-      });
-    }
-  };
+  const {
+    copiedHistoryVersionId,
+    getHistoryOperationLabel,
+    handleOpenHistory,
+    handleCopyHistoryPrompt,
+  } = useSlidePreviewHistoryActions({
+    imageVersions,
+    historyVersionsDescending,
+    selectedHistoryVersion,
+    setSelectedHistoryVersionId,
+    setIsHistoryModalOpen,
+    t,
+    show,
+  });
   const descriptionGenerationTotal = taskProgress?.total && taskProgress.total > 0
     ? taskProgress.total
     : currentProject.pages.filter((page) => page.id).length;
@@ -4653,176 +2193,22 @@ export const SlidePreview: React.FC = () => {
     </div>
   );
 
-  const pageAiInlineImageUrls = extractImageUrlsFromDescription(editPrompt);
-  const selectedPageAiReferences: PageAiReference[] = (() => {
-    const references: PageAiReference[] = [];
-    const uploadedMarkdownUrls = new Set(
-      selectedContextImages.uploadedReferences
-        .map((reference) => reference.markdownUrl)
-        .filter((url): url is string => Boolean(url))
-    );
-    pageAiInlineImageUrls
-      .filter((url) => !uploadedMarkdownUrls.has(url))
-      .forEach((url, index) => {
-      references.push({
-        id: `inline-reference:${url}`,
-        sourceType: 'description',
-        label: `${t('preview.imagesInDescription')} ${index + 1}`,
-        previewUrl: isSupportedDescriptionImageUrl(url) ? getImageUrl(url) : url,
-      });
-      });
-    selectedContextImages.uploadedReferences.forEach((reference) => {
-      references.push({
-        id: reference.id,
-        sourceType: reference.sourceType,
-        label: reference.label,
-        previewUrl: reference.previewUrl,
-        regionBounds: reference.regionBounds,
-      });
-    });
-    return references;
-  })();
-
-  const buildPageAiPayload = () => {
-    const uploadedMarkdownUrls = new Set(
-      selectedContextImages.uploadedReferences
-        .map((reference) => reference.markdownUrl)
-        .filter((url): url is string => Boolean(url))
-    );
-    const inlineImageUrls = extractImageUrlsFromDescription(editPrompt)
-      .filter((url) => !uploadedMarkdownUrls.has(url));
-    return {
-      promptText: stripMarkdownImages(editPrompt),
-      inlineImageUrls,
-      uploadedReferences: selectedContextImages.uploadedReferences,
-    };
-  };
-
-  const handleSubmitCurrentPageGeneration = async (options?: {
-    appendPageAiMessages?: boolean;
-  }) => {
-    if (!currentProject) return;
-    const currentPage = currentProject.pages[selectedIndex];
-    const pageId = currentPage?.id;
-    if (!pageId) return;
-
-    const payload = buildPageAiPayload();
-    const draftText = payload.promptText.trim() || (selectedPageAiReferences.length > 0
-      ? t('preview.pageAiReferenceOnlyFallback')
-      : '');
-    const referenceSnapshot = selectedPageAiReferences.map((reference) => ({ ...reference }));
-    const shouldAppendPageAiMessages = Boolean(
-      options?.appendPageAiMessages && (draftText || referenceSnapshot.length > 0)
-    );
-    const userMessage = shouldAppendPageAiMessages
-      ? createPageAiMessage(
-        'user',
-        draftText || t('preview.pageAiReferenceOnlyFallback'),
-        referenceSnapshot,
-      )
-      : null;
-
-    if (userMessage) {
-      setPageAiMessages((prev) => [
-        ...prev,
-        userMessage,
-      ]);
-    }
-
-    setIsPageAiSubmitting(true);
-    try {
-      const didStartGeneration = await runGenerateFlow(async () => {
-        await executePageImageGeneration({
-          prompt: draftText,
-          contextImages: {
-            useTemplate: false,
-            descImageUrls: payload.inlineImageUrls,
-            uploadedReferences: payload.uploadedReferences,
-          },
-          model: editRunImageModel,
-        });
-      });
-
-      if (!didStartGeneration) {
-        return;
-      }
-
-      const assistantMessage = shouldAppendPageAiMessages
-        ? createPageAiMessage('assistant', t('preview.pageAiResponseFallback'))
-        : null;
-      if (assistantMessage) {
-        setPageAiMessages((prev) => [
-          ...prev,
-          assistantMessage,
-        ]);
-      }
-
-      pendingPageAiContextBindingRef.current[pageId] = {
-        sourceVersionId: currentImageVersionId,
-        context: {
-          draftInput: editPrompt,
-          messages: [
-            ...pageAiMessages,
-            ...(userMessage ? [userMessage] : []),
-            ...(assistantMessage ? [assistantMessage] : []),
-          ],
-          model: editRunImageModel,
-          contextImages: {
-            useTemplate: selectedContextImages.useTemplate,
-            descImageUrls: [...selectedContextImages.descImageUrls],
-            uploadedReferences: [...selectedContextImages.uploadedReferences],
-          },
-        },
-      };
-
-    } catch (error: any) {
-      const errorMessage =
-        error?.response?.data?.error?.message ||
-        error?.response?.data?.message ||
-        error?.message ||
-        t('preview.generationFailed');
-
-      if (shouldAppendPageAiMessages) {
-        setPageAiMessages((prev) => [
-          ...prev,
-          createPageAiMessage('assistant', errorMessage, [], 'error'),
-        ]);
-      }
-    } finally {
-      setIsPageAiSubmitting(false);
-    }
-  };
-
-  const handleToggleTemplateReference = () => {
-    setSelectedContextImages((prev) => ({
-      ...prev,
-      useTemplate: !prev.useTemplate,
-    }));
-  };
-
-  const handleToggleDescriptionImage = (url: string) => {
-    setSelectedContextImages((prev) => {
-      const isSelected = prev.descImageUrls.includes(url);
-      return {
-        ...prev,
-        descImageUrls: isSelected
-          ? prev.descImageUrls.filter((item) => item !== url)
-          : [...prev.descImageUrls, url],
-      };
-    });
-  };
-
-  const handleRemovePageAiReference = (referenceId: string) => {
-    if (activePreviewReferenceId === referenceId) {
-      setActivePreviewReferenceId(null);
-    }
-    if (referenceId.startsWith('inline-reference:')) {
-      const url = referenceId.replace('inline-reference:', '');
-      setEditPrompt((current) => removeMarkdownImageByUrl(current, url));
-      return;
-    }
-    removeUploadedReference(referenceId);
-  };
+  const { isPageAiSubmitting, handlePageAiSend } = useSlidePreviewPageAiSubmit({
+    currentProject,
+    selectedIndex,
+    t,
+    buildPageAiPayload,
+    selectedPageAiReferences,
+    pageAiMessages,
+    setPageAiMessages,
+    runGenerateFlow,
+    executePageImageGeneration,
+    editRunImageModel,
+    currentImageVersionId,
+    editPrompt,
+    selectedContextImages,
+    bindPendingPageAiContext,
+  });
 
   const handlePreviewReferenceFocus = (reference: PageAiReference) => {
     setActivePreviewReferenceId(reference.id);
@@ -4830,14 +2216,8 @@ export const SlidePreview: React.FC = () => {
       return;
     }
     setIsRegionSelectionMode(false);
-    setIsSelectingRegion(false);
-    setSelectionStart(null);
-    setSelectionRect(null);
+    clearSelectionPreview();
     imageRef.current.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-  };
-
-  const handlePageAiSend = async () => {
-    await handleSubmitCurrentPageGeneration({ appendPageAiMessages: true });
   };
 
   const currentPageDescriptionText = getDescriptionText(selectedPage?.description_content);
@@ -4865,833 +2245,104 @@ export const SlidePreview: React.FC = () => {
   const generationStatusDetail = selectedPage?.status === 'QUEUED'
     ? '排队等待'
     : '正在渲染';
+  const outlineQuickEditModalTitle = `${t('preview.outlineQuickEditTitle')} · ${t('preview.page', { num: (outlineQuickEditPageIndex >= 0 ? outlineQuickEditPageIndex : selectedIndex) + 1 })}`;
+
+  const closeOutlineQuickEditModal = () => {
+    setIsOutlineQuickEditOpen(false);
+    setOutlineQuickEditPageId(null);
+    setOutlineQuickEditMode('edit');
+    setIsOutlineQuickGeneratePromptOpen(false);
+    setOutlineQuickGeneratePrompt('');
+  };
+
+  const closeOutlineQuickGeneratePromptModal = () => {
+    if (isOutlineQuickGeneratingDescription) return;
+    setIsOutlineQuickGeneratePromptOpen(false);
+  };
 
   return (
     <div className="h-dvh bg-gray-50 dark:bg-background-primary flex flex-col overflow-hidden">
-      {/* 顶栏 */}
-      <header className="h-14 md:h-16 bg-white dark:bg-background-secondary shadow-sm dark:shadow-background-primary/30 border-b border-gray-200 dark:border-border-primary flex items-center justify-between px-3 md:px-6 flex-shrink-0">
-        <div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<Home size={16} className="md:w-[18px] md:h-[18px]" />}
-            onClick={() => navigate('/')}
-            className="hidden sm:inline-flex flex-shrink-0"
-          >
-            <span className="hidden md:inline">{t('nav.home')}</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<ArrowLeft size={16} className="md:w-[18px] md:h-[18px]" />}
-            onClick={() => {
-              if (fromHistory) {
-                navigate('/history');
-              } else {
-                navigate(`/project/${projectId}/outline`);
-              }
-            }}
-            className="flex-shrink-0"
-          >
-            <span className="hidden sm:inline">{t('common.back')}</span>
-          </Button>
-          <div className="flex items-center gap-1.5 md:gap-2 min-w-0">
-            <span className="text-xl md:text-2xl">🍌</span>
-            <span className="text-base md:text-xl font-bold truncate">{t('home.title')}</span>
-          </div>
-          <span className="text-gray-400 hidden md:inline">|</span>
-          <span className="text-sm md:text-lg font-semibold truncate hidden sm:inline">{t('preview.title')}</span>
-        </div>
-        <div className="flex items-center gap-1 md:gap-3 flex-shrink-0">
-          <button
-            type="button"
-            onClick={() => setIsGlobalAiDrawerOpen(true)}
-            title={t('preview.globalAiOpen')}
-            aria-label={t('preview.globalAiOpen')}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[#ecd67c] bg-[#fff5cf] text-[#8a6200] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#ffefb5] focus:outline-none focus:ring-2 focus:ring-banana-500 focus:ring-offset-2 dark:border-banana-700/50 dark:bg-banana-500/10 dark:text-banana"
-          >
-            <Sparkles size={18} />
-          </button>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<Settings size={16} className="md:w-[18px] md:h-[18px]" />}
-            onClick={() => setIsProjectSettingsOpen(true)}
-            className="hidden lg:inline-flex"
-          >
-            <span className="hidden xl:inline">{t('preview.projectSettings')}</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<LayoutGrid size={16} className="md:w-[18px] md:h-[18px]" />}
-            onClick={openTemplateModal}
-            className="hidden lg:inline-flex"
-          >
-            <span className="hidden xl:inline">{t('preview.changeTemplate')}</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<ImagePlus size={16} className="md:w-[18px] md:h-[18px]" />}
-            onClick={() => setIsMaterialModalOpen(true)}
-            className="hidden lg:inline-flex"
-          >
-            <span className="hidden xl:inline">{t('nav.materialGenerate')}</span>
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<ArrowLeft size={16} className="md:w-[18px] md:h-[18px]" />}
-            onClick={() => navigate(`/project/${projectId}/outline`)}
-            className="hidden sm:inline-flex"
-          >
-            <span className="hidden md:inline">{t('common.previous')}</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<RefreshCw size={16} className={`md:w-[18px] md:h-[18px] ${isRefreshing ? 'animate-spin' : ''}`} />}
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="hidden md:inline-flex"
-          >
-            <span className="hidden lg:inline">{t('preview.refresh')}</span>
-          </Button>
-          {/* 导出任务按钮 */}
-          {exportTasks.filter(t => t.projectId === projectId).length > 0 && (
-            <div className="relative" ref={exportTasksPanelRef}>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setShowExportTasksPanel(!showExportTasksPanel);
-                  setShowExportMenu(false);
-                }}
-                className="relative"
-              >
-                {exportTasks.filter(t => t.projectId === projectId && (t.status === 'PROCESSING' || t.status === 'RUNNING' || t.status === 'PENDING')).length > 0 ? (
-                  <Loader2 size={16} className="animate-spin text-banana-500" />
-                ) : (
-                  <FileText size={16} />
-                )}
-                <span className="ml-1 text-xs">
-                  {exportTasks.filter(t => t.projectId === projectId).length}
-                </span>
-              </Button>
-              {showExportTasksPanel && (
-                <div className="absolute right-0 mt-2 z-20">
-                  <ExportTasksPanel
-                    projectId={projectId}
-                    pages={currentProject?.pages || []}
-                    className="w-96 max-h-[28rem] shadow-lg"
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="relative" ref={exportMenuRef}>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={isExporting ? <Loader2 size={16} className="md:w-[18px] md:h-[18px] animate-spin text-banana-500" /> : <Download size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={() => {
-                setShowExportMenu(!showExportMenu);
-                setShowExportTasksPanel(false);
-              }}
-              disabled={isMultiSelectMode ? selectedPageIds.size === 0 : !hasAllImages}
-              title={!isMultiSelectMode && !hasAllImages ? t('preview.disabledExportTip', { count: missingImageCount }) : undefined}
-              className="text-xs md:text-sm"
-            >
-              <span className="hidden sm:inline">
-                {isMultiSelectMode && selectedPageIds.size > 0
-                  ? `${t('preview.export')} (${selectedPageIds.size})`
-                  : t('preview.export')}
-              </span>
-              <span className="sm:hidden">
-                {isMultiSelectMode && selectedPageIds.size > 0
-                  ? `(${selectedPageIds.size})`
-                  : t('preview.export')}
-              </span>
-            </Button>
-            {showExportMenu && (
-              <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-background-secondary rounded-lg shadow-lg border border-gray-200 dark:border-border-primary py-2 z-10">
-                {isMultiSelectMode && selectedPageIds.size > 0 && (
-                  <div className="px-4 py-2 text-xs text-gray-500 dark:text-foreground-tertiary border-b border-gray-100 dark:border-border-primary">
-                    {t('preview.exportSelectedPages', { count: selectedPageIds.size })}
-                  </div>
-                )}
-                <button
-                  onClick={() => handleExport('pptx')}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-background-hover transition-colors text-sm"
-                >
-                  {t('preview.exportPptx')}
-                </button>
-                <button
-                  onClick={() => handleExport('editable-pptx')}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-background-hover transition-colors text-sm"
-                >
-                  {t('preview.exportEditablePptx')}
-                </button>
-                <button
-                  onClick={() => handleExport('pdf')}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-background-hover transition-colors text-sm"
-                >
-                  {t('preview.exportPdf')}
-                </button>
-                <button
-                  onClick={() => handleExport('images')}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-background-hover transition-colors text-sm"
-                >
-                  {t('preview.exportImages')}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+      <SlidePreviewHeader
+        t={t}
+        navigate={navigate}
+        fromHistory={fromHistory}
+        projectId={projectId}
+        isRefreshing={isRefreshing}
+        handleRefresh={handleRefresh}
+        setIsGlobalAiDrawerOpen={setIsGlobalAiDrawerOpen}
+        setIsProjectSettingsOpen={setIsProjectSettingsOpen}
+        openTemplateModal={openTemplateModal}
+        setIsMaterialModalOpen={setIsMaterialModalOpen}
+        exportTasks={exportTasks}
+        exportTasksPanelRef={exportTasksPanelRef}
+        showExportTasksPanel={showExportTasksPanel}
+        setShowExportTasksPanel={setShowExportTasksPanel}
+        setShowExportMenu={setShowExportMenu}
+        currentProjectPages={currentProject?.pages || []}
+        exportMenuRef={exportMenuRef}
+        isExporting={isExporting}
+        isMultiSelectMode={isMultiSelectMode}
+        selectedPageCount={selectedPageIds.size}
+        hasAllImages={hasAllImages}
+        missingImageCount={missingImageCount}
+        showExportMenu={showExportMenu}
+        handleExport={handleExport}
+      />
 
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-w-0 min-h-0">
         {/* 左侧：缩略图列表 */}
-        <aside
-          className={`relative w-full md:w-auto bg-white dark:bg-background-secondary border-b md:border-b-0 md:border-r border-gray-200 dark:border-border-primary flex flex-col flex-shrink-0 ${isResizingSidebar ? 'transition-none' : 'transition-[width] duration-300 ease-out'
-            } ${isSidebarCollapsed ? 'md:items-center' : ''}`}
-          style={isMobileView ? undefined : { width: sidebarWidthPx }}
+        <SlidePreviewSidebarShell
+          t={t}
+          currentPageCount={currentProject.pages.length}
+          isMobileView={isMobileView}
+          isResizingSidebar={isResizingSidebar}
+          isSidebarCollapsed={isSidebarCollapsed}
+          isSidebarCompact={isSidebarCompact}
+          sidebarWidthPx={sidebarWidthPx}
+          sidebarDefaultWidth={sidebarDefaultWidth}
+          setSidebarWidthPxExpanded={setSidebarWidthPxExpanded}
+          setIsSidebarCollapsed={setIsSidebarCollapsed}
+          handleSidebarResizeStart={handleSidebarResizeStart}
+          sidebarViewMode={sidebarViewMode}
+          setSidebarViewMode={setSidebarViewMode}
+          sidebarGridThumbMinPx={sidebarGridThumbMinPx}
+          sidebarGridThumbMaxPx={sidebarGridThumbMaxPx}
+          sidebarGridThumbMaxWidthPx={sidebarGridThumbMaxWidthPx}
+          setSidebarGridThumbMaxWidthPx={setSidebarGridThumbMaxWidthPx}
         >
-          {!isMobileView && (
-            <div
-              className="absolute -right-2 top-0 h-full w-3 cursor-col-resize bg-transparent hover:bg-banana-100/60 z-20"
-              onMouseDown={handleSidebarResizeStart}
-            />
-          )}
-          <div
-            className={`border-b border-gray-200 dark:border-border-primary flex-shrink-0 space-y-2 md:space-y-3 ${isSidebarCollapsed ? 'px-2 py-3' : 'p-3 md:p-4'
-              }`}
-          >
-            <div className={`flex items-center gap-2 ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
-              {!isSidebarCollapsed && !isSidebarCompact && (
-                <span className="text-xs font-semibold text-gray-600 dark:text-foreground-tertiary">
-                  {t('preview.pageCount', { count: currentProject.pages.length })}
-                </span>
-              )}
-              {!isMobileView && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (isSidebarCollapsed) {
-                      setSidebarWidthPxExpanded(sidebarDefaultWidth);
-                      setIsSidebarCollapsed(false);
-                    } else {
-                      setIsSidebarCollapsed(true);
-                    }
-                  }}
-                  title={isSidebarCollapsed ? t('preview.expandSidebar') : t('preview.collapseSidebar')}
-                  className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:text-foreground-secondary dark:hover:bg-background-hover transition-colors"
-                >
-                  {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-                </button>
-              )}
-            </div>
-            {!isSidebarCollapsed && !isSidebarCompact && !isMobileView && (
-              <div className="space-y-2">
-                <div className="inline-flex w-full rounded-lg border border-gray-200 dark:border-border-primary overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setSidebarViewMode('list')}
-                    className={`flex-1 h-8 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors ${sidebarViewMode === 'list'
-                        ? 'bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
-                        : 'bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
-                      }`}
-                    title={t('preview.sidebarView.list')}
-                    aria-label={t('preview.sidebarView.list')}
-                  >
-                    <List size={14} />
-                    <span>{t('preview.sidebarView.list')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSidebarViewMode('grid')}
-                    className={`flex-1 h-8 inline-flex items-center justify-center gap-1.5 text-xs font-medium transition-colors border-l border-gray-200 dark:border-border-primary ${sidebarViewMode === 'grid'
-                        ? 'bg-banana-50 text-banana-700 dark:bg-banana-900/30 dark:text-banana-400'
-                        : 'bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-tertiary hover:bg-gray-50 dark:hover:bg-background-hover'
-                      }`}
-                    title={t('preview.sidebarView.grid')}
-                    aria-label={t('preview.sidebarView.grid')}
-                  >
-                    <LayoutGrid size={14} />
-                    <span>{t('preview.sidebarView.grid')}</span>
-                  </button>
-                </div>
-                {sidebarViewMode === 'grid' && (
-                  <div className="rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary px-2 py-1.5">
-                    <div className="mb-1 flex items-center justify-between text-[11px] text-gray-500 dark:text-foreground-tertiary">
-                      <span>{t('preview.gridZoomLabel')}</span>
-                      <span>{sidebarGridThumbMaxWidthPx}px</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-400 dark:text-foreground-tertiary">{t('preview.gridZoomSmall')}</span>
-                      <input
-                        type="range"
-                        min={sidebarGridThumbMinPx}
-                        max={sidebarGridThumbMaxPx}
-                        step={10}
-                        value={sidebarGridThumbMaxWidthPx}
-                        onChange={(e) => {
-                          const next = Number(e.target.value);
-                          if (!Number.isFinite(next)) return;
-                          const clamped = Math.min(Math.max(next, sidebarGridThumbMinPx), sidebarGridThumbMaxPx);
-                          setSidebarGridThumbMaxWidthPx(clamped);
-                        }}
-                        className="h-1.5 w-full cursor-pointer accent-banana-500"
-                        aria-label={t('preview.gridZoomLabel')}
-                        title={t('preview.gridZoomLabel')}
-                      />
-                      <span className="text-[10px] text-gray-400 dark:text-foreground-tertiary">{t('preview.gridZoomLarge')}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
 
-          {isSidebarCollapsed && !isMobileView ? (
-            <div className="flex-1 overflow-y-auto py-3 pb-8 md:pb-10 flex flex-col items-center gap-2 min-h-0">
-              {canReorderPreviewPages ? (
-                <DndContext
-                  sensors={previewThumbnailSensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handlePreviewThumbnailDragEnd}
-                >
-                  <SortableContext items={previewSortablePageIds} strategy={verticalListSortingStrategy}>
-                    {currentProject.pages.map((page, index) => (
-                      <SortablePreviewThumbnail
-                        key={page.id || `collapsed-${index}`}
-                        id={page.id!}
-                        itemIndex={index}
-                        getItemIndex={getPreviewSortablePageIndex}
-                        className="relative"
-                      >
-                        <button
-                          data-preview-page-index={index}
-                          onClick={() => {
-                            if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
-                              togglePageSelection(page.id);
-                            } else {
-                              handleSelectPageByIndex(index);
-                            }
-                          }}
-                          title={`${t('preview.page', { num: index + 1 })} · ${t('preview.reorderPage')}`}
-                          className={`w-12 h-9 rounded border-2 transition-all ${selectedIndex === index
-                              ? 'border-banana-500 shadow-md'
-                              : 'border-gray-200 dark:border-border-primary'
-                            } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
-                        >
-                          {(page.preview_image_path || page.generated_image_path) ? (
-                            <img
-                              src={getPageImageUrl(page, { preferPreview: true })}
-                              alt={`Slide ${index + 1}`}
-                              className="w-full h-full object-cover rounded"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-gray-100 dark:bg-background-secondary rounded flex items-center justify-center text-[10px] text-gray-400">
-                              {index + 1}
-                            </div>
-                          )}
-                        </button>
-                      </SortablePreviewThumbnail>
-                    ))}
-                  </SortableContext>
-                </DndContext>
-              ) : (
-                currentProject.pages.map((page, index) => (
-                  <div key={page.id || `collapsed-${index}`} className="relative">
-                    <button
-                      data-preview-page-index={index}
-                      onClick={() => {
-                        if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
-                          togglePageSelection(page.id);
-                        } else {
-                          handleSelectPageByIndex(index);
-                        }
-                      }}
-                      title={t('preview.page', { num: index + 1 })}
-                      className={`w-12 h-9 rounded border-2 transition-all ${selectedIndex === index
-                          ? 'border-banana-500 shadow-md'
-                          : 'border-gray-200 dark:border-border-primary'
-                        } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
-                    >
-                      {(page.preview_image_path || page.generated_image_path) ? (
-                        <img
-                          src={getPageImageUrl(page, { preferPreview: true })}
-                          alt={`Slide ${index + 1}`}
-                          className="w-full h-full object-cover rounded"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gray-100 dark:bg-background-secondary rounded flex items-center justify-center text-[10px] text-gray-400">
-                          {index + 1}
-                        </div>
-                      )}
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          ) : (
-            <div className="flex-1 overflow-y-auto md:overflow-y-auto overflow-x-auto md:overflow-x-visible p-3 md:p-4 pb-10 md:pb-12 min-h-0">
-              <div className="flex items-center gap-2 text-xs mb-3">
-                {isSidebarCompact ? (
-                  <button
-                    onClick={toggleMultiSelectMode}
-                    title={isMultiSelectMode ? t('preview.cancelMultiSelect') : t('preview.multiSelect')}
-                    className={`w-8 h-8 rounded transition-colors inline-flex items-center justify-center ${isMultiSelectMode
-                        ? 'bg-banana-100 text-banana-700 hover:bg-banana-200'
-                        : 'text-gray-500 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover'
-                      }`}
-                  >
-                    {isMultiSelectMode ? <CheckSquare size={16} /> : <Square size={16} />}
-                  </button>
-                ) : (
-                  <button
-                    onClick={toggleMultiSelectMode}
-                    className={`px-2 py-1 rounded transition-colors flex items-center gap-1 ${isMultiSelectMode
-                        ? 'bg-banana-100 text-banana-700 hover:bg-banana-200'
-                        : 'text-gray-500 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover'
-                      }`}
-                  >
-                    {isMultiSelectMode ? <CheckSquare size={14} /> : <Square size={14} />}
-                    <span>{isMultiSelectMode ? t('preview.cancelMultiSelect') : t('preview.multiSelect')}</span>
-                  </button>
-                )}
-                {isMultiSelectMode && !isSidebarCompact && (
-                  <>
-                    <button
-                      onClick={selectedPageIds.size === pagesWithImages.length ? deselectAllPages : selectAllPages}
-                      className="text-gray-500 dark:text-foreground-tertiary hover:text-banana-600 transition-colors"
-                    >
-                      {selectedPageIds.size === pagesWithImages.length ? t('common.deselectAll') : t('common.selectAll')}
-                    </button>
-                    {selectedPageIds.size > 0 && (
-                      <span className="text-banana-600 font-medium">
-                        ({selectedPageIds.size}{t('preview.pagesUnit')})
-                      </span>
-                    )}
-                  </>
-                )}
-                {isMultiSelectMode && isSidebarCompact && selectedPageIds.size > 0 && (
-                  <span className="text-banana-600 font-medium">
-                    {selectedPageIds.size}
-                  </span>
-                )}
-              </div>
-              {isSidebarGridMode ? (
-                canReorderPreviewPages ? (
-                  <DndContext
-                    sensors={previewThumbnailSensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handlePreviewThumbnailDragEnd}
-                  >
-                    <SortableContext items={previewSortablePageIds} strategy={rectSortingStrategy}>
-                      <div
-                        className="grid gap-3"
-                        style={{ gridTemplateColumns: `repeat(${sidebarGridColumns}, minmax(0, 1fr))` }}
-                      >
-                        {currentProject.pages.map((page, index) => {
-                          const hasImage = Boolean(page.preview_image_path || page.generated_image_path);
-                          const isGenerating = isPageGenerating(page);
-                          return (
-                            <SortablePreviewThumbnail
-                              key={page.id || `grid-${index}`}
-                              id={page.id!}
-                              itemIndex={index}
-                              getItemIndex={getPreviewSortablePageIndex}
-                              className="relative group"
-                            >
-                              <button
-                                data-preview-page-index={index}
-                                onClick={() => {
-                                  if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
-                                    togglePageSelection(page.id);
-                                  } else {
-                                    handleSelectPageByIndex(index);
-                                  }
-                                }}
-                                title={`${t('preview.page', { num: index + 1 })} · ${t('preview.reorderPage')}`}
-                                className={`w-full overflow-hidden rounded-lg bg-white dark:bg-background-secondary shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all ${selectedIndex === index
-                                    ? 'ring-2 ring-banana-300 shadow-[0_10px_30px_rgba(250,204,21,0.18)]'
-                                    : 'ring-1 ring-gray-200 hover:ring-gray-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]'
-                                  } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
-                              >
-                                <div className="text-xs font-medium px-2 py-1 text-left text-gray-600 dark:text-foreground-tertiary bg-white/90 dark:bg-background-secondary/90">
-                                  {t('preview.page', { num: index + 1 })}
-                                </div>
-                                <div className="aspect-video bg-gray-100 dark:bg-background-primary ring-1 ring-gray-200/90">
-                                  {(page.preview_image_path || page.generated_image_path) ? (
-                                    <img
-                                      src={getPageImageUrl(page, { preferPreview: true })}
-                                      alt={`Slide ${index + 1}`}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">
-                                      {index + 1}
-                                    </div>
-                                  )}
-                                </div>
-                              </button>
-                              {isMultiSelectMode && page.id && hasImage && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    togglePageSelection(page.id!);
-                                  }}
-                                  className={`absolute top-2 right-2 z-10 w-5 h-5 rounded flex items-center justify-center transition-all ${selectedPageIds.has(page.id)
-                                      ? 'bg-banana-500 text-white shadow-md'
-                                      : 'bg-white/90 border border-gray-300 dark:border-border-primary'
-                                    }`}
-                                >
-                                  {selectedPageIds.has(page.id) && <Check size={12} />}
-                                </button>
-                              )}
-                              {!isMultiSelectMode && !isGenerating && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeletePage(page);
-                                  }}
-                                  className={`absolute top-2 right-2 z-20 p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-red-600 transition-opacity hover:bg-red-50 ${hasImage ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : 'opacity-100'
-                                    }`}
-                                  title={t('preview.confirmDeleteTitle')}
-                                  aria-label={t('preview.confirmDeleteTitle')}
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void handleInsertPageAfter(page, index);
-                                }}
-                                title={t('preview.insertAfterPage')}
-                                aria-label={t('preview.insertAfterPage')}
-                                className="absolute -right-3 top-1/2 -translate-y-1/2 z-20 h-7 w-7 hidden md:inline-flex items-center justify-center rounded-full border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-secondary shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity hover:bg-banana-50 dark:hover:bg-background-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-400"
-                              >
-                                <Plus size={13} />
-                              </button>
-                            </SortablePreviewThumbnail>
-                          );
-                        })}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
-                ) : (
-                  <div
-                    className="grid gap-3"
-                    style={{ gridTemplateColumns: `repeat(${sidebarGridColumns}, minmax(0, 1fr))` }}
-                  >
-                    {currentProject.pages.map((page, index) => {
-                      const hasImage = Boolean(page.preview_image_path || page.generated_image_path);
-                      const isGenerating = isPageGenerating(page);
-                      return (
-                        <div key={page.id || `grid-${index}`} className="relative group">
-                          <button
-                            data-preview-page-index={index}
-                            onClick={() => {
-                              if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
-                                togglePageSelection(page.id);
-                              } else {
-                                handleSelectPageByIndex(index);
-                              }
-                            }}
-                            className={`w-full overflow-hidden rounded-lg bg-white dark:bg-background-secondary shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all ${selectedIndex === index
-                                ? 'ring-2 ring-banana-300 shadow-[0_10px_30px_rgba(250,204,21,0.18)]'
-                                : 'ring-1 ring-gray-200 hover:ring-gray-300 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]'
-                              } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
-                          >
-                            <div className="text-xs font-medium px-2 py-1 text-left text-gray-600 dark:text-foreground-tertiary bg-white/90 dark:bg-background-secondary/90">
-                              {t('preview.page', { num: index + 1 })}
-                            </div>
-                            <div className="aspect-video bg-gray-100 dark:bg-background-primary ring-1 ring-gray-200/90">
-                              {(page.preview_image_path || page.generated_image_path) ? (
-                                <img
-                                  src={getPageImageUrl(page, { preferPreview: true })}
-                                  alt={`Slide ${index + 1}`}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">
-                                  {index + 1}
-                                </div>
-                              )}
-                            </div>
-                          </button>
-                          {isMultiSelectMode && page.id && hasImage && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                togglePageSelection(page.id!);
-                              }}
-                              className={`absolute top-2 right-2 z-10 w-5 h-5 rounded flex items-center justify-center transition-all ${selectedPageIds.has(page.id)
-                                  ? 'bg-banana-500 text-white shadow-md'
-                                  : 'bg-white/90 border border-gray-300 dark:border-border-primary'
-                                }`}
-                            >
-                              {selectedPageIds.has(page.id) && <Check size={12} />}
-                            </button>
-                          )}
-                          {!isMultiSelectMode && !isGenerating && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeletePage(page);
-                              }}
-                              className={`absolute top-2 right-2 z-20 p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-red-600 transition-opacity hover:bg-red-50 ${hasImage ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : 'opacity-100'
-                                }`}
-                              title={t('preview.confirmDeleteTitle')}
-                              aria-label={t('preview.confirmDeleteTitle')}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleInsertPageAfter(page, index);
-                            }}
-                            title={t('preview.insertAfterPage')}
-                            aria-label={t('preview.insertAfterPage')}
-                            className="absolute -right-3 top-1/2 -translate-y-1/2 z-20 h-7 w-7 hidden md:inline-flex items-center justify-center rounded-full border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-secondary shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity hover:bg-banana-50 dark:hover:bg-background-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-400"
-                          >
-                            <Plus size={13} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )
-              ) : (
-                canReorderPreviewPages ? (
-                  <DndContext
-                    sensors={previewThumbnailSensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handlePreviewThumbnailDragEnd}
-                  >
-                    <SortableContext items={previewSortablePageIds} strategy={verticalListSortingStrategy}>
-                      <div className="flex md:flex-col gap-2 md:gap-4 min-w-max md:min-w-0">
-                        {currentProject.pages.map((page, index) => (
-                          <SortablePreviewThumbnail
-                            key={page.id || `list-${index}`}
-                            id={page.id!}
-                            itemIndex={index}
-                            getItemIndex={getPreviewSortablePageIndex}
-                            className="md:w-full flex-shrink-0 relative group"
-                          >
-                            {/* 移动端：简化缩略图 */}
-                            <div className="md:hidden relative">
-                              <button
-                                data-preview-page-index={index}
-                                onClick={() => {
-                                  if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
-                                    togglePageSelection(page.id);
-                                  } else {
-                                    handleSelectPageByIndex(index);
-                                  }
-                                }}
-                                className={`h-14 w-20 rounded bg-white dark:bg-background-secondary shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all ${selectedIndex === index
-                                    ? 'ring-2 ring-banana-300 shadow-[0_10px_30px_rgba(250,204,21,0.18)]'
-                                    : 'ring-1 ring-gray-200'
-                                  } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
-                              >
-                                {(page.preview_image_path || page.generated_image_path) ? (
-                                  <img
-                                    src={getPageImageUrl(page, { preferPreview: true })}
-                                    alt={`Slide ${index + 1}`}
-                                    className="w-full h-full object-cover rounded"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full rounded bg-gray-100 dark:bg-background-secondary flex items-center justify-center text-xs text-gray-400">
-                                    {index + 1}
-                                  </div>
-                                )}
-                              </button>
-                              {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    togglePageSelection(page.id!);
-                                  }}
-                                  className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center transition-all ${selectedPageIds.has(page.id)
-                                      ? 'bg-banana-500 text-white'
-                                      : 'bg-white dark:bg-background-secondary border-2 border-gray-300 dark:border-border-primary'
-                                    }`}
-                                >
-                                  {selectedPageIds.has(page.id) && <Check size={12} />}
-                                </button>
-                              )}
-                            </div>
-                            {/* 桌面端：完整卡片 */}
-                            <div className="hidden md:block relative" data-preview-page-index={index}>
-                              {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    togglePageSelection(page.id!);
-                                  }}
-                                  className={`absolute top-2 right-2 z-10 w-6 h-6 rounded flex items-center justify-center transition-all ${selectedPageIds.has(page.id)
-                                      ? 'bg-banana-500 text-white shadow-md'
-                                      : 'bg-white/90 border-2 border-gray-300 dark:border-border-primary hover:border-banana-400'
-                                    }`}
-                                >
-                                  {selectedPageIds.has(page.id) && <Check size={14} />}
-                                </button>
-                              )}
-                              <SlideCard
-                                page={page}
-                                index={index}
-                                isSelected={selectedIndex === index}
-                                onClick={() => {
-                                  if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
-                                    togglePageSelection(page.id);
-                                  } else {
-                                    handleSelectPageByIndex(index);
-                                  }
-                                }}
-                                onEdit={() => {
-                                  handleEditPage(page.id || page.page_id, index);
-                                }}
-                                onDelete={() => handleDeletePage(page)}
-                                showDelete={!isMultiSelectMode}
-                                isGenerating={page.id ? isPageGenerating(page) : false}
-                                aspectRatio={aspectRatio}
-                              />
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void handleInsertPageAfter(page, index);
-                                }}
-                                title={t('preview.insertAfterPage')}
-                                aria-label={t('preview.insertAfterPage')}
-                                className="absolute left-1/2 -bottom-3 -translate-x-1/2 z-20 h-7 w-7 hidden md:inline-flex items-center justify-center rounded-full border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-secondary shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity hover:bg-banana-50 dark:hover:bg-background-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-400"
-                              >
-                                <Plus size={13} />
-                              </button>
-                            </div>
-                          </SortablePreviewThumbnail>
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
-                ) : (
-                  <div className="flex md:flex-col gap-2 md:gap-4 min-w-max md:min-w-0">
-                    {currentProject.pages.map((page, index) => (
-                      <div key={page.id || `list-${index}`} className="md:w-full flex-shrink-0 relative group">
-                        {/* 移动端：简化缩略图 */}
-                        <div className="md:hidden relative">
-                          <button
-                            data-preview-page-index={index}
-                            onClick={() => {
-                              if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
-                                togglePageSelection(page.id);
-                              } else {
-                                handleSelectPageByIndex(index);
-                              }
-                            }}
-                            className={`h-14 w-20 rounded bg-white dark:bg-background-secondary shadow-[0_2px_10px_rgba(15,23,42,0.04)] transition-all ${selectedIndex === index
-                                ? 'ring-2 ring-banana-300 shadow-[0_10px_30px_rgba(250,204,21,0.18)]'
-                                : 'ring-1 ring-gray-200'
-                              } ${isMultiSelectMode && page.id && selectedPageIds.has(page.id) ? 'ring-2 ring-banana-400' : ''}`}
-                          >
-                            {(page.preview_image_path || page.generated_image_path) ? (
-                              <img
-                                src={getPageImageUrl(page, { preferPreview: true })}
-                                alt={`Slide ${index + 1}`}
-                                className="w-full h-full object-cover rounded"
-                              />
-                            ) : (
-                              <div className="w-full h-full rounded bg-gray-100 dark:bg-background-secondary flex items-center justify-center text-xs text-gray-400">
-                                {index + 1}
-                              </div>
-                            )}
-                          </button>
-                          {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                togglePageSelection(page.id!);
-                              }}
-                              className={`absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center transition-all ${selectedPageIds.has(page.id)
-                                  ? 'bg-banana-500 text-white'
-                                  : 'bg-white dark:bg-background-secondary border-2 border-gray-300 dark:border-border-primary'
-                                }`}
-                            >
-                              {selectedPageIds.has(page.id) && <Check size={12} />}
-                            </button>
-                          )}
-                        </div>
-                        {/* 桌面端：完整卡片 */}
-                        <div className="hidden md:block relative" data-preview-page-index={index}>
-                          {isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path) && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                togglePageSelection(page.id!);
-                              }}
-                              className={`absolute top-2 right-2 z-10 w-6 h-6 rounded flex items-center justify-center transition-all ${selectedPageIds.has(page.id)
-                                  ? 'bg-banana-500 text-white shadow-md'
-                                  : 'bg-white/90 border-2 border-gray-300 dark:border-border-primary hover:border-banana-400'
-                                }`}
-                            >
-                              {selectedPageIds.has(page.id) && <Check size={14} />}
-                            </button>
-                          )}
-                          <SlideCard
-                            page={page}
-                            index={index}
-                            isSelected={selectedIndex === index}
-                            onClick={() => {
-                              if (isMultiSelectMode && page.id && (page.generated_image_path || page.preview_image_path)) {
-                                togglePageSelection(page.id);
-                              } else {
-                                handleSelectPageByIndex(index);
-                              }
-                            }}
-                            onEdit={() => {
-                              handleEditPage(page.id || page.page_id, index);
-                            }}
-                            onDelete={() => handleDeletePage(page)}
-                            showDelete={!isMultiSelectMode}
-                            isGenerating={page.id ? isPageGenerating(page) : false}
-                            aspectRatio={aspectRatio}
-                          />
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleInsertPageAfter(page, index);
-                            }}
-                            title={t('preview.insertAfterPage')}
-                            aria-label={t('preview.insertAfterPage')}
-                            className="absolute left-1/2 -bottom-3 -translate-x-1/2 z-20 h-7 w-7 hidden md:inline-flex items-center justify-center rounded-full border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-600 dark:text-foreground-secondary shadow-sm opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity hover:bg-banana-50 dark:hover:bg-background-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-400"
-                          >
-                            <Plus size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              )}
-            </div>
-          )}
-        </aside>
+          <SlidePreviewSidebarContent
+            t={t}
+            pages={currentProject.pages}
+            selectedIndex={selectedIndex}
+            isMobileView={isMobileView}
+            isSidebarCollapsed={isSidebarCollapsed}
+            isSidebarCompact={isSidebarCompact}
+            isSidebarGridMode={isSidebarGridMode}
+            isMultiSelectMode={isMultiSelectMode}
+            selectedPageIds={selectedPageIds}
+            pagesWithImages={pagesWithImages}
+            canReorderPreviewPages={canReorderPreviewPages}
+            previewThumbnailSensors={previewThumbnailSensors}
+            previewSortablePageIds={previewSortablePageIds}
+            sidebarGridColumns={sidebarGridColumns}
+            aspectRatio={aspectRatio}
+            toggleMultiSelectMode={toggleMultiSelectMode}
+            selectAllPages={selectAllPages}
+            deselectAllPages={deselectAllPages}
+            togglePageSelection={togglePageSelection}
+            getPreviewSortablePageIndex={getPreviewSortablePageIndex}
+            isPageGenerating={isPageGenerating}
+            onSelectPageByIndex={handleSelectPageByIndex}
+            onDeletePage={handleDeletePage}
+            onInsertPageAfter={handleInsertPageAfter}
+            onEditPage={handleEditPage}
+            onPreviewThumbnailDragEnd={handlePreviewThumbnailDragEnd}
+          />
+        </SlidePreviewSidebarShell>
 
-        <main className="flex-1 flex flex-col bg-white dark:bg-background-primary min-w-0 overflow-hidden">
+        <SlidePreviewMainPanel>
           <div
             data-testid="preview-secondary-toolbar"
             className="border-b border-gray-200 dark:border-border-primary bg-white/85 dark:bg-background-secondary/90 px-4 py-2 md:px-6 md:py-2.5"
@@ -5703,169 +2354,38 @@ export const SlidePreview: React.FC = () => {
               showToast={show}
             />
             <div className="mx-auto w-full max-w-6xl">
-              <div
-                data-testid="preview-editor-toolbar"
-                className="flex min-h-[40px] flex-wrap items-center gap-2 py-1"
-              >
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<Sparkles size={16} />}
-                  className="h-9 rounded-xl px-3"
-                  data-testid="preview-batch-generate-descriptions"
-                  loading={isDescriptionStreaming}
-                  onClick={() => void handleGenerateDescriptions()}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <span>批量生成描述</span>
-                    {isDescriptionProgressVisible && (
-                      <span
-                        data-testid="preview-description-progress"
-                        className="inline-flex items-center gap-1 rounded-full border border-banana-200 bg-banana-50 px-2 py-0.5 text-[11px] leading-none dark:border-banana-700/50 dark:bg-banana-900/15"
-                      >
-                        <span className="font-semibold text-banana-700 dark:text-banana">
-                          {descriptionGenerationProgressPercent}%
-                        </span>
-                      </span>
-                    )}
-                  </span>
-                </Button>
-                {descriptionGenerationError && (
-                  <div
-                    data-testid="preview-description-error-inline"
-                    className="inline-flex max-w-[560px] items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-2.5 py-1 text-xs text-red-700 dark:border-red-500/40 dark:bg-red-900/20 dark:text-red-200"
-                  >
-                    <span className="truncate" title={descriptionGenerationError}>{descriptionGenerationError}</span>
-                    <button
-                      type="button"
-                      onClick={() => setDescriptionGenerationError(null)}
-                      className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-900/40"
-                      aria-label="close description generation error"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                )}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<ImagePlus size={16} />}
-                  className="h-9 rounded-xl px-3"
-                  data-testid="preview-batch-generate-images"
-                  onClick={handleGenerateAll}
-                  loading={isRenovationProcessing}
-                  disabled={isGenerateDisabled || isRenovationProcessing}
-                >
-                  {isRenovationProcessing ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <span>解析页面内容</span>
-                      {renovationProgress && renovationProgress.total > 0 && (
-                        <>
-                          <span className="rounded-full bg-banana-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 dark:bg-banana-900/15 dark:text-foreground-secondary">
-                            {renovationProgress.completed}/{renovationProgress.total}
-                          </span>
-                          <span className="text-[11px] font-semibold text-banana-700 dark:text-banana">
-                            {renovationProgressPercent}%
-                          </span>
-                        </>
-                      )}
-                    </span>
-                  ) : (
-                    generateButtonText
-                  )}
-                </Button>
-
-                <div className="relative" ref={fileMenuRef}>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={<ArrowUpDown size={16} />}
-                    className="h-9 rounded-xl"
-                    onClick={() => setFileMenuOpen((prev) => !prev)}
-                  >
-                    导入/导出
-                    <ChevronDown size={14} className={`ml-1 transition-transform ${fileMenuOpen ? 'rotate-180' : ''}`} />
-                  </Button>
-                  {fileMenuOpen && (
-                    <div className="absolute left-0 top-full mt-2 z-30 min-w-[170px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg dark:border-border-primary dark:bg-background-secondary">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleExportDescriptions();
-                          setFileMenuOpen(false);
-                        }}
-                        disabled={!currentProject.pages.some((page) => page.description_content)}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:text-foreground-tertiary dark:hover:bg-background-hover"
-                      >
-                        <Download size={14} />
-                        导出描述
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleExportFull();
-                          setFileMenuOpen(false);
-                        }}
-                        disabled={!currentProject.pages.some((page) => page.description_content)}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 dark:text-foreground-tertiary dark:hover:bg-background-hover"
-                      >
-                        <Download size={14} />
-                        导出大纲+描述
-                      </button>
-                      <div className="border-t border-gray-100 dark:border-border-primary" />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          importFileRef.current?.click();
-                          setFileMenuOpen(false);
-                        }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:text-foreground-tertiary dark:hover:bg-background-hover"
-                      >
-                        <Upload size={14} />
-                        导入描述
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <input
-                  ref={importFileRef}
-                  type="file"
-                  accept=".md,.txt"
-                  className="hidden"
-                  onChange={handleImportDescriptions}
-                />
-              </div>
+              <SlidePreviewEditorToolbar
+                isDescriptionStreaming={isDescriptionStreaming}
+                isDescriptionProgressVisible={isDescriptionProgressVisible}
+                descriptionGenerationProgressPercent={descriptionGenerationProgressPercent}
+                descriptionGenerationError={descriptionGenerationError}
+                isRenovationProcessing={isRenovationProcessing}
+                isGenerateDisabled={isGenerateDisabled}
+                renovationProgress={renovationProgress}
+                renovationProgressPercent={renovationProgressPercent}
+                generateButtonText={generateButtonText}
+                fileMenuOpen={fileMenuOpen}
+                hasDescriptionContent={currentProject.pages.some((page) => page.description_content)}
+                fileMenuRef={fileMenuRef}
+                importFileRef={importFileRef}
+                setFileMenuOpen={setFileMenuOpen}
+                onGenerateDescriptions={() => void handleGenerateDescriptions()}
+                onClearDescriptionGenerationError={() => setDescriptionGenerationError(null)}
+                onGenerateAll={handleGenerateAll}
+                onExportDescriptions={handleExportDescriptions}
+                onExportFull={handleExportFull}
+                onImportDescriptions={handleImportDescriptions}
+              />
             </div>
           </div>
 
           {currentProject.pages.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center overflow-y-auto">
-              <div className="text-center">
-                <div className="text-4xl md:text-6xl mb-4">📊</div>
-                <h3 className="text-lg md:text-xl font-semibold text-gray-700 dark:text-foreground-secondary mb-2">
-                  {t('preview.noPages')}
-                </h3>
-                <p className="text-sm md:text-base text-gray-500 dark:text-foreground-tertiary mb-6">
-                  {t('preview.noPagesHint')}
-                </p>
-                <Button
-                  variant="primary"
-                  icon={<Plus size={16} />}
-                  onClick={() => void handleInsertPageAfter(undefined, -1)}
-                  className="text-sm md:text-base"
-                >
-                  {t('preview.addFirstPage')}
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => navigate(`/project/${projectId}/outline`)}
-                  className="text-sm md:text-base mt-2"
-                >
-                  {t('preview.backToEdit')}
-                </Button>
-              </div>
-            </div>
+            <SlidePreviewEmptyState
+              t={t}
+              projectId={projectId}
+              onInsertFirstPage={() => void handleInsertPageAfter(undefined, -1)}
+              onBackToOutline={(targetProjectId) => navigate(`/project/${targetProjectId}/outline`)}
+            />
           ) : (
             <>
               <div className={`flex-1 min-h-0 overflow-hidden ${useRenovationPreviewForm ? 'px-2 pt-0 pb-0 md:px-3 md:pt-0 md:pb-0' : 'px-2 py-3 md:px-3 md:py-4'}`}>
@@ -5894,988 +2414,257 @@ export const SlidePreview: React.FC = () => {
                         }
                         : undefined}
                     >
-                    <section
-                      data-testid="preview-visual-pane"
-                      className="min-w-0 overflow-hidden"
-                    >
-                      <div className="flex h-full flex-col">
-                        <div className="flex-1 overflow-auto px-2 pb-2 pt-1 md:px-3 md:pb-3 md:pt-2">
-                          <div className={`flex h-full min-h-[320px] ${selectedPageHasImage ? 'items-center justify-stretch' : 'items-center justify-center'}`}>
-                            <div className={selectedPageHasImage ? 'h-full w-full' : 'w-full'}>
-                              <div className={`flex ${selectedPageHasImage ? 'h-full flex-col items-center justify-center gap-4' : ''}`}>
-                                <div
-                                  ref={previewContainerRef}
-                                  className={`relative overflow-hidden touch-manipulation ${isFullscreen
-                                    ? 'h-screen w-screen max-h-none max-w-none rounded-none bg-black shadow-none'
-                                    : 'rounded-2xl border border-[#eadfbf] bg-white dark:border-border-primary dark:bg-background-primary'
-                                  }`}
-                                  style={isFullscreen ? undefined : { aspectRatio: aspectRatioStyle, width: '100%' }}
-                                  onMouseDown={selectedPageHasImage ? handleSelectionMouseDown : undefined}
-                                  onMouseMove={selectedPageHasImage ? handleSelectionMouseMove : undefined}
-                                  onMouseUp={selectedPageHasImage ? handleSelectionMouseUp : undefined}
-                                  onMouseLeave={selectedPageHasImage ? handleSelectionMouseUp : undefined}
-                                >
-                                  {selectedPageHasImage ? (
-                                    <>
-                                      <img
-                                        ref={imageRef}
-                                        src={imageUrl}
-                                        alt={`Slide ${selectedIndex + 1}`}
-                                        className={`h-full w-full select-none ${isFullscreen ? 'object-contain' : 'object-contain'}`}
-                                        draggable={false}
-                                        crossOrigin="anonymous"
-                                      />
-                                      <button
-                                        type="button"
-                                        aria-label={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
-                                        title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
-                                        onMouseDown={handleFloatingFullscreenButtonMouseDown}
-                                        onClick={handleFloatingFullscreenButtonClick}
-                                        className={`absolute z-20 inline-flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-800 shadow-[0_10px_28px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.7)] transition-colors hover:border-banana-400 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 ${isDraggingFloatingFullscreenButton ? 'cursor-grabbing' : 'cursor-grab'}`}
-                                        style={{
-                                          left: `${floatingFullscreenButtonPosition.x * 100}%`,
-                                          top: `${floatingFullscreenButtonPosition.y * 100}%`,
-                                        }}
-                                      >
-                                        {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-                                      </button>
-                                      {regionOverlayReferences.map((reference, index) => {
-                                        const isActive = activePreviewReferenceId === reference.id;
-                                        const bounds = reference.regionBounds;
-                                        return (
-                                          <div
-                                            key={reference.id}
-                                            className="pointer-events-none absolute"
-                                            style={{
-                                              left: `${bounds.leftRatio * 100}%`,
-                                              top: `${bounds.topRatio * 100}%`,
-                                              width: `${bounds.widthRatio * 100}%`,
-                                              height: `${bounds.heightRatio * 100}%`,
-                                            }}
-                                          >
-                                            <div className={`h-full w-full rounded-[6px] border-2 border-dashed bg-[#2f80ff]/10 shadow-[0_0_0_1px_rgba(255,255,255,0.9)] ${isActive ? 'border-[#005eea]' : 'border-[#2f80ff]'}`} />
-                                            <div className="absolute -bottom-2 -right-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-[#1677ff] px-1 text-xs font-semibold leading-none text-white shadow-sm">
-                                              {index + 1}
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                      {selectionRect && (
-                                        <div
-                                          className="pointer-events-none absolute"
-                                          style={{
-                                            left: selectionRect.left,
-                                            top: selectionRect.top,
-                                            width: selectionRect.width,
-                                            height: selectionRect.height,
-                                          }}
-                                        >
-                                          <div className="h-full w-full rounded-[6px] border-2 border-dashed border-[#2f80ff] bg-[#2f80ff]/10 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]" />
-                                          <div className="absolute -bottom-2 -right-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-[#1677ff] px-1 text-xs font-semibold leading-none text-white shadow-sm">
-                                            {regionOverlayReferences.length + 1}
-                                          </div>
-                                        </div>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#f7f5ef] text-sm text-slate-400 dark:bg-background-secondary dark:text-foreground-tertiary">
-                                      尚未生成图片
-                                    </div>
-                                  )}
-                                </div>
-                                {selectedPageHasImage && imageVersions.length > 1 && !isFullscreen && (
-                                  <div className="flex w-full flex-col items-center gap-2 px-2 pb-1">
-                                    <div className="text-xs font-medium tracking-[0.18em] text-[#9f8b5b] dark:text-foreground-tertiary">
-                                      {t('preview.historyVersions')} ({imageVersions.length})
-                                    </div>
-                                    <div className="flex flex-wrap items-center justify-center gap-2">
-                                      {[...imageVersions]
-                                        .sort((a, b) => a.version_number - b.version_number)
-                                        .map((version, index) => (
-                                          <button
-                                            key={version.version_id}
-                                            type="button"
-                                            onClick={() => handleSwitchVersion(version.version_id)}
-                                            aria-pressed={version.is_current}
-                                            aria-label={`${t('preview.version')} ${index + 1}${version.is_current ? `，${t('preview.current')}` : ''}`}
-                                            title={`${t('preview.version')} ${index + 1}${version.is_current ? ` (${t('preview.current')})` : ''}`}
-                                            className={`inline-flex h-10 w-10 items-center justify-center rounded-full border text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 ${
-                                              version.is_current
-                                                ? 'border-banana-500 bg-banana-500 text-white shadow-[0_10px_24px_rgba(245,181,0,0.28)]'
-                                                : 'border-[#d8caa6] bg-white text-[#6f5f3d] hover:border-banana-400 hover:text-banana-600 dark:border-border-primary dark:bg-background-primary dark:text-foreground-primary'
-                                            }`}
-                                          >
-                                            {index + 1}
-                                          </button>
-                                        ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </section>
+                    <SlidePreviewVisualPane
+                      t={t}
+                      selectedIndex={selectedIndex}
+                      imageUrl={imageUrl}
+                      selectedPageHasImage={selectedPageHasImage}
+                      isFullscreen={isFullscreen}
+                      isDraggingFloatingFullscreenButton={isDraggingFloatingFullscreenButton}
+                      floatingFullscreenButtonPosition={floatingFullscreenButtonPosition}
+                      aspectRatioStyle={aspectRatioStyle}
+                      previewContainerRef={previewContainerRef}
+                      imageRef={imageRef}
+                      regionOverlayReferences={regionOverlayReferences}
+                      activePreviewReferenceId={activePreviewReferenceId}
+                      selectionRect={selectionRect}
+                      imageVersions={imageVersions}
+                      onSelectionMouseDown={handleSelectionMouseDown}
+                      onSelectionMouseMove={handleSelectionMouseMove}
+                      onSelectionMouseUp={handleSelectionMouseUp}
+                      onFloatingFullscreenButtonMouseDown={handleFloatingFullscreenButtonMouseDown}
+                      onFloatingFullscreenButtonClick={handleFloatingFullscreenButtonClick}
+                      onSwitchVersion={(versionId) => void handleSwitchVersion(versionId)}
+                    />
 
                     {!isMobileView && !isEditorPaneHidden && (
-                      <div
-                        data-testid="preview-split-divider"
-                        role="separator"
-                        aria-orientation="vertical"
-                        className="group relative"
-                      >
-                        <div
-                          className={`absolute inset-y-0 left-1/2 z-10 -translate-x-1/2 cursor-col-resize ${isResizingPreviewSplit ? 'bg-banana-300/70' : 'bg-transparent'}`}
-                          style={{ width: `${PREVIEW_SPLIT_HIT_AREA_PX}px` }}
-                          onMouseDown={handlePreviewSplitResizeStart}
-                        />
-                        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
-                        <button
-                          type="button"
-                          onMouseDown={(event) => event.stopPropagation()}
-                          onClick={() => setIsEditorPaneCollapsed((prev) => !prev)}
-                          aria-label={t('preview.collapseRightPanel')}
-                          title={t('preview.collapseRightPanel')}
-                          className="absolute left-1/2 top-2 z-20 -translate-x-1/2 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#d9c99d] bg-[#f9f2df] text-[#7c6840] shadow-sm transition-colors hover:bg-[#f6ebcf] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:bg-background-hover"
-                        >
-                          <ChevronRight size={16} />
-                        </button>
-                      </div>
+                      <SlidePreviewSplitDivider
+                        t={t}
+                        isResizingPreviewSplit={isResizingPreviewSplit}
+                        previewSplitHitAreaPx={PREVIEW_SPLIT_HIT_AREA_PX}
+                        onResizeStart={handlePreviewSplitResizeStart}
+                        onToggleEditorPane={() => setIsEditorPaneCollapsed((prev) => !prev)}
+                      />
                     )}
 
-                    <section
-                      data-testid="preview-editor-pane"
-                      className={`min-h-0 min-w-0 ${isEditorPaneHidden ? 'pointer-events-none opacity-0' : ''} ${isMobileView ? 'overflow-visible' : (useRenovationPreviewForm ? 'overflow-x-visible overflow-y-hidden' : 'overflow-x-visible overflow-y-auto overscroll-contain')}`}
-                      aria-hidden={isEditorPaneHidden}
-                    >
-                      <div
-                        ref={shouldUseEditorVerticalSplit ? editorVerticalSplitContainerRef : undefined}
-                        className={`${shouldUseEditorVerticalSplit ? 'grid h-full min-h-0 overflow-x-visible overflow-y-visible pt-1 pb-0 md:pt-1 md:pb-0' : `flex h-full min-h-0 flex-col ${useRenovationPreviewForm ? 'px-2 pt-1 pb-0 md:px-3 md:pt-1 md:pb-0' : 'px-3 pt-3 pb-0 md:px-4 md:pt-4 md:pb-0'}`}`}
-                        style={shouldUseEditorVerticalSplit
-                          ? {
-                            gridTemplateRows: `minmax(${PREVIEW_EDITOR_CANVAS_MIN_HEIGHT}px, ${Math.max(resolvedEditorVerticalSplitRatio * 100, 1)}fr) ${PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX}px minmax(${PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT}px, ${Math.max((1 - resolvedEditorVerticalSplitRatio) * 100, 1)}fr)`,
-                          }
-                          : undefined}
-                      >
-                        <div className={shouldUseEditorVerticalSplit ? 'min-h-0 overflow-hidden' : `${useRenovationPreviewForm ? (isMobileView ? 'min-h-0 flex-1' : 'min-h-0 basis-0 flex-[3]') : 'shrink-0'}`}>
-                          {editorCanvasContent}
-                        </div>
-                        {shouldUseEditorVerticalSplit && (
-                          <div
-                            role="separator"
-                            aria-orientation="horizontal"
-                            className={`group relative flex select-none items-center justify-center cursor-row-resize ${isResizingEditorVerticalSplit ? 'bg-transparent' : 'bg-transparent'}`}
-                            onMouseDown={handleEditorVerticalSplitResizeStart}
-                          >
-                            <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
-                            <button
-                              type="button"
-                              aria-label="调整上下分区"
-                              className="relative z-10 h-3 w-28 cursor-row-resize rounded-full bg-transparent hover:bg-banana-200/40"
-                              onMouseDown={handleEditorVerticalSplitResizeStart}
-                            />
-                            <div
-                              role="separator"
-                              aria-label="联动调整左右与上下分区"
-                              className="absolute top-1/2 z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 cursor-move rounded-md bg-transparent hover:bg-banana-200/40"
-                              style={{ left: `-${Math.ceil(PREVIEW_SPLIT_DIVIDER_PX / 2)}px` }}
-                              onMouseDown={handleLinkedSplitResizeStart}
-                            />
-                          </div>
-                        )}
-                        {!useRenovationPreviewForm && (
-                          <div className="mt-3 shrink-0">
-                            {externalFieldTags}
-                          </div>
-                        )}
-                        <div className={`${shouldUseEditorVerticalSplit ? 'min-h-0 overflow-hidden' : `${useRenovationPreviewForm ? (isMobileView ? 'mt-0 flex-1 justify-start' : 'mt-0 min-h-0 basis-0 flex-[1] justify-start') : 'mt-2 flex-1 justify-end'} min-h-0 overflow-visible flex flex-col`}`}>
-                          <div className={`relative ${useRenovationPreviewForm ? 'min-h-0 h-full' : 'min-h-0'}`}>
-                            <PageAiWorkbench
-                              title={t('preview.pageAiTitle')}
-                              subtitle={t('preview.pageAiSubtitle')}
-                              emptyTitle={t('preview.pageAiEmptyTitle')}
-                              emptyDescription={t('preview.pageAiEmptyDescription')}
-                              inputPlaceholder={t('preview.editPromptPlaceholder')}
-                              inputHint={t('preview.pageAiInputHint')}
-                              sendTooltip={t('preview.generateImage')}
-                              referencesTitle={t('preview.pageAiReferencesTitle')}
-                              referencesEmpty={t('preview.pageAiReferencesEmpty')}
-                              descriptionSourcesTitle={t('preview.pageAiDescriptionSourcesTitle')}
-                              templateLabel={t('preview.pageAiTemplateReference')}
-                              materialLabel={t('preview.pageAiMaterialReference')}
-                              uploadLabel={t('preview.pageAiUploadReference')}
-                              loadingLabel={t('preview.pageAiLoading')}
-                              regionSelectLabel={t('preview.regionSelect')}
-                              regionSelectActiveLabel={t('preview.endRegionSelect')}
-                              modelLabel={t('preview.editRunImageModelLabel')}
-                              modelHint={t('preview.editRunImageModelHint')}
-                              messages={pageAiMessages}
-                              references={selectedPageAiReferences}
-                              descriptionImageOptions={[]}
-                              hasTemplateReference={false}
-                              templatePreviewUrl={undefined}
-                              activeReferenceId={activePreviewReferenceId}
-                              inputValue={editPrompt}
-                              inputRef={pageAiTextareaRef}
-                              slashActions={pageAiSlashActions}
-                              sendLabel={t('preview.generateImage')}
-                              modelValue={editRunImageModel}
-                              modelOptions={PROJECT_SUPPORTED_IMAGE_MODELS}
-                              showModelPickerControl={false}
-                              isSubmitting={isPageAiSubmitting}
-                              isRegionSelectionActive={isRegionSelectionMode}
-                              headerActions={!useRenovationPreviewForm ? (
-                                <div className="relative">
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    icon={<History size={16} />}
-                                    onClick={handleOpenHistory}
-                                    disabled={historyVersionsDescending.length === 0}
-                                    aria-label={t('preview.historyButton')}
-                                    title={t('preview.historyButton')}
-                                    className="h-10 w-10 rounded-full border border-[#d9c99d] bg-[#f9f2df] p-0 text-[#7c6840] shadow-sm hover:bg-[#f6ebcf] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:bg-background-hover"
-                                  />
-                                  {historyVersionsDescending.length > 0 && (
-                                    <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-banana-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-black shadow-sm">
-                                      {historyVersionsDescending.length}
-                                    </span>
-                                  )}
-                                </div>
-                              ) : undefined}
-                              onInputChange={setEditPrompt}
-                              onModelChange={setEditRunImageModel}
-                              onSend={() => void handleGenerateCurrentPage()}
-                              onToggleRegionSelect={() => {
-                                setIsRegionSelectionMode((prev) => !prev);
-                                setSelectionStart(null);
-                                setSelectionRect(null);
-                                setIsSelectingRegion(false);
-                              }}
-                              onToggleTemplate={handleToggleTemplateReference}
-                              onToggleDescriptionImage={handleToggleDescriptionImage}
-                              onReferenceClick={handlePreviewReferenceFocus}
-                              onRemoveReference={handleRemovePageAiReference}
-                              onOpenMaterialSelector={projectId ? () => {
-                                setMaterialSelectorMode('pageAi');
-                                setIsMaterialSelectorOpen(true);
-                              } : undefined}
-                              onUploadFiles={handleFileUpload}
-                              cardless={useRenovationPreviewForm}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </section>
+                    <SlidePreviewEditorPane
+                      t={t}
+                      isEditorPaneHidden={isEditorPaneHidden}
+                      isMobileView={isMobileView}
+                      useRenovationPreviewForm={useRenovationPreviewForm}
+                      shouldUseEditorVerticalSplit={shouldUseEditorVerticalSplit}
+                      editorVerticalSplitContainerRef={editorVerticalSplitContainerRef}
+                      resolvedEditorVerticalSplitRatio={resolvedEditorVerticalSplitRatio}
+                      isResizingEditorVerticalSplit={isResizingEditorVerticalSplit}
+                      editorCanvasContent={editorCanvasContent}
+                      externalFieldTags={externalFieldTags}
+                      pageAiMessages={pageAiMessages}
+                      selectedPageAiReferences={selectedPageAiReferences}
+                      activePreviewReferenceId={activePreviewReferenceId}
+                      editPrompt={editPrompt}
+                      pageAiTextareaRef={pageAiTextareaRef}
+                      pageAiSlashActions={pageAiSlashActions}
+                      editRunImageModel={editRunImageModel}
+                      isPageAiSubmitting={isPageAiSubmitting}
+                      isRegionSelectionMode={isRegionSelectionMode}
+                      historyVersionsCount={historyVersionsDescending.length}
+                      onEditorVerticalSplitResizeStart={handleEditorVerticalSplitResizeStart}
+                      onLinkedSplitResizeStart={handleLinkedSplitResizeStart}
+                      onOpenHistory={handleOpenHistory}
+                      onEditPromptChange={setEditPrompt}
+                      onEditRunImageModelChange={setEditRunImageModel}
+                      onPageAiSend={() => void handlePageAiSend()}
+                      onToggleRegionSelect={() => {
+                        setIsRegionSelectionMode((prev) => !prev);
+                        clearSelectionPreview();
+                      }}
+                      onToggleTemplate={handleToggleTemplateReference}
+                      onToggleDescriptionImage={handleToggleDescriptionImage}
+                      onReferenceClick={handlePreviewReferenceFocus}
+                      onRemoveReference={handleRemovePageAiReference}
+                      onOpenMaterialSelector={projectId ? () => {
+                        setMaterialSelectorMode('pageAi');
+                        setIsMaterialSelectorOpen(true);
+                      } : undefined}
+                      onUploadFiles={handleFileUpload}
+                    />
                   </div>
                 </div>
               </div>
               </div>
 
-              <div
-                data-testid="preview-status-bar"
-                className="border-t border-gray-200 bg-white/92 px-4 py-3 dark:border-border-primary dark:bg-background-secondary/95"
-              >
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-foreground-secondary">
-                    <span className="rounded-full bg-gray-100 px-3 py-1 dark:bg-background-hover">
-                      第 {selectedIndex + 1} / {currentProject.pages.length} 页
-                    </span>
-                    <span className={`rounded-full px-3 py-1 ${isCurrentPageDirty ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                      {textStatusLabel}
-                    </span>
-                    {isSelectedPageGenerating ? (
-                      <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
-                        <Loader2 size={14} className="animate-spin" />
-                        <span className="inline-flex items-center">
-                          {generationStatusDetail}
-                          <span className="ml-1 inline-flex items-end gap-0.5 text-[12px] leading-none">
-                            <span className="animate-pulse">.</span>
-                            <span className="animate-pulse" style={{ animationDelay: '150ms' }}>.</span>
-                            <span className="animate-pulse" style={{ animationDelay: '300ms' }}>.</span>
-                          </span>
-                        </span>
-                        {generatingImageCount > 1 && (
-                          <span className="text-[11px] text-amber-800/80 dark:text-amber-100/80">
-                            进行中 {generatingImageCount} 页
-                          </span>
-                        )}
-                      </span>
-                    ) : (
-                      <span className={`rounded-full px-3 py-1 ${selectedPageHasImage ? 'bg-sky-100 text-sky-700' : 'bg-gray-100 text-gray-600 dark:bg-background-hover dark:text-foreground-tertiary'}`}>
-                        {imageStatusLabel}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<ChevronLeft size={16} />}
-                      onClick={goPrevPage}
-                      disabled={selectedIndex === 0}
-                    >
-                      {t('preview.prevPage')}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<ChevronRight size={16} />}
-                      onClick={goNextPage}
-                      disabled={selectedIndex === currentProject.pages.length - 1}
-                    >
-                      {t('preview.nextPage')}
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              <PreviewStatusBar
+                selectedIndex={selectedIndex}
+                totalPages={currentProject.pages.length}
+                isCurrentPageDirty={isCurrentPageDirty}
+                textStatusLabel={textStatusLabel}
+                isSelectedPageGenerating={isSelectedPageGenerating}
+                generationStatusDetail={generationStatusDetail}
+                generatingImageCount={generatingImageCount}
+                selectedPageHasImage={selectedPageHasImage}
+                imageStatusLabel={imageStatusLabel}
+                t={t}
+                onPrevPage={goPrevPage}
+                onNextPage={goNextPage}
+              />
             </>
           )}
-        </main>
+        </SlidePreviewMainPanel>
       </div>
-      <ToastContainer />
-      {ConfirmDialog}
-      <GlobalAiAssistantDrawer
-        isOpen={isGlobalAiDrawerOpen}
-        onClose={() => setIsGlobalAiDrawerOpen(false)}
-        title={t('preview.globalAiTitle')}
-        subtitle={t('preview.globalAiSubtitle')}
-        welcomeTitle={t('preview.globalAiWelcomeTitle')}
-        welcomeDescription={t('preview.globalAiWelcomeDescription')}
-        suggestions={[
-          t('preview.globalAiSuggestionTone'),
-          t('preview.globalAiSuggestionTrim'),
-          t('preview.globalAiSuggestionFlow'),
-        ]}
-        placeholder={t('preview.globalAiPlaceholder')}
-        loadingLabel={t('preview.globalAiLoading')}
-        responseFallback={t('preview.globalAiResponseFallback')}
-        errorFallback={t('preview.globalAiErrorFallback')}
-        submitTooltip={t('preview.globalAiSubmitTooltip')}
-        inputHint={t('preview.globalAiInputHint')}
-        onSubmit={handleAiRefineDescriptions}
-      />
-      <FilePreviewModal fileId={previewFileId} onClose={() => setPreviewFileId(null)} />
-
-      <Modal
-        isOpen={isOutlineQuickEditOpen}
-        onClose={() => {
-          setIsOutlineQuickEditOpen(false);
-          setOutlineQuickEditPageId(null);
-          setOutlineQuickEditMode('edit');
-          setIsOutlineQuickGeneratePromptOpen(false);
+      <SlidePreviewTopOverlays
+        t={t}
+        toastContainer={<ToastContainer />}
+        confirmDialog={ConfirmDialog}
+        isGlobalAiDrawerOpen={isGlobalAiDrawerOpen}
+        onCloseGlobalAiDrawer={() => setIsGlobalAiDrawerOpen(false)}
+        onSubmitGlobalAi={handleAiRefineDescriptions}
+        previewFileId={previewFileId}
+        onClosePreviewFile={() => setPreviewFileId(null)}
+        isOutlineQuickEditOpen={isOutlineQuickEditOpen}
+        isOutlineQuickGeneratePromptOpen={isOutlineQuickGeneratePromptOpen}
+        isOutlineQuickGeneratingDescription={isOutlineQuickGeneratingDescription}
+        outlineQuickEditTitle={outlineQuickEditModalTitle}
+        editOutlineTitle={editOutlineTitle}
+        editOutlinePoints={editOutlinePoints}
+        outlineQuickEditMode={outlineQuickEditMode}
+        outlineQuickGeneratePrompt={outlineQuickGeneratePrompt}
+        outlineQuickPointsTextareaRef={outlineQuickPointsTextareaRef}
+        onCloseOutlineQuickEdit={closeOutlineQuickEditModal}
+        onEditOutlineTitleChange={(value) => {
+          setEditOutlineTitle(value);
+          persistCurrentPageDraft({ title: value });
+        }}
+        onEditOutlineModeChange={setOutlineQuickEditMode}
+        onEditOutlinePointsChange={(value) => {
+          setEditOutlinePoints(value);
+          persistCurrentPageDraft({ points: value });
+        }}
+        onOutlineQuickPointsPaste={handleOutlineQuickPointsPaste}
+        onOpenGeneratePrompt={() => {
           setOutlineQuickGeneratePrompt('');
+          setIsOutlineQuickGeneratePromptOpen(true);
         }}
-        title={`${t('preview.outlineQuickEditTitle')} · ${t('preview.page', { num: (outlineQuickEditPageIndex >= 0 ? outlineQuickEditPageIndex : selectedIndex) + 1 })}`}
-        size="wide75"
-        closeOnOverlayClick={false}
-      >
-        <div className="mx-auto flex h-[min(72vh,780px)] max-h-[78vh] w-full max-w-[980px] flex-col">
-          <div className="shrink-0 space-y-2">
-            <div className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{t('preview.enterTitle')}</div>
-            <input
-              type="text"
-              value={editOutlineTitle}
-              onChange={(event) => {
-                const value = event.target.value;
-                setEditOutlineTitle(value);
-                persistCurrentPageDraft({ title: value });
-              }}
-              className="h-12 w-full rounded-xl border border-gray-200 px-4 text-base outline-none focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
-              placeholder={t('preview.enterTitle')}
-            />
-          </div>
-
-          <div className="mt-4 flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-xs font-medium text-gray-500 dark:text-foreground-tertiary">{t('preview.pointsPerLine')}</div>
-              <div className="flex items-center gap-2">
-                <div className="text-xs text-gray-400 dark:text-foreground-tertiary">{t('preview.quickEditMarkdownHint')}</div>
-                <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 dark:border-border-primary dark:bg-background-secondary">
-                  <button
-                    type="button"
-                    onClick={() => setOutlineQuickEditMode('edit')}
-                    className={`rounded-md px-2 py-1 text-xs transition-colors ${
-                      outlineQuickEditMode === 'edit'
-                        ? 'bg-banana-100 text-banana-900 dark:bg-banana-500/20 dark:text-banana'
-                        : 'text-gray-500 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:bg-background-hover'
-                    }`}
-                  >
-                    {t('preview.quickEditModeEdit')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setOutlineQuickEditMode('preview')}
-                    className={`rounded-md px-2 py-1 text-xs transition-colors ${
-                      outlineQuickEditMode === 'preview'
-                        ? 'bg-banana-100 text-banana-900 dark:bg-banana-500/20 dark:text-banana'
-                        : 'text-gray-500 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:bg-background-hover'
-                    }`}
-                  >
-                    {t('preview.quickEditModePreview')}
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="min-h-0 flex-1 overflow-hidden">
-              {outlineQuickEditMode === 'edit' ? (
-                <MarkdownTextarea
-                  ref={outlineQuickPointsTextareaRef}
-                  value={editOutlinePoints}
-                  onChange={(value) => {
-                    setEditOutlinePoints(value);
-                    persistCurrentPageDraft({ points: value });
-                  }}
-                  onPaste={handleOutlineQuickPointsPaste}
-                  placeholder={t('preview.enterPointsPerLine')}
-                  className="min-h-[300px] rounded-xl"
-                  fillHeight
-                  showUploadButton={false}
-                  showImagePreview={false}
-                  resizable={false}
-                />
-              ) : (
-                <div className="h-full min-h-[300px] overflow-auto rounded-xl border border-gray-200 bg-white p-4 dark:border-border-primary dark:bg-background-secondary">
-                  <Markdown>{editOutlinePoints || ' '}</Markdown>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-4 flex shrink-0 justify-end gap-2 pt-4 dark:border-border-primary">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setIsOutlineQuickEditOpen(false);
-                setOutlineQuickEditPageId(null);
-                setOutlineQuickEditMode('edit');
-                setIsOutlineQuickGeneratePromptOpen(false);
-                setOutlineQuickGeneratePrompt('');
-              }}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setOutlineQuickGeneratePrompt('');
-                setIsOutlineQuickGeneratePromptOpen(true);
-              }}
-              disabled={isOutlineQuickGeneratingDescription}
-            >
-              {isOutlineQuickGeneratingDescription ? t('preview.descriptionGenerating') : t('preview.outlineQuickEditGenerateDescription')}
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                handleSaveOutlineForQuickEditTarget();
-                setIsOutlineQuickEditOpen(false);
-                setOutlineQuickEditPageId(null);
-                setOutlineQuickEditMode('edit');
-                setIsOutlineQuickGeneratePromptOpen(false);
-                setOutlineQuickGeneratePrompt('');
-              }}
-            >
-              {t('preview.outlineQuickEditSave')}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={isOutlineQuickGeneratePromptOpen}
-        onClose={() => {
-          if (isOutlineQuickGeneratingDescription) return;
-          setIsOutlineQuickGeneratePromptOpen(false);
+        onSaveOutline={() => {
+          handleSaveOutlineForQuickEditTarget();
+          closeOutlineQuickEditModal();
         }}
-        title={t('preview.outlineQuickGeneratePromptTitle')}
-        size="md"
-        closeOnOverlayClick={!isOutlineQuickGeneratingDescription}
-      >
-        <div className="space-y-4">
-          <textarea
-            value={outlineQuickGeneratePrompt}
-            onChange={(event) => setOutlineQuickGeneratePrompt(event.target.value)}
-            placeholder={t('preview.outlineQuickGeneratePromptPlaceholder')}
-            className="h-36 w-full resize-none rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
-          />
-          <div className="text-xs text-gray-500 dark:text-foreground-tertiary">
-            {t('preview.outlineQuickGeneratePromptHint')}
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <Button
-              variant="ghost"
-              onClick={() => setIsOutlineQuickGeneratePromptOpen(false)}
-              disabled={isOutlineQuickGeneratingDescription}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => void handleGenerateDescriptionForCurrentPage(outlineQuickGeneratePrompt)}
-              disabled={isOutlineQuickGeneratingDescription}
-            >
-              {isOutlineQuickGeneratingDescription ? t('preview.descriptionGenerating') : t('preview.outlineQuickGeneratePromptConfirm')}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onCloseGeneratePrompt={closeOutlineQuickGeneratePromptModal}
+        onOutlineQuickGeneratePromptChange={setOutlineQuickGeneratePrompt}
+        onConfirmGeneratePrompt={() => void handleGenerateDescriptionForCurrentPage(outlineQuickGeneratePrompt)}
+      />
 
-      {/* 模板选择 Modal */}
-      <Modal
-        isOpen={isTemplateModalOpen}
-        onClose={closeTemplateModal}
-        title={t('preview.changeTemplate')}
-        size="wide"
-      >
-        <TemplateSelector
-          projectId={projectId || null}
-          activeTab={activeTemplateTab}
-          onActiveTabChange={setActiveTemplateTab}
-          draftSelection={draftTemplateSelection}
-          onDraftSelectionChange={setDraftTemplateSelection}
-          appliedSelection={appliedTemplateSelection}
-          appliedStyleJson={currentProject?.template_style_json || ''}
-          onApplySelection={handleApplyTemplateSelection}
-          isApplyingSelection={isUploadingTemplate}
-        />
-      </Modal>
-      {/* 素材生成模态组件（可复用模块，这里只是示例挂载） */}
-      {projectId && (
-        <>
-          <MaterialGeneratorModal
-            projectId={projectId}
-            isOpen={isMaterialModalOpen}
-            onClose={() => setIsMaterialModalOpen(false)}
-          />
-          {/* 素材选择器 */}
-          <MaterialSelector
-            projectId={projectId}
-            isOpen={isMaterialSelectorOpen}
-            onClose={() => setIsMaterialSelectorOpen(false)}
-            onSelect={handleSelectMaterials}
-            multiple={true}
-          />
-          {/* 项目设置模态框 */}
-          <ProjectSettingsModal
-            isOpen={isProjectSettingsOpen}
-            onClose={() => setIsProjectSettingsOpen(false)}
-            extraRequirements={extraRequirements}
-            templateStyle={templateStyle}
-            onExtraRequirementsChange={(value) => {
-              isEditingRequirements.current = true;
-              setExtraRequirements(value);
-            }}
-            onTemplateStyleChange={(value) => {
-              isEditingTemplateStyle.current = true;
-              setTemplateStyle(value);
-            }}
-            onSaveExtraRequirements={handleSaveExtraRequirements}
-            onSaveTemplateStyle={handleSaveTemplateStyle}
-            isSavingRequirements={isSavingRequirements}
-            isSavingTemplateStyle={isSavingTemplateStyle}
-            descriptionGenerationMode={generationMode}
-            descriptionExtraFields={extraFieldNames}
-            availableDescriptionFields={availableFields}
-            descriptionImagePromptFields={imagePromptFields}
-            descriptionRequirements={descriptionRequirementsDraft}
-            presetDescriptionFields={DEFAULT_EXTRA_FIELDS}
-            onDescriptionGenerationModeChange={handleDescriptionGenerationModeChange}
-            onDescriptionExtraFieldsChange={handleDescriptionExtraFieldsChange}
-            onAvailableDescriptionFieldsChange={handleAvailableDescriptionFieldsChange}
-            onDescriptionImagePromptFieldsChange={handleDescriptionImagePromptFieldsChange}
-            onDescriptionRequirementsChange={setDescriptionRequirementsDraft}
-            onSaveDescriptionRequirements={() => void handleSaveDescriptionRequirements()}
-            isSavingDescriptionRequirements={isSavingDescriptionRequirements}
-            // 导出设置
-            exportExtractorMethod={exportExtractorMethod}
-            exportInpaintMethod={exportInpaintMethod}
-            exportAllowPartial={exportAllowPartial}
-            exportCompressEnabled={exportCompressEnabled}
-            exportCompressFormat={exportCompressFormat}
-            exportCompressQuality={exportCompressQuality}
-            exportCompressPngQuantizeEnabled={exportCompressPngQuantizeEnabled}
-            onExportExtractorMethodChange={setExportExtractorMethod}
-            onExportInpaintMethodChange={setExportInpaintMethod}
-            onExportAllowPartialChange={setExportAllowPartial}
-            onExportCompressEnabledChange={setExportCompressEnabled}
-            onExportCompressFormatChange={setExportCompressFormat}
-            onExportCompressQualityChange={setExportCompressQuality}
-            onExportCompressPngQuantizeEnabledChange={setExportCompressPngQuantizeEnabled}
-            onSaveExportSettings={handleSaveExportSettings}
-            isSavingExportSettings={isSavingExportSettings}
-            // 画面比例
-            aspectRatio={aspectRatio}
-            onAspectRatioChange={setAspectRatio}
-            onSaveAspectRatio={handleSaveAspectRatio}
-            isSavingAspectRatio={isSavingAspectRatio}
-            hasImages={hasImages}
-            generationDefaultImageSource={projectDefaultImageSource}
-            generationDefaultImageModel={projectDefaultImageModel}
-            generationDefaultImageResolution={projectDefaultImageResolution}
-            onGenerationDefaultImageSourceChange={setProjectDefaultImageSource}
-            onGenerationDefaultImageModelChange={setProjectDefaultImageModel}
-            onGenerationDefaultImageResolutionChange={setProjectDefaultImageResolution}
-            onSaveGenerationDefaults={handleSaveGenerationDefaults}
-            isSavingGenerationDefaults={isSavingGenerationDefaults}
-          />
-        </>
-      )}
-
-      <Modal
-        isOpen={isHistoryModalOpen}
-        onClose={() => setIsHistoryModalOpen(false)}
-        title={`${t('preview.historyModalTitle')} · ${t('preview.page', { num: selectedIndex + 1 })}`}
-        size="wide"
-      >
-        {historyVersionsDescending.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#eadfbf] bg-[#fffaf0] px-4 py-10 text-center text-sm text-[#8a7a57] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-tertiary">
-            {t('preview.historyModalEmpty')}
-          </div>
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-            <div className="min-h-0 max-h-[70vh] overflow-y-auto pr-1">
-              <div className="space-y-3">
-                {historyVersionsDescending.map((version) => {
-                  const isSelected = version.version_id === selectedHistoryVersion?.version_id;
-                  const previewUrl = version.image_url
-                    ? getImageUrl(version.image_url, version.created_at || version.version_number)
-                    : '';
-                  return (
-                    <button
-                      key={version.version_id}
-                      type="button"
-                      onClick={() => setSelectedHistoryVersionId(version.version_id)}
-                      className={`w-full overflow-hidden rounded-2xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 ${
-                        isSelected
-                          ? 'border-banana-400 bg-[#fff7df] shadow-[0_14px_30px_rgba(245,181,0,0.16)] dark:border-banana-500/60 dark:bg-banana-500/10'
-                          : 'border-[#eadfbf] bg-white hover:border-banana-300 hover:bg-[#fffaf0] dark:border-border-primary dark:bg-background-secondary dark:hover:bg-background-hover'
-                      }`}
-                    >
-                      {previewUrl ? (
-                        <img
-                          src={previewUrl}
-                          alt={`${t('preview.version')} ${version.version_number}`}
-                          className="h-32 w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-32 w-full items-center justify-center bg-[#f7f5ef] text-sm text-slate-400 dark:bg-background-hover dark:text-foreground-tertiary">
-                          {t('preview.notGenerated')}
-                        </div>
-                      )}
-                      <div className="space-y-2 px-4 py-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-sm font-semibold text-slate-800 dark:text-foreground-primary">
-                            {t('preview.version')} {version.version_number}
-                          </div>
-                          {version.is_current && (
-                            <span className="rounded-full bg-banana-500 px-2 py-0.5 text-xs font-semibold text-black">
-                              {t('preview.current')}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-foreground-tertiary">
-                          <span className="rounded-full bg-slate-100 px-2 py-1 dark:bg-background-hover">
-                            {getHistoryOperationLabel(version)}
-                          </span>
-                          <span>{formatImageVersionTimestamp(version.created_at)}</span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="min-w-0 space-y-4">
-              {selectedHistoryVersion && (
-                <div className="rounded-2xl border border-[#eadfbf] bg-white p-4 dark:border-border-primary dark:bg-background-secondary">
-                  <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="text-base font-semibold text-slate-900 dark:text-foreground-primary">
-                        {t('preview.version')} {selectedHistoryVersion.version_number}
-                      </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600 dark:text-foreground-secondary">
-                        <span className="rounded-full bg-[#f8f5eb] px-2 py-1 dark:bg-background-hover">
-                          {getHistoryOperationLabel(selectedHistoryVersion)}
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[#f8f5eb] px-2 py-1 dark:bg-background-hover">
-                          <Clock3 size={12} />
-                          {t('preview.historyCreatedAt')}：{formatImageVersionTimestamp(selectedHistoryVersion.created_at)}
-                        </span>
-                        {selectedHistoryVersion.is_current && (
-                          <span className="rounded-full bg-banana-500 px-2 py-1 font-semibold text-black">
-                            {t('preview.current')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {!selectedHistoryVersion.is_current && (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => void handleSwitchVersion(selectedHistoryVersion.version_id)}
-                          className="h-9 rounded-xl"
-                        >
-                          {t('preview.historySwitchToVersion')}
-                        </Button>
-                      )}
-                      {selectedHistoryVersion.prompt_text && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          icon={copiedHistoryVersionId === selectedHistoryVersion.version_id ? <Check size={15} /> : <Copy size={15} />}
-                          onClick={() => void handleCopyHistoryPrompt()}
-                          className="h-9 rounded-xl border border-[#eadfbf] bg-[#fffaf0] px-3 text-[#6f5f3d] hover:bg-[#fff3cf] dark:border-border-primary dark:bg-background-hover dark:text-foreground-secondary dark:hover:bg-background-primary"
-                        >
-                          {copiedHistoryVersionId === selectedHistoryVersion.version_id
-                            ? t('preview.historyPromptCopied')
-                            : t('preview.historyCopyPrompt')}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mb-3 text-sm font-semibold text-slate-900 dark:text-foreground-primary">
-                    {t('preview.historyPromptTitle')}
-                  </div>
-                  {selectedHistoryVersion.prompt_text ? (
-                    <pre className="max-h-[62vh] overflow-auto whitespace-pre-wrap break-words rounded-2xl bg-[#f8f5eb] px-4 py-4 text-xs leading-6 text-slate-700 dark:bg-[#111827] dark:text-[#dbe4f3]">
-                      {selectedHistoryVersion.prompt_text}
-                    </pre>
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-[#eadfbf] bg-[#fffaf0] px-4 py-10 text-sm text-[#8a7a57] dark:border-border-primary dark:bg-background-hover dark:text-foreground-tertiary">
-                      {t('preview.historyPromptMissing')}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* 1K分辨率警告对话框 */}
-      <Modal
-        isOpen={show1KWarningDialog}
-        onClose={handleCancel1KWarning}
-        title={t('preview.resolution1KWarning')}
-        size="sm"
-      >
-        <div className="space-y-4">
-          <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-            <div className="text-2xl">⚠️</div>
-            <div className="flex-1">
-              <p className="text-sm text-amber-800">
-                {t('preview.resolution1KWarningText')}
-              </p>
-              <p className="text-sm text-amber-700 mt-2">
-                {t('preview.resolution1KWarningHint')}
-              </p>
-            </div>
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={skip1KWarningChecked}
-              onChange={(e) => setSkip1KWarningChecked(e.target.checked)}
-              className="w-4 h-4 text-banana-600 rounded focus:ring-banana-500"
-            />
-            <span className="text-sm text-gray-600 dark:text-foreground-tertiary">{t('preview.dontShowAgain')}</span>
-          </label>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="ghost" onClick={handleCancel1KWarning}>
-              {t('common.cancel')}
-            </Button>
-            <Button variant="primary" onClick={handleConfirm1KWarning}>
-              {t('preview.generateAnyway')}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* 批量生成范围选择对话框 */}
-      <Modal
-        isOpen={showBatchGenerateDialog}
-        onClose={() => {
-          setShowBatchGenerateDialog(false);
-          setBatchGenerateContext(null);
+      <SlidePreviewDialogs
+        t={t}
+        projectId={projectId}
+        isTemplateModalOpen={isTemplateModalOpen}
+        closeTemplateModal={closeTemplateModal}
+        activeTemplateTab={activeTemplateTab}
+        setActiveTemplateTab={setActiveTemplateTab}
+        draftTemplateSelection={draftTemplateSelection}
+        setDraftTemplateSelection={setDraftTemplateSelection}
+        appliedTemplateSelection={appliedTemplateSelection}
+        currentProjectTemplateStyleJson={currentProject?.template_style_json || ''}
+        handleApplyTemplateSelection={handleApplyTemplateSelection}
+        isUploadingTemplate={isUploadingTemplate}
+        isMaterialModalOpen={isMaterialModalOpen}
+        setIsMaterialModalOpen={setIsMaterialModalOpen}
+        isMaterialSelectorOpen={isMaterialSelectorOpen}
+        setIsMaterialSelectorOpen={setIsMaterialSelectorOpen}
+        handleSelectMaterials={handleSelectMaterials}
+        isProjectSettingsOpen={isProjectSettingsOpen}
+        setIsProjectSettingsOpen={setIsProjectSettingsOpen}
+        extraRequirements={extraRequirements}
+        templateStyle={templateStyle}
+        onExtraRequirementsChange={(value) => {
+          isEditingRequirements.current = true;
+          setExtraRequirements(value);
         }}
-        title={t('preview.confirmPartialGenerateTitle')}
-        size="sm"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-gray-700 dark:text-foreground-secondary">
-            {batchGenerateContext
-              ? t(
-                batchGenerateContext.generating > 0
-                  ? 'preview.confirmPartialGenerateWithGeneratingMessage'
-                  : 'preview.confirmPartialGenerateMessage',
-                {
-                  generated: batchGenerateContext.generated,
-                  total: batchGenerateContext.total,
-                  missing: batchGenerateContext.missing,
-                  generating: batchGenerateContext.generating,
-                }
-              )
-              : ''}
-          </p>
-          <div className="flex flex-col gap-2">
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                if (!batchGenerateContext) return;
-                setShowBatchGenerateDialog(false);
-                setBatchGenerateContext(null);
-                await handleBatchGenerate(batchGenerateContext.missingPageIds);
-              }}
-            >
-              {batchGenerateContext
-                ? t('preview.generateMissingOnly', { count: batchGenerateContext.missing })
-                : t('preview.generateMissingOnly', { count: 0 })}
-            </Button>
-            <Button
-              variant="primary"
-              onClick={async () => {
-                if (!batchGenerateContext) return;
-                setShowBatchGenerateDialog(false);
-                setBatchGenerateContext(null);
-                await handleBatchGenerate(batchGenerateContext.targetPageIds);
-              }}
-            >
-              {batchGenerateContext
-                ? t('preview.regenerateAllPages', { count: batchGenerateContext.total })
-                : t('preview.regenerateAllPages', { count: 0 })}
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setShowBatchGenerateDialog(false);
-                setBatchGenerateContext(null);
-              }}
-            >
-              {t('common.cancel')}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={showBatchDescriptionGenerateDialog}
-        onClose={() => {
-          setShowBatchDescriptionGenerateDialog(false);
-          setBatchDescriptionGenerateContext(null);
+        onTemplateStyleChange={(value) => {
+          isEditingTemplateStyle.current = true;
+          setTemplateStyle(value);
         }}
-        title={t('preview.confirmPartialDescriptionGenerateTitle')}
-        size="md"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-gray-700 dark:text-foreground-secondary">
-            {batchDescriptionGenerateContext
-              ? t(
-                batchDescriptionGenerateContext.generating > 0
-                  ? 'preview.confirmPartialDescriptionGenerateWithGeneratingMessage'
-                  : 'preview.confirmPartialDescriptionGenerateMessage',
-                {
-                  generated: batchDescriptionGenerateContext.generated,
-                  total: batchDescriptionGenerateContext.total,
-                  missing: batchDescriptionGenerateContext.missing,
-                  generating: batchDescriptionGenerateContext.generating,
-                }
-              )
-              : ''}
-          </p>
-
-          <div className="flex flex-col gap-2">
-            <Button
-              variant="primary"
-              disabled={!batchDescriptionGenerateContext || batchDescriptionGenerateContext.missing === 0}
-              onClick={async () => {
-                if (!batchDescriptionGenerateContext) return;
-                setShowBatchDescriptionGenerateDialog(false);
-                const context = batchDescriptionGenerateContext;
-                setBatchDescriptionGenerateContext(null);
-                await generateDescriptions(undefined, context.missingPageIds);
-                await syncProject(projectId);
-                clearPageDraftsByIds(context.missingPageIds);
-                hydrateSelectedPageEditor(useProjectStore.getState().currentProject);
-              }}
-            >
-              {batchDescriptionGenerateContext
-                ? t('preview.generateMissingDescriptionsOnly', { count: batchDescriptionGenerateContext.missing })
-                : t('preview.generateMissingDescriptionsOnly', { count: 0 })}
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                if (!batchDescriptionGenerateContext) return;
-                setShowBatchDescriptionGenerateDialog(false);
-                const context = batchDescriptionGenerateContext;
-                setBatchDescriptionGenerateContext(null);
-                await generateDescriptions(undefined, context.targetPageIds);
-                await syncProject(projectId);
-                clearPageDraftsByIds(context.targetPageIds);
-                hydrateSelectedPageEditor(useProjectStore.getState().currentProject);
-              }}
-            >
-              {batchDescriptionGenerateContext
-                ? t('preview.regenerateAllDescriptions', { count: batchDescriptionGenerateContext.total })
-                : t('preview.regenerateAllDescriptions', { count: 0 })}
-            </Button>
-            <div className="pt-1">
-              <div className="grid grid-cols-[5rem_auto_5rem_1fr] items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={batchDescriptionGenerateContext?.total || 1}
-                  value={descriptionRangeStart}
-                  onChange={(e) => setDescriptionRangeStart(e.target.value)}
-                  placeholder={t('preview.rangePlaceholderStart')}
-                  aria-label={t('preview.rangeStartPage')}
-                  className="h-9 w-20 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary px-3 text-sm outline-none focus:ring-2 focus:ring-banana-400"
-                />
-                <span className="inline-flex h-9 items-center justify-center whitespace-nowrap text-sm text-gray-500 dark:text-foreground-tertiary">
-                  {t('preview.rangeSeparator')}
-                </span>
-                <input
-                  type="number"
-                  min={1}
-                  max={batchDescriptionGenerateContext?.total || 1}
-                  value={descriptionRangeEnd}
-                  onChange={(e) => setDescriptionRangeEnd(e.target.value)}
-                  placeholder={t('preview.rangePlaceholderEnd')}
-                  aria-label={t('preview.rangeEndPage')}
-                  className="h-9 w-20 rounded-lg border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary px-3 text-sm outline-none focus:ring-2 focus:ring-banana-400"
-                />
-                <Button
-                  variant="secondary"
-                  className="h-9 justify-self-start whitespace-nowrap px-3"
-                  onClick={handleGenerateDescriptionsByRange}
-                >
-                  {t('preview.generateDescriptionsByRange')}
-                </Button>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setShowBatchDescriptionGenerateDialog(false);
-                setBatchDescriptionGenerateContext(null);
-              }}
-            >
-              {t('common.cancel')}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        handleSaveExtraRequirements={handleSaveExtraRequirements}
+        handleSaveTemplateStyle={handleSaveTemplateStyle}
+        isSavingRequirements={isSavingRequirements}
+        isSavingTemplateStyle={isSavingTemplateStyle}
+        generationMode={generationMode}
+        extraFieldNames={extraFieldNames}
+        availableFields={availableFields}
+        imagePromptFields={imagePromptFields}
+        descriptionRequirementsDraft={descriptionRequirementsDraft}
+        presetDescriptionFields={DEFAULT_EXTRA_FIELDS}
+        handleDescriptionGenerationModeChange={handleDescriptionGenerationModeChange}
+        handleDescriptionExtraFieldsChange={handleDescriptionExtraFieldsChange}
+        handleAvailableDescriptionFieldsChange={handleAvailableDescriptionFieldsChange}
+        handleDescriptionImagePromptFieldsChange={handleDescriptionImagePromptFieldsChange}
+        setDescriptionRequirementsDraft={setDescriptionRequirementsDraft}
+        handleSaveDescriptionRequirements={handleSaveDescriptionRequirements}
+        isSavingDescriptionRequirements={isSavingDescriptionRequirements}
+        exportExtractorMethod={exportExtractorMethod}
+        exportInpaintMethod={exportInpaintMethod}
+        exportAllowPartial={exportAllowPartial}
+        exportCompressEnabled={exportCompressEnabled}
+        exportCompressFormat={exportCompressFormat}
+        exportCompressQuality={exportCompressQuality}
+        exportCompressPngQuantizeEnabled={exportCompressPngQuantizeEnabled}
+        setExportExtractorMethod={setExportExtractorMethod}
+        setExportInpaintMethod={setExportInpaintMethod}
+        setExportAllowPartial={setExportAllowPartial}
+        setExportCompressEnabled={setExportCompressEnabled}
+        setExportCompressFormat={setExportCompressFormat}
+        setExportCompressQuality={setExportCompressQuality}
+        setExportCompressPngQuantizeEnabled={setExportCompressPngQuantizeEnabled}
+        handleSaveExportSettings={handleSaveExportSettings}
+        isSavingExportSettings={isSavingExportSettings}
+        aspectRatio={aspectRatio}
+        setAspectRatio={setAspectRatio}
+        handleSaveAspectRatio={handleSaveAspectRatio}
+        isSavingAspectRatio={isSavingAspectRatio}
+        hasImages={hasImages}
+        projectDefaultImageSource={projectDefaultImageSource}
+        projectDefaultImageModel={projectDefaultImageModel}
+        projectDefaultImageResolution={projectDefaultImageResolution}
+        setProjectDefaultImageSource={setProjectDefaultImageSource}
+        setProjectDefaultImageModel={setProjectDefaultImageModel}
+        setProjectDefaultImageResolution={setProjectDefaultImageResolution}
+        handleSaveGenerationDefaults={handleSaveGenerationDefaults}
+        isSavingGenerationDefaults={isSavingGenerationDefaults}
+        isHistoryModalOpen={isHistoryModalOpen}
+        setIsHistoryModalOpen={setIsHistoryModalOpen}
+        selectedIndex={selectedIndex}
+        historyVersionsDescending={historyVersionsDescending}
+        selectedHistoryVersion={selectedHistoryVersion}
+        copiedHistoryVersionId={copiedHistoryVersionId}
+        setSelectedHistoryVersionId={setSelectedHistoryVersionId}
+        handleSwitchVersion={handleSwitchVersion}
+        handleCopyHistoryPrompt={handleCopyHistoryPrompt}
+        getHistoryOperationLabel={getHistoryOperationLabel}
+        formatImageVersionTimestamp={formatImageVersionTimestamp}
+        show1KWarningDialog={show1KWarningDialog}
+        skip1KWarningChecked={skip1KWarningChecked}
+        handleCancel1KWarning={handleCancel1KWarning}
+        setSkip1KWarningChecked={setSkip1KWarningChecked}
+        handleConfirm1KWarning={handleConfirm1KWarning}
+        showBatchGenerateDialog={showBatchGenerateDialog}
+        batchGenerateContext={batchGenerateContext}
+        closeBatchGenerateDialog={closeBatchGenerateDialog}
+        handleGenerateMissingImagesFromDialog={handleGenerateMissingImagesFromDialog}
+        handleRegenerateAllImagesFromDialog={handleRegenerateAllImagesFromDialog}
+        showBatchDescriptionGenerateDialog={showBatchDescriptionGenerateDialog}
+        batchDescriptionGenerateContext={batchDescriptionGenerateContext}
+        descriptionRangeStart={descriptionRangeStart}
+        descriptionRangeEnd={descriptionRangeEnd}
+        setDescriptionRangeStart={setDescriptionRangeStart}
+        setDescriptionRangeEnd={setDescriptionRangeEnd}
+        handleGenerateMissingDescriptionsFromDialog={handleGenerateMissingDescriptionsFromDialog}
+        handleRegenerateAllDescriptionsFromDialog={handleRegenerateAllDescriptionsFromDialog}
+        handleGenerateDescriptionsByRange={handleGenerateDescriptionsByRange}
+        closeBatchDescriptionGenerateDialog={closeBatchDescriptionGenerateDialog}
+      />
 
     </div>
   );
 };
+
+
+

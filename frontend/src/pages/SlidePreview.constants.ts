@@ -1,0 +1,14 @@
+export const DEFAULT_EXTRA_FIELDS = ['视觉元素', '视觉焦点', '排版布局', '演讲者备注'];
+export const PREVIEW_SPLIT_STORAGE_KEY = 'previewSplitRatio';
+export const PREVIEW_EDITOR_COLLAPSED_STORAGE_KEY = 'previewEditorPaneCollapsed';
+export const PREVIEW_SPLIT_DEFAULT_RATIO = 0.45;
+export const PREVIEW_SPLIT_DIVIDER_PX = 1;
+export const PREVIEW_SPLIT_HIT_AREA_PX = 12;
+export const PREVIEW_VISUAL_MIN_WIDTH = 360;
+export const PREVIEW_EDITOR_MIN_WIDTH = 420;
+export const PREVIEW_EDITOR_VERTICAL_SPLIT_STORAGE_KEY = 'previewEditorVerticalSplitRatio';
+export const PREVIEW_EDITOR_VERTICAL_SPLIT_DEFAULT_RATIO = 0.74;
+export const PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX = 1;
+export const PREVIEW_EDITOR_CANVAS_MIN_HEIGHT = 260;
+export const PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT = 180;
+export const FLOATING_FULLSCREEN_BUTTON_SIZE = 44;
