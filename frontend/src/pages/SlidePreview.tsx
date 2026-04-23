@@ -439,17 +439,25 @@ export const SlidePreview: React.FC = () => {
     () => normalizeProjectDefaultImageSource(projectDefaultImageSource, normalizedProjectImageModel),
     [projectDefaultImageSource, normalizedProjectImageModel]
   );
-  const normalizedProjectImageResolution = useMemo(
-    () => normalizeProjectDefaultImageResolution(projectDefaultImageResolution, normalizedProjectImageModel),
-    [projectDefaultImageResolution, normalizedProjectImageModel]
+  const normalizedRunImageModel = useMemo(
+    () => normalizeProjectDefaultImageModel(editRunImageModel || projectDefaultImageModel),
+    [editRunImageModel, projectDefaultImageModel]
   );
-  const currentImageGenerationOverride = useMemo<GenerationOverride>(() => ({
+  const normalizedRunImageSource = useMemo(
+    () => getImageSourceForModel(normalizedRunImageModel, normalizedProjectImageSource),
+    [normalizedRunImageModel, normalizedProjectImageSource]
+  );
+  const normalizedRunImageResolution = useMemo(
+    () => normalizeProjectDefaultImageResolution(projectDefaultImageResolution, normalizedRunImageModel),
+    [projectDefaultImageResolution, normalizedRunImageModel]
+  );
+  const runtimeImageGenerationOverride = useMemo<GenerationOverride>(() => ({
     image: {
-      source: getImageSourceForModel(normalizedProjectImageModel, normalizedProjectImageSource),
-      model: normalizedProjectImageModel,
-      resolution: normalizedProjectImageResolution,
+      source: normalizedRunImageSource,
+      model: normalizedRunImageModel,
+      resolution: normalizedRunImageResolution,
     },
-  }), [normalizedProjectImageModel, normalizedProjectImageResolution, normalizedProjectImageSource]);
+  }), [normalizedRunImageModel, normalizedRunImageResolution, normalizedRunImageSource]);
   // 根据画面比例计算 CSS aspect-ratio
   const aspectRatioStyle = useMemo(() => {
     const parts = aspectRatio.split(':');
@@ -981,7 +989,7 @@ export const SlidePreview: React.FC = () => {
 
   const handleBatchGenerate = useCallback(async (pageIds?: string[]) => {
     try {
-      await generateImages(pageIds, currentImageGenerationOverride);
+      await generateImages(pageIds, runtimeImageGenerationOverride);
     } catch (error: any) {
       console.error('批量生成错误:', error);
       console.error('错误响应:', error?.response?.data);
@@ -1017,7 +1025,7 @@ export const SlidePreview: React.FC = () => {
         type: 'error',
       });
     }
-  }, [generateImages, currentImageGenerationOverride, show, t]);
+  }, [generateImages, runtimeImageGenerationOverride, show, t]);
 
   const {
     show1KWarningDialog,
@@ -1046,7 +1054,7 @@ export const SlidePreview: React.FC = () => {
     handleRegenerateAllDescriptionsFromDialog,
   } = useSlidePreviewGeneration({
     currentProject,
-    currentImageGenerationOverride,
+    currentImageGenerationOverride: runtimeImageGenerationOverride,
     projectId,
     t,
     show,
