@@ -14,6 +14,7 @@ Endpoint strategy is controlled by environment variables:
 """
 import base64
 import logging
+import math
 import re
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -49,6 +50,10 @@ class OpenAIImageProvider(ImageProvider):
     _VALID_PATH_STYLES = {"auto", "singular", "plural"}
     _VALID_RESPONSE_FORMATS = {"b64_json", "url"}
     _VALID_RESOLUTIONS = {"1K", "2K", "4K"}
+    _GPT_IMAGE_2_MIN_PIXELS = 655_360
+    _GPT_IMAGE_2_MAX_PIXELS = 8_294_400
+    _GPT_IMAGE_2_MAX_EDGE = 3840
+    _GPT_IMAGE_2_MULTIPLE = 16
 
     # gemini-2.5 / nano-banana pixel mapping (1K only)
     _GEMINI_25_SIZE_MAP = {
@@ -176,9 +181,115 @@ class OpenAIImageProvider(ImageProvider):
             return False
         return m.startswith("gemini-2.5") or m == "nano-banana"
 
+    def _is_gpt_image_2(self, model: str) -> bool:
+        return (model or "").strip().lower() == "gpt-image-2"
+
     def _validate_aspect_ratio(self, aspect_ratio: str, strict: bool):
         if strict and not re.fullmatch(r"\d+:\d+", str(aspect_ratio or "").strip()):
             raise ValueError(f"Invalid aspect_ratio='{aspect_ratio}'. Expected format like 16:9")
+
+    def _parse_aspect_ratio(self, aspect_ratio: str, strict: bool) -> Tuple[int, int]:
+        raw = str(aspect_ratio or "").strip()
+        match = re.fullmatch(r"(\d+):(\d+)", raw)
+        if not match:
+            if strict:
+                raise ValueError(f"Invalid aspect_ratio='{aspect_ratio}'. Expected format like 16:9")
+            return (16, 9)
+        w = int(match.group(1))
+        h = int(match.group(2))
+        if w <= 0 or h <= 0:
+            if strict:
+                raise ValueError(f"Invalid aspect_ratio='{aspect_ratio}'. Width/height must be > 0")
+            return (16, 9)
+        return (w, h)
+
+    def _round_to_multiple(self, value: float, multiple: int = 16, minimum: int = 16) -> int:
+        rounded = int(round(float(value) / multiple) * multiple)
+        return max(minimum, rounded)
+
+    def _clamp_gpt_image_2_ratio(self, ratio_w: int, ratio_h: int, strict: bool) -> Tuple[int, int]:
+        ratio = max(ratio_w, ratio_h) / max(1, min(ratio_w, ratio_h))
+        if ratio <= 3:
+            return ratio_w, ratio_h
+        if strict:
+            raise ValueError(
+                f"gpt-image-2 only supports aspect ratios between 1:1 and 3:1 (or 1:3), got {ratio_w}:{ratio_h}"
+            )
+        if ratio_w >= ratio_h:
+            return (3, 1)
+        return (1, 3)
+
+    def _compute_gpt_image_2_size(self, aspect_ratio: str, resolution: str, strict: bool) -> str:
+        ratio_w, ratio_h = self._parse_aspect_ratio(aspect_ratio, strict)
+        ratio_w, ratio_h = self._clamp_gpt_image_2_ratio(ratio_w, ratio_h, strict)
+
+        resolution_upper = (resolution or "").upper()
+        long_edge_map = {
+            "1K": 1536,
+            "2K": 2048,
+            "4K": 3840,
+        }
+        target_long_edge = long_edge_map.get(resolution_upper, 1536)
+
+        scale = target_long_edge / max(ratio_w, ratio_h)
+        width = self._round_to_multiple(ratio_w * scale, self._GPT_IMAGE_2_MULTIPLE, self._GPT_IMAGE_2_MULTIPLE)
+        height = self._round_to_multiple(ratio_h * scale, self._GPT_IMAGE_2_MULTIPLE, self._GPT_IMAGE_2_MULTIPLE)
+
+        def _scale_dims(w: int, h: int, scale_factor: float) -> Tuple[int, int]:
+            return (
+                self._round_to_multiple(w * scale_factor, self._GPT_IMAGE_2_MULTIPLE, self._GPT_IMAGE_2_MULTIPLE),
+                self._round_to_multiple(h * scale_factor, self._GPT_IMAGE_2_MULTIPLE, self._GPT_IMAGE_2_MULTIPLE),
+            )
+
+        # Max edge
+        max_edge = max(width, height)
+        if max_edge > self._GPT_IMAGE_2_MAX_EDGE:
+            width, height = _scale_dims(width, height, self._GPT_IMAGE_2_MAX_EDGE / max_edge)
+
+        # Max pixels
+        pixels = width * height
+        if pixels > self._GPT_IMAGE_2_MAX_PIXELS:
+            width, height = _scale_dims(width, height, math.sqrt(self._GPT_IMAGE_2_MAX_PIXELS / pixels))
+
+        # Min pixels
+        pixels = width * height
+        if pixels < self._GPT_IMAGE_2_MIN_PIXELS:
+            scale_up = math.sqrt(self._GPT_IMAGE_2_MIN_PIXELS / max(1, pixels))
+            candidate_w, candidate_h = _scale_dims(width, height, scale_up)
+            if max(candidate_w, candidate_h) <= self._GPT_IMAGE_2_MAX_EDGE:
+                width, height = candidate_w, candidate_h
+            elif strict:
+                raise ValueError(
+                    f"Unable to satisfy gpt-image-2 min pixels for aspect_ratio={aspect_ratio}; "
+                    f"candidate={candidate_w}x{candidate_h}"
+                )
+
+        # Final guards
+        width = min(width, self._GPT_IMAGE_2_MAX_EDGE)
+        height = min(height, self._GPT_IMAGE_2_MAX_EDGE)
+        width = self._round_to_multiple(width, self._GPT_IMAGE_2_MULTIPLE, self._GPT_IMAGE_2_MULTIPLE)
+        height = self._round_to_multiple(height, self._GPT_IMAGE_2_MULTIPLE, self._GPT_IMAGE_2_MULTIPLE)
+
+        final_pixels = width * height
+        if strict:
+            if final_pixels < self._GPT_IMAGE_2_MIN_PIXELS or final_pixels > self._GPT_IMAGE_2_MAX_PIXELS:
+                raise ValueError(
+                    f"gpt-image-2 size out of range: {width}x{height}, pixels={final_pixels}, "
+                    f"allowed=[{self._GPT_IMAGE_2_MIN_PIXELS},{self._GPT_IMAGE_2_MAX_PIXELS}]"
+                )
+            final_ratio = max(width, height) / max(1, min(width, height))
+            if final_ratio > 3:
+                raise ValueError(f"gpt-image-2 final ratio out of range: {width}x{height}")
+
+        return f"{width}x{height}"
+
+    def _select_gpt_image_2_quality(self, resolution: str) -> str:
+        resolution_upper = (resolution or "").upper()
+        if resolution_upper == "4K":
+            return "high"
+        if resolution_upper == "2K":
+            return "medium"
+        return "low"
 
     def _build_image_api_params(self, model: str, aspect_ratio: str, resolution: str, strict: bool) -> Dict[str, str]:
         self._validate_aspect_ratio(aspect_ratio, strict)
@@ -187,6 +298,13 @@ class OpenAIImageProvider(ImageProvider):
             raise ValueError(
                 f"Invalid resolution='{resolution}'. Allowed values: {sorted(self._VALID_RESOLUTIONS)}"
             )
+
+        if self._is_gpt_image_2(model):
+            return {
+                "response_format": self.response_format,
+                "size": self._compute_gpt_image_2_size(aspect_ratio, resolution_upper, strict),
+                "quality": self._select_gpt_image_2_quality(resolution_upper),
+            }
 
         params: Dict[str, str] = {
             "response_format": self.response_format,
