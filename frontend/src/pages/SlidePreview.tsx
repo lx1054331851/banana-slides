@@ -75,6 +75,7 @@ import {
   Check,
   History,
   Send,
+  Sparkles,
   Info,
   Settings2,
 } from 'lucide-react';
