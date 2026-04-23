@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "project_id": "9ac5f04a-46ef-433c-985b-ead8d71ac7f1",
+  "contains": [
+    "project-transfer.zip",
+    "style-library/data.json",
+    "style-library/import_style_library.py",
+    "uploads/style-presets/<preset_id>/"
+  ],
+  "import_order": [
+    "project",
+    "style_library"
+  ],
+  "style_library_records": {
+    "style_templates": 1,
+    "style_presets": 1
+  },
+  "used_style_preset_ids": [
+    "a65dd906-3a66-42ae-9d82-b9c0bfbf6935"
+  ]
+}
