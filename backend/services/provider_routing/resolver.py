@@ -134,7 +134,15 @@ def _pick_model(role: str, override: Dict[str, Any], project_defaults: Dict[str,
     return str(setting_model or MODEL_DEFAULTS[role])
 
 
-def _resolve_openai_credentials(role: str, override: Dict[str, Any], traces: list[str]) -> Dict[str, Optional[str]]:
+def _resolve_openai_credentials(
+    role: str,
+    override: Dict[str, Any],
+    traces: list[str],
+    *,
+    selected_source: str = "",
+    selected_model: str = "",
+) -> Dict[str, Optional[str]]:
+    # Resolve OpenAI/Azure credentials for a role, with gpt-image-2 forcing Azure for image calls.
     prefix = MODEL_PREFIX[role]
     model_api_key = _resolve_setting(f"{prefix}_API_KEY")
     model_api_base = _resolve_setting(f"{prefix}_API_BASE")
@@ -143,10 +151,16 @@ def _resolve_openai_credentials(role: str, override: Dict[str, Any], traces: lis
 
     override_api_key = (override or {}).get("api_key")
     override_api_base = (override or {}).get("api_base_url")
+    model_name = str(selected_model or (override or {}).get("model") or _resolve_setting(f"{prefix}_MODEL") or "").strip().lower()
+    source_name = _normalize_model_source(selected_source or (override or {}).get("source"))
+    force_azure = role == "image" and (source_name in {"azure-openai", "azure"} or model_name == "gpt-image-2")
 
     api_base = (override_api_base or model_api_base or _resolve_setting("OPENAI_API_BASE", "https://aihubmix.com/v1"))
 
-    if model_azure_endpoint:
+    if force_azure:
+        azure_endpoint = model_azure_endpoint or _resolve_setting("AZURE_OPENAI_ENDPOINT")
+        azure_api_version = model_azure_api_version or _resolve_setting("AZURE_OPENAI_API_VERSION")
+    elif model_azure_endpoint:
         azure_endpoint = model_azure_endpoint
         azure_api_version = model_azure_api_version or _resolve_setting("AZURE_OPENAI_API_VERSION")
     elif model_api_key or model_api_base or override_api_key or override_api_base:
@@ -304,9 +318,15 @@ def resolve_provider_route(
         )
         return _apply_adapter_and_finalize(route)
 
-    if source in {"openai", "gemini"}:
-        if source == "openai":
-            creds = _resolve_openai_credentials(role, override, traces)
+    if source in {"openai", "azure-openai", "azure", "gemini"}:
+        if source in {"openai", "azure-openai", "azure"}:
+            creds = _resolve_openai_credentials(
+                role,
+                override,
+                traces,
+                selected_source=source,
+                selected_model=model,
+            )
             route = ResolvedProviderRoute(
                 role=role,
                 provider="openai",

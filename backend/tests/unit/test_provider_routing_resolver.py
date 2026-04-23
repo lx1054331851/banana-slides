@@ -25,6 +25,7 @@ def _clear_env(monkeypatch):
         "PROVIDER_ROUTING_STRICT",
         "PROVIDER_ADAPTER_DEFAULT",
         "IMAGE_API_KEY",
+        "IMAGE_API_BASE",
     ]
     for key in keys:
         monkeypatch.delenv(key, raising=False)
@@ -177,3 +178,33 @@ def test_bundle_fingerprint_changes_with_override(monkeypatch):
 
     assert bundle_a.bundle_fingerprint == bundle_b.bundle_fingerprint
     assert bundle_a.bundle_fingerprint != bundle_c.bundle_fingerprint
+
+
+def test_gpt_image2_prefers_azure_even_if_image_api_base_exists(monkeypatch):
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("IMAGE_MODEL_SOURCE", "openai")
+    monkeypatch.setenv("IMAGE_MODEL", "gpt-image-2")
+    monkeypatch.setenv("IMAGE_API_BASE", "https://api.viviai.cc/v1")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example-resource.openai.azure.com")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2025-04-01-preview")
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "azure-key")
+
+    route = resolve_provider_route("image")
+
+    assert route.provider == "openai"
+    assert route.model == "gpt-image-2"
+    assert route.api_base == "https://api.viviai.cc/v1"
+    assert route.azure_endpoint == "https://example-resource.openai.azure.com"
+    assert route.azure_api_version == "2025-04-01-preview"
+    assert route.api_key == "azure-key"
+
+
+def test_azure_openai_source_alias_routes_to_openai_provider(monkeypatch):
+    _clear_env(monkeypatch)
+    route = resolve_provider_route(
+        "image",
+        generation_override={"image": {"source": "azure-openai", "model": "gpt-image-2"}},
+    )
+
+    assert route.provider == "openai"
+    assert route.source == "azure-openai"
