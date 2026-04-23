@@ -213,6 +213,7 @@ import * as api from '@/api/endpoints';
 import type { OutputLanguage, ProviderProfileSummary } from '@/api/endpoints';
 import { OUTPUT_LANGUAGE_OPTIONS } from '@/api/endpoints';
 import type { Settings as SettingsType } from '@/types';
+import { PROJECT_IMAGE_MODEL_CATALOG, getImageSourceForModel } from '@/config/projectAiDefaults';
 
 // 配置项类型定义
 type FieldType = 'text' | 'password' | 'number' | 'select' | 'buttons' | 'switch';
@@ -338,6 +339,20 @@ const resolveLazyllmVendor = (format: string, keysInfo?: Record<string, number>)
   return LAZYLLM_SOURCES.find(s => isLazyllmVendor(s.value))?.value || 'deepseek';
 };
 
+const IMAGE_MODEL_OPTIONS = PROJECT_IMAGE_MODEL_CATALOG.map((item) => ({
+  value: item.model,
+  label: item.label,
+}));
+
+// Build image model dropdown options and preserve current custom model value.
+const getImageModelSelectOptions = (currentValue: string) => {
+  const normalizedCurrent = String(currentValue || '').trim();
+  if (!normalizedCurrent) return IMAGE_MODEL_OPTIONS;
+  const exists = IMAGE_MODEL_OPTIONS.some((item) => item.value === normalizedCurrent);
+  if (exists) return IMAGE_MODEL_OPTIONS;
+  return [{ value: normalizedCurrent, label: `Custom · ${normalizedCurrent}` }, ...IMAGE_MODEL_OPTIONS];
+};
+
 const GlobalVendorKeyInput: React.FC<{
   vendor: string; formData: typeof initialFormData;
   setFormData: React.Dispatch<React.SetStateAction<typeof initialFormData>>;
@@ -386,7 +401,7 @@ const formDataFromSettings = (data: SettingsType): typeof initialFormData => ({
   image_thinking_budget: data.image_thinking_budget || 1024,
   baidu_api_key: '',
   text_model_source: data.text_model_source || '',
-  image_model_source: data.image_model_source || '',
+  image_model_source: data.image_model_source || getImageSourceForModel(data.image_model || '', ''),
   image_caption_model_source: data.image_caption_model_source || '',
   lazyllm_api_keys: {},
   text_api_key: '',
@@ -1052,6 +1067,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       placeholder: t('settings.fields.imageModelPlaceholder'),
       description: t('settings.fields.imageModelDesc'),
       sourceLabel: t('settings.fields.imageModelSource'),
+      usePresetModelSelect: true,
     },
     {
       modelKey: 'image_caption_model' as keyof typeof initialFormData,
@@ -1074,6 +1090,8 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
   // 渲染单个模型配置组（模型名 + 提供商选择 + 条件凭证）
   const renderModelConfigGroup = (item: typeof modelConfigItems[0]) => {
     const sourceValue = formData[item.sourceKey] as string;
+    const currentModelValue = String(formData[item.modelKey] || '');
+    const isImageModelGroup = item.usePresetModelSelect === true;
     const isApiKeyProvider = API_KEY_PROVIDERS.has(sourceValue);
     const isLazyllm = sourceValue && isLazyllmVendor(sourceValue);
     // 'openai' in source dropdown means OpenAI format (API key provider), not lazyllm openai vendor
@@ -1082,13 +1100,40 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
     return (
       <div key={item.modelKey} className="p-4 bg-gray-50 dark:bg-background-primary border border-gray-200 dark:border-border-primary rounded-lg space-y-3">
         {/* 模型名称 */}
-        <Input
-          label={item.label}
-          type="text"
-          placeholder={item.placeholder}
-          value={formData[item.modelKey] as string}
-          onChange={(e) => handleFieldChange(item.modelKey, e.target.value)}
-        />
+        {!isImageModelGroup && (
+          <Input
+            label={item.label}
+            type="text"
+            placeholder={item.placeholder}
+            value={formData[item.modelKey] as string}
+            onChange={(e) => handleFieldChange(item.modelKey, e.target.value)}
+          />
+        )}
+        {isImageModelGroup && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+              {item.label}
+            </label>
+            <select
+              value={currentModelValue}
+              onChange={(e) => {
+                const nextModel = e.target.value;
+                handleFieldChange(item.modelKey, nextModel);
+                if (!nextModel) {
+                  handleFieldChange(item.sourceKey, '');
+                  return;
+                }
+                handleFieldChange(item.sourceKey, getImageSourceForModel(nextModel, 'gemini'));
+              }}
+              className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
+            >
+              <option value="">{item.placeholder}</option>
+              {getImageModelSelectOptions(currentModelValue).map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
         {item.description && (
           <p className="-mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">{item.description}</p>
         )}

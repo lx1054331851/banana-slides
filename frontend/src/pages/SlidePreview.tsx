@@ -125,6 +125,8 @@ import {
   PROJECT_DEFAULT_IMAGE_MODEL,
   PROJECT_DEFAULT_IMAGE_SOURCE,
   PROJECT_DEFAULT_IMAGE_RESOLUTION,
+  getImageSourceForModel,
+  normalizeProjectDefaultImageSource,
   PROJECT_SUPPORTED_IMAGE_MODELS,
   normalizeProjectDefaultImageModel,
   normalizeProjectDefaultImageResolution,
@@ -433,17 +435,21 @@ export const SlidePreview: React.FC = () => {
     () => normalizeProjectDefaultImageModel(projectDefaultImageModel),
     [projectDefaultImageModel]
   );
+  const normalizedProjectImageSource = useMemo(
+    () => normalizeProjectDefaultImageSource(projectDefaultImageSource, normalizedProjectImageModel),
+    [projectDefaultImageSource, normalizedProjectImageModel]
+  );
   const normalizedProjectImageResolution = useMemo(
     () => normalizeProjectDefaultImageResolution(projectDefaultImageResolution, normalizedProjectImageModel),
     [projectDefaultImageResolution, normalizedProjectImageModel]
   );
   const currentImageGenerationOverride = useMemo<GenerationOverride>(() => ({
     image: {
-      source: (projectDefaultImageSource || PROJECT_DEFAULT_IMAGE_SOURCE).trim() || PROJECT_DEFAULT_IMAGE_SOURCE,
+      source: getImageSourceForModel(normalizedProjectImageModel, normalizedProjectImageSource),
       model: normalizedProjectImageModel,
       resolution: normalizedProjectImageResolution,
     },
-  }), [projectDefaultImageSource, normalizedProjectImageModel, normalizedProjectImageResolution]);
+  }), [normalizedProjectImageModel, normalizedProjectImageResolution, normalizedProjectImageSource]);
   // 根据画面比例计算 CSS aspect-ratio
   const aspectRatioStyle = useMemo(() => {
     const parts = aspectRatio.split(':');
@@ -753,6 +759,7 @@ export const SlidePreview: React.FC = () => {
     extraRequirements,
     templateStyle,
     descriptionRequirementsDraft,
+    projectDefaultImageSource,
     projectDefaultImageModel,
     projectDefaultImageResolution,
     exportExtractorMethod,
@@ -933,7 +940,8 @@ export const SlidePreview: React.FC = () => {
         setAspectRatio(currentProject.image_aspect_ratio || '16:9');
         const imageDefaults = currentProject.generation_defaults?.image || {};
         const normalizedModel = normalizeProjectDefaultImageModel(imageDefaults.model);
-        setProjectDefaultImageSource(PROJECT_DEFAULT_IMAGE_SOURCE);
+        const normalizedSource = normalizeProjectDefaultImageSource(imageDefaults.source, normalizedModel);
+        setProjectDefaultImageSource(normalizedSource);
         setProjectDefaultImageModel(normalizedModel);
         setEditRunImageModel(normalizedModel);
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
@@ -960,7 +968,8 @@ export const SlidePreview: React.FC = () => {
         setExportCompressPngQuantizeEnabled(currentProject.export_compress_png_quantize_enabled || false);
         const imageDefaults = currentProject.generation_defaults?.image || {};
         const normalizedModel = normalizeProjectDefaultImageModel(imageDefaults.model);
-        setProjectDefaultImageSource(PROJECT_DEFAULT_IMAGE_SOURCE);
+        const normalizedSource = normalizeProjectDefaultImageSource(imageDefaults.source, normalizedModel);
+        setProjectDefaultImageSource(normalizedSource);
         setProjectDefaultImageModel(normalizedModel);
         setEditRunImageModel(normalizedModel);
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
@@ -1395,10 +1404,14 @@ export const SlidePreview: React.FC = () => {
         projectDefaultImageResolution,
         normalizedEditModel
       );
+      const normalizedEditSource = getImageSourceForModel(
+        normalizedEditModel,
+        normalizedProjectImageSource,
+      );
       const editGenerationOverride: GenerationOverride | undefined = normalizedEditModel
         ? {
           image: {
-            source: (projectDefaultImageSource || PROJECT_DEFAULT_IMAGE_SOURCE).trim() || PROJECT_DEFAULT_IMAGE_SOURCE,
+            source: normalizedEditSource,
             model: normalizedEditModel,
             resolution: normalizedEditResolution,
           },
@@ -1425,7 +1438,7 @@ export const SlidePreview: React.FC = () => {
       show({ message: errorMessage, type: 'error' });
       throw error;
     }
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, projectDefaultImageResolution, projectDefaultImageSource, handleSaveOutlineAndDescription, saveAllPages, show, t]);
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, projectDefaultImageResolution, normalizedProjectImageSource, handleSaveOutlineAndDescription, saveAllPages, show, t]);
 
   const handleGenerateCurrentPage = useCallback(async () => {
     const preferredPageId = selectedPageIdRef.current;
@@ -2666,6 +2679,3 @@ export const SlidePreview: React.FC = () => {
     </div>
   );
 };
-
-
-

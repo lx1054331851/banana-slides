@@ -7,9 +7,12 @@ import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
 import {
   PROJECT_DEFAULT_IMAGE_MODEL,
   PROJECT_DEFAULT_IMAGE_RESOLUTION,
-  PROJECT_DEFAULT_IMAGE_SOURCE,
-  PROJECT_IMAGE_RESOLUTION_OPTIONS,
+  PROJECT_IMAGE_MODEL_CATALOG,
+  PROJECT_SUPPORTED_IMAGE_SOURCES,
   PROJECT_SUPPORTED_IMAGE_MODELS,
+  getImageSourceForModel,
+  getSupportedResolutionsForModel,
+  normalizeProjectDefaultImageSource,
   type ProjectSupportedImageModel,
 } from '@/config/projectAiDefaults';
 import {
@@ -326,6 +329,10 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
       : PROJECT_DEFAULT_IMAGE_MODEL),
     [generationDefaultImageModel]
   );
+  const selectedImageSource = useMemo(
+    () => normalizeProjectDefaultImageSource(generationDefaultImageSource, selectedImageModel),
+    [generationDefaultImageSource, selectedImageModel]
+  );
   const presetDescriptionFieldSet = useMemo(
     () => new Set(presetDescriptionFields.length > 0 ? presetDescriptionFields : FALLBACK_DESCRIPTION_FIELDS),
     [presetDescriptionFields]
@@ -337,7 +344,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
     return ASPECT_RATIO_OPTIONS.filter((opt) => GEMINI_PRO_SUPPORTED_ASPECT_RATIOS.has(opt.value));
   }, [selectedImageModel]);
   const visibleResolutionOptions = useMemo(
-    () => PROJECT_IMAGE_RESOLUTION_OPTIONS[selectedImageModel],
+    () => getSupportedResolutionsForModel(selectedImageModel),
     [selectedImageModel]
   );
   const selectedImageResolution = useMemo(
@@ -348,16 +355,16 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   );
 
   useEffect(() => {
-    if (generationDefaultImageSource !== PROJECT_DEFAULT_IMAGE_SOURCE) {
-      onGenerationDefaultImageSourceChange?.(PROJECT_DEFAULT_IMAGE_SOURCE);
-    }
-  }, [generationDefaultImageSource, onGenerationDefaultImageSourceChange]);
-
-  useEffect(() => {
     if (generationDefaultImageModel !== selectedImageModel) {
       onGenerationDefaultImageModelChange?.(selectedImageModel);
     }
   }, [generationDefaultImageModel, onGenerationDefaultImageModelChange, selectedImageModel]);
+
+  useEffect(() => {
+    if (generationDefaultImageSource !== selectedImageSource) {
+      onGenerationDefaultImageSourceChange?.(selectedImageSource);
+    }
+  }, [generationDefaultImageSource, onGenerationDefaultImageSourceChange, selectedImageSource]);
 
   useEffect(() => {
     if (generationDefaultImageResolution !== selectedImageResolution) {
@@ -556,11 +563,22 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                         服务商
                       </label>
                       <select
-                        value={PROJECT_DEFAULT_IMAGE_SOURCE}
-                        onChange={(e) => onGenerationDefaultImageSourceChange?.(e.target.value)}
+                        value={selectedImageSource}
+                        onChange={(e) => {
+                          const nextSource = e.target.value;
+                          onGenerationDefaultImageSourceChange?.(nextSource);
+                          const sourceModels = PROJECT_IMAGE_MODEL_CATALOG.filter((item) => item.source === nextSource);
+                          if (sourceModels.length > 0) {
+                            onGenerationDefaultImageModelChange?.(sourceModels[0].model);
+                          }
+                        }}
                         className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
                       >
-                        <option value={PROJECT_DEFAULT_IMAGE_SOURCE}>{PROJECT_DEFAULT_IMAGE_SOURCE}</option>
+                        {PROJECT_SUPPORTED_IMAGE_SOURCES.map((source) => (
+                          <option key={source} value={source}>
+                            {source === 'openai' ? 'azure-openai' : source}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div className="w-full">
@@ -569,12 +587,16 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                       </label>
                       <select
                         value={selectedImageModel}
-                        onChange={(e) => onGenerationDefaultImageModelChange?.(e.target.value)}
+                        onChange={(e) => {
+                          const nextModel = e.target.value;
+                          onGenerationDefaultImageModelChange?.(nextModel);
+                          onGenerationDefaultImageSourceChange?.(getImageSourceForModel(nextModel, selectedImageSource));
+                        }}
                         className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
                       >
-                        {PROJECT_SUPPORTED_IMAGE_MODELS.map((model) => (
-                          <option key={model} value={model}>
-                            {model}
+                        {PROJECT_IMAGE_MODEL_CATALOG.map((item) => (
+                          <option key={item.model} value={item.model}>
+                            {item.label}
                           </option>
                         ))}
                       </select>
@@ -597,7 +619,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
-                    更高的清晰度会生成更详细的图像，但需要更长时间。
+                    更高的清晰度会生成更详细的图像，但需要更长时间。Azure OpenAI `gpt-image-1` 目前仅支持 1K。
                   </p>
                   {onSaveGenerationDefaults && (
                     <Button

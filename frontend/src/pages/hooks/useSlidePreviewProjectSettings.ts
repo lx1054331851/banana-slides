@@ -7,7 +7,8 @@ import type {
   Project,
 } from '@/types';
 import {
-  PROJECT_DEFAULT_IMAGE_SOURCE,
+  getImageSourceForModel,
+  normalizeProjectDefaultImageSource,
   normalizeProjectDefaultImageModel,
   normalizeProjectDefaultImageResolution,
 } from '@/config/projectAiDefaults';
@@ -20,6 +21,7 @@ type UseSlidePreviewProjectSettingsParams = {
   extraRequirements: string;
   templateStyle: string;
   descriptionRequirementsDraft: string;
+  projectDefaultImageSource: string;
   projectDefaultImageModel: string;
   projectDefaultImageResolution: string;
   exportExtractorMethod: ExportExtractorMethod;
@@ -43,6 +45,7 @@ export const useSlidePreviewProjectSettings = ({
   extraRequirements,
   templateStyle,
   descriptionRequirementsDraft,
+  projectDefaultImageSource,
   projectDefaultImageModel,
   projectDefaultImageResolution,
   exportExtractorMethod,
@@ -126,12 +129,16 @@ export const useSlidePreviewProjectSettings = ({
     setIsSavingGenerationDefaults(true);
     try {
       const normalizedModel = normalizeProjectDefaultImageModel(projectDefaultImageModel);
+      const normalizedSource = normalizeProjectDefaultImageSource(
+        projectDefaultImageSource,
+        normalizedModel,
+      );
       const normalizedResolution = normalizeProjectDefaultImageResolution(
         projectDefaultImageResolution,
         normalizedModel
       );
       const imageDefaults: Record<string, string> = {
-        source: PROJECT_DEFAULT_IMAGE_SOURCE,
+        source: getImageSourceForModel(normalizedModel, normalizedSource),
         model: normalizedModel,
         resolution: normalizedResolution,
       };
@@ -149,6 +156,7 @@ export const useSlidePreviewProjectSettings = ({
     }
   }, [
     currentProject,
+    projectDefaultImageSource,
     projectDefaultImageModel,
     projectDefaultImageResolution,
     projectId,
