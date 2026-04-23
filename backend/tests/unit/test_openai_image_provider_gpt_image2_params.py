@@ -41,3 +41,15 @@ def test_gpt_image2_rejects_ratio_over_3_when_strict(monkeypatch):
     with pytest.raises(ValueError, match="only supports aspect ratios between 1:1 and 3:1"):
         provider._build_image_api_params("gpt-image-2", "8:1", "1K", True)
 
+
+def test_azure_image_endpoint_uses_deployment_route(monkeypatch):
+    provider = _provider(monkeypatch, strict_params=True)
+    provider.azure_endpoint = "https://example-resource.openai.azure.com"
+    provider.azure_api_version = "2025-04-01-preview"
+
+    urls = provider._build_endpoint_candidates("generations")
+
+    assert urls == [
+        "https://example-resource.openai.azure.com/openai/deployments/gpt-image-2/images/generations"
+        "?api-version=2025-04-01-preview"
+    ]

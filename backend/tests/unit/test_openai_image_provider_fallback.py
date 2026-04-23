@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from services.ai_providers.image.openai_provider import ImageApiRequestError, OpenAIImageProvider
@@ -67,3 +69,29 @@ def test_provider_parses_string_bool_options(monkeypatch):
     )
     assert provider.chat_fallback is False
     assert provider.strict_params is False
+
+
+def test_chat_response_string_json_is_supported(monkeypatch):
+    provider = _build_provider(monkeypatch, endpoint_mode="chat")
+    encoded = "aGVsbG8="
+    response = json.dumps(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{encoded}"},
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    )
+
+    message = provider._extract_message_from_chat_response(response)
+
+    assert isinstance(message, dict)
+    assert message["content"][0]["type"] == "image_url"

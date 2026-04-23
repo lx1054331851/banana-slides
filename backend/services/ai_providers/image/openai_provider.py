@@ -13,6 +13,7 @@ Endpoint strategy is controlled by environment variables:
   - IMAGE_OPENAI_STRICT_PARAMS: true | false
 """
 import base64
+import json
 import logging
 import math
 import re
@@ -96,6 +97,8 @@ class OpenAIImageProvider(ImageProvider):
         )
         self.api_key = api_key
         self.api_base = (api_base or "").rstrip("/")
+        self.azure_endpoint = azure_endpoint.rstrip("/") if azure_endpoint else ""
+        self.azure_api_version = azure_api_version or ""
         self.model = model
         self.timeout = cfg.OPENAI_TIMEOUT
 
@@ -338,6 +341,9 @@ class OpenAIImageProvider(ImageProvider):
         return params
 
     def _resolve_api_base_for_image_endpoint(self) -> str:
+        # For Azure OpenAI image endpoints, always prefer azure_endpoint over generic api_base.
+        if self.azure_endpoint:
+            return self.azure_endpoint.rstrip("/")
         if self.api_base:
             return self.api_base.rstrip("/")
         base_url = getattr(self.client, "base_url", None)
@@ -346,9 +352,21 @@ class OpenAIImageProvider(ImageProvider):
         return ""
 
     def _build_endpoint_candidates(self, endpoint_kind: str) -> List[str]:
+        # Build endpoint candidates for both OpenAI-compatible relays and Azure OpenAI routes.
         base = self._resolve_api_base_for_image_endpoint()
         if not base:
             raise ValueError("OPENAI API base URL is required for image endpoint mode")
+
+        if self.azure_endpoint:
+            if not self.azure_api_version:
+                raise ValueError("AZURE_OPENAI_API_VERSION is required when using Azure OpenAI image endpoints")
+            deployment = (self.model or "").strip()
+            if not deployment:
+                raise ValueError("Azure OpenAI image endpoints require model/deployment name")
+            return [
+                f"{base}/openai/deployments/{deployment}/images/{endpoint_kind}"
+                f"?api-version={self.azure_api_version}"
+            ]
 
         if self.path_style == "singular":
             prefixes = ["image"]
@@ -449,10 +467,12 @@ class OpenAIImageProvider(ImageProvider):
         unavailable_errors: List[str] = []
 
         for url in candidates:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Accept": "application/json",
-            }
+            # Azure image endpoints require api-key header; OpenAI-compatible relays use Bearer.
+            headers = {"Accept": "application/json"}
+            if self.azure_endpoint:
+                headers["api-key"] = self.api_key
+            else:
+                headers["Authorization"] = f"Bearer {self.api_key}"
             if json_payload is not None:
                 headers["Content-Type"] = "application/json"
 
@@ -479,12 +499,15 @@ class OpenAIImageProvider(ImageProvider):
             try:
                 return response.json()
             except Exception as e:
-                raise ImageApiRequestError(
-                    f"Image API returned non-JSON response at endpoint={url}: {type(e).__name__}: {e}",
-                    status_code=response.status_code,
-                    response_text=(response.text or "")[:500],
-                    url=url,
-                ) from e
+                # Some gateways may return HTML/plain text for unsupported endpoint variants.
+                # In auto path-style mode, keep trying the next candidate endpoint.
+                content_type = (response.headers.get("Content-Type") or "").lower()
+                body_preview = (response.text or "")[:500]
+                unavailable_errors.append(
+                    f"{url} -> non-JSON response (content-type={content_type or 'unknown'}): "
+                    f"{type(e).__name__}: {e}; body={body_preview}"
+                )
+                continue
 
         raise ImageEndpointUnavailableError(
             f"Image endpoint unavailable for {endpoint_kind}. Tried: {'; '.join(unavailable_errors)}"
@@ -584,6 +607,20 @@ class OpenAIImageProvider(ImageProvider):
         )
 
     def _extract_image_from_chat_message(self, message: Any) -> Optional[Image.Image]:
+        # Parse image payload from either SDK message objects or dict-based responses.
+        if isinstance(message, dict):
+            multi_mod_content = message.get("multi_mod_content")
+            if multi_mod_content:
+                for part in multi_mod_content:
+                    if isinstance(part, dict) and "inline_data" in part:
+                        image_data = base64.b64decode(part["inline_data"]["data"])
+                        image = Image.open(BytesIO(image_data))
+                        image.load()
+                        return image
+            content = message.get("content")
+        else:
+            content = getattr(message, "content", None)
+
         if hasattr(message, "multi_mod_content") and message.multi_mod_content:
             for part in message.multi_mod_content:
                 if "inline_data" in part:
@@ -592,9 +629,9 @@ class OpenAIImageProvider(ImageProvider):
                     image.load()
                     return image
 
-        if hasattr(message, "content") and message.content:
-            if isinstance(message.content, list):
-                for part in message.content:
+        if content:
+            if isinstance(content, list):
+                for part in content:
                     if isinstance(part, dict) and part.get("type") == "image_url":
                         image_url = part.get("image_url", {}).get("url", "")
                         if image_url.startswith("data:image"):
@@ -613,8 +650,8 @@ class OpenAIImageProvider(ImageProvider):
                             image.load()
                             return image
 
-            elif isinstance(message.content, str):
-                content_str = message.content
+            elif isinstance(content, str):
+                content_str = content
 
                 markdown_matches = re.findall(r"!\[.*?\]\((https?://[^\s\)]+)\)", content_str)
                 if markdown_matches:
@@ -646,6 +683,33 @@ class OpenAIImageProvider(ImageProvider):
                     return image
 
         return None
+
+    def _extract_message_from_chat_response(self, response: Any) -> Any:
+        # Normalize chat completion responses from SDK objects, dicts, or JSON strings.
+        if hasattr(response, "choices"):
+            choices = getattr(response, "choices", None) or []
+            if choices:
+                return choices[0].message
+            raise ValueError("Chat response has empty choices")
+
+        payload = response
+        if isinstance(response, str):
+            try:
+                payload = json.loads(response)
+            except Exception as e:
+                raise ValueError(
+                    f"Chat response is string but not JSON (preview={response[:160]})"
+                ) from e
+
+        if isinstance(payload, dict):
+            choices = payload.get("choices")
+            if isinstance(choices, list) and choices:
+                first = choices[0]
+                if isinstance(first, dict):
+                    return first.get("message") or {}
+            raise ValueError(f"Chat response dict has no usable choices: keys={list(payload.keys())}")
+
+        raise ValueError(f"Unsupported chat response type: {type(response).__name__}")
 
     def _call_via_chat_completions(
         self,
@@ -679,15 +743,15 @@ class OpenAIImageProvider(ImageProvider):
             extra_body=extra_body,
         )
 
-        message = response.choices[0].message
+        message = self._extract_message_from_chat_response(response)
         image = self._extract_image_from_chat_message(message)
         if image:
             return image
 
-        raw_content = str(getattr(message, "content", "N/A"))
+        raw_content = str(message.get("content", "N/A") if isinstance(message, dict) else getattr(message, "content", "N/A"))
         raise ValueError(
             "No valid image found in chat response. "
-            f"content_type={type(getattr(message, 'content', None))}, "
+            f"content_type={type(message.get('content', None) if isinstance(message, dict) else getattr(message, 'content', None))}, "
             f"content_preview={raw_content[:300]}"
         )
 
