@@ -619,7 +619,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
-                    更高的清晰度会生成更详细的图像，但需要更长时间。Azure OpenAI `gpt-image-1` 目前仅支持 1K。
+                    更高的清晰度会生成更详细的图像，但需要更长时间。Azure OpenAI `gpt-image-2` 目前仅支持 1K。
                   </p>
                   {onSaveGenerationDefaults && (
                     <Button

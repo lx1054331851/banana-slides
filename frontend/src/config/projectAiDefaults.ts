@@ -15,8 +15,8 @@ export const PROJECT_IMAGE_MODEL_CATALOG = [
   },
   {
     source: 'openai',
-    model: 'gpt-image-1',
-    label: 'Azure OpenAI · gpt-image-1',
+    model: 'gpt-image-2',
+    label: 'Azure OpenAI · gpt-image-2',
     resolutions: ['1K'],
   },
 ] as const;
