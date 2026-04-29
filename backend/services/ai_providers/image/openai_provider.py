@@ -755,6 +755,149 @@ class OpenAIImageProvider(ImageProvider):
             f"content_preview={raw_content[:300]}"
         )
 
+    def _is_native_images_api_model(self) -> bool:
+        """Return True when the model should use images.generate / images.edit."""
+        return self.model.lower() in _NATIVE_IMAGES_API_MODELS
+
+    def _pil_to_png_bytes(self, image: Image.Image) -> bytes:
+        buf = BytesIO()
+        # Preserve alpha channel: the images.edit endpoint uses it as a mask
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+        image.save(buf, format='PNG')
+        buf.seek(0)
+        return buf.read()
+
+    def _resolve_size(self, aspect_ratio: str, resolution: str = '2K') -> str:
+        """Map aspect_ratio to a size string appropriate for the current model."""
+        model = self.model.lower()
+        if model == 'dall-e-3':
+            return _DALLE3_SIZE_MAP.get(aspect_ratio, '1024x1024')
+        if model == 'dall-e-2':
+            return _DALLE2_SIZE_MAP.get(aspect_ratio, '1024x1024')
+        return _compute_gpt_image_size(aspect_ratio, resolution)
+
+    def _resolve_quality(self):
+        """Return quality param appropriate for the current model, or None to omit."""
+        model = self.model.lower()
+        if model == 'dall-e-3':
+            return 'standard'   # dall-e-3 only accepts standard / hd
+        if model == 'dall-e-2':
+            return None          # dall-e-2 has no quality param
+        return 'auto'            # gpt-image-* accepts auto / low / medium / high
+
+    def _decode_image_response(self, item) -> Image.Image:
+        """Extract PIL Image from an images API response item (b64_json, url, or raw string)."""
+        if isinstance(item, str):
+            return self._decode_raw_string(item)
+        b64 = getattr(item, 'b64_json', None)
+        if b64:
+            return Image.open(BytesIO(base64.b64decode(b64)))
+        url = getattr(item, 'url', None)
+        if url:
+            with requests.get(url, timeout=60, stream=True) as resp:
+                resp.raise_for_status()
+                return Image.open(BytesIO(resp.content))
+        if isinstance(item, dict):
+            if item.get('b64_json'):
+                return Image.open(BytesIO(base64.b64decode(item['b64_json'])))
+            if item.get('url'):
+                with requests.get(item['url'], timeout=60, stream=True) as resp:
+                    resp.raise_for_status()
+                    return Image.open(BytesIO(resp.content))
+        raise ValueError("images API returned neither b64_json nor url")
+
+    def _decode_raw_string(self, raw: str) -> Image.Image:
+        """Try to decode a raw string as base64 image data, data-URL, or HTTP URL."""
+        raw = raw.strip()
+        # data:image/...;base64,...
+        if raw.startswith('data:image') and ',' in raw:
+            b64 = raw.split(',', 1)[1]
+            return Image.open(BytesIO(base64.b64decode(b64)))
+        # plain HTTP(S) URL
+        if raw.startswith(('http://', 'https://')):
+            with requests.get(raw, timeout=60, stream=True) as resp:
+                resp.raise_for_status()
+                return Image.open(BytesIO(resp.content))
+        # assume raw base64
+        try:
+            return Image.open(BytesIO(base64.b64decode(raw)))
+        except Exception:
+            raise ValueError(f"Cannot decode raw string as image (len={len(raw)}, prefix={raw[:80]!r})")
+
+    def _extract_from_images_result(self, result) -> Image.Image:
+        """Defensively extract an image from images.generate / images.edit result.
+
+        Standard OpenAI returns an ImagesResponse with .data[0].
+        Proxies (newapi, one-api, etc.) may return strings, dicts, or other shapes.
+        """
+        # Standard path: result.data exists and is iterable
+        data = getattr(result, 'data', None)
+        if data is not None:
+            try:
+                item = data[0]
+                return self._decode_image_response(item)
+            except (TypeError, IndexError, AttributeError) as exc:
+                logger.warning("result.data exists but extraction failed: %s", exc)
+
+        # Proxy returned a plain string (URL or base64)
+        if isinstance(result, str):
+            logger.info("images API returned raw string, attempting decode")
+            return self._decode_raw_string(result)
+
+        # Proxy returned a dict (e.g. {"url": "..."} or {"b64_json": "..."})
+        if isinstance(result, dict):
+            logger.info("images API returned dict, attempting decode")
+            if 'data' in result and isinstance(result['data'], list) and result['data']:
+                return self._decode_image_response(result['data'][0])
+            return self._decode_image_response(result)
+
+        raise ValueError(f"Unexpected images API response type: {type(result)}")
+
+    def _generate_with_images_api(
+        self,
+        prompt: str,
+        ref_images: Optional[List[Image.Image]],
+        aspect_ratio: str,
+        resolution: str = '2K',
+    ) -> Optional[Image.Image]:
+        """Use the native OpenAI images API (gpt-image-* / dall-e-*)."""
+        size = self._resolve_size(aspect_ratio, resolution)
+        quality = self._resolve_quality()
+        # GPT image models always return b64_json; DALL-E models default to url
+        is_dalle = self.model.lower() in _DALLE_MODELS
+        response_format = 'b64_json' if is_dalle else None
+
+        if ref_images and self.model.lower() != 'dall-e-3':
+            # dall-e-3 does not support images.edit; all other native models do
+            # Resize ref image to match target size so the API doesn't reject mismatched dimensions
+            w, h = map(int, size.split('x'))
+            ref_img = ref_images[0]
+            if ref_img.size != (w, h):
+                ref_img = ref_img.resize((w, h), Image.LANCZOS)
+            image_bytes = self._pil_to_png_bytes(ref_img)
+            image_file = BytesIO(image_bytes)
+            image_file.name = 'image.png'
+            logger.debug("%s: images.edit, size=%s", self.model, size)
+            kwargs = dict(model=self.model, image=image_file, prompt=prompt, n=1, size=size)
+            if quality:
+                kwargs['quality'] = quality
+            if response_format:
+                kwargs['response_format'] = response_format
+            result = self.client.images.edit(**kwargs)
+        else:
+            if ref_images:
+                logger.warning("dall-e-3 does not support images.edit; ignoring ref_images")
+            logger.debug("%s: images.generate, size=%s, quality=%s", self.model, size, quality)
+            kwargs = dict(model=self.model, prompt=prompt, n=1, size=size)
+            if quality:
+                kwargs['quality'] = quality
+            if response_format:
+                kwargs['response_format'] = response_format
+            result = self.client.images.generate(**kwargs)
+
+        return self._extract_from_images_result(result)
+
     def generate_image(
         self,
         prompt: str,

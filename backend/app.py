@@ -46,7 +46,7 @@ def set_sqlite_pragma(dbapi_conn, connection_record):
     try:
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
-        cursor.execute("PRAGMA busy_timeout=30000")  # 30 seconds timeout
+        cursor.execute("PRAGMA busy_timeout=60000")  # 60 seconds timeout
     finally:
         cursor.close()
 
@@ -162,12 +162,14 @@ def create_app(load_settings_from_db=None):
     app.register_blueprint(page_bp)
     app.register_blueprint(template_bp)
     app.register_blueprint(user_template_bp)
+    app.register_blueprint(user_style_template_bp)
     app.register_blueprint(export_bp)
     app.register_blueprint(file_bp)
     app.register_blueprint(material_bp)
     app.register_blueprint(material_global_bp)
     app.register_blueprint(reference_file_bp, url_prefix='/api/reference-files')
     app.register_blueprint(settings_bp)
+    app.register_blueprint(openai_oauth_bp)
     app.register_blueprint(style_bp)
     app.register_blueprint(style_library_bp)
 

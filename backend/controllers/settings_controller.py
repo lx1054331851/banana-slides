@@ -23,7 +23,7 @@ from services.image_compression_service import ImageCompressionService
 from services.provider_routing import list_provider_profiles_redacted
 
 logger = logging.getLogger(__name__)
-ALLOWED_PROVIDER_FORMATS = {"openai", "gemini", "lazyllm"} | LAZYLLM_VENDORS
+ALLOWED_PROVIDER_FORMATS = {"openai", "gemini", "lazyllm", "codex"} | LAZYLLM_VENDORS
 
 settings_bp = Blueprint(
     "settings", __name__, url_prefix="/api/settings"
@@ -137,6 +137,10 @@ def temporary_settings_override(settings_override: dict):
         if "image_thinking_budget" in settings_override:
             original_values["IMAGE_THINKING_BUDGET"] = current_app.config.get("IMAGE_THINKING_BUDGET")
             current_app.config["IMAGE_THINKING_BUDGET"] = settings_override["image_thinking_budget"]
+
+        if "openai_image_api_protocol" in settings_override:
+            original_values["OPENAI_IMAGE_API_PROTOCOL"] = current_app.config.get("OPENAI_IMAGE_API_PROTOCOL")
+            current_app.config["OPENAI_IMAGE_API_PROTOCOL"] = settings_override["openai_image_api_protocol"]
 
         yield
 
@@ -313,6 +317,12 @@ def update_settings():
         if "image_model_source" in data:
             settings.image_model_source = (data["image_model_source"] or "").strip() or None
 
+        if "openai_image_api_protocol" in data:
+            protocol = data["openai_image_api_protocol"]
+            if protocol not in ("auto", "images", "chat"):
+                return bad_request("openai_image_api_protocol must be 'auto', 'images', or 'chat'")
+            settings.openai_image_api_protocol = protocol if protocol != "auto" else None
+
         if "image_caption_model_source" in data:
             settings.image_caption_model_source = (data["image_caption_model_source"] or "").strip() or None
 
@@ -389,6 +399,7 @@ def reset_settings():
         settings.text_model_source = None
         settings.image_model_source = None
         settings.image_caption_model_source = None
+        settings.openai_image_api_protocol = None
         settings.lazyllm_api_keys = None
         for model_type in ('text', 'image', 'image_caption'):
             setattr(settings, f'{model_type}_api_key', None)
@@ -677,6 +688,18 @@ def _sync_settings_to_config(settings: Settings):
                     ai_config_changed = True
                 current_app.config.pop(config_key, None)
 
+    # Sync OpenAI image API protocol
+    config_key = 'OPENAI_IMAGE_API_PROTOCOL'
+    val = settings.openai_image_api_protocol
+    if val:
+        if current_app.config.get(config_key) != val:
+            ai_config_changed = True
+        current_app.config[config_key] = val
+    else:
+        if config_key in current_app.config:
+            ai_config_changed = True
+        current_app.config.pop(config_key, None)
+
     # Sync LazyLLM vendor API keys to environment variables
     # (lazyllm_env.py reads from os.environ via {SOURCE}_API_KEY)
     if settings.lazyllm_api_keys:
@@ -730,6 +753,8 @@ def _create_file_parser():
             caption_format = 'gemini'
         elif source_lower == 'openai':
             caption_format = 'openai'
+        elif source_lower == 'codex':
+            caption_format = 'codex'
         elif source_lower in LAZYLLM_VENDORS:
             caption_format = 'lazyllm'
         else:
@@ -748,6 +773,11 @@ def _create_file_parser():
         google_base = ""
         openai_key = current_app.config.get("IMAGE_CAPTION_API_KEY") or current_app.config.get("OPENAI_API_KEY", "")
         openai_base = current_app.config.get("IMAGE_CAPTION_API_BASE") or current_app.config.get("OPENAI_API_BASE", "")
+    elif caption_format == 'codex':
+        google_key = ""
+        google_base = ""
+        openai_key = ""
+        openai_base = ""
     else:
         # lazyllm or global fallback
         google_key = current_app.config.get("GOOGLE_API_KEY", "")
@@ -1089,6 +1119,7 @@ def run_settings_test(test_name: str):
         test_settings["text_thinking_budget"] = global_settings.text_thinking_budget
         test_settings["enable_image_reasoning"] = global_settings.enable_image_reasoning
         test_settings["image_thinking_budget"] = global_settings.image_thinking_budget
+        test_settings["openai_image_api_protocol"] = global_settings.openai_image_api_protocol or current_app.config.get('OPENAI_IMAGE_API_PROTOCOL') or 'auto'
 
         # 应用前端发送的覆盖参数（如果有的话，用于测试未保存的配置）
         override_settings = request.get_json() or {}

@@ -27,14 +27,28 @@ from services.provider_routing.types import ResolvedProviderRoute
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    'TextProvider', 'GenAITextProvider', 'OpenAITextProvider', 'AnthropicTextProvider', 'LazyLLMTextProvider',
-    'ImageProvider', 'GenAIImageProvider', 'OpenAIImageProvider', 'AnthropicImageProvider', 'LazyLLMImageProvider',
+    'TextProvider', 'GenAITextProvider', 'OpenAITextProvider', 'AnthropicTextProvider', 'LazyLLMTextProvider', 'CodexTextProvider',
+    'ImageProvider', 'GenAIImageProvider', 'OpenAIImageProvider', 'AnthropicImageProvider', 'LazyLLMImageProvider', 'CodexImageProvider',
     'get_text_provider', 'get_image_provider', 'get_provider_format',
     'get_caption_provider', 'get_image_caption_provider_config', 'LAZYLLM_VENDORS',
 ]
 
 # LazyLLM vendor names (used to distinguish from gemini/openai formats)
 LAZYLLM_VENDORS = {'qwen', 'doubao', 'deepseek', 'glm', 'siliconflow', 'sensenova', 'minimax', 'kimi'}
+
+
+def _get_openai_oauth_token() -> Optional[str]:
+    """Try to get a valid OpenAI OAuth token from the database."""
+    try:
+        from flask import current_app
+        if not current_app:
+            return None
+        from models import Settings
+        settings = Settings.get_settings()
+        return settings.get_openai_oauth_token()
+    except Exception as e:
+        logger.error("从设置中获取 OpenAI OAuth 令牌失败: %s", e)
+        return None
 
 
 def get_provider_format() -> str:
@@ -152,6 +166,16 @@ def _build_provider_config() -> Dict[str, Any]:
             )
         logger.info("Provider config — format: vertex, project: %s, location: %s",
                      cfg['project_id'], cfg['location'])
+
+    elif fmt == 'codex':
+        oauth_token = _get_openai_oauth_token()
+        if not oauth_token:
+            raise ValueError(
+                "OpenAI OAuth is not connected. Please log in with your OpenAI account in Settings."
+            )
+        cfg['api_key'] = oauth_token
+        cfg['api_base'] = 'https://chatgpt.com/backend-api/codex'
+        logger.info("Provider config — format: codex (OAuth), api_base: %s", cfg['api_base'])
 
     elif fmt in LAZYLLM_VENDORS or fmt == 'lazyllm':
         # fmt is a specific vendor (e.g., 'doubao') or generic 'lazyllm' (legacy)
@@ -273,6 +297,16 @@ def _get_model_type_provider_config(model_type: str) -> Dict[str, Any]:
             'azure_api_version': azure_api_version,
         }
 
+    elif source_lower == 'codex':
+        oauth_token = _get_openai_oauth_token()
+        if not oauth_token:
+            raise ValueError(
+                f"OpenAI OAuth is not connected. Please log in with your OpenAI account "
+                f"in Settings to use Codex as the provider for {model_type}."
+            )
+        logger.info("Per-model config — %s: codex (OAuth)", model_type)
+        return {'format': 'codex', 'api_key': oauth_token}
+
     elif source_lower == 'anthropic':
         api_key = (_resolve_setting(f'{prefix}_API_KEY')
                    or _resolve_setting('ANTHROPIC_API_KEY')
@@ -350,6 +384,9 @@ def get_caption_provider(model: str = "gemini-3-flash-preview", route: Optional[
         source = config.get('source') or config.get('text_source', 'doubao')
         logger.info("Caption provider: LazyLLM, model=%s, source=%s", model, source)
         return LazyLLMTextProvider(source=source, model=model)
+    elif fmt == 'codex':
+        logger.info("Caption provider: Codex (OAuth), model=%s", model)
+        return CodexTextProvider(api_key=config['api_key'], model=model)
     else:
         logger.info("Caption provider: Gemini, model=%s", model)
         return GenAITextProvider(api_key=config['api_key'], api_base=config['api_base'], model=model)
@@ -406,6 +443,9 @@ def get_text_provider(model: str = "gemini-3-flash-preview", route: Optional[Res
         source = config.get('source') or config.get('text_source', 'deepseek')
         logger.info("Text provider: LazyLLM, model=%s, source=%s", model, source)
         return LazyLLMTextProvider(source=source, model=model)
+    elif fmt == 'codex':
+        logger.info("Text provider: Codex (OAuth), model=%s", model)
+        return CodexTextProvider(api_key=config['api_key'], model=model)
     else:
         # gemini (default)
         logger.info("Text provider: Gemini, model=%s", model)
@@ -484,6 +524,10 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
         source = config.get('source') or config.get('image_source', 'doubao')
         logger.info("Image provider: LazyLLM, model=%s, source=%s", model, source)
         return LazyLLMImageProvider(source=source, model=model)
+    elif fmt == 'codex':
+        resolution = _resolve_setting('DEFAULT_RESOLUTION', '2K') or '2K'
+        logger.info("Image provider: Codex (OAuth), model=%s, resolution=%s", model, resolution)
+        return CodexImageProvider(api_key=config['api_key'], model=model, resolution=resolution)
     else:
         # gemini (default)
         logger.info("Image provider: Gemini, model=%s", model)

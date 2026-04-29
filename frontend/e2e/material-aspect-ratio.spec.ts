@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
 import { ASPECT_RATIO_OPTIONS } from '../src/config/aspectRatio';
 
@@ -75,14 +76,18 @@ test.describe('Material generation aspect ratio selector', () => {
 
   test('should send selected aspect_ratio in material generation API request', async ({ page }) => {
     let capturedAspectRatio: string | null = null;
+    let capturedOperation: string | null = null;
     let requestIntercepted = false;
 
-    // Intercept the material generation call (global, projectId=none)
-    await page.route('**/api/projects/none/materials/generate', async (route) => {
+    await page.route('**/api/projects/none/materials/process', async (route) => {
       const request = route.request();
       const postData = request.postData() || '';
 
-      // Multipart form: find aspect_ratio field value
+      const opMatch = postData.match(/name="operation"\r\n\r\n([^\r\n]*)/);
+      if (opMatch) {
+        capturedOperation = opMatch[1].trim();
+      }
+
       const match = postData.match(/name="aspect_ratio"\r\n\r\n([^\r\n]*)/);
       if (match) {
         capturedAspectRatio = match[1].trim();
@@ -127,12 +132,82 @@ test.describe('Material generation aspect ratio selector', () => {
 
     // Click the generate button and wait for the API response
     const [response] = await Promise.all([
-      page.waitForResponse('**/api/projects/none/materials/generate'),
-      dialog.locator('button', { hasText: /生成素材|Generate Material/ }).first().click(),
+      page.waitForResponse('**/api/projects/none/materials/process'),
+      dialog.locator('button', { hasText: /执行工具|Run Tool/ }).first().click(),
     ]);
 
     expect(response.status()).toBe(202);
     expect(requestIntercepted).toBe(true);
+    expect(capturedOperation).toBe('generate');
     expect(capturedAspectRatio).toBe('1:1');
+  });
+
+  test('should send region edit selection and apply_mode payload', async ({ page }) => {
+    let capturedSelection: string | null = null;
+    let capturedApplyMode: string | null = null;
+    let capturedOperation: string | null = null;
+
+    await page.route('**/api/projects/none/materials/process', async (route) => {
+      const postData = route.request().postData() || '';
+      capturedSelection = postData.match(/name="selection"\r\n\r\n([^\r\n]*)/)?.[1]?.trim() || null;
+      capturedApplyMode = postData.match(/name="apply_mode"\r\n\r\n([^\r\n]*)/)?.[1]?.trim() || null;
+      capturedOperation = postData.match(/name="operation"\r\n\r\n([^\r\n]*)/)?.[1]?.trim() || null;
+
+      await route.fulfill({
+        status: 202,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: { task_id: 'mock-task-id', status: 'PENDING' },
+        }),
+      });
+    });
+
+    await page.route('**/api/projects/global/tasks/mock-task-id', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            id: 'mock-task-id',
+            status: 'COMPLETED',
+            progress: { image_url: '/files/materials/test-region.png', total: 1, completed: 1, failed: 0 },
+          },
+        }),
+      });
+    });
+
+    await openMaterialGeneratorModal(page);
+    const dialog = page.getByRole('dialog', { name: /素材工具箱|Material Toolbox/ });
+
+    await dialog.locator('button', { hasText: /框选编辑|Region Edit/ }).first().click();
+    await dialog.locator('textarea').first().fill('make the selected area glossy');
+    await dialog.getByTestId('material-source-input').setInputFiles(path.join(process.cwd(), 'e2e', 'fixtures', 'slide_1.jpg'));
+    await dialog.getByTestId('material-selection-toggle').click();
+
+    const canvas = dialog.getByTestId('material-source-canvas');
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+    if (!box) {
+      throw new Error('material source canvas has no bounding box');
+    }
+
+    await page.mouse.move(box.x + box.width * 0.35, box.y + box.height * 0.35);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.7);
+    await page.mouse.up();
+
+    await dialog.locator('button', { hasText: /直接用整张结果覆盖|Replace with the full generated image/ }).first().click();
+
+    await Promise.all([
+      page.waitForResponse('**/api/projects/none/materials/process'),
+      dialog.locator('button', { hasText: /执行工具|Run Tool/ }).first().click(),
+    ]);
+
+    expect(capturedOperation).toBe('region_edit');
+    expect(capturedApplyMode).toBe('replace_full');
+    expect(capturedSelection).toContain('"width"');
+    expect(capturedSelection).toContain('"height"');
   });
 });

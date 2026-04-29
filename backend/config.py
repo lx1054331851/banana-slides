@@ -109,7 +109,7 @@ class Config:
     # OpenAI 格式专用配置（当 AI_PROVIDER_FORMAT=openai 时使用）
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')  # 当 AI_PROVIDER_FORMAT=openai 时必须设置
     OPENAI_API_BASE = os.getenv('OPENAI_API_BASE', 'https://aihubmix.com/v1')
-    OPENAI_TIMEOUT = float(os.getenv('OPENAI_TIMEOUT', '300.0'))  # 增加到 5 分钟（生成清洁背景图需要很长时间）
+    OPENAI_TIMEOUT = float(os.getenv('OPENAI_TIMEOUT', '480.0'))  # 8 分钟：留出 gpt-image-2 生图(~225s)+传输的余量
     OPENAI_MAX_RETRIES = int(os.getenv('OPENAI_MAX_RETRIES', '2'))  # 减少重试次数，避免过多重试导致累积超时
     # OpenAI 图片专用调用策略（仅影响 IMAGE_MODEL_SOURCE=openai 的图片生成）
     # auto: 优先 images 端点，必要时回退 chat/completions
@@ -216,6 +216,17 @@ class Config:
     # 百度 API 配置（用于 OCR 和图像修复）
     BAIDU_API_KEY = os.getenv('BAIDU_API_KEY', '') or os.getenv('BAIDU_OCR_API_KEY', '')
     BAIDU_INPAINTING_TIMEOUT = int(os.getenv('BAIDU_INPAINTING_TIMEOUT', '300'))
+
+    # TTS 视频导出配置
+    TTS_DEFAULT_VOICE_ZH = os.getenv('TTS_DEFAULT_VOICE_ZH', 'zh-CN-XiaoxiaoNeural')
+    TTS_DEFAULT_VOICE_EN = os.getenv('TTS_DEFAULT_VOICE_EN', 'en-US-JennyNeural')
+    TTS_DEFAULT_VOICE_JA = os.getenv('TTS_DEFAULT_VOICE_JA', 'ja-JP-NanamiNeural')
+    TTS_DEFAULT_RATE = os.getenv('TTS_DEFAULT_RATE', '+0%')
+    VIDEO_OUTPUT_WIDTH = int(os.getenv('VIDEO_OUTPUT_WIDTH', '1920'))
+    VIDEO_OUTPUT_HEIGHT = int(os.getenv('VIDEO_OUTPUT_HEIGHT', '1080'))
+    VIDEO_FPS = int(os.getenv('VIDEO_FPS', '25'))
+    FFMPEG_PATH = os.getenv('FFMPEG_PATH', 'ffmpeg')
+    DEFAULT_SILENT_CLIP_DURATION = float(os.getenv('DEFAULT_SILENT_CLIP_DURATION', '3.0'))
 
 
 class DevelopmentConfig(Config):

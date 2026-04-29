@@ -132,6 +132,25 @@ import {
   normalizeProjectDefaultImageResolution,
 } from '@/config/projectAiDefaults';
 
+const VIDEO_VOICE_OPTIONS = [
+  { group: '中文', voices: [
+    { id: 'zh-CN-XiaoxiaoNeural', label: '晓晓（女声）', lang: 'zh' },
+    { id: 'zh-CN-YunxiNeural', label: '云希（男声）', lang: 'zh' },
+    { id: 'zh-CN-YunjianNeural', label: '云健（男声）', lang: 'zh' },
+    { id: 'zh-CN-XiaoyiNeural', label: '晓伊（女声）', lang: 'zh' },
+  ]},
+  { group: 'English', voices: [
+    { id: 'en-US-JennyNeural', label: 'Jenny (Female)', lang: 'en' },
+    { id: 'en-US-GuyNeural', label: 'Guy (Male)', lang: 'en' },
+    { id: 'en-US-AriaNeural', label: 'Aria (Female)', lang: 'en' },
+    { id: 'en-US-DavisNeural', label: 'Davis (Male)', lang: 'en' },
+  ]},
+  { group: '日本語', voices: [
+    { id: 'ja-JP-NanamiNeural', label: 'Nanami（女声）', lang: 'ja' },
+    { id: 'ja-JP-KeitaNeural', label: 'Keita（男声）', lang: 'ja' },
+  ]},
+];
+
 export const SlidePreview: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -2310,6 +2329,74 @@ export const SlidePreview: React.FC = () => {
         showExportMenu={showExportMenu}
         handleExport={handleExport}
       />
+
+      {/* 视频导出设置弹窗 */}
+      {showVideoExportDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowVideoExportDialog(false)}>
+          <div className="bg-white dark:bg-background-secondary rounded-xl shadow-xl p-6 w-[420px] max-w-[90vw]" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-5">{t('preview.videoExportTitle')}</h3>
+            <div className="space-y-4">
+              {/* 语音选择 */}
+              <div>
+                <label className="block text-sm font-medium mb-1.5">{t('preview.videoVoiceLabel')}</label>
+                <select
+                  value={videoVoice}
+                  onChange={e => setVideoVoice(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-border-primary rounded-lg bg-white dark:bg-background-primary focus:outline-none focus:ring-2 focus:ring-banana-400"
+                >
+                  {VIDEO_VOICE_OPTIONS.map(group => (
+                    <optgroup key={group.group} label={group.group}>
+                      {group.voices.map(v => (
+                        <option key={v.id} value={v.id}>{v.label}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+              {/* Ken Burns 动效 */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={videoEnableKenBurns}
+                  onChange={e => setVideoEnableKenBurns(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-banana-500 focus:ring-banana-500"
+                />
+                <span className="text-sm">{t('preview.videoEnableKenBurns')}</span>
+                <span className="relative group">
+                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 dark:bg-gray-600 text-[10px] text-gray-500 dark:text-gray-300 cursor-help">?</span>
+                  <span className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 px-2.5 py-1.5 text-xs text-white bg-gray-800 dark:bg-gray-700 rounded-md whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
+                    {t('preview.videoKenBurnsTip')}
+                  </span>
+                </span>
+              </label>
+              {/* 包含未配图页面 */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={videoIncludeNoImage}
+                  onChange={e => setVideoIncludeNoImage(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-banana-500 focus:ring-banana-500"
+                />
+                <span className="text-sm">{t('preview.videoIncludeNoImage')}</span>
+              </label>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowVideoExportDialog(false)}
+                className="px-4 py-2 text-sm text-gray-600 dark:text-foreground-tertiary hover:bg-gray-100 dark:hover:bg-background-hover rounded-lg transition-colors"
+              >
+                {t('preview.videoCancel')}
+              </button>
+              <button
+                onClick={() => { setShowVideoExportDialog(false); handleExport('video'); }}
+                className="px-4 py-2 text-sm bg-banana-500 text-white rounded-lg hover:bg-banana-600 transition-colors"
+              >
+                {t('preview.videoStartExport')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-w-0 min-h-0">

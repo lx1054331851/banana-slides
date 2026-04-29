@@ -16,7 +16,32 @@ const settingsI18n = {
         performanceConfig: "性能配置", outputLanguage: "输出语言设置",
         textReasoning: "文本推理模式", imageReasoning: "图像推理模式",
         baiduOcr: "百度配置", serviceTest: "服务测试", lazyllmConfig: "LazyLLM 厂商配置",
-        vendorApiKeys: "厂商 API Key 配置"
+        vendorApiKeys: "厂商 API Key 配置",
+        advancedSettings: "高级设置"
+      },
+      openaiOAuth: {
+        title: "OpenAI 账号连接",
+        description: "通过 OAuth 登录 OpenAI 账号，无需手动输入 API Key 即可使用 OpenAI 的模型（如 GPT Image）",
+        loginBtn: "Login with OpenAI",
+        disconnectBtn: "断开连接",
+        connected: "已连接",
+        disconnected: "未连接",
+        account: "账号",
+        connecting: "连接中...",
+        disconnecting: "断开中...",
+        connectFailed: "连接失败",
+        disconnectFailed: "断开失败",
+        disconnectSuccess: "已断开 OpenAI 账号",
+        hint: "连接后，可在上方模型配置中选择 Codex 作为提供商，使用你的 OpenAI 账号额度",
+        availableModels: "可用模型",
+        selectModel: "选择模型...",
+        loadingModels: "正在加载可用模型...",
+        connectFirst: "请先连接 OpenAI 账号",
+        manualCallbackLabel: "登录后连接失败？",
+        manualCallbackHint: "请复制弹窗浏览器地址栏中的完整地址，粘贴到下方即可完成连接",
+        manualCallbackPlaceholder: "粘贴回调地址...",
+        manualCallbackSubmit: "提交",
+        manualCallbackSuccess: "连接成功",
       },
       theme: { label: "主题模式", light: "浅色", dark: "深色", system: "跟随系统" },
       language: { label: "界面语言", zh: "中文", en: "English" },
@@ -66,10 +91,15 @@ const settingsI18n = {
         perModelApiKey: "API Key", perModelApiKeyPlaceholder: "输入 API Key",
         perModelApiKeyDesc: "留空则保持当前设置不变",
         perModelApiKeySet: "已设置（长度: {{length}}）",
+        imageApiProtocol: "图片 API 协议",
+        imageApiProtocolDesc: "选择图片生成使用的 API 路径。自动检测根据模型名判断，也可强制指定",
+        imageApiProtocolAuto: "自动检测",
+        imageApiProtocolImages: "images.generate",
+        imageApiProtocolChat: "chat.completions",
       },
       serviceTest: {
         title: "服务测试", description: "提前验证关键服务配置是否可用，避免使用期间异常。",
-        tip: "提示：图像生成和 MinerU 测试可能需要 30-60 秒，请耐心等待。",
+        tip: "提示：图像生成测试可能需要数分钟（取决于模型），请耐心等待。",
         startTest: "开始测试", testing: "测试中...", testTimeout: "测试超时，请重试", testFailed: "测试失败",
         tests: {
           baiduOcr: { title: "Baidu OCR 服务", description: "识别测试图片文字，验证 BAIDU_API_KEY 配置" },
@@ -117,7 +147,32 @@ const settingsI18n = {
         performanceConfig: "Performance Configuration", outputLanguage: "Output Language Settings",
         textReasoning: "Text Reasoning Mode", imageReasoning: "Image Reasoning Mode",
         baiduOcr: "Baidu Configuration", serviceTest: "Service Test", lazyllmConfig: "LazyLLM Provider Configuration",
-        vendorApiKeys: "Vendor API Key Configuration"
+        vendorApiKeys: "Vendor API Key Configuration",
+        advancedSettings: "Advanced Settings"
+      },
+      openaiOAuth: {
+        title: "OpenAI Account",
+        description: "Log in with your OpenAI account via OAuth to use OpenAI models (e.g. GPT Image) without entering an API key",
+        loginBtn: "Login with OpenAI",
+        disconnectBtn: "Disconnect",
+        connected: "Connected",
+        disconnected: "Not connected",
+        account: "Account",
+        connecting: "Connecting...",
+        disconnecting: "Disconnecting...",
+        connectFailed: "Connection failed",
+        disconnectFailed: "Disconnect failed",
+        disconnectSuccess: "OpenAI account disconnected",
+        hint: "When connected, select Codex as the provider in model configuration above to use your OpenAI account credits",
+        availableModels: "Available Models",
+        selectModel: "Select a model...",
+        loadingModels: "Loading available models...",
+        connectFirst: "Please connect your OpenAI account first",
+        manualCallbackLabel: "Connection failed after login?",
+        manualCallbackHint: "Copy the full URL from the popup's address bar and paste it below to complete the connection",
+        manualCallbackPlaceholder: "Paste callback URL...",
+        manualCallbackSubmit: "Submit",
+        manualCallbackSuccess: "Connected successfully",
       },
       theme: { label: "Theme", light: "Light", dark: "Dark", system: "System" },
       language: { label: "Interface Language", zh: "中文", en: "English" },
@@ -167,10 +222,15 @@ const settingsI18n = {
         perModelApiKey: "API Key", perModelApiKeyPlaceholder: "Enter API Key",
         perModelApiKeyDesc: "Leave empty to keep current setting",
         perModelApiKeySet: "Set (length: {{length}})",
+        imageApiProtocol: "Image API Protocol",
+        imageApiProtocolDesc: "Select the API path for image generation. Auto detects by model name, or force a specific path",
+        imageApiProtocolAuto: "Auto detect",
+        imageApiProtocolImages: "images.generate",
+        imageApiProtocolChat: "chat.completions",
       },
       serviceTest: {
         title: "Service Test", description: "Verify key service configurations before use to avoid issues.",
-        tip: "Tip: Image generation and MinerU tests may take 30-60 seconds, please be patient.",
+        tip: "Tip: Image generation tests may take several minutes depending on the model, please be patient.",
         startTest: "Start Test", testing: "Testing...", testTimeout: "Test timeout, please retry", testFailed: "Test failed",
         tests: {
           baiduOcr: { title: "Baidu OCR Service", description: "Recognize text in test image, verify BAIDU_API_KEY configuration" },
@@ -283,6 +343,7 @@ const LAZYLLM_SOURCES = [
 const GLOBAL_PROVIDER_SOURCES = [
   { value: 'gemini', label: 'Gemini' },
   { value: 'openai', label: 'OpenAI' },
+  { value: 'codex', label: 'Codex (OpenAI OAuth)' },
   ...LAZYLLM_SOURCES.filter(s => s.value !== 'openai'), // avoid duplicate 'openai'
 ];
 
@@ -324,6 +385,7 @@ const initialFormData = {
   image_api_base_url: '',
   image_caption_api_key: '',
   image_caption_api_base_url: '',
+  openai_image_api_protocol: 'auto',
 };
 
 const isLazyllmVendor = (vendor: string) =>
@@ -410,6 +472,7 @@ const formDataFromSettings = (data: SettingsType): typeof initialFormData => ({
   image_api_base_url: data.image_api_base_url || '',
   image_caption_api_key: '',
   image_caption_api_base_url: data.image_caption_api_base_url || '',
+  openai_image_api_protocol: data.openai_image_api_protocol || 'auto',
 });
 
 // Settings 组件 - 纯嵌入模式（可复用）
@@ -860,8 +923,20 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       const response = await action(testSettings);
       const taskId = response.data.task_id;
 
+      // isActive tracks whether this test round is still pending — avoids stale closure
+      let isActive = true;
+      // eslint-disable-next-line prefer-const
+      let pollInterval: ReturnType<typeof setInterval>;
+      const finish = (nextState: ServiceTestState, toastMsg: string, toastType: 'success' | 'error') => {
+        if (!isActive) return;
+        isActive = false;
+        clearInterval(pollInterval);
+        updateServiceTest(key, nextState);
+        show({ message: toastMsg, type: toastType });
+      };
+
       // 开始轮询任务状态
-      const pollInterval = setInterval(async () => {
+      pollInterval = setInterval(async () => {
         try {
           const statusResponse = await api.getTestStatus(taskId);
           const statusData = statusResponse.data;
@@ -884,21 +959,15 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
           }
           // 如果是 PENDING 或 PROCESSING，继续轮询
         } catch (pollError: any) {
-          clearInterval(pollInterval);
           const errorMessage = pollError?.response?.data?.error?.message || pollError?.message || t('settings.serviceTest.testFailed');
-          updateServiceTest(key, { status: 'error', message: errorMessage });
-          show({ message: `${t('settings.serviceTest.testFailed')}: ${errorMessage}`, type: 'error' });
+          finish({ status: 'error', message: errorMessage }, `${t('settings.serviceTest.testFailed')}: ${errorMessage}`, 'error');
         }
       }, 2000); // 每2秒轮询一次
 
       // 设置最大轮询时间（2分钟）
       setTimeout(() => {
-        clearInterval(pollInterval);
-        if (serviceTestStates[key]?.status === 'loading') {
-          updateServiceTest(key, { status: 'error', message: t('settings.serviceTest.testTimeout') });
-          show({ message: t('settings.serviceTest.testTimeout'), type: 'error' });
-        }
-      }, 120000);
+        finish({ status: 'error', message: t('settings.serviceTest.testTimeout') }, t('settings.serviceTest.testTimeout'), 'error');
+      }, 600000); // 10 分钟，覆盖 gpt-image-2 等慢模型的生成时间
 
     } catch (error: any) {
       const errorMessage = error?.response?.data?.error?.message || error?.message || t('common.unknownError');
@@ -1098,7 +1167,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
     // lazyllm openai vendor is handled separately
 
     return (
-      <div key={item.modelKey} className="p-4 bg-gray-50 dark:bg-background-primary border border-gray-200 dark:border-border-primary rounded-lg space-y-3">
+      <div key={item.modelKey} className="pb-6 border-b border-gray-200 dark:border-border-primary last:border-b-0 last:pb-0 space-y-3">
         {/* 模型名称 */}
         {!isImageModelGroup && (
           <Input
@@ -1186,6 +1255,27 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
                 {t('settings.fields.perModelApiKeyDesc')}
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Image API Protocol: for image model when effective provider is openai */}
+        {item.sourceKey === 'image_model_source' && (sourceValue === 'openai' || (!sourceValue && formData.ai_provider_format === 'openai')) && (
+          <div className="pl-3 border-l-2 border-banana-300 dark:border-banana-600">
+            <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+              {t('settings.fields.imageApiProtocol')}
+            </label>
+            <select
+              value={formData.openai_image_api_protocol}
+              onChange={(e) => handleFieldChange('openai_image_api_protocol', e.target.value)}
+              className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
+            >
+              <option value="auto">{t('settings.fields.imageApiProtocolAuto')}</option>
+              <option value="images">{t('settings.fields.imageApiProtocolImages')}</option>
+              <option value="chat">{t('settings.fields.imageApiProtocolChat')}</option>
+            </select>
+            <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
+              {t('settings.fields.imageApiProtocolDesc')}
+            </p>
           </div>
         )}
 

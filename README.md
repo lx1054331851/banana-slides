@@ -1,10 +1,16 @@
 <div align="center">
-<img src="https://github.com/user-attachments/assets/81fe6816-44cc-4c61-97c7-f3c099650966" alt="banana-slides">
 
-  
-<a href="https://trendshift.io/repositories/22056" target="_blank">
-  <img src="https://trendshift.io/api/badge/repositories/22056" alt="Anionex%2Fbanana-slides | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
-</a>
+<p>
+  <img src="https://github.com/user-attachments/assets/81fe6816-44cc-4c61-97c7-f3c099650966" alt="Banana Slides" width="860">
+</p>
+<p>
+  <a href="https://trendshift.io/repositories/22056" target="_blank">
+    <img src="https://trendshift.io/api/badge/repositories/22056" alt="Anionex%2Fbanana-slides | Trendshift" width="360" height="79">
+  </a>
+  <a href="https://hellogithub.com/repository/Anionex/banana-slides" target="_blank">
+    <img src="https://abroad.hellogithub.com/v1/widgets/recommend.svg?rid=c8a0ee51918e4353af08012b8472b85e&claim_uid=CtDTm2jbUHhVGBr&theme=neutral" alt="Featured｜HelloGitHub" width="360" height="78">
+  </a>
+</p>
 <br>
 
 <b>一个基于nano banana pro🍌的原生AI PPT生成应用<br></b>
@@ -22,22 +28,28 @@ npm run dev
 <p>
   <a href="https://bananaslides.online/"><b>🚀 在线 Demo</b></a>
   &nbsp;•&nbsp;
-  <a href="https://docs.bananaslides.online/"><b>📚 文档</b></a>
+  <a href="https://docs.bananaslides.online/"><b>📖 文档</b></a>
+  &nbsp;•&nbsp;
+  <a href="#-项目缘起"><b>简体中文</b></a>
   &nbsp;•&nbsp;
   <a href="README_EN.md"><b>English</b></a>
 </p>
+<br>
+<p>
+  <a href="https://github.com/Anionex/banana-slides/stargazers"><img src="https://img.shields.io/github/stars/Anionex/banana-slides?style=flat-square&color=FFD700" alt="GitHub Stars"></a>
+  <a href="https://github.com/Anionex/banana-slides/network"><img src="https://img.shields.io/github/forks/Anionex/banana-slides?style=flat-square&color=FFD700" alt="GitHub Forks"></a>
+  <a href="https://github.com/Anionex/banana-slides/watchers"><img src="https://img.shields.io/github/watchers/Anionex/banana-slides?style=flat-square&color=FFD700" alt="GitHub Watchers"></a>
+  <a href="https://github.com/Anionex/banana-slides"><img src="https://img.shields.io/badge/version-v0.4.0-44cc11?style=flat-square" alt="Version"></a>
+  <a href="https://github.com/Anionex/banana-slides/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Anionex/banana-slides?color=0055aa&style=flat-square" alt="License"></a>
+  <br>
+  <img src="https://img.shields.io/badge/Docker-Build-4A90D9?logo=docker&logoColor=white&style=flat-square" alt="Docker Build">
+  <a href="https://deepwiki.com/Anionex/banana-slides"><img src="./assets/badge-deepwiki-flat.svg" alt="Ask DeepWiki"></a>
+</p>
 
-[![GitHub Stars](https://img.shields.io/github/stars/Anionex/banana-slides?style=flat-square&color=FFD700)](https://github.com/Anionex/banana-slides/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/Anionex/banana-slides?style=flat-square&color=FFD700)](https://github.com/Anionex/banana-slides/network)
-[![GitHub Watchers](https://img.shields.io/github/watchers/Anionex/banana-slides?style=flat-square&color=FFD700)](https://github.com/Anionex/banana-slides/watchers)
-
-
-[![Version](https://img.shields.io/badge/version-v0.4.0-44cc11?style=flat-square)](https://github.com/Anionex/banana-slides)
-![Docker](https://img.shields.io/badge/Docker-Build-4A90D9?logo=docker&logoColor=white&style=flat-square)
-[![License](https://img.shields.io/github/license/Anionex/banana-slides?color=0055aa&style=flat-square)](https://github.com/Anionex/banana-slides/blob/main/LICENSE)
-
-
-
+<p>
+  <b>一个基于 nano banana pro 🍌 的原生 AI PPT 生成应用</b><br>
+  <b>在几分钟内从想法到演示文稿，无需繁琐排版、口头提出修改，迈向真正的 "Vibe PPT"</b>
+</p>
 
 <p>
   如果该项目对你有用，欢迎 <b>Star 🌟</b> & <b>Fork 🍴</b>
@@ -109,6 +121,13 @@ npm run dev
 - **导出图像为高还原度、背景干净的、可自由编辑图像和文字的PPT页面**
 - 相关更新见 https://github.com/Anionex/banana-slides/issues/121
 
+### 6. TTS 讲解视频导出
+- **一键将幻灯片转换为带 AI 语音旁白和字幕的讲解视频（MP4）**
+- AI 自动将页面描述转为口语化旁白，通过 edge-tts 合成语音
+- 支持中/英/日三种语言，多种音色可选（晓晓、云希、Jenny、Guy 等）
+- 逐句滚动字幕，自动按语音节奏切换，支持中文字体渲染
+- 可选 Ken Burns 画面动效（缩放/平移），丰富视觉表现
+
 <br>
 
 **🌟和notebooklm slide deck功能对比**
@@ -117,7 +136,7 @@ npm run dev
 | 页数上限 | 15页 | **无限制** | 
 | 二次编辑 | 提示词修改 | **框选编辑+口头编辑** |
 | 素材添加 | 生成后无法添加 | **生成后自由添加** |
-| 导出格式 | 支持导出为 PDF、（不可编辑图片）pptx | **导出为PDF、(图片or可编辑)pptx** |
+| 导出格式 | 支持导出为 PDF、（不可编辑图片）pptx | **导出为PDF、(图片or可编辑)pptx、讲解视频** |
 | 水印 | 免费版有水印 | **无水印，自由增删元素** |
 
 > 注：随着新功能添加,对比可能过时
@@ -162,6 +181,10 @@ cp .env.example .env
 ```
 
 **（可选， 也可以启动后在用户界面配置）** 编辑 `.env` 文件，配置必要的环境变量：
+
+<details>
+<summary>点击展开详情</summary>
+  
 > **项目中大模型接口以AIHubMix平台格式为标准，推荐使用 [AIHubMix(点击此处可直接访问)](https://aihubmix.com/?aff=17EC) 获取API密钥，减小迁移成本**<br>
 > **友情提示：谷歌nano banana pro模型接口费用较高，请注意调用成本**
 ```env
@@ -213,6 +236,9 @@ SENSENOVA_API_KEY=your-sensenova-api-key      # 商汤日日新
 MINIMAX_API_KEY=your-minimax-api-key          # MiniMax
 ...
 ```
+  
+</details>
+
 
 #### 双中转 Gemini 图片配置（手动切换）
 
@@ -473,33 +499,7 @@ uv sync
 复制环境变量模板：
 ```bash
 cp .env.example .env
-```
-
-编辑 `.env` 文件，配置你的 API 密钥：
-> **项目中大模型接口以AIHubMix平台格式为标准，推荐使用 [AIHubMix](https://aihubmix.com/?aff=17EC) 获取API密钥，减小迁移成本** 
-```env
-# AI Provider格式配置 (gemini / openai / vertex)
-AI_PROVIDER_FORMAT=gemini
-
-# Gemini 格式配置（当 AI_PROVIDER_FORMAT=gemini 时使用）
-GOOGLE_API_KEY=your-api-key-here
-GOOGLE_API_BASE=https://generativelanguage.googleapis.com
-# 代理示例: https://aihubmix.com/gemini
-
-# OpenAI 格式配置（当 AI_PROVIDER_FORMAT=openai 时使用）
-OPENAI_API_KEY=your-api-key-here
-OPENAI_API_BASE=https://api.openai.com/v1
-# 代理示例: https://aihubmix.com/v1
-
-# Vertex AI 配置（AI_PROVIDER_FORMAT=vertex）
-# 需要 GCP 项目和服务账户密钥
-# VERTEX_PROJECT_ID=your-gcp-project-id
-# VERTEX_LOCATION=global
-# GOOGLE_APPLICATION_CREDENTIALS=./gcp-service-account.json
-
-# 可修改此变量来控制后端服务端口
-BACKEND_PORT=5000
-...
+# 然后按照前述方法，打开编辑 `.env` 文件，配置你的 API 密钥
 ```
 
 #### 前端安装
@@ -587,14 +587,7 @@ python scripts/project_transfer.py import --archive ./project-transfer.zip --tar
 ## 🛠️ 技术架构
 
 ### 前端技术栈
-- **框架**：React 18 + TypeScript
-- **构建工具**：Vite 5
-- **状态管理**：Zustand
-- **路由**：React Router v6
-- **UI组件**：Tailwind CSS
-- **拖拽功能**：@dnd-kit
-- **图标**：Lucide React
-- **HTTP客户端**：Axios
+React 18 + TypeScript + Vite 5 + Zustand
 
 ### 后端技术栈
 - **语言**：Python 3.10 - 3.13
@@ -709,39 +702,22 @@ banana-slides/
 
 欢迎提出新功能建议或反馈，本人也会~~佛系~~回答大家问题
 
+<img width="302" alt="image" src="https://github.com/user-attachments/assets/e5ccc7ac-3944-4d29-8a49-638401683888" />
 
+欢迎关注作者的社交媒体，我会分享有关本项目和有关AI的信息：
 
-<img width="302" alt="image" src="https://github.com/user-attachments/assets/6a65822b-0b44-485e-a30e-b01f8dc7d2d5" />
-
-
-
-
-
-
-
+<p>
+  <a href="https://x.com/anion_ex"><img src="https://img.shields.io/badge/X-@anion__ex-000000?style=flat-square&logo=x&logoColor=white" alt="X (Twitter)"></a>
+  <a href="https://www.xiaohongshu.com/user/profile/62e8f580000000001902fc9d"><img src="https://img.shields.io/badge/小红书-Anion-FF2442?style=flat-square&logo=xiaohongshu&logoColor=white" alt="小红书"></a>
+  <a href="https://space.bilibili.com/477162339"><img src="https://img.shields.io/badge/Bilibili-Anion-00A1D6?style=flat-square&logo=bilibili&logoColor=white" alt="Bilibili"></a>
+</p>
 
 
 
 
 
 ## **🔧 常见问题**
-
-1. **生成页面文字有乱码，文字不清晰**
-    - 可选择更高分辨率的输出（openai 格式可能不支持调高分辨率，建议使用gemini格式）。根据测试，生成页面前将 1k 分辨率调整至 2k 后，文字渲染质量会显著提升。
-    - 请确保在页面描述中包含具体要渲染的文字内容。
-
-2. **导出可编辑 ppt 效果不佳，如文字重叠、无样式等**
-    - 90% 情况为 API 配置出现问题。可以参考 [issue 121](https://github.com/Anionex/banana-slides/issues/121) 中的排查与解决方案。
-
-3. **支持免费层级的 Gemini API Key 吗？**
-    - 免费层级只支持文本生成，不支持图片生成。
-
-4. **生成内容时提示 503 错误或 Retry Error**
-    - 可以根据 README 中的命令查看 Docker 后端日志，定位 503 问题的详细报错，一般是模型配置不正确导致。
-
-5. **.env 中设置了 API Key 之后，为什么不生效？**
-    - 运行时编辑 `.env` 后需要重启 Docker 容器以应用更改。
-    - 如果曾在网页设置页中配置参数，会覆盖 `.env` 中的参数，可通过"还原默认设置"恢复为 `.env` 设置。
+可见[官网文档](https://docs.bananaslides.online/zh/faq)
 
 
 ## 🤝 贡献指南
@@ -760,8 +736,7 @@ banana-slides/
 可自由用于个人学习、研究、试验、教育或非营利科研活动等非商业用途；
 <details> 
 <summary> 详情 </summary>
-需要商业许可证（Commercial License）（例如：希望闭源使用、私有化部署交付、将本项目集成进闭源产品，或在不公开对应源代码的前提下提供服务），请联系作者：anionex@qq.com
-- 联系方式：anionex@qq.com
+需要商业许可证（Commercial License）（例如：希望闭源使用、私有化部署交付、将本项目集成进闭源产品，或在不公开对应源代码的前提下提供服务），请联系作者：davidyang042@gmail.com
 </details>
 
 
@@ -784,10 +759,7 @@ banana-slides/
 </a>
 
 
-<details>
-  <summary>感谢<a href="https://api.chatfire.site/login?inviteCode=A15CD6A0">AI火宝</a>对本项目的赞助</summary>
-  “聚合全球多模型API服务商。更低价格享受安全、稳定且72小时链接全球最新模型的服务。”
-</details>
+感谢<a href="https://api.chatfire.site/login?inviteCode=A15CD6A0">AI火宝</a>对本项目的赞助
  
 </div>
 
@@ -809,7 +781,7 @@ banana-slides/
 
 感谢以下朋友对项目的无偿赞助支持：
 > @雅俗共赏、@曹峥、@以年观日、@John、@胡yun星Ethan, @azazo1、@刘聪NLP、@🍟、@苍何、@万瑾、@biubiu、@law、@方源、@寒松Falcon
-> 如对赞助列表有疑问，可<a href="mailto:anionex@qq.com">联系作者</a>
+> 如对赞助列表有疑问，可<a href="mailto:davidyang042@gmail.com">联系作者</a>
  
 ## 📈 项目统计
 
