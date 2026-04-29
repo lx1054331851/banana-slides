@@ -68,7 +68,6 @@ import { useSlidePreviewJsonRefine } from './hooks/useSlidePreviewJsonRefine';
 import { useSlidePreviewRegionSelection } from './hooks/useSlidePreviewRegionSelection';
 import { useSlidePreviewHistoryActions } from './hooks/useSlidePreviewHistoryActions';
 import {
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   X,
@@ -82,7 +81,6 @@ import {
 import {
   Button,
   Loading,
-  Markdown,
   MarkdownTextarea,
   useToast,
   useConfirm,
@@ -90,14 +88,12 @@ import {
 } from '@/components/shared';
 import type { MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
 import { listUserTemplates, type UserTemplate } from '@/api/endpoints';
-import { SlideCard } from '@/components/preview/SlideCard';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useExportTasksStore } from '@/store/useExportTasksStore';
 import { getPageImageUrl } from '@/api/client';
 import { useImagePaste } from '@/hooks/useImagePaste';
 import {
   setCurrentImageVersion,
-  updateProject,
   getSettings,
   refineDescriptions,
   addPage,
@@ -1729,6 +1725,41 @@ export const SlidePreview: React.FC = () => {
     setActivePreviewReferenceId(null);
   }, [selectedIndex]);
 
+  const historyVersionsDescending = [...imageVersions].sort((a, b) => b.version_number - a.version_number);
+  const selectedHistoryVersion = historyVersionsDescending.find(
+    (version) => version.version_id === selectedHistoryVersionId
+  ) || historyVersionsDescending[0] || null;
+  const {
+    copiedHistoryVersionId,
+    getHistoryOperationLabel,
+    handleOpenHistory,
+    handleCopyHistoryPrompt,
+  } = useSlidePreviewHistoryActions({
+    imageVersions,
+    historyVersionsDescending,
+    selectedHistoryVersion,
+    setSelectedHistoryVersionId,
+    setIsHistoryModalOpen,
+    t,
+    show,
+  });
+  const { isPageAiSubmitting, handlePageAiSend } = useSlidePreviewPageAiSubmit({
+    currentProject,
+    selectedIndex,
+    t,
+    buildPageAiPayload,
+    selectedPageAiReferences,
+    pageAiMessages,
+    setPageAiMessages,
+    runGenerateFlow,
+    executePageImageGeneration,
+    editRunImageModel,
+    currentImageVersionId,
+    editPrompt,
+    selectedContextImages,
+    bindPendingPageAiContext,
+  });
+
   if (!currentProject) {
     return <Loading fullscreen message={t('preview.messages.loadingProject')} />;
   }
@@ -1784,30 +1815,8 @@ export const SlidePreview: React.FC = () => {
   const isGenerateDisabled = isMultiSelectMode && selectedPageIds.size === 0;
   const missingImageCount = currentProject.pages.filter(p => !p.generated_image_path).length;
   const selectedPageHasImage = Boolean(selectedPage?.generated_image_path || selectedPage?.preview_image_path);
-  const generatedImageCount = currentProject.pages.filter((page) => Boolean(page.generated_image_path || page.preview_image_path)).length;
   const generatingImageCount = currentProject.pages.filter((page) => isPageGenerating(page)).length;
-  const imageGenerationProgressPercent = currentProject.pages.length > 0
-    ? Math.max(0, Math.min(100, Math.round((generatedImageCount / currentProject.pages.length) * 100)))
-    : 0;
   const isSelectedPageGenerating = isPageGenerating(selectedPage);
-  const historyVersionsDescending = [...imageVersions].sort((a, b) => b.version_number - a.version_number);
-  const selectedHistoryVersion = historyVersionsDescending.find(
-    (version) => version.version_id === selectedHistoryVersionId
-  ) || historyVersionsDescending[0] || null;
-  const {
-    copiedHistoryVersionId,
-    getHistoryOperationLabel,
-    handleOpenHistory,
-    handleCopyHistoryPrompt,
-  } = useSlidePreviewHistoryActions({
-    imageVersions,
-    historyVersionsDescending,
-    selectedHistoryVersion,
-    setSelectedHistoryVersionId,
-    setIsHistoryModalOpen,
-    t,
-    show,
-  });
   const descriptionGenerationTotal = taskProgress?.total && taskProgress.total > 0
     ? taskProgress.total
     : currentProject.pages.filter((page) => page.id).length;
@@ -2233,23 +2242,6 @@ export const SlidePreview: React.FC = () => {
       </div>
     </div>
   );
-
-  const { isPageAiSubmitting, handlePageAiSend } = useSlidePreviewPageAiSubmit({
-    currentProject,
-    selectedIndex,
-    t,
-    buildPageAiPayload,
-    selectedPageAiReferences,
-    pageAiMessages,
-    setPageAiMessages,
-    runGenerateFlow,
-    executePageImageGeneration,
-    editRunImageModel,
-    currentImageVersionId,
-    editPrompt,
-    selectedContextImages,
-    bindPendingPageAiContext,
-  });
 
   const handlePreviewReferenceFocus = (reference: PageAiReference) => {
     setActivePreviewReferenceId(reference.id);

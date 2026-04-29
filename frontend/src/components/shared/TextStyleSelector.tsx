@@ -102,7 +102,6 @@ export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onC
   useEffect(() => {
     if (!advancedOpen) return;
     loadAdvanced();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [advancedOpen]);
 
   useEffect(() => {

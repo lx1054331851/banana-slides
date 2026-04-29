@@ -133,46 +133,6 @@ interface MaterialGeneratorModalProps {
   onGenerated?: (taskId?: string) => void;
 }
 
-type SelectorTarget = 'source' | 'references';
-type DisplayRect = { left: number; top: number; width: number; height: number };
-type PersistedMaterialRun = {
-  taskId: string | null;
-  previewUrl: string | null;
-  status: 'idle' | 'pending' | 'completed' | 'failed';
-  updatedAt: number;
-};
-type ToolCard = {
-  value: MaterialProcessOperation;
-  icon: React.ReactNode;
-  labelKey: string;
-  descKey: string;
-};
-
-function getRenderedImageRect(img: HTMLImageElement) {
-  const naturalWidth = img.naturalWidth || 1;
-  const naturalHeight = img.naturalHeight || 1;
-  const scale = Math.min(img.clientWidth / naturalWidth, img.clientHeight / naturalHeight);
-  const width = naturalWidth * scale;
-  const height = naturalHeight * scale;
-  const left = (img.clientWidth - width) / 2;
-  const top = (img.clientHeight - height) / 2;
-  return { left, top, width, height, naturalWidth, naturalHeight };
-}
-
-const TOOL_CARDS: ToolCard[] = [
-  { value: 'generate', icon: <Sparkles size={16} />, labelKey: 'material.toolGenerate', descKey: 'material.toolGenerateDesc' },
-  { value: 'edit_full', icon: <Wand2 size={16} />, labelKey: 'material.toolEditFull', descKey: 'material.toolEditFullDesc' },
-  { value: 'region_edit', icon: <Crop size={16} />, labelKey: 'material.toolRegionEdit', descKey: 'material.toolRegionEditDesc' },
-  { value: 'erase_region', icon: <Eraser size={16} />, labelKey: 'material.toolEraseRegion', descKey: 'material.toolEraseRegionDesc' },
-];
-
-const MATERIAL_POLL_INTERVAL_MS = 2000;
-const MATERIAL_MAX_POLL_ATTEMPTS = 90;
-
-function getMaterialRunStorageKey(projectId?: string | null) {
-  return `banana-material-toolbox:${projectId || 'global'}`;
-}
-
 export const MaterialGeneratorModal: React.FC<MaterialGeneratorModalProps> = ({
   projectId,
   isOpen,

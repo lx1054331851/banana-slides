@@ -16,7 +16,7 @@ from services import FileService
 from services.ai_service_manager import get_ai_service
 from services.ai_providers import get_caption_provider
 from services.provider_routing import resolve_routing_bundle
-from services.task_manager import task_manager, generate_material_image_task
+from services.task_manager import task_manager, generate_material_image_task, process_material_image_task
 from pathlib import Path
 from werkzeug.utils import secure_filename
 from typing import Optional
@@ -27,7 +27,6 @@ import zipfile
 import io
 import base64
 import logging
-import json
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +34,9 @@ material_bp = Blueprint('materials', __name__, url_prefix='/api/projects')
 material_global_bp = Blueprint('materials_global', __name__, url_prefix='/api/materials')
 
 ALLOWED_MATERIAL_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'}
+ALLOWED_ASPECT_RATIOS = frozenset({'16:9', '21:9', '4:3', '3:2', '5:4', '1:1', '4:5', '2:3', '3:4', '9:16'})
+ALLOWED_MATERIAL_OPERATIONS = frozenset({'generate', 'edit_full', 'region_edit', 'erase_region'})
+ALLOWED_REGION_APPLY_MODES = frozenset({'overlay_selection', 'replace_full'})
 
 
 def _generate_image_caption(filepath: str) -> str:

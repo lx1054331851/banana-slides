@@ -25,9 +25,20 @@ from flask_cors import CORS
 from models import db
 from config import Config, get_default_sqlalchemy_database_uri
 from controllers.material_controller import material_bp, material_global_bp
+from controllers.openai_oauth_controller import openai_oauth_bp
 from controllers.reference_file_controller import reference_file_bp
 from controllers.settings_controller import settings_bp
-from controllers import project_bp, page_bp, template_bp, user_template_bp, export_bp, file_bp, style_bp, style_library_bp
+from controllers import (
+    project_bp,
+    page_bp,
+    template_bp,
+    user_template_bp,
+    user_style_template_bp,
+    export_bp,
+    file_bp,
+    style_bp,
+    style_library_bp,
+)
 
 
 # Enable SQLite WAL mode for all connections

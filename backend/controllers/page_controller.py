@@ -448,6 +448,7 @@ def generate_page_description(project_id, page_id):
 
         if project.creation_type == 'ppt_renovation':
             project_dir = Path(current_app.config['UPLOAD_FOLDER']) / project_id
+            file_service = FileService(current_app.config['UPLOAD_FOLDER'])
             source_image = None
             for ext in ('png', 'jpg', 'jpeg', 'webp'):
                 candidate = project_dir / 'pages' / f"page_{page.order_index + 1}_original.{ext}"

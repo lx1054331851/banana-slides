@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { DescriptionCard } from '@/components/preview/DescriptionCard'
 import type { Page } from '@/types'
@@ -15,8 +16,6 @@ vi.mock('@/api/endpoints', () => ({
 
 // Mock MarkdownTextarea as a plain textarea so getByDisplayValue works
 vi.mock('@/components/shared/MarkdownTextarea', () => {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const React = require('react') as typeof import('react')
   return {
     MarkdownTextarea: React.forwardRef(
       ({ value, onChange, onPaste, onFocus, placeholder, label }: any, ref: any) => {

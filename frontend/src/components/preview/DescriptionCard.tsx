@@ -132,7 +132,8 @@ export const DescriptionCard: React.FC<DescriptionCardProps> = React.memo(({
   }, []);
 
   // 通过 page.status 驱动骨架屏，与图片生成的 GENERATING 状态互不干扰
-  const generating = isGenerating || useDescriptionGeneratingState(page, isAiRefining);
+  const descriptionGenerating = useDescriptionGeneratingState(page, isAiRefining);
+  const generating = isGenerating || descriptionGenerating;
 
   const handleEdit = () => {
     // 在打开编辑对话框时，从当前的 page 获取最新值

@@ -5,6 +5,7 @@ No need for Celery or Redis, uses in-memory task tracking
 import logging
 import os
 import json
+import shutil
 import threading
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed

@@ -13,6 +13,7 @@ from typing import Optional, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from PIL import Image
 from markitdown import MarkItDown
+from services.ai_providers.lazyllm_env import ensure_lazyllm_namespace_key
 from services.ai_providers.text import strip_think_tags
 
 logger = logging.getLogger(__name__)

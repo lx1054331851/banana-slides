@@ -550,6 +550,7 @@ def export_video(project_id):
         if not pages:
             return bad_request("No pages found for project")
 
+        include_no_image_pages = data.get('include_no_image_pages', False)
         has_images = any(page.generated_image_path for page in pages)
         if not has_images and not include_no_image_pages:
             return bad_request("No generated images found for project. Enable 'include pages without images' to export all pages.")
@@ -566,7 +567,6 @@ def export_video(project_id):
         rate = data.get('rate', current_app.config.get('TTS_DEFAULT_RATE', '+0%'))
         generate_narration = data.get('generate_narration', True)
         enable_ken_burns = data.get('enable_ken_burns', False)
-        include_no_image_pages = data.get('include_no_image_pages', False)
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
 
         # 根据语言自动选择默认语音
