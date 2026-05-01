@@ -25,7 +25,8 @@ from .material import Material
 from .reference_file import ReferenceFile
 from .settings import Settings
 from .style_template import StyleTemplate
+from .user_style_template import UserStyleTemplate
 from .style_preset import StylePreset
 from .preset_template import PresetTemplate
 
-__all__ = ['db', 'Project', 'Page', 'Task', 'UserTemplate', 'PageImageVersion', 'Material', 'ReferenceFile', 'Settings', 'StyleTemplate', 'StylePreset', 'PresetTemplate']
+__all__ = ['db', 'Project', 'Page', 'Task', 'UserTemplate', 'PageImageVersion', 'Material', 'ReferenceFile', 'Settings', 'StyleTemplate', 'UserStyleTemplate', 'StylePreset', 'PresetTemplate']

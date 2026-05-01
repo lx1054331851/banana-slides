@@ -30,6 +30,42 @@ from .base import ImageProvider
 logger = logging.getLogger(__name__)
 
 
+_GPT_IMAGE_SIZE_LONG_EDGE = {
+    "1K": 1280,
+    "2K": 2048,
+    "4K": 3840,
+}
+_GPT_IMAGE_SIZE_MAX_EDGE = 3840
+_GPT_IMAGE_SIZE_MULTIPLE = 16
+
+
+def _compute_gpt_image_size(aspect_ratio: str, resolution: str = "2K") -> str:
+    """Compute a WxH size string for Codex image_generation tool requests."""
+    parts = str(aspect_ratio or "").split(":")
+    if len(parts) != 2:
+        return "auto"
+    try:
+        ratio_w, ratio_h = int(parts[0]), int(parts[1])
+    except ValueError:
+        return "auto"
+    if ratio_w <= 0 or ratio_h <= 0:
+        return "auto"
+
+    long_edge = _GPT_IMAGE_SIZE_LONG_EDGE.get(str(resolution or "").upper(), _GPT_IMAGE_SIZE_LONG_EDGE["2K"])
+    if ratio_w >= ratio_h:
+        width = long_edge
+        height = round(width * ratio_h / ratio_w)
+    else:
+        height = long_edge
+        width = round(height * ratio_w / ratio_h)
+
+    width = min(width, _GPT_IMAGE_SIZE_MAX_EDGE)
+    height = min(height, _GPT_IMAGE_SIZE_MAX_EDGE)
+    width = max(_GPT_IMAGE_SIZE_MULTIPLE, round(width / _GPT_IMAGE_SIZE_MULTIPLE) * _GPT_IMAGE_SIZE_MULTIPLE)
+    height = max(_GPT_IMAGE_SIZE_MULTIPLE, round(height / _GPT_IMAGE_SIZE_MULTIPLE) * _GPT_IMAGE_SIZE_MULTIPLE)
+    return f"{width}x{height}"
+
+
 class ImageEndpointUnavailableError(Exception):
     """Raised when image endpoint itself is unavailable (404/405/unsupported route)."""
 
