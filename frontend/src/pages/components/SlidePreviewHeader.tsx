@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Download, FileText, Home, ImagePlus, LayoutGrid, Loader2, RefreshCw, Settings, Sparkles } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Home, ImagePlus, LayoutGrid, Loader2, RefreshCw, Settings, Sparkles, Video } from 'lucide-react';
 import { Button, ExportTasksPanel } from '@/components/shared';
 
 type ExportTaskLite = {
@@ -32,8 +32,10 @@ type SlidePreviewHeaderProps = {
   missingImageCount: number;
   showExportMenu: boolean;
   handleExport: (type: 'pptx' | 'pdf' | 'editable-pptx' | 'images') => void;
+  openVideoExportDialog: () => void;
 };
 
+// Renders the preview toolbar and export menu for the slide preview page.
 export const SlidePreviewHeader: React.FC<SlidePreviewHeaderProps> = ({
   t,
   navigate,
@@ -59,6 +61,7 @@ export const SlidePreviewHeader: React.FC<SlidePreviewHeaderProps> = ({
   missingImageCount,
   showExportMenu,
   handleExport,
+  openVideoExportDialog,
 }) => {
   const projectTasks = exportTasks.filter((task) => task.projectId === projectId);
   const activeProjectTaskCount = exportTasks.filter(
@@ -229,6 +232,16 @@ export const SlidePreviewHeader: React.FC<SlidePreviewHeaderProps> = ({
               </button>
               <button onClick={() => handleExport('images')} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-background-hover transition-colors text-sm">
                 {t('preview.exportImages')}
+              </button>
+              <button
+                onClick={() => {
+                  setShowExportMenu(false);
+                  openVideoExportDialog();
+                }}
+                className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-background-hover transition-colors text-sm flex items-center gap-2"
+              >
+                <Video size={14} />
+                {t('preview.exportVideo')}
               </button>
             </div>
           )}

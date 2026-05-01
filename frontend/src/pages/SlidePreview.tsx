@@ -310,6 +310,10 @@ export const SlidePreview: React.FC = () => {
   const [isGlobalAiDrawerOpen, setIsGlobalAiDrawerOpen] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showExportTasksPanel, setShowExportTasksPanel] = useState(false);
+  const [showVideoExportDialog, setShowVideoExportDialog] = useState(false);
+  const [videoVoice, setVideoVoice] = useState('zh-CN-XiaoxiaoNeural');
+  const [videoEnableKenBurns, setVideoEnableKenBurns] = useState(false);
+  const [videoIncludeNoImage, setVideoIncludeNoImage] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement | null>(null);
   const exportTasksPanelRef = useRef<HTMLDivElement | null>(null);
   const externalFieldPopoverRef = useRef<HTMLDivElement | null>(null);
@@ -762,6 +766,11 @@ export const SlidePreview: React.FC = () => {
     setShowExportMenu,
     setShowExportTasksPanel,
     getSelectedPageIdsForExport,
+    videoExportOptions: {
+      voice: videoVoice,
+      enableKenBurns: videoEnableKenBurns,
+      includeNoImagePages: videoIncludeNoImage,
+    },
   });
   const {
     isSavingRequirements,
@@ -2320,6 +2329,7 @@ export const SlidePreview: React.FC = () => {
         missingImageCount={missingImageCount}
         showExportMenu={showExportMenu}
         handleExport={handleExport}
+        openVideoExportDialog={() => setShowVideoExportDialog(true)}
       />
 
       {/* 视频导出设置弹窗 */}

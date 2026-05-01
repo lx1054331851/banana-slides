@@ -4,6 +4,7 @@ import {
   exportPDFTask as apiExportPDFTask,
   exportImagesTask as apiExportImagesTask,
   exportEditablePPTX as apiExportEditablePPTX,
+  exportVideo as apiExportVideo,
 } from '@/api/endpoints';
 import type { ExportTask, ExportTaskType } from '@/store/useExportTasksStore';
 import { normalizeErrorMessage } from '@/utils';
@@ -19,6 +20,11 @@ type UseSlidePreviewExportParams = {
   setShowExportMenu: (value: boolean) => void;
   setShowExportTasksPanel: (value: boolean) => void;
   getSelectedPageIdsForExport: () => string[] | undefined;
+  videoExportOptions?: {
+    voice: string;
+    enableKenBurns: boolean;
+    includeNoImagePages: boolean;
+  };
 };
 
 export const useSlidePreviewExport = ({
@@ -30,8 +36,10 @@ export const useSlidePreviewExport = ({
   setShowExportMenu,
   setShowExportTasksPanel,
   getSelectedPageIdsForExport,
+  videoExportOptions,
 }: UseSlidePreviewExportParams) => {
-  const handleExport = useCallback(async (type: 'pptx' | 'pdf' | 'editable-pptx' | 'images') => {
+  // Creates an export task and starts polling it for the selected export format.
+  const handleExport = useCallback(async (type: 'pptx' | 'pdf' | 'editable-pptx' | 'images' | 'video') => {
     setShowExportMenu(false);
     if (!projectId) return;
 
@@ -61,6 +69,13 @@ export const useSlidePreviewExport = ({
         response = await apiExportImagesTask(projectId, pageIds);
       } else if (type === 'editable-pptx') {
         response = await apiExportEditablePPTX(projectId, undefined, pageIds);
+      } else if (type === 'video') {
+        response = await apiExportVideo(projectId, {
+          pageIds,
+          voice: videoExportOptions?.voice,
+          enableKenBurns: videoExportOptions?.enableKenBurns,
+          includeNoImagePages: videoExportOptions?.includeNoImagePages,
+        });
       }
 
       const taskId = response?.data?.task_id;
@@ -100,6 +115,9 @@ export const useSlidePreviewExport = ({
     setShowExportTasksPanel,
     show,
     t,
+    videoExportOptions?.enableKenBurns,
+    videoExportOptions?.includeNoImagePages,
+    videoExportOptions?.voice,
   ]);
 
   return {
