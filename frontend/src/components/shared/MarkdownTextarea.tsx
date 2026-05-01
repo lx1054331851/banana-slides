@@ -39,7 +39,7 @@ interface MarkdownTextareaProps {
   onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
   /** Called when files are dropped or selected via upload button */
   onFiles?: (files: File[]) => void;
-  onBlur?: () => void;
+  onBlur?: (value: string) => void;
   onFocus?: () => void;
   placeholder?: string;
   label?: string;
@@ -706,14 +706,21 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     requestAnimationFrame(() => emitChange());
   }, [emitChange]);
 
+  // Flushes the live contentEditable text before parent save handlers run.
   const handleBlur = useCallback(() => {
+    const currentValue = editorRef.current ? serializeEditor(editorRef.current) : value;
+    if (currentValue !== lastValueRef.current) {
+      isInternalRef.current = true;
+      lastValueRef.current = currentValue;
+      onChange(currentValue);
+    }
     const pending = pendingExternalValueRef.current;
     if (pending !== null && !isComposingRef.current) {
       applyExternalValue(pending);
       pendingExternalValueRef.current = null;
     }
-    onBlur?.();
-  }, [applyExternalValue, onBlur]);
+    onBlur?.(currentValue);
+  }, [applyExternalValue, onBlur, onChange, value]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
     onPaste?.(e);

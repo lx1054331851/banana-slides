@@ -128,6 +128,14 @@ import {
   normalizeProjectDefaultImageResolution,
 } from '@/config/projectAiDefaults';
 
+type TextSaveOverrides = {
+  title?: string;
+  points?: string;
+  description?: string;
+  extraFields?: Record<string, string>;
+  styleGuideBindings?: StyleGuideBindings;
+};
+
 const VIDEO_VOICE_OPTIONS = [
   { group: '中文', voices: [
     { id: 'zh-CN-XiaoxiaoNeural', label: '晓晓（女声）', lang: 'zh' },
@@ -1290,14 +1298,19 @@ export const SlidePreview: React.FC = () => {
     t,
   ]);
 
-  // 保存大纲和描述修改（支持静默保存，避免自动保存时频繁提示）
-  const handleSaveOutlineAndDescription = useCallback((options?: { silent?: boolean }) => {
+  // 保存大纲和描述修改（支持传入本次输入值，避免自动保存闭包读取旧状态）
+  const handleSaveOutlineAndDescription = useCallback((options?: { silent?: boolean; overrides?: TextSaveOverrides }) => {
     if (!currentProject) return false;
     const page = currentProject.pages[selectedIndex];
     if (!page?.id) return false;
+    const nextOutlineTitle = options?.overrides?.title ?? editOutlineTitle;
+    const nextOutlinePoints = options?.overrides?.points ?? editOutlinePoints;
+    const nextDescriptionDraft = options?.overrides?.description ?? editDescription;
+    const nextExtraFields = options?.overrides?.extraFields ?? editExtraFields;
+    const nextStyleGuideBindings = options?.overrides?.styleGuideBindings ?? editStyleGuideBindings;
     const nextDescriptionText = currentProject.creation_type === 'ppt_renovation'
-      ? toCanonicalRenovationJsonText(editDescription, 4)
-      : editDescription;
+      ? toCanonicalRenovationJsonText(nextDescriptionDraft, 4)
+      : nextDescriptionDraft;
     const nextEditorDescriptionText = currentProject.creation_type === 'ppt_renovation'
       ? toLocalizedRenovationJsonText(nextDescriptionText, 4)
       : nextDescriptionText;
@@ -1307,22 +1320,22 @@ export const SlidePreview: React.FC = () => {
     // 检查大纲是否有变化
     const originalTitle = page.outline_content?.title || '';
     const originalPoints = page.outline_content?.points?.join('\n') || '';
-    if (editOutlineTitle !== originalTitle || editOutlinePoints !== originalPoints) {
+    if (nextOutlineTitle !== originalTitle || nextOutlinePoints !== originalPoints) {
       updates.outline_content = {
-        title: editOutlineTitle,
-        points: editOutlinePoints.split('\n').filter((p) => p.trim()),
+        title: nextOutlineTitle,
+        points: nextOutlinePoints.split('\n').filter((p) => p.trim()),
       };
     }
 
     const originalDesc = getDescriptionText(page.description_content);
     const originalExtraFields = getDescriptionExtraFields(page.description_content);
     const originalStyleGuideBindings = getDescriptionStyleGuideBindings(page.description_content);
-    const serializedExtraFields = serializeExtraFields(editExtraFields);
-    const serializedStyleGuideBindings = serializeStyleGuideBindings(editStyleGuideBindings);
+    const serializedExtraFields = serializeExtraFields(nextExtraFields);
+    const serializedStyleGuideBindings = serializeStyleGuideBindings(nextStyleGuideBindings);
     if (
       nextDescriptionText !== originalDesc
-      || !areStringRecordsEqual(editExtraFields, originalExtraFields)
-      || !areStyleGuideBindingsEqual(editStyleGuideBindings, originalStyleGuideBindings)
+      || !areStringRecordsEqual(nextExtraFields, originalExtraFields)
+      || !areStyleGuideBindingsEqual(nextStyleGuideBindings, originalStyleGuideBindings)
     ) {
       const nextDescriptionContent: Record<string, any> = {
         ...(page.description_content && typeof page.description_content === 'object'
@@ -1346,11 +1359,11 @@ export const SlidePreview: React.FC = () => {
     if (Object.keys(updates).length > 0) {
       updatePageLocal(page.id, updates);
       persistCurrentPageDraft({
-        title: editOutlineTitle,
-        points: editOutlinePoints,
+        title: nextOutlineTitle,
+        points: nextOutlinePoints,
         description: nextEditorDescriptionText,
-        extraFields: editExtraFields,
-        styleGuideBindings: editStyleGuideBindings,
+        extraFields: nextExtraFields,
+        styleGuideBindings: nextStyleGuideBindings,
       });
       if (!options?.silent && nextEditorDescriptionText !== editDescription) {
         setEditDescription(nextEditorDescriptionText);
@@ -1364,7 +1377,7 @@ export const SlidePreview: React.FC = () => {
   }, [currentProject, selectedIndex, editOutlineTitle, editOutlinePoints, editDescription, editExtraFields, editStyleGuideBindings, updatePageLocal, persistCurrentPageDraft, show, t]);
 
   // 调度页面文本的自动保存，连续输入时只在停顿后触发一次。
-  const scheduleTextAutoSave = useCallback(() => {
+  const scheduleTextAutoSave = useCallback((overrides?: TextSaveOverrides) => {
     textChangesPendingPersistRef.current = true;
     if (textAutoSaveTimerRef.current) {
       clearTimeout(textAutoSaveTimerRef.current);
@@ -1372,20 +1385,21 @@ export const SlidePreview: React.FC = () => {
     textAutoSaveTimerRef.current = setTimeout(() => {
       try {
         // 自动保存阶段仅触发本地更新与防抖上送，避免频繁 syncProject 回拉导致编辑光标/输入状态被打断。
-        handleSaveOutlineAndDescription({ silent: true });
+        handleSaveOutlineAndDescription({ silent: true, overrides });
       } catch (error) {
         console.error('Failed to auto-save page text:', error);
       }
     }, 900);
   }, [handleSaveOutlineAndDescription]);
 
-  const persistTextEditsNow = useCallback((options?: { silent?: boolean }) => {
+  // 立即保存页面文本，并可携带 blur 时从编辑器读取到的最新值。
+  const persistTextEditsNow = useCallback((options?: { silent?: boolean; overrides?: TextSaveOverrides }) => {
     if (textAutoSaveTimerRef.current) {
       clearTimeout(textAutoSaveTimerRef.current);
       textAutoSaveTimerRef.current = undefined;
     }
 
-    handleSaveOutlineAndDescription({ silent: options?.silent ?? true });
+    handleSaveOutlineAndDescription({ silent: options?.silent ?? true, overrides: options?.overrides });
 
     if (!textChangesPendingPersistRef.current || textPersistInFlightRef.current) {
       return;
@@ -1850,20 +1864,27 @@ export const SlidePreview: React.FC = () => {
   const currentImageBoundStyleGuide = editStyleGuideBindings[activeStyleGuideBindingKey] || '';
   const pageDefaultStyleGuide = editStyleGuideBindings[PAGE_STYLE_GUIDE_DEFAULT_BINDING] || '';
   const resolvedStyleGuideText = currentImageBoundStyleGuide || pageDefaultStyleGuide || projectStyleGuideJson || '';
+  // 根据当前输入构建风格指导覆盖，供 onChange 与 blur 保存共用。
+  const buildStyleGuideBindingsFromText = (value: string, base: StyleGuideBindings) => {
+    const next = { ...base };
+    if (value.trim()) {
+      next[PAGE_STYLE_GUIDE_DEFAULT_BINDING] = value;
+      if (activeStyleGuideBindingKey !== PAGE_STYLE_GUIDE_DEFAULT_BINDING) {
+        next[activeStyleGuideBindingKey] = value;
+      }
+    } else {
+      delete next[activeStyleGuideBindingKey];
+      delete next[PAGE_STYLE_GUIDE_DEFAULT_BINDING];
+    }
+    return next;
+  };
+
+  // 记录风格指导输入并携带最新值触发自动保存。
   const handleStyleGuideTextChange = (value: string) => {
     setEditStyleGuideBindings((prev) => {
-      const next = { ...prev };
-      if (value.trim()) {
-        next[PAGE_STYLE_GUIDE_DEFAULT_BINDING] = value;
-        if (activeStyleGuideBindingKey !== PAGE_STYLE_GUIDE_DEFAULT_BINDING) {
-          next[activeStyleGuideBindingKey] = value;
-        }
-      } else {
-        delete next[activeStyleGuideBindingKey];
-        delete next[PAGE_STYLE_GUIDE_DEFAULT_BINDING];
-      }
+      const next = buildStyleGuideBindingsFromText(value, prev);
       persistCurrentPageDraft({ styleGuideBindings: next });
-      scheduleTextAutoSave();
+      scheduleTextAutoSave({ styleGuideBindings: next });
       return next;
     });
   };
@@ -1930,7 +1951,7 @@ export const SlidePreview: React.FC = () => {
                 const value = event.target.value;
                 setEditOutlineTitle(value);
                 persistCurrentPageDraft({ title: value });
-                scheduleTextAutoSave();
+                scheduleTextAutoSave({ title: value });
               }}
               placeholder={t('preview.enterTitle')}
               data-testid="preview-text-title-input"
@@ -1948,7 +1969,7 @@ export const SlidePreview: React.FC = () => {
                 const value = event.target.value;
                 setEditOutlinePoints(value);
                 persistCurrentPageDraft({ points: value });
-                scheduleTextAutoSave();
+                scheduleTextAutoSave({ points: value });
               }}
               placeholder={t('preview.enterPointsPerLine')}
               data-testid="preview-text-points-input"
@@ -2084,7 +2105,11 @@ export const SlidePreview: React.FC = () => {
               ref={styleGuideTextareaRef}
               value={resolvedStyleGuideText}
               onChange={(value: string) => handleStyleGuideTextChange(value)}
-              onBlur={() => persistTextEditsNow({ silent: true })}
+              onBlur={(value) => {
+                const next = buildStyleGuideBindingsFromText(value, editStyleGuideBindings);
+                persistCurrentPageDraft({ styleGuideBindings: next });
+                persistTextEditsNow({ silent: true, overrides: { styleGuideBindings: next } });
+              }}
               placeholder={t('preview.jsonStyleGuidePlaceholder')}
               data-testid="preview-style-guide-input"
               rows={14}
@@ -2102,12 +2127,12 @@ export const SlidePreview: React.FC = () => {
               onChange={(value: string) => {
                 setEditDescription(value);
                 persistCurrentPageDraft({ description: value });
-                scheduleTextAutoSave();
+                scheduleTextAutoSave({ description: value });
               }}
               onPaste={handleDescriptionPaste}
               onFiles={handleDescriptionFiles}
               onFocus={focusMainDescriptionField}
-              onBlur={() => persistTextEditsNow({ silent: true })}
+              onBlur={(value) => persistTextEditsNow({ silent: true, overrides: { description: value } })}
               placeholder={useRenovationPreviewForm ? t('preview.enterPageJson') : t('preview.enterDescription')}
               data-testid="preview-text-description-input"
               rows={useRenovationPreviewForm ? 14 : 8}
@@ -2218,7 +2243,7 @@ export const SlidePreview: React.FC = () => {
               setEditExtraFields((prev) => {
                 const next = { ...prev, [activeExternalField]: value };
                 persistCurrentPageDraft({ extraFields: next });
-                scheduleTextAutoSave();
+                scheduleTextAutoSave({ extraFields: next });
                 return next;
               });
             }}
