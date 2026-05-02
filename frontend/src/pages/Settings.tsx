@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Key, Image, Zap, Save, RotateCcw, Globe, FileText, Brain, ArrowUp, HelpCircle, RefreshCw } from 'lucide-react';
+import { Key, Image, Zap, Save, RotateCcw, Globe, FileText, Brain, ArrowUp, HelpCircle, RefreshCw, Link2 } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 
 // 组件内翻译
@@ -274,6 +274,8 @@ import type { OutputLanguage, ProviderProfileSummary } from '@/api/endpoints';
 import { OUTPUT_LANGUAGE_OPTIONS } from '@/api/endpoints';
 import type { Settings as SettingsType } from '@/types';
 import { PROJECT_IMAGE_MODEL_CATALOG, getImageSourceForModel } from '@/config/projectAiDefaults';
+import { SettingsOpenAIOAuthSection } from './components/SettingsOpenAIOAuthSection';
+import { useSettingsOpenAIOAuth } from './hooks/useSettingsOpenAIOAuth';
 
 // 配置项类型定义
 type FieldType = 'text' | 'password' | 'number' | 'select' | 'buttons' | 'switch';
@@ -315,6 +317,7 @@ interface ServiceTestState {
 
 const SETTINGS_SECTION_IDS = [
   'api-config',
+  'openai-oauth',
   'model-config',
   'mineru-config',
   'image-config',
@@ -486,22 +489,6 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
   const { show, ToastContainer } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
 
-  const copyToClipboard = (text: string) => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text);
-    } else {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-    }
-    show({ message: '链接已复制到剪贴板', type: 'success' });
-  };
-
   const [settings, setSettings] = useState<SettingsType | null>(null);
   const [providerProfiles, setProviderProfiles] = useState<ProviderProfileSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -509,6 +496,17 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
   const [formData, setFormData] = useState(initialFormData);
   const [serviceTestStates, setServiceTestStates] = useState<Record<string, ServiceTestState>>({});
   const [activeSectionId, setActiveSectionId] = useState('api-config');
+  const {
+    oauthConnecting,
+    manualCallbackUrl,
+    manualCallbackOpen,
+    manualCallbackSubmitting,
+    setManualCallbackUrl,
+    setManualCallbackOpen,
+    handleOAuthLogin,
+    handleOAuthDisconnect,
+    handleManualCallback,
+  } = useSettingsOpenAIOAuth({ t, show, setSettings });
 
   // 配置驱动的表单区块定义（使用翻译）
   const settingsSections: SectionConfig[] = [
@@ -655,6 +653,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
 
   const settingsNavItems = useMemo<SettingsNavItem[]>(() => ([
     { id: 'api-config', title: t('settings.sections.apiConfig'), icon: <Key size={18} /> },
+    { id: 'openai-oauth', title: t('settings.openaiOAuth.title'), icon: <Link2 size={18} /> },
     { id: 'model-config', title: t('settings.sections.modelConfig'), icon: <FileText size={18} /> },
     ...settingsSections.map((section) => ({
       id: section.id,
@@ -1219,8 +1218,12 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
           >
             <option value="">{t('settings.fields.modelProviderPlaceholder')}</option>
             {MODEL_PROVIDER_SOURCES.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+              <option
+                key={option.value}
+                value={option.value}
+                disabled={option.value === 'codex' && !settings?.openai_oauth_connected}
+              >
+                {option.label}{option.value === 'codex' && !settings?.openai_oauth_connected ? ` (${t('settings.openaiOAuth.disconnected')})` : ''}
               </option>
             ))}
           </select>
@@ -1369,7 +1372,13 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
                       className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
                     >
                       {GLOBAL_PROVIDER_SOURCES.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
+                        <option
+                          key={option.value}
+                          value={option.value}
+                          disabled={option.value === 'codex' && !settings?.openai_oauth_connected}
+                        >
+                          {option.label}{option.value === 'codex' && !settings?.openai_oauth_connected ? ` (${t('settings.openaiOAuth.disconnected')})` : ''}
+                        </option>
                       ))}
                     </select>
                     <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">{t('settings.fields.aiProviderFormatDesc')}</p>
@@ -1408,6 +1417,28 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
                 </div>
 
               </>
+            ),
+          })}
+
+          {renderModuleSection({
+            id: 'openai-oauth',
+            title: t('settings.openaiOAuth.title'),
+            icon: <Link2 size={20} />,
+            description: t('settings.openaiOAuth.description'),
+            children: (
+              <SettingsOpenAIOAuthSection
+                settings={settings}
+                t={t}
+                oauthConnecting={oauthConnecting}
+                manualCallbackUrl={manualCallbackUrl}
+                manualCallbackOpen={manualCallbackOpen}
+                manualCallbackSubmitting={manualCallbackSubmitting}
+                onLogin={handleOAuthLogin}
+                onDisconnect={handleOAuthDisconnect}
+                onManualCallback={handleManualCallback}
+                onManualCallbackUrlChange={setManualCallbackUrl}
+                onManualCallbackOpenChange={setManualCallbackOpen}
+              />
             ),
           })}
 
