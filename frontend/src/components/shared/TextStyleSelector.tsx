@@ -1,12 +1,25 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ImagePlus, Loader2, Trash2 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ImagePlus, Loader2, Save, Trash2, X } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 import { Textarea } from './Textarea';
 import { PRESET_STYLES } from '@/config/presetStyles';
 import { presetStylesI18n } from '@/config/presetStylesI18n';
-import { createStyleTemplate, deleteStyleTemplate, extractStyleFromImage, listStyleTemplates } from '@/api/endpoints';
-import type { StyleTemplate } from '@/api/endpoints';
+import {
+  createStyleTemplate,
+  createUserStyleTemplate,
+  deleteStyleTemplate,
+  deleteUserStyleTemplate,
+  extractStyleFromImage,
+  listStyleTemplates,
+  listUserStyleTemplates,
+} from '@/api/endpoints';
+import type { StyleTemplate, UserStyleTemplate } from '@/api/endpoints';
 import { useConfirm } from './ConfirmDialog';
+
+const STYLE_COLORS = [
+  '#EF4444', '#F97316', '#EAB308', '#22C55E',
+  '#06B6D4', '#3B82F6', '#8B5CF6', '#EC4899',
+];
 
 const i18n = {
   zh: {
@@ -19,6 +32,14 @@ const i18n = {
     extracting: '提取中...',
     extractSuccess: '风格提取成功',
     extractFailed: '风格提取失败',
+    saveAsTemplate: '保存为模板',
+    saveStyle: '保存',
+    styleNamePlaceholder: '输入风格名称...',
+    saveSuccess: '风格模板已保存',
+    saveFailed: '保存失败',
+    deleteSuccess: '风格模板已删除',
+    deleteFailed: '删除失败',
+    noContent: '请先输入风格描述',
     advanced: '高级：JSON文本模版骨架',
     templateJson: 'JSON文本模版骨架',
     templateJsonHint: '必填：可解析的 JSON（用于让 AI 按字段结构补全 JSON文本模版）',
@@ -43,6 +64,14 @@ const i18n = {
     extracting: 'Extracting...',
     extractSuccess: 'Style extracted successfully',
     extractFailed: 'Style extraction failed',
+    saveAsTemplate: 'Save as template',
+    saveStyle: 'Save',
+    styleNamePlaceholder: 'Enter style name...',
+    saveSuccess: 'Style template saved',
+    saveFailed: 'Save failed',
+    deleteSuccess: 'Style template deleted',
+    deleteFailed: 'Delete failed',
+    noContent: 'Please enter a style description first',
     advanced: 'Advanced: JSON text template skeleton',
     templateJson: 'JSON text template skeleton',
     templateJsonHint: 'Required: Valid JSON (AI will fill the JSON text template following this schema)',
@@ -72,6 +101,12 @@ export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onC
   const [hoveredPresetId, setHoveredPresetId] = useState<string | null>(null);
   const [isExtractingStyle, setIsExtractingStyle] = useState(false);
   const styleImageInputRef = useRef<HTMLInputElement>(null);
+  const [userStyles, setUserStyles] = useState<UserStyleTemplate[]>([]);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [saveColor, setSaveColor] = useState(STYLE_COLORS[0]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hoveredUserStyleId, setHoveredUserStyleId] = useState<string | null>(null);
 
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [templateJson, setTemplateJson] = useState('');
@@ -86,6 +121,53 @@ export const TextStyleSelector: React.FC<TextStyleSelectorProps> = ({ value, onC
     () => templates.find((x) => x.id === selectedTemplateId),
     [selectedTemplateId, templates]
   );
+
+  // 加载用户保存的直接应用风格模板。
+  const loadUserStyles = useCallback(async () => {
+    try {
+      const res = await listUserStyleTemplates();
+      if (res.data?.templates) setUserStyles(res.data.templates);
+    } catch {
+      // 用户模板加载失败不影响预设风格和高级 JSON 模版使用。
+    }
+  }, []);
+
+  useEffect(() => {
+    loadUserStyles();
+  }, [loadUserStyles]);
+
+  // 将当前风格描述保存为用户模板。
+  const handleSave = async () => {
+    if (!value.trim()) {
+      onToast?.({ message: t('noContent'), type: 'error' });
+      return;
+    }
+    if (!saveName.trim()) return;
+    setIsSaving(true);
+    try {
+      await createUserStyleTemplate({ name: saveName.trim(), description: value.trim(), color: saveColor });
+      onToast?.({ message: t('saveSuccess'), type: 'success' });
+      setShowSaveDialog(false);
+      setSaveName('');
+      setSaveColor(STYLE_COLORS[0]);
+      await loadUserStyles();
+    } catch {
+      onToast?.({ message: t('saveFailed'), type: 'error' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 删除一个用户保存的直接应用风格模板。
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteUserStyleTemplate(id);
+      onToast?.({ message: t('deleteSuccess'), type: 'success' });
+      setUserStyles((prev) => prev.filter((style) => style.id !== id));
+    } catch {
+      onToast?.({ message: t('deleteFailed'), type: 'error' });
+    }
+  };
 
   const loadAdvanced = async () => {
     setIsLoadingAdvanced(true);

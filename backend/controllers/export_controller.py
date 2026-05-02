@@ -22,6 +22,51 @@ logger = logging.getLogger(__name__)
 export_bp = Blueprint('export', __name__, url_prefix='/api/projects')
 
 
+@export_bp.route('/<project_id>/exports', methods=['GET'])
+def list_exports(project_id):
+    """List exported files for a project."""
+    try:
+        project = Project.query.get(project_id)
+        if not project:
+            return not_found('Project')
+
+        exports_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], project_id, 'exports')
+        if not os.path.isdir(exports_dir):
+            return success_response(data={"files": []})
+
+        files = []
+        for name in sorted(os.listdir(exports_dir)):
+            filepath = os.path.join(exports_dir, name)
+            if not os.path.isfile(filepath) or name.startswith('.') or name.startswith('_'):
+                continue
+
+            stat = os.stat(filepath)
+            ext = os.path.splitext(name)[1].lower()
+            file_type = {
+                '.mp4': 'video',
+                '.pptx': 'pptx',
+                '.pdf': 'pdf',
+                '.zip': 'images',
+                '.png': 'image',
+                '.jpg': 'image',
+                '.jpeg': 'image',
+            }.get(ext, 'other')
+
+            files.append({
+                "filename": name,
+                "type": file_type,
+                "size": stat.st_size,
+                "modified_at": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(stat.st_mtime)),
+                "download_url": f"/files/{project_id}/exports/{name}",
+            })
+
+        files.sort(key=lambda item: item["modified_at"], reverse=True)
+        return success_response(data={"files": files})
+    except Exception as e:
+        logger.exception("Error listing exports for project %s", project_id)
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
 @export_bp.route('/<project_id>/export/pptx', methods=['GET', 'POST'])
 def export_pptx(project_id):
     """
