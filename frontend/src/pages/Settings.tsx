@@ -1,219 +1,34 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Key, Image, Zap, Save, RotateCcw, Globe, FileText, Brain, ArrowUp, HelpCircle, RefreshCw, Link2 } from 'lucide-react';
+import { Key, Image, Zap, Save, RotateCcw, Globe, FileText, Brain, HelpCircle, Link2 } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 
 import { settingsI18n } from './Settings.i18n';
-import { Button, Input, Card, Loading, PageHeader, PAGE_CONTAINER_CLASS, useToast, useConfirm } from '@/components/shared';
+import { getActiveSettingsSectionId, type SettingsSectionBounds } from './Settings.scrollSpy';
+import { Button, Input, Card, Loading, useToast, useConfirm } from '@/components/shared';
 import * as api from '@/api/endpoints';
-import type { OutputLanguage, ProviderProfileSummary } from '@/api/endpoints';
+import type { ProviderProfileSummary } from '@/api/endpoints';
 import { OUTPUT_LANGUAGE_OPTIONS } from '@/api/endpoints';
 import type { Settings as SettingsType } from '@/types';
-import { PROJECT_IMAGE_MODEL_CATALOG, getImageSourceForModel } from '@/config/projectAiDefaults';
+import { getImageSourceForModel } from '@/config/projectAiDefaults';
 import { SettingsOpenAIOAuthSection } from './components/SettingsOpenAIOAuthSection';
 import { useSettingsOpenAIOAuth } from './hooks/useSettingsOpenAIOAuth';
 
-// 配置项类型定义
-type FieldType = 'text' | 'password' | 'number' | 'select' | 'buttons' | 'switch';
-
-interface FieldConfig {
-  key: keyof typeof initialFormData;
-  label: string;
-  type: FieldType;
-  placeholder?: string;
-  description?: string;
-  sensitiveField?: boolean;  // 是否为敏感字段（如 API Key）
-  lengthKey?: keyof SettingsType;  // 用于显示已有长度的 key（如 api_key_length）
-  options?: { value: string; label: string }[];  // select 类型的选项
-  min?: number;
-  max?: number;
-  link?: string;  // 申请链接 URL
-}
-
-interface SectionConfig {
-  id: string;
-  title: string;
-  icon: React.ReactNode;
-  fields: FieldConfig[];
-}
-
-interface SettingsNavItem {
-  id: string;
-  title: string;
-  icon: React.ReactNode;
-}
-
-type TestStatus = 'idle' | 'loading' | 'success' | 'error';
-
-interface ServiceTestState {
-  status: TestStatus;
-  message?: string;
-  detail?: string;
-}
-
-const SETTINGS_SECTION_IDS = [
-  'api-config',
-  'openai-oauth',
-  'model-config',
-  'mineru-config',
-  'image-config',
-  'performance-config',
-  'output-language',
-  'text-reasoning',
-  'image-reasoning',
-  'baidu-ocr',
-  'service-test',
-] as const;
-
-// LazyLLM 支持的厂商列表
-const LAZYLLM_SOURCES = [
-  { value: 'qwen', label: 'Qwen (通义千问)' },
-  { value: 'doubao', label: 'Doubao (豆包)' },
-  { value: 'deepseek', label: 'DeepSeek' },
-  { value: 'glm', label: 'GLM (智谱)' },
-  { value: 'siliconflow', label: 'SiliconFlow' },
-  { value: 'sensenova', label: 'SenseNova (商汤)' },
-  { value: 'minimax', label: 'MiniMax' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'kimi', label: 'Kimi' },
-];
-
-// 全局 provider 下拉（不含 profile:*）
-const GLOBAL_PROVIDER_SOURCES = [
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'codex', label: 'Codex (OpenAI OAuth)' },
-  ...LAZYLLM_SOURCES.filter(s => s.value !== 'openai'), // avoid duplicate 'openai'
-];
-
-// 需要 API Key + Base URL 的提供商（非 LazyLLM 厂商）
-const API_KEY_PROVIDERS = new Set(['gemini', 'openai']);
-
-// LazyLLM 厂商名集合
-const LAZYLLM_VENDOR_SET = new Set(LAZYLLM_SOURCES.map(s => s.value));
-
-// 初始表单数据
-const initialFormData = {
-  ai_provider_format: 'gemini' as string,
-  api_base_url: '',
-  api_key: '',
-  text_model: '',
-  image_model: '',
-  image_caption_model: '',
-  mineru_api_base: '',
-  mineru_token: '',
-  image_resolution: '2K',
-  max_description_workers: 5,
-  max_image_workers: 8,
-  output_language: 'zh' as OutputLanguage,
-  // 推理模式配置（分别控制文本和图像）
-  enable_text_reasoning: false,
-  text_thinking_budget: 1024,
-  enable_image_reasoning: false,
-  image_thinking_budget: 1024,
-  baidu_api_key: '',
-  // LazyLLM 配置
-  text_model_source: '',
-  image_model_source: '',
-  image_caption_model_source: '',
-  lazyllm_api_keys: {} as Record<string, string>,
-  // Per-model API credentials (for gemini/openai per-model overrides)
-  text_api_key: '',
-  text_api_base_url: '',
-  image_api_key: '',
-  image_api_base_url: '',
-  image_caption_api_key: '',
-  image_caption_api_base_url: '',
-  openai_image_api_protocol: 'auto',
-};
-
-const isLazyllmVendor = (vendor: string) =>
-  LAZYLLM_VENDOR_SET.has(vendor) && vendor !== 'openai';
-
-// When backend returns "lazyllm", infer specific vendor from configured keys
-const resolveLazyllmVendor = (format: string, keysInfo?: Record<string, number>): string => {
-  if (format !== 'lazyllm') return format;
-  if (keysInfo) {
-    const vendor = LAZYLLM_SOURCES.find(s => isLazyllmVendor(s.value) && keysInfo[s.value]);
-    if (vendor) return vendor.value;
-  }
-  return LAZYLLM_SOURCES.find(s => isLazyllmVendor(s.value))?.value || 'deepseek';
-};
-
-const IMAGE_MODEL_OPTIONS = PROJECT_IMAGE_MODEL_CATALOG.map((item) => ({
-  value: item.model,
-  label: item.label,
-}));
-
-// Build image model dropdown options and preserve current custom model value.
-const getImageModelSelectOptions = (currentValue: string) => {
-  const normalizedCurrent = String(currentValue || '').trim();
-  if (!normalizedCurrent) return IMAGE_MODEL_OPTIONS;
-  const exists = IMAGE_MODEL_OPTIONS.some((item) => item.value === normalizedCurrent);
-  if (exists) return IMAGE_MODEL_OPTIONS;
-  return [{ value: normalizedCurrent, label: `Custom · ${normalizedCurrent}` }, ...IMAGE_MODEL_OPTIONS];
-};
-
-const GlobalVendorKeyInput: React.FC<{
-  vendor: string; formData: typeof initialFormData;
-  setFormData: React.Dispatch<React.SetStateAction<typeof initialFormData>>;
-  settings: SettingsType | null; t: ReturnType<typeof useT>;
-}> = ({ vendor, formData, setFormData, settings, t }) => {
-  const vendorLabel = LAZYLLM_SOURCES.find(s => s.value === vendor)?.label || vendor.toUpperCase();
-  const keyLength = settings?.lazyllm_api_keys_info?.[vendor] || 0;
-  const placeholder = keyLength > 0
-    ? t('settings.fields.vendorApiKeySet', { length: keyLength })
-    : t('settings.fields.vendorApiKeyPlaceholder', { vendor: vendorLabel });
-  return (
-    <div className="pl-3 border-l-2 border-amber-300 dark:border-amber-600">
-      <Input
-        label={t('settings.fields.vendorApiKey', { vendor: vendorLabel })}
-        type="password"
-        placeholder={placeholder}
-        value={formData.lazyllm_api_keys[vendor] || ''}
-        onChange={(e) => {
-          setFormData(prev => ({
-            ...prev,
-            lazyllm_api_keys: { ...prev.lazyllm_api_keys, [vendor]: e.target.value }
-          }));
-        }}
-      />
-      <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">{t('settings.fields.vendorApiKeyDesc')}</p>
-    </div>
-  );
-};
-
-const formDataFromSettings = (data: SettingsType): typeof initialFormData => ({
-  ai_provider_format: resolveLazyllmVendor(data.ai_provider_format || 'gemini', data.lazyllm_api_keys_info),
-  api_base_url: data.api_base_url || '',
-  api_key: '',
-  image_resolution: data.image_resolution || '2K',
-  max_description_workers: data.max_description_workers || 5,
-  max_image_workers: data.max_image_workers || 8,
-  text_model: data.text_model || '',
-  image_model: data.image_model || '',
-  mineru_api_base: data.mineru_api_base || '',
-  mineru_token: '',
-  image_caption_model: data.image_caption_model || '',
-  output_language: data.output_language || 'zh',
-  enable_text_reasoning: data.enable_text_reasoning || false,
-  text_thinking_budget: data.text_thinking_budget || 1024,
-  enable_image_reasoning: data.enable_image_reasoning || false,
-  image_thinking_budget: data.image_thinking_budget || 1024,
-  baidu_api_key: '',
-  text_model_source: data.text_model_source || '',
-  image_model_source: data.image_model_source || getImageSourceForModel(data.image_model || '', ''),
-  image_caption_model_source: data.image_caption_model_source || '',
-  lazyllm_api_keys: {},
-  text_api_key: '',
-  text_api_base_url: data.text_api_base_url || '',
-  image_api_key: '',
-  image_api_base_url: data.image_api_base_url || '',
-  image_caption_api_key: '',
-  image_caption_api_base_url: data.image_caption_api_base_url || '',
-  openai_image_api_protocol: data.openai_image_api_protocol || 'auto',
-});
-
+import {
+  API_KEY_PROVIDERS,
+  GLOBAL_PROVIDER_SOURCES,
+  LAZYLLM_SOURCES,
+  SETTINGS_SECTION_IDS,
+  GlobalVendorKeyInput,
+  formDataFromSettings,
+  getImageModelSelectOptions,
+  initialFormData,
+  isLazyllmVendor,
+  type FieldConfig,
+  type SectionConfig,
+  type ServiceTestState,
+  type SettingsNavItem,
+  type TestStatus,
+} from './Settings.config';
 // Settings 组件 - 纯嵌入模式（可复用）
 interface SettingsProps {
   refreshToken?: number;
@@ -471,43 +286,46 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
   }, [loadSettings, refreshToken]);
 
   useEffect(() => {
-    if (isLoading || typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') {
+    if (isLoading || typeof window === 'undefined' || typeof document === 'undefined') {
       return;
     }
 
-    const sectionElements = SETTINGS_SECTION_IDS
-      .map((sectionId) => document.getElementById(sectionId))
-      .filter((element): element is HTMLElement => Boolean(element));
+    let frameId: number | null = null;
 
-    if (sectionElements.length === 0) {
-      return;
-    }
+    // Schedules active nav updates without running layout reads for every scroll event.
+    const updateActiveSection = () => {
+      frameId = null;
+      const sections = SETTINGS_SECTION_IDS
+        .map((sectionId): SettingsSectionBounds | null => {
+          const element = document.getElementById(sectionId);
+          if (!element) return null;
+          const rect = element.getBoundingClientRect();
+          return { id: sectionId, top: rect.top, bottom: rect.bottom };
+        })
+        .filter((section): section is SettingsSectionBounds => Boolean(section));
+      const nextActiveId = getActiveSettingsSectionId(sections, window.innerHeight);
+      if (nextActiveId) {
+        setActiveSectionId(nextActiveId);
+      }
+    };
 
-    let observer: IntersectionObserver;
+    // Coalesces scroll and resize events into one animation frame.
+    const requestActiveSectionUpdate = () => {
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(updateActiveSection);
+    };
 
-    try {
-      observer = new IntersectionObserver(
-        (entries) => {
-          const visibleEntries = entries
-            .filter((entry) => entry.isIntersecting)
-            .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+    requestActiveSectionUpdate();
+    window.addEventListener('scroll', requestActiveSectionUpdate, { passive: true });
+    window.addEventListener('resize', requestActiveSectionUpdate);
 
-          if (visibleEntries[0]) {
-            setActiveSectionId(visibleEntries[0].target.id);
-          }
-        },
-        {
-          rootMargin: '-18% 0px -55% 0px',
-          threshold: [0.15, 0.35, 0.6],
-        },
-      );
-    } catch {
-      return;
-    }
-
-    sectionElements.forEach((element) => observer.observe(element));
-
-    return () => observer.disconnect();
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      window.removeEventListener('scroll', requestActiveSectionUpdate);
+      window.removeEventListener('resize', requestActiveSectionUpdate);
+    };
   }, [isLoading]);
 
   const handleSave = async () => {
@@ -1374,75 +1192,5 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
         </div>
       </div>
     </>
-  );
-};
-
-// SettingsPage 组件 - 完整页面包装
-const SCROLL_SHOW_THRESHOLD = 300;
-
-export const SettingsPage: React.FC = () => {
-  const navigate = useNavigate();
-  const t = useT(settingsI18n);
-  const [showTop, setShowTop] = useState(false);
-  const [refreshToken, setRefreshToken] = useState(0);
-  const [isSettingsLoading, setIsSettingsLoading] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setShowTop(window.scrollY > SCROLL_SHOW_THRESHOLD);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  const handleBack = useCallback(() => {
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      navigate(-1);
-      return;
-    }
-    navigate('/');
-  }, [navigate]);
-
-  const handleRefresh = useCallback(() => {
-    setRefreshToken((prev) => prev + 1);
-  }, []);
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-banana-50 dark:from-background-primary to-yellow-50 dark:to-background-primary">
-      <PageHeader
-        title={t('settings.title')}
-        icon={<Key size={18} />}
-        onBack={handleBack}
-        onHome={() => navigate('/')}
-        backLabel={t('nav.back')}
-        homeLabel={t('nav.home')}
-        actions={(
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<RefreshCw size={16} className={isSettingsLoading ? 'animate-spin' : ''} />}
-            onClick={handleRefresh}
-            disabled={isSettingsLoading}
-          >
-            {isSettingsLoading ? t('nav.loading') : t('nav.refresh')}
-          </Button>
-        )}
-      />
-
-      <main className={`${PAGE_CONTAINER_CLASS} py-6 md:py-8`}>
-
-        <Settings refreshToken={refreshToken} onLoadingChange={setIsSettingsLoading} />
-      </main>
-
-      {showTop && (
-        <button
-          data-testid="back-to-top-button"
-          aria-label="Back to top"
-          title="Back to top"
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-6 right-6 p-3 rounded-full bg-banana-500 text-white shadow-lg hover:bg-banana-600 transition-all z-50"
-        >
-          <ArrowUp size={20} />
-        </button>
-      )}
-    </div>
   );
 };

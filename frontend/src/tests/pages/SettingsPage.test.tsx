@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { SettingsPage } from '@/pages/Settings';
+import { SettingsPage } from '@/pages/SettingsPage';
 
 const {
   mockNavigate,

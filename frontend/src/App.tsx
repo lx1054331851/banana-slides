@@ -7,7 +7,7 @@ import { OutlineEditor } from './pages/OutlineEditor';
 import { DetailEditor } from './pages/DetailEditor';
 import { SlidePreview } from './pages/SlidePreview';
 import { StyleWorkflow } from './pages/StyleWorkflow';
-import { SettingsPage } from './pages/Settings';
+import { SettingsPage } from './pages/SettingsPage';
 import { StyleLibrary } from './pages/StyleLibrary';
 import { MaterialManagement } from './pages/MaterialManagement';
 import { useProjectStore } from './store/useProjectStore';
