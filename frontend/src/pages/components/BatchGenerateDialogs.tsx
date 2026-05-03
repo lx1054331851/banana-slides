@@ -29,6 +29,7 @@ type BatchGenerateDialogsProps = {
   onCloseBatchDescriptionGenerateDialog: () => void;
 };
 
+// Renders batch image and description generation dialogs, including page-range controls.
 export const BatchGenerateDialogs: React.FC<BatchGenerateDialogsProps> = ({
   t,
   showBatchGenerateDialog,
@@ -165,7 +166,7 @@ export const BatchGenerateDialogs: React.FC<BatchGenerateDialogsProps> = ({
               />
               <Button
                 variant="secondary"
-                className="h-9 justify-self-start whitespace-nowrap px-3"
+                className="h-9 w-full whitespace-nowrap px-3"
                 onClick={onGenerateDescriptionsByRange}
               >
                 {t('preview.generateDescriptionsByRange')}
