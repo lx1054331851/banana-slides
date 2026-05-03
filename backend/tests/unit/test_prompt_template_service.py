@@ -45,3 +45,18 @@ def test_registered_prompt_templates_are_listed(db_session):
     templates = list_prompt_templates()
     keys = {item["key"] for item in templates}
     assert set(PROMPT_TEMPLATE_DEFINITIONS) <= keys
+
+
+def test_image_generation_prompt_uses_enabled_override(db_session):
+    """图片生成提示词函数使用启用中的数据库覆盖。"""
+    from services.prompts import get_image_generation_prompt
+
+    save_prompt_template("image_generation", "自定义图片提示词", True)
+    prompt = get_image_generation_prompt(
+        page_desc="页面描述",
+        outline_text="完整大纲",
+        current_section="第一部分",
+        aspect_ratio="16:9",
+        page_index=1,
+    )
+    assert prompt == "自定义图片提示词"

@@ -16,10 +16,33 @@ import re
 from textwrap import dedent
 from typing import List, Dict, Optional, TYPE_CHECKING
 
+from services.prompt_template_service import resolve_prompt_template
+
 if TYPE_CHECKING:
     from services.ai_service import ProjectContext
 
 logger = logging.getLogger(__name__)
+
+_PROMPT_TEMPLATE_TAG_KEYS = {
+    'get_outline_generation_prompt': 'outline_generation',
+    'get_outline_generation_prompt_markdown': 'outline_generation_markdown',
+    'get_outline_parsing_prompt': 'outline_parsing',
+    'get_outline_parsing_prompt_markdown': 'outline_parsing_markdown',
+    'get_description_to_outline_prompt': 'description_to_outline',
+    'get_description_to_outline_prompt_markdown': 'description_to_outline_markdown',
+    'get_outline_refinement_prompt': 'outline_refinement',
+    'get_page_description_json_prompt': 'page_description_json',
+    'get_all_descriptions_stream_prompt': 'all_descriptions_stream',
+    'get_descriptions_refinement_prompt': 'descriptions_refinement',
+}
+
+
+def _resolve_prompt_override(tag: str, prompt: str) -> str:
+    """Resolve a registered prompt override for a prompt builder tag."""
+    key = _PROMPT_TEMPLATE_TAG_KEYS.get(tag)
+    if not key:
+        return prompt
+    return resolve_prompt_template(key, prompt)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -114,7 +137,7 @@ _PAGE_DETAIL_JSON_OUTPUT_FORMAT = """\
 def _build_prompt(prompt_text: str, reference_files_content=None, *, tag: str = '') -> str:
     """Prepend reference files XML and log the final prompt."""
     files_xml = _format_reference_files_xml(reference_files_content)
-    final = files_xml + prompt_text
+    final = _resolve_prompt_override(tag, files_xml + prompt_text)
     if tag:
         logger.debug(f"[{tag}] Final prompt:\n{final}")
     return final
@@ -783,6 +806,7 @@ Now split the description text into individual page descriptions. Return only th
 {get_language_instruction(language)}
 """)
 
+    prompt = resolve_prompt_template('description_split', prompt)
     logger.debug(f"[get_description_split_prompt] Final prompt:\n{prompt}")
     return prompt
 
@@ -992,6 +1016,7 @@ def get_image_generation_prompt(page_desc: str, outline_text: str,
 {"**注意：当前页面为ppt的封面页，请你采用专业的封面设计美学技巧，务必凸显出页面标题，分清主次，确保一下就能抓住观众的注意力。**" if page_index == 1 else ""}
 """)
 
+    prompt = resolve_prompt_template('image_generation', prompt)
     logger.debug(f"[get_image_generation_prompt] Final prompt:\n{prompt}")
     return prompt
 
@@ -1019,6 +1044,7 @@ def get_image_edit_prompt(
         "只依据这些图片和修改要求完成编辑，并尽量保持原页面主体结构与版式逻辑。"
     )
 
+    prompt = resolve_prompt_template('image_edit', prompt)
     logger.debug(f"[get_image_edit_prompt] Final prompt:\n{prompt}")
     return prompt
 
@@ -1097,6 +1123,7 @@ def get_cover_ending_fields_detect_prompt(cover_text: str,
 """)
     prompt = prompt.replace("<<<COVER_TEXT>>>", cover_text or "")
     prompt = prompt.replace("<<<ENDING_TEXT>>>", ending_text or "")
+    prompt = resolve_prompt_template('cover_ending_fields_detect', prompt)
     logger.debug(f"[get_cover_ending_fields_detect_prompt] Final prompt:\n{prompt}")
     return prompt
 
@@ -1257,6 +1284,7 @@ Task:
 """)
     prompt = prompt.replace("<<<REPORT_TEXT>>>", report_text)
     final_prompt = files_xml + prompt
+    final_prompt = resolve_prompt_template('long_report_split', final_prompt)
     logger.debug(f"[get_long_report_split_prompt] Final prompt:\n{final_prompt}")
     return final_prompt
 
@@ -1671,7 +1699,13 @@ def get_style_recommendations_prompt(project_dict: Dict,
                                      reference_files_content: Optional[List[Dict[str, str]]],
                                      template_json_text: str,
                                      style_requirements: str = "",
-                                     language: str = None) -> str:
+                                     language: str = None,
+                                     max_total_file_chars: int = 24000,
+                                     max_file_chars: int = 6000,
+                                     max_idea_chars: int = 4000,
+                                     max_outline_chars: int = 8000,
+                                     max_description_chars: int = 8000,
+                                     max_template_chars: int = 24000) -> str:
     """
     基于原始内容 + 用户提供的风格模板 JSON 骨架 + 附加风格要求，推荐 3 组风格指导 JSON，并为每组给出 4 个样例页面描述。
 
@@ -1690,8 +1724,8 @@ def get_style_recommendations_prompt(project_dict: Dict,
     # Keep structure compatible with other prompts (uploaded_files XML), but truncate aggressively.
     files_xml = ""
     if reference_files_content:
-        max_total = 24000
-        max_per_file = 6000
+        max_total = max(0, int(max_total_file_chars or 0))
+        max_per_file = max(0, int(max_file_chars or 0))
         total = 0
         parts = ["<uploaded_files>"]
         for file_info in reference_files_content:
@@ -1715,9 +1749,10 @@ def get_style_recommendations_prompt(project_dict: Dict,
         files_xml = '\n'.join(parts)
 
     creation_type = (project_dict.get('creation_type') or '').strip()
-    idea_prompt = _truncate(project_dict.get('idea_prompt') or "", 4000)
-    outline_text = _truncate(project_dict.get('outline_text') or "", 8000)
-    description_text = _truncate(project_dict.get('description_text') or "", 8000)
+    idea_prompt = _truncate(project_dict.get('idea_prompt') or "", max_idea_chars)
+    outline_text = _truncate(project_dict.get('outline_text') or "", max_outline_chars)
+    description_text = _truncate(project_dict.get('description_text') or "", max_description_chars)
+    template_json_text = _truncate(template_json_text or "", max_template_chars)
 
     style_req = (style_requirements or "").strip()
 
@@ -1780,3 +1815,72 @@ description_text:
     final_prompt = files_xml + prompt
     logger.debug(f"[get_style_recommendations_prompt] Final prompt:\n{final_prompt}")
     return final_prompt
+
+
+def get_style_recommendations_prompt_minimal(project_dict: Dict,
+                                             template_json_text: str,
+                                             style_requirements: str = "",
+                                             language: str = None,
+                                             max_context_chars: int = 2500,
+                                             max_template_chars: int = 6000) -> str:
+    """生成更短的风格推荐 prompt，用于大上下文失败后的降级重试。"""
+    def _truncate(text: str, limit: int) -> str:
+        if not text:
+            return ""
+        s = str(text)
+        safe_limit = max(0, int(limit or 0))
+        if len(s) <= safe_limit:
+            return s
+        return s[:safe_limit] + f"\n...(内容过长，已截断，原长度={len(s)})"
+
+    context = "\n".join([
+        str(project_dict.get('idea_prompt') or ''),
+        str(project_dict.get('outline_text') or ''),
+        str(project_dict.get('description_text') or ''),
+    ]).strip()
+    context = _truncate(context, max_context_chars)
+    template_json_text = _truncate(template_json_text or "", max_template_chars)
+    style_req = (style_requirements or "").strip()
+
+    prompt = f"""\
+你是 PPT 视觉设计总监。请基于项目内容、风格模板 JSON 骨架和附加要求，输出 3 组不同的风格指导方案。
+
+<project_context>
+{context}
+</project_context>
+
+<style_template_json_skeleton>
+{template_json_text}
+</style_template_json_skeleton>
+
+<style_requirements>
+{style_req}
+</style_requirements>
+
+只输出 JSON 对象，格式：
+{{
+  "recommendations": [
+    {{
+      "name": "风格名称",
+      "rationale": "适配原因",
+      "style_json": {{}},
+      "sample_pages": {{
+        "cover": "封面页描述",
+        "toc": "目录页描述",
+        "detail": "详情页描述",
+        "ending": "结尾页描述"
+      }}
+    }}
+  ]
+}}
+
+强约束：
+- recommendations 必须刚好 3 个。
+- style_json 必须遵循模板骨架字段。
+- 三组风格应有明显差异，避免同质化暗色科技风。
+- sample_pages 必须包含 cover/toc/detail/ending。
+- 只输出 JSON，不要 markdown。
+{get_language_instruction(language)}
+"""
+    logger.debug(f"[get_style_recommendations_prompt_minimal] Final prompt:\n{prompt}")
+    return prompt
