@@ -56,7 +56,7 @@ describe('BatchGenerateDialogs', () => {
     });
   });
 
-  it('keeps the description dialog cancel action visually lightweight', async () => {
+  it('renders the description dialog cancel action as a clear neutral button', async () => {
     render(
       <BatchGenerateDialogs
         t={t}
@@ -88,6 +88,8 @@ describe('BatchGenerateDialogs', () => {
     const cancelButton = await screen.findByRole('button', { name: '取消' });
 
     expect(cancelButton).toHaveClass('self-center');
-    expect(cancelButton).toHaveClass('h-auto');
+    expect(cancelButton).toHaveClass('h-9');
+    expect(cancelButton).toHaveClass('min-w-20');
+    expect(cancelButton).toHaveClass('border-gray-300');
   });
 });
