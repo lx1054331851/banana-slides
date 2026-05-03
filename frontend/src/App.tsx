@@ -10,6 +10,7 @@ import { StyleWorkflow } from './pages/StyleWorkflow';
 import { SettingsPage } from './pages/SettingsPage';
 import { StyleLibrary } from './pages/StyleLibrary';
 import { MaterialManagement } from './pages/MaterialManagement';
+import { PromptManager } from './pages/PromptManager';
 import { useProjectStore } from './store/useProjectStore';
 import { useToast, AccessCodeGuard } from './components/shared';
 
@@ -48,6 +49,7 @@ function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/materials" element={<MaterialManagement />} />
           <Route path="/style-library" element={<StyleLibrary />} />
+          <Route path="/prompt-manager" element={<PromptManager />} />
           <Route path="/project/:projectId/outline" element={<OutlineEditor />} />
           <Route path="/project/:projectId/detail" element={<DetailEditor />} />
           <Route path="/project/:projectId/style" element={<StyleWorkflow />} />

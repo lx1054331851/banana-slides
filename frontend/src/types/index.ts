@@ -282,3 +282,20 @@ export interface Settings {
   created_at?: string;
   updated_at?: string;
 }
+
+// 提示词模板
+export interface PromptTemplate {
+  id: number;
+  key: string;
+  mode: string;
+  stage: string;
+  title: string;
+  description: string;
+  default_content: string;
+  custom_content: string;
+  effective_content: string;
+  enabled: boolean;
+  is_customized: boolean;
+  created_at?: string;
+  updated_at?: string;
+}

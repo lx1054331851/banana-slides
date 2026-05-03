@@ -101,6 +101,7 @@ const homeI18n = {
     nav: {
       materialManagement: '素材管理',
       styleLibrary: '模板管理',
+      promptManager: '提示词管理',
       history: '历史项目', settings: '设置', help: '帮助'
     },
     settings: {
@@ -191,6 +192,7 @@ const homeI18n = {
     nav: {
       materialManagement: 'Material Management',
       styleLibrary: 'Style Library',
+      promptManager: 'Prompt Manager',
       history: 'History', settings: 'Settings', help: 'Help'
     },
     settings: {
@@ -1029,6 +1031,15 @@ export const Home: React.FC = () => {
               className="text-xs md:text-sm hover:bg-banana-100/60 hover:shadow-sm hover:scale-105 transition-all duration-200 font-medium"
             >
               <span className="hidden md:inline">{t('nav.styleLibrary')}</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<FileText size={16} className="md:w-[18px] md:h-[18px]" />}
+              onClick={() => navigate('/prompt-manager')}
+              className="text-xs md:text-sm hover:bg-banana-100/60 hover:shadow-sm hover:scale-105 transition-all duration-200 font-medium"
+            >
+              <span className="hidden lg:inline">{t('nav.promptManager')}</span>
             </Button>
             <Button
               variant="ghost"

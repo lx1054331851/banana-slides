@@ -10,6 +10,7 @@ import type {
   GenerationOverride,
 } from '@/types';
 import type { Settings } from '../types/index';
+import type { PromptTemplate } from '../types/index';
 
 const IMAGE_OPERATION_TIMEOUT_MS = 300000; // 5 minutes
 
@@ -1612,6 +1613,35 @@ export const updateSettings = async (
  */
 export const resetSettings = async (): Promise<ApiResponse<Settings>> => {
   const response = await apiClient.post<ApiResponse<Settings>>('/api/settings/reset');
+  return response.data;
+};
+
+// ===== 提示词模板 API =====
+
+export interface PromptTemplatesResponse {
+  templates: PromptTemplate[];
+}
+
+export interface UpdatePromptTemplatePayload {
+  custom_content: string;
+  enabled: boolean;
+}
+
+export const getPromptTemplates = async (): Promise<ApiResponse<PromptTemplatesResponse>> => {
+  const response = await apiClient.get<ApiResponse<PromptTemplatesResponse>>('/api/prompt-templates');
+  return response.data;
+};
+
+export const updatePromptTemplate = async (
+  key: string,
+  data: UpdatePromptTemplatePayload
+): Promise<ApiResponse<PromptTemplate>> => {
+  const response = await apiClient.put<ApiResponse<PromptTemplate>>(`/api/prompt-templates/${key}`, data);
+  return response.data;
+};
+
+export const resetPromptTemplate = async (key: string): Promise<ApiResponse<PromptTemplate>> => {
+  const response = await apiClient.post<ApiResponse<PromptTemplate>>(`/api/prompt-templates/${key}/reset`);
   return response.data;
 };
 
