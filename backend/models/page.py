@@ -110,6 +110,7 @@ class Page(db.Model):
             'outline_content': self.get_outline_content(),
             'description_content': self.get_description_content(),
             'json_refine_context': self.get_json_refine_context(),
+            'narration_text': self.narration_text,
             'generated_image_url': original_url or display_image_url,
             'cached_image_url': cached_url,
             'preview_image_url': display_image_url,
