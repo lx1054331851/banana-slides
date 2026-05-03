@@ -28,5 +28,6 @@ from .style_template import StyleTemplate
 from .user_style_template import UserStyleTemplate
 from .style_preset import StylePreset
 from .preset_template import PresetTemplate
+from .prompt_template import PromptTemplate
 
-__all__ = ['db', 'Project', 'Page', 'Task', 'UserTemplate', 'PageImageVersion', 'Material', 'ReferenceFile', 'Settings', 'StyleTemplate', 'UserStyleTemplate', 'StylePreset', 'PresetTemplate']
+__all__ = ['db', 'Project', 'Page', 'Task', 'UserTemplate', 'PageImageVersion', 'Material', 'ReferenceFile', 'Settings', 'StyleTemplate', 'UserStyleTemplate', 'StylePreset', 'PresetTemplate', 'PromptTemplate']

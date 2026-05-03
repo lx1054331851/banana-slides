@@ -26,6 +26,7 @@ from models import db
 from config import Config, get_default_sqlalchemy_database_uri
 from controllers.material_controller import material_bp, material_global_bp
 from controllers.openai_oauth_controller import openai_oauth_bp
+from controllers.prompt_template_controller import prompt_template_bp
 from controllers.reference_file_controller import reference_file_bp
 from controllers.settings_controller import settings_bp
 from controllers import (
@@ -183,6 +184,7 @@ def create_app(load_settings_from_db=None):
     app.register_blueprint(openai_oauth_bp)
     app.register_blueprint(style_bp)
     app.register_blueprint(style_library_bp)
+    app.register_blueprint(prompt_template_bp)
 
     if load_settings_from_db is None:
         load_settings_from_db = _should_load_settings_from_db()
