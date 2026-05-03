@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { BatchGenerateDialogs } from '@/pages/components/BatchGenerateDialogs';
 
+// Provides the small i18n surface needed to render the dialog under test.
 const t = (key: string, options?: Record<string, unknown>) => {
   const translations: Record<string, string> = {
     'preview.confirmPartialDescriptionGenerateTitle': '选择描述生成范围',
@@ -53,5 +54,40 @@ describe('BatchGenerateDialogs', () => {
     await waitFor(() => {
       expect(rangeButton).toHaveClass('w-full');
     });
+  });
+
+  it('keeps the description dialog cancel action visually lightweight', async () => {
+    render(
+      <BatchGenerateDialogs
+        t={t}
+        showBatchGenerateDialog={false}
+        batchGenerateContext={null}
+        onCloseBatchGenerateDialog={vi.fn()}
+        onGenerateMissingImages={vi.fn()}
+        onRegenerateAllImages={vi.fn()}
+        showBatchDescriptionGenerateDialog
+        batchDescriptionGenerateContext={{
+          total: 21,
+          generated: 0,
+          generating: 0,
+          missing: 21,
+          targetPageIds: [],
+          missingPageIds: [],
+        }}
+        descriptionRangeStart="1"
+        descriptionRangeEnd="21"
+        onDescriptionRangeStartChange={vi.fn()}
+        onDescriptionRangeEndChange={vi.fn()}
+        onGenerateMissingDescriptions={vi.fn()}
+        onRegenerateAllDescriptions={vi.fn()}
+        onGenerateDescriptionsByRange={vi.fn()}
+        onCloseBatchDescriptionGenerateDialog={vi.fn()}
+      />
+    );
+
+    const cancelButton = await screen.findByRole('button', { name: '取消' });
+
+    expect(cancelButton).toHaveClass('self-center');
+    expect(cancelButton).toHaveClass('h-auto');
   });
 });

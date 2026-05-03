@@ -90,6 +90,7 @@ export const BatchGenerateDialogs: React.FC<BatchGenerateDialogsProps> = ({
           </Button>
           <Button
             variant="ghost"
+            className="self-center h-auto px-3 py-1 text-sm"
             onClick={onCloseBatchGenerateDialog}
           >
             {t('common.cancel')}
@@ -175,6 +176,7 @@ export const BatchGenerateDialogs: React.FC<BatchGenerateDialogsProps> = ({
           </div>
           <Button
             variant="ghost"
+            className="self-center h-auto px-3 py-1 text-sm"
             onClick={onCloseBatchDescriptionGenerateDialog}
           >
             {t('common.cancel')}
