@@ -56,7 +56,7 @@ describe('BatchGenerateDialogs', () => {
     });
   });
 
-  it('renders the description dialog cancel action as a clear neutral button', async () => {
+  it('uses the modal close button instead of rendering a duplicate description cancel action', async () => {
     render(
       <BatchGenerateDialogs
         t={t}
@@ -85,11 +85,8 @@ describe('BatchGenerateDialogs', () => {
       />
     );
 
-    const cancelButton = await screen.findByRole('button', { name: '取消' });
+    await screen.findByRole('button', { name: '关闭' });
 
-    expect(cancelButton).toHaveClass('self-center');
-    expect(cancelButton).toHaveClass('h-9');
-    expect(cancelButton).toHaveClass('min-w-20');
-    expect(cancelButton).toHaveClass('border-gray-300');
+    expect(screen.queryByRole('button', { name: '取消' })).not.toBeInTheDocument();
   });
 });
