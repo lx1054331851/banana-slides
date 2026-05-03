@@ -135,7 +135,7 @@ export const PromptManager: React.FC = () => {
 
       <main className={`${PAGE_CONTAINER_CLASS} py-6 md:py-8`}>
         {isLoading ? (
-          <Loading text="正在加载提示词模板..." />
+          <Loading message="正在加载提示词模板..." />
         ) : (
           <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
             <aside className="space-y-4">
