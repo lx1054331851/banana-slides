@@ -1,15 +1,17 @@
 import React from 'react';
 import type { PromptTemplate } from '@/types';
+import { cn } from '@/utils';
 
 interface PromptTemplateListProps {
   templates: PromptTemplate[];
   selectedKey?: string;
   onSelect: (template: PromptTemplate) => void;
+  className?: string;
 }
 
 // Renders selectable prompt template rows grouped by the current page filters.
-export const PromptTemplateList: React.FC<PromptTemplateListProps> = ({ templates, selectedKey, onSelect }) => (
-  <div className="space-y-2" data-testid="prompt-template-list">
+export const PromptTemplateList: React.FC<PromptTemplateListProps> = ({ templates, selectedKey, onSelect, className }) => (
+  <div className={cn('flex h-full min-h-0 flex-col gap-2 overflow-y-auto', className)} data-testid="prompt-template-list">
     {templates.map((template) => {
       const isSelected = template.key === selectedKey;
       return (

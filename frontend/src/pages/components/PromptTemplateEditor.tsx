@@ -2,6 +2,7 @@ import React from 'react';
 import { Save, RotateCcw } from 'lucide-react';
 import { Button, Card } from '@/components/shared';
 import type { PromptTemplate } from '@/types';
+import { cn } from '@/utils';
 
 interface PromptTemplateEditorProps {
   template: PromptTemplate | null;
@@ -12,6 +13,7 @@ interface PromptTemplateEditorProps {
   onEnabledChange: (value: boolean) => void;
   onSave: () => void;
   onReset: () => void;
+  className?: string;
 }
 
 // Provides default/custom prompt editing controls for the selected template.
@@ -24,17 +26,18 @@ export const PromptTemplateEditor: React.FC<PromptTemplateEditorProps> = ({
   onEnabledChange,
   onSave,
   onReset,
+  className,
 }) => {
   if (!template) {
     return (
-      <Card className="p-6">
+      <Card className={cn('min-h-0 overflow-y-auto p-6', className)}>
         <p className="text-sm text-gray-500 dark:text-foreground-tertiary">请选择一个提示词模板</p>
       </Card>
     );
   }
 
   return (
-    <Card className="p-5 md:p-6 space-y-5" data-testid="prompt-template-editor">
+    <Card className={cn('flex min-h-0 flex-col gap-5 overflow-y-auto p-5 md:p-6', className)} data-testid="prompt-template-editor">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-foreground-primary">{template.title}</h2>
@@ -55,7 +58,7 @@ export const PromptTemplateEditor: React.FC<PromptTemplateEditorProps> = ({
         </label>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
         <label className="block">
           <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-foreground-secondary">默认提示词</span>
           <textarea

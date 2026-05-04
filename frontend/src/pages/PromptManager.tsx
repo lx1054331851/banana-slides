@@ -118,7 +118,7 @@ export const PromptManager: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-background-primary">
+    <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-gray-50 dark:bg-background-primary">
       <PageHeader
         title="提示词管理"
         icon={<FileText size={18} />}
@@ -133,12 +133,14 @@ export const PromptManager: React.FC = () => {
         )}
       />
 
-      <main className={`${PAGE_CONTAINER_CLASS} py-6 md:py-8`}>
+      <main className={`${PAGE_CONTAINER_CLASS} flex min-h-0 flex-1 flex-col overflow-hidden py-6 md:py-8`}>
         {isLoading ? (
-          <Loading message="正在加载提示词模板..." />
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            <Loading message="正在加载提示词模板..." />
+          </div>
         ) : (
-          <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
-            <aside className="space-y-4">
+          <div className="grid min-h-0 flex-1 gap-5 lg:grid-cols-[320px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+            <aside className="flex h-full min-h-0 flex-col gap-4">
               <Card className="p-4">
                 <div className="mb-3 text-sm font-semibold text-gray-900 dark:text-foreground-primary">模式</div>
                 <div className="flex flex-wrap gap-2">
@@ -162,6 +164,7 @@ export const PromptManager: React.FC = () => {
                 templates={filteredTemplates}
                 selectedKey={selectedKey}
                 onSelect={handleSelect}
+                className="min-h-0 flex-1 pr-1"
               />
             </aside>
             <PromptTemplateEditor
@@ -173,6 +176,7 @@ export const PromptManager: React.FC = () => {
               onEnabledChange={setEnabled}
               onSave={handleSave}
               onReset={() => setResetPending(true)}
+              className="h-full"
             />
           </div>
         )}
