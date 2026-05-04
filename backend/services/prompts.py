@@ -1025,7 +1025,6 @@ def get_image_generation_prompt(page_desc: str, outline_text: str,
 # Auxiliary prompt builders are split out to keep this core prompt module under the file-size limit.
 from services.prompt_auxiliary_prompts import (  # noqa: E402,F401
     get_image_edit_prompt,
-    get_cover_ending_fields_detect_prompt,
     get_long_report_split_prompt,
     get_clean_background_prompt,
     get_quality_enhancement_prompt,

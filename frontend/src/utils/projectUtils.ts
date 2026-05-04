@@ -1,5 +1,5 @@
 import { getImageUrl } from '@/api/client';
-import type { Project, Page, DescriptionContent, PresentationMeta, CoverEndingFieldDetect } from '@/types';
+import type { Project, Page, DescriptionContent, PresentationMeta } from '@/types';
 import { downloadFile } from './index';
 import { getT } from './i18nHelper';
 import i18n from '@/i18n';
@@ -441,12 +441,9 @@ export const applyPresentationMetaToDescription = (
   meta: PresentationMeta,
   options: {
     pageRole: 'cover' | 'ending';
-    detectFields?: CoverEndingFieldDetect[];
   }
 ): string => {
   const pageRole = options.pageRole;
-  const detectFields = options.detectFields || [];
-  const relevantFields = detectFields.filter(f => f.page_role === pageRole);
   const defaultKeysByRole: Record<'cover' | 'ending', string[]> = {
     cover: [
       'logo',
@@ -471,11 +468,9 @@ export const applyPresentationMetaToDescription = (
   };
   let updated = descriptionText || '';
   const handledKeys = new Set<string>();
-  const relevantFieldMap = new Map(relevantFields.map(field => [field.key, field]));
 
-  // 用户输入优先：先尝试按字段标签覆盖，再回退到占位符/检测值替换
+  // 用户输入优先：先尝试按字段标签覆盖，再回退到文本直写。
   for (const key of defaultKeysByRole[pageRole]) {
-    const field = relevantFieldMap.get(key);
     const value = (meta as any)[key === 'logo' ? 'logo_url' : key] as string | undefined;
     if (!value) continue;
 
@@ -483,20 +478,6 @@ export const applyPresentationMetaToDescription = (
     const lineReplaceResult = replaceFieldLineByLabel(updated, key, value, pageRole);
     if (lineReplaceResult.replaced) {
       updated = lineReplaceResult.text;
-      replaced = true;
-    }
-
-    if (field && Array.isArray(field.placeholders) && field.placeholders.length > 0) {
-      for (const placeholder of field.placeholders) {
-        if (placeholder && updated.includes(placeholder)) {
-          updated = safeReplaceAll(updated, placeholder, value);
-          replaced = true;
-        }
-      }
-    }
-
-    if (field && field.value && field.value !== value && updated.includes(field.value)) {
-      updated = safeReplaceAll(updated, field.value, value);
       replaced = true;
     }
 

@@ -15,7 +15,6 @@ export { ReferenceFileSelector } from './ReferenceFileSelector';
 export { FilePreviewModal } from './FilePreviewModal';
 export { ReferenceFileList } from './ReferenceFileList';
 export { MaterialSelector } from './MaterialSelector';
-export { CoverEndingInfoModal } from './CoverEndingInfoModal';
 export { Footer } from './Footer';
 export { GithubBadge } from './GithubBadge';
 export { GithubRepoCard } from './GithubRepoCard';

@@ -6,7 +6,6 @@ import type {
   CreateProjectRequest,
   Page,
   ImageVersion,
-  CoverEndingFieldDetect,
   GenerationOverride,
 } from '@/types';
 import type { Settings } from '../types/index';
@@ -282,24 +281,6 @@ export const parseDescriptionToPages = async (
 
   const response = await apiClient.post<ApiResponse<{ page_descriptions: string[] }>>(
     url,
-    payload
-  );
-  return response.data;
-};
-
-/**
- * 检测封面/结尾页信息缺失
- */
-export const detectCoverEndingFields = async (
-  projectId: string,
-  payload: {
-    cover: { page_id?: string; description?: string };
-    ending: { page_id?: string; description?: string };
-    language?: OutputLanguage;
-  }
-): Promise<ApiResponse<{ fields: CoverEndingFieldDetect[] }>> => {
-  const response = await apiClient.post<ApiResponse<{ fields: CoverEndingFieldDetect[] }>>(
-    `/api/projects/${projectId}/detect/cover-ending-fields`,
     payload
   );
   return response.data;

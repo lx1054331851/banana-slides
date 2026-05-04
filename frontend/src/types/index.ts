@@ -40,9 +40,6 @@ export interface PresentationMeta {
   phone?: string;
   website_or_email?: string;
   thanks_or_slogan?: string;
-  _cover_ending_checked?: boolean;
-  _cover_ending_skipped?: boolean;
-  _cover_ending_completed?: boolean;
   _ai_generation_defaults_v1?: GenerationOverride;
 }
 
@@ -95,16 +92,6 @@ export type PreviewMode = 'text' | 'image';
 export interface JsonRefineContext {
   requirement_draft?: string;
   history?: string[];
-}
-
-export interface CoverEndingFieldDetect {
-  key: string;
-  page_role: 'cover' | 'ending';
-  present: boolean;
-  value?: string;
-  is_placeholder?: boolean;
-  placeholders?: string[];
-  confidence?: number | null;
 }
 
 // 图片版本

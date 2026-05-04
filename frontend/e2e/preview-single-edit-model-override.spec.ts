@@ -81,14 +81,6 @@ test.describe('Preview single edit model override', () => {
       });
     });
 
-    await page.route(`**/api/projects/${projectId}/detect/cover-ending-fields`, async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, data: { fields: [] } }),
-      });
-    });
-
     await page.route(`**/api/projects/${projectId}/pages/${pageId}/edit/image`, async (route) => {
       capturedEditPayload = route.request().postDataJSON();
       await route.fulfill({

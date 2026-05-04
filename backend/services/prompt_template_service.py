@@ -29,7 +29,6 @@ _DEFINITIONS: Iterable[PromptTemplateDefinition] = (
     PromptTemplateDefinition('descriptions_refinement', 'description', 'refine', '描述润色', '根据用户要求修改页面描述。'),
     PromptTemplateDefinition('image_generation', 'image', 'generate', '图片生成', '根据页面描述、大纲和素材字段生成图片提示词。'),
     PromptTemplateDefinition('image_edit', 'image', 'edit', '图片编辑', '根据自然语言要求编辑当前页面图片。'),
-    PromptTemplateDefinition('cover_ending_fields_detect', 'description', 'detect', '封面结尾字段识别', '识别封面和结尾页缺失字段。'),
     PromptTemplateDefinition('long_report_split', 'description', 'split_report', '长文拆分', '将长文档拆分为演示文稿页面描述。'),
 )
 
@@ -76,6 +75,12 @@ def sync_prompt_templates() -> None:
     """Ensure every registered prompt has a database row."""
     for key in PROMPT_TEMPLATE_DEFINITIONS:
         _get_or_create_template(key)
+    registered_keys = list(PROMPT_TEMPLATE_DEFINITIONS.keys())
+    stale_templates = PromptTemplate.query.filter(
+        PromptTemplate.key.notin_(registered_keys)
+    ).all()
+    for template in stale_templates:
+        db.session.delete(template)
     db.session.commit()
 
 

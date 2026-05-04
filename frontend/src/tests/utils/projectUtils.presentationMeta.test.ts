@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyPresentationMetaToDescription } from '@/utils/projectUtils';
-import type { CoverEndingFieldDetect, PresentationMeta } from '@/types';
+import type { PresentationMeta } from '@/types';
 
 describe('applyPresentationMetaToDescription', () => {
   it('overrides existing presenter line with user input even when field is already present', () => {
@@ -20,19 +20,8 @@ describe('applyPresentationMetaToDescription', () => {
       presenter: '李鑫',
     };
 
-    const detectFields: CoverEndingFieldDetect[] = [
-      {
-        key: 'presenter',
-        page_role: 'cover',
-        present: true,
-        value: '供应商策略与研发团队',
-        is_placeholder: false,
-      },
-    ];
-
     const updated = applyPresentationMetaToDescription(description, meta, {
       pageRole: 'cover',
-      detectFields,
     });
 
     expect(updated).toContain('汇报人：李鑫｜2026.03');
@@ -57,7 +46,6 @@ describe('applyPresentationMetaToDescription', () => {
 
     const updated = applyPresentationMetaToDescription(description, meta, {
       pageRole: 'cover',
-      detectFields: [],
     });
 
     expect(updated).toContain('联系电话：18813185524');
