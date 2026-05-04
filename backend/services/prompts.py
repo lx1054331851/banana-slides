@@ -16,7 +16,10 @@ import re
 from textwrap import dedent
 from typing import List, Dict, Optional, TYPE_CHECKING
 
-from services.prompt_template_service import resolve_prompt_template
+from services.prompt_template_service import (
+    prompt_template_overrides_enabled,
+    resolve_prompt_template,
+)
 
 if TYPE_CHECKING:
     from services.ai_service import ProjectContext
@@ -40,7 +43,7 @@ _PROMPT_TEMPLATE_TAG_KEYS = {
 def _resolve_prompt_override(tag: str, prompt: str) -> str:
     """Resolve a registered prompt override for a prompt builder tag."""
     key = _PROMPT_TEMPLATE_TAG_KEYS.get(tag)
-    if not key:
+    if not key or not prompt_template_overrides_enabled():
         return prompt
     return resolve_prompt_template(key, prompt)
 
@@ -806,7 +809,8 @@ Now split the description text into individual page descriptions. Return only th
 {get_language_instruction(language)}
 """)
 
-    prompt = resolve_prompt_template('description_split', prompt)
+    if prompt_template_overrides_enabled():
+        prompt = resolve_prompt_template('description_split', prompt)
     logger.debug(f"[get_description_split_prompt] Final prompt:\n{prompt}")
     return prompt
 
@@ -1016,7 +1020,8 @@ def get_image_generation_prompt(page_desc: str, outline_text: str,
 {"**注意：当前页面为ppt的封面页，请你采用专业的封面设计美学技巧，务必凸显出页面标题，分清主次，确保一下就能抓住观众的注意力。**" if page_index == 1 else ""}
 """)
 
-    prompt = resolve_prompt_template('image_generation', prompt)
+    if prompt_template_overrides_enabled():
+        prompt = resolve_prompt_template('image_generation', prompt)
     logger.debug(f"[get_image_generation_prompt] Final prompt:\n{prompt}")
     return prompt
 

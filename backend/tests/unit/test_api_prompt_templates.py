@@ -4,7 +4,11 @@ def test_prompt_templates_list_endpoint(client):
     data = response.get_json()
     assert response.status_code == 200
     assert data["success"] is True
-    assert any(item["key"] == "image_generation" for item in data["data"]["templates"])
+    templates = data["data"]["templates"]
+    image_generation = next(item for item in templates if item["key"] == "image_generation")
+    page_description_json = next(item for item in templates if item["key"] == "page_description_json")
+    assert image_generation["default_content"].strip()
+    assert page_description_json["default_content"].strip()
 
 
 def test_prompt_template_update_endpoint(client):

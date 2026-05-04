@@ -1,5 +1,8 @@
 """Prompt template registry and override resolution."""
 from dataclasses import dataclass
+from contextlib import contextmanager
+from contextvars import ContextVar
+from types import SimpleNamespace
 from typing import Dict, Iterable
 
 from models import PromptTemplate, db
@@ -36,6 +39,11 @@ PROMPT_TEMPLATE_DEFINITIONS: Dict[str, PromptTemplateDefinition] = {
     definition.key: definition for definition in _DEFINITIONS
 }
 
+_PROMPT_TEMPLATE_OVERRIDES_ENABLED: ContextVar[bool] = ContextVar(
+    'prompt_template_overrides_enabled',
+    default=True,
+)
+
 
 def _get_definition(key: str) -> PromptTemplateDefinition:
     """Return a registered prompt definition or raise KeyError."""
@@ -44,7 +52,127 @@ def _get_definition(key: str) -> PromptTemplateDefinition:
     return PROMPT_TEMPLATE_DEFINITIONS[key]
 
 
-def _get_or_create_template(key: str, default_content: str = '') -> PromptTemplate:
+def prompt_template_overrides_enabled() -> bool:
+    """Return whether prompt overrides should be resolved for the current context."""
+    return bool(_PROMPT_TEMPLATE_OVERRIDES_ENABLED.get())
+
+
+@contextmanager
+def disable_prompt_template_overrides():
+    """Temporarily disable prompt override resolution for seed generation."""
+    token = _PROMPT_TEMPLATE_OVERRIDES_ENABLED.set(False)
+    try:
+        yield
+    finally:
+        _PROMPT_TEMPLATE_OVERRIDES_ENABLED.reset(token)
+
+
+def _build_default_content(key: str) -> str:
+    """Render the canonical default prompt text for a registered key."""
+    with disable_prompt_template_overrides():
+        from services.prompts import (
+            get_all_descriptions_stream_prompt,
+            get_description_split_prompt,
+            get_description_to_outline_prompt,
+            get_description_to_outline_prompt_markdown,
+            get_descriptions_refinement_prompt,
+            get_image_generation_prompt,
+            get_image_edit_prompt,
+            get_long_report_split_prompt,
+            get_outline_generation_prompt,
+            get_outline_generation_prompt_markdown,
+            get_outline_parsing_prompt,
+            get_outline_parsing_prompt_markdown,
+            get_outline_refinement_prompt,
+            get_page_description_json_prompt,
+        )
+
+        context = SimpleNamespace(
+            idea_prompt='示例主题',
+            outline_text='示例大纲',
+            description_text='示例页面描述',
+            creation_type='idea',
+            outline_requirements='',
+            description_requirements='',
+            template_style_json='',
+            reference_files_content=[],
+        )
+
+        if key == 'outline_generation':
+            return get_outline_generation_prompt(context, 'zh')
+        if key == 'outline_generation_markdown':
+            return get_outline_generation_prompt_markdown(context, 'zh')
+        if key == 'outline_parsing':
+            return get_outline_parsing_prompt(context, 'zh')
+        if key == 'outline_parsing_markdown':
+            return get_outline_parsing_prompt_markdown(context, 'zh')
+        if key == 'description_to_outline':
+            return get_description_to_outline_prompt(context, 'zh')
+        if key == 'description_to_outline_markdown':
+            return get_description_to_outline_prompt_markdown(context, 'zh')
+        if key == 'outline_refinement':
+            return get_outline_refinement_prompt(
+                current_outline=[{'title': '示例标题', 'points': ['要点1', '要点2']}],
+                user_requirement='示例修改要求',
+                project_context=context,
+                previous_requirements=['示例历史要求'],
+                language='zh',
+            )
+        if key == 'page_description_json':
+            return get_page_description_json_prompt(
+                context,
+                outline=[{'title': '示例标题', 'points': ['要点1', '要点2']}],
+                page_outline={'title': '示例标题', 'points': ['要点1', '要点2']},
+                page_index=1,
+                part_info='',
+                language='zh',
+            )
+        if key == 'all_descriptions_stream':
+            return get_all_descriptions_stream_prompt(
+                context,
+                outline=[{'title': '示例标题', 'points': ['要点1', '要点2']}],
+                flat_pages=[{'title': '示例标题', 'points': ['要点1', '要点2']}],
+                language='zh',
+            )
+        if key == 'description_split':
+            return get_description_split_prompt(
+                context,
+                outline=[{'title': '示例标题', 'points': ['要点1', '要点2']}],
+                language='zh',
+            )
+        if key == 'descriptions_refinement':
+            return get_descriptions_refinement_prompt(
+                current_descriptions=[{'index': 0, 'title': '示例标题', 'description_content': '示例页面描述'}],
+                user_requirement='示例修改要求',
+                project_context=context,
+                outline=[{'title': '示例标题', 'points': ['要点1', '要点2']}],
+                previous_requirements=['示例历史要求'],
+                language='zh',
+            )
+        if key == 'image_generation':
+            return get_image_generation_prompt(
+                page_desc='示例页面描述',
+                outline_text='示例大纲',
+                current_section='示例章节',
+                has_material_images=False,
+                extra_requirements='',
+                language='zh',
+                has_template=True,
+                page_index=1,
+                aspect_ratio='16:9',
+            )
+        if key == 'image_edit':
+            return get_image_edit_prompt(
+                edit_instruction='示例编辑要求',
+                original_description='示例原始描述',
+                reference_image_count=1,
+            )
+        if key == 'long_report_split':
+            return get_long_report_split_prompt('示例长文报告', [])
+        raise KeyError(f"Unsupported prompt template key: {key}")
+
+
+def _get_or_create_template(key: str, default_content: str | None = None) -> PromptTemplate:
     """Fetch or create the database row for a registered prompt template."""
     definition = _get_definition(key)
     template = PromptTemplate.query.filter_by(key=key).first()
@@ -74,7 +202,7 @@ def _get_or_create_template(key: str, default_content: str = '') -> PromptTempla
 def sync_prompt_templates() -> None:
     """Ensure every registered prompt has a database row."""
     for key in PROMPT_TEMPLATE_DEFINITIONS:
-        _get_or_create_template(key)
+        _get_or_create_template(key, _build_default_content(key))
     registered_keys = list(PROMPT_TEMPLATE_DEFINITIONS.keys())
     stale_templates = PromptTemplate.query.filter(
         PromptTemplate.key.notin_(registered_keys)
@@ -98,7 +226,7 @@ def list_prompt_templates():
 def get_prompt_template(key: str):
     """Return one prompt template as a serialized dict."""
     _get_definition(key)
-    template = _get_or_create_template(key)
+    template = _get_or_create_template(key, _build_default_content(key))
     db.session.commit()
     return template.to_dict()
 
@@ -125,7 +253,7 @@ def save_prompt_template(key: str, custom_content: str, enabled: bool):
     """Persist a custom prompt override and enabled state."""
     if enabled and not (custom_content or '').strip():
         raise ValueError("custom_content is required when enabled is true")
-    template = _get_or_create_template(key)
+    template = _get_or_create_template(key, None)
     template.custom_content = custom_content or ''
     template.enabled = bool(enabled)
     db.session.commit()
@@ -134,7 +262,7 @@ def save_prompt_template(key: str, custom_content: str, enabled: bool):
 
 def reset_prompt_template(key: str):
     """Clear a custom prompt override and disable it."""
-    template = _get_or_create_template(key)
+    template = _get_or_create_template(key, None)
     template.custom_content = ''
     template.enabled = False
     db.session.commit()

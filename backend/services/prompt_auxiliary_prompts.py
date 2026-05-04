@@ -4,7 +4,10 @@ import logging
 from textwrap import dedent
 from typing import Dict, List, Optional
 
-from services.prompt_template_service import resolve_prompt_template
+from services.prompt_template_service import (
+    prompt_template_overrides_enabled,
+    resolve_prompt_template,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +74,8 @@ def get_image_edit_prompt(
         "只依据这些图片和修改要求完成编辑，并尽量保持原页面主体结构与版式逻辑。"
     )
 
-    prompt = resolve_prompt_template('image_edit', prompt)
+    if prompt_template_overrides_enabled():
+        prompt = resolve_prompt_template('image_edit', prompt)
     logger.debug(f"[get_image_edit_prompt] Final prompt:\n{prompt}")
     return prompt
 
@@ -237,7 +241,8 @@ Task:
 """)
     prompt = prompt.replace("<<<REPORT_TEXT>>>", report_text)
     final_prompt = files_xml + prompt
-    final_prompt = resolve_prompt_template('long_report_split', final_prompt)
+    if prompt_template_overrides_enabled():
+        final_prompt = resolve_prompt_template('long_report_split', final_prompt)
     logger.debug(f"[get_long_report_split_prompt] Final prompt:\n{final_prompt}")
     return final_prompt
 
