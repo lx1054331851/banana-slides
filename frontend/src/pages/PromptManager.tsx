@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Home, RotateCcw } from 'lucide-react';
-import { Button, Card, Loading, PageHeader, PAGE_CONTAINER_CLASS, useToast } from '@/components/shared';
+import { Button, Card, Loading, PageHeader, useToast } from '@/components/shared';
 import * as api from '@/api/endpoints';
 import type { PromptTemplate } from '@/types';
 import { PromptTemplateEditor } from './components/PromptTemplateEditor';
@@ -133,7 +133,7 @@ export const PromptManager: React.FC = () => {
         )}
       />
 
-      <main className={`${PAGE_CONTAINER_CLASS} flex min-h-0 flex-1 flex-col overflow-hidden py-6 md:py-8`}>
+      <main className="flex min-h-0 w-full flex-1 flex-col overflow-hidden px-4 py-6 md:px-6 md:py-8 xl:px-8">
         {isLoading ? (
           <div className="flex min-h-0 flex-1 items-center justify-center">
             <Loading message="正在加载提示词模板..." />
