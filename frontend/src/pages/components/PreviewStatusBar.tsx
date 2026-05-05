@@ -17,6 +17,7 @@ type PreviewStatusBarProps = {
   onNextPage: () => void;
 };
 
+// Renders the persistent preview footer with page, text, and image generation status.
 export const PreviewStatusBar: React.FC<PreviewStatusBarProps> = ({
   selectedIndex,
   totalPages,
@@ -43,22 +44,20 @@ export const PreviewStatusBar: React.FC<PreviewStatusBarProps> = ({
         <span className={`rounded-full px-3 py-1 ${isCurrentPageDirty ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
           {textStatusLabel}
         </span>
-        {isSelectedPageGenerating ? (
+        {generatingImageCount > 0 ? (
           <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
             <Loader2 size={14} className="animate-spin" />
             <span className="inline-flex items-center">
-              {generationStatusDetail}
+              {isSelectedPageGenerating ? generationStatusDetail : '正在渲染'}
               <span className="ml-1 inline-flex items-end gap-0.5 text-[12px] leading-none">
                 <span className="animate-pulse">.</span>
                 <span className="animate-pulse" style={{ animationDelay: '150ms' }}>.</span>
                 <span className="animate-pulse" style={{ animationDelay: '300ms' }}>.</span>
               </span>
             </span>
-            {generatingImageCount > 1 && (
-              <span className="text-[11px] text-amber-800/80 dark:text-amber-100/80">
-                进行中 {generatingImageCount} 页
-              </span>
-            )}
+            <span className="text-[11px] font-medium text-amber-800/80 dark:text-amber-100/80">
+              进行中 {generatingImageCount} 张
+            </span>
           </span>
         ) : (
           <span className={`rounded-full px-3 py-1 ${selectedPageHasImage ? 'bg-sky-100 text-sky-700' : 'bg-gray-100 text-gray-600 dark:bg-background-hover dark:text-foreground-tertiary'}`}>
