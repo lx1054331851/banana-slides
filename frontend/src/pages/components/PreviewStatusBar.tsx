@@ -9,7 +9,6 @@ type PreviewStatusBarProps = {
   textStatusLabel: string;
   isSelectedPageGenerating: boolean;
   generationStatusDetail: string;
-  generatingImageCount: number;
   selectedPageHasImage: boolean;
   imageStatusLabel: string;
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -25,7 +24,6 @@ export const PreviewStatusBar: React.FC<PreviewStatusBarProps> = ({
   textStatusLabel,
   isSelectedPageGenerating,
   generationStatusDetail,
-  generatingImageCount,
   selectedPageHasImage,
   imageStatusLabel,
   t,
@@ -44,19 +42,16 @@ export const PreviewStatusBar: React.FC<PreviewStatusBarProps> = ({
         <span className={`rounded-full px-3 py-1 ${isCurrentPageDirty ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
           {textStatusLabel}
         </span>
-        {generatingImageCount > 0 ? (
+        {isSelectedPageGenerating ? (
           <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
             <Loader2 size={14} className="animate-spin" />
             <span className="inline-flex items-center">
-              {isSelectedPageGenerating ? generationStatusDetail : '正在渲染'}
+              {generationStatusDetail}
               <span className="ml-1 inline-flex items-end gap-0.5 text-[12px] leading-none">
                 <span className="animate-pulse">.</span>
                 <span className="animate-pulse" style={{ animationDelay: '150ms' }}>.</span>
                 <span className="animate-pulse" style={{ animationDelay: '300ms' }}>.</span>
               </span>
-            </span>
-            <span className="text-[11px] font-medium text-amber-800/80 dark:text-amber-100/80">
-              进行中 {generatingImageCount} 张
             </span>
           </span>
         ) : (

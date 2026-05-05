@@ -2431,6 +2431,7 @@ export const SlidePreview: React.FC = () => {
         <SlidePreviewSidebarShell
           t={t}
           currentPageCount={currentProject.pages.length}
+          generatingImageCount={generatingImageCount}
           isMobileView={isMobileView}
           isResizingSidebar={isResizingSidebar}
           isSidebarCollapsed={isSidebarCollapsed}
@@ -2636,7 +2637,6 @@ export const SlidePreview: React.FC = () => {
                 textStatusLabel={textStatusLabel}
                 isSelectedPageGenerating={isSelectedPageGenerating}
                 generationStatusDetail={generationStatusDetail}
-                generatingImageCount={generatingImageCount}
                 selectedPageHasImage={selectedPageHasImage}
                 imageStatusLabel={imageStatusLabel}
                 t={t}

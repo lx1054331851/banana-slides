@@ -9,7 +9,6 @@ const baseProps = {
   textStatusLabel: '文本已保存',
   isSelectedPageGenerating: false,
   generationStatusDetail: '正在渲染',
-  generatingImageCount: 0,
   selectedPageHasImage: false,
   imageStatusLabel: '尚未生成图片',
   t: (key: string) => key,
@@ -18,28 +17,26 @@ const baseProps = {
 };
 
 describe('PreviewStatusBar', () => {
-  it('shows global rendering count even when the selected page is not generating', () => {
+  it('keeps the current page image status when other pages are generating', () => {
     render(
       <PreviewStatusBar
         {...baseProps}
-        generatingImageCount={3}
         isSelectedPageGenerating={false}
       />
     );
 
-    expect(screen.getByText('进行中 3 张')).toBeInTheDocument();
-    expect(screen.queryByText('尚未生成图片')).not.toBeInTheDocument();
+    expect(screen.getByText('尚未生成图片')).toBeInTheDocument();
+    expect(screen.queryByText('进行中 3 张')).not.toBeInTheDocument();
   });
 
-  it('shows a single rendering image count', () => {
+  it('shows current page generation status when the selected page is generating', () => {
     render(
       <PreviewStatusBar
         {...baseProps}
-        generatingImageCount={1}
         isSelectedPageGenerating={true}
       />
     );
 
-    expect(screen.getByText('进行中 1 张')).toBeInTheDocument();
+    expect(screen.getByText('正在渲染')).toBeInTheDocument();
   });
 });
