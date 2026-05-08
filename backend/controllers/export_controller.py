@@ -16,6 +16,7 @@ from utils import (
 )
 from services import ExportService, FileService
 from services.export_helpers import maybe_compress_export_images
+from services.prompts import normalize_narration_generation_config
 
 logger = logging.getLogger(__name__)
 
@@ -610,9 +611,19 @@ def export_video(project_id):
 
         voice = data.get('voice', current_app.config.get('TTS_DEFAULT_VOICE_ZH', 'zh-CN-XiaoxiaoNeural'))
         rate = data.get('rate', current_app.config.get('TTS_DEFAULT_RATE', '+0%'))
+        try:
+            speed = float(data.get('speed', 1.0))
+        except (TypeError, ValueError):
+            speed = 1.0
+        speed = max(0.7, min(speed, 1.2))
         generate_narration = data.get('generate_narration', True)
         enable_ken_burns = data.get('enable_ken_burns', False)
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+        presentation_topic = data.get('presentation_topic') or project.idea_prompt or ''
+        narration_config = normalize_narration_generation_config(
+            data.get('narration_config'),
+            fallback_topic=presentation_topic,
+        )
 
         # 根据语言自动选择默认语音
         if 'voice' not in data:
@@ -645,11 +656,13 @@ def export_video(project_id):
             file_service=file_service,
             voice=voice,
             rate=rate,
+            speed=speed,
             generate_narration=generate_narration,
             enable_ken_burns=enable_ken_burns,
             include_no_image_pages=include_no_image_pages,
             page_ids=selected_page_ids if selected_page_ids else None,
             language=language,
+            narration_config=narration_config,
             app=app,
         )
 
@@ -660,6 +673,7 @@ def export_video(project_id):
                 "generate_narration": generate_narration,
                 "enable_ken_burns": enable_ken_burns,
                 "include_no_image_pages": include_no_image_pages,
+                "narration_config": narration_config,
             },
             message="Video export task created"
         )

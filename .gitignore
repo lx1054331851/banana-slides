@@ -71,3 +71,6 @@ banana_slides.egg-info/
 # VS Code workspace settings
 .vscode/
 .DS_Store
+
+# 本地 ML 模型（RMBG 等）
+/models/

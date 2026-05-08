@@ -1041,5 +1041,8 @@ from services.prompt_auxiliary_prompts import (  # noqa: E402,F401
     get_style_extraction_prompt,
     get_style_recommendations_prompt,
     get_style_recommendations_prompt_minimal,
+    get_default_narration_generation_config,
+    normalize_narration_generation_config,
+    parse_narration_generation_result,
     get_narration_generation_prompt,
 )

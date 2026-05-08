@@ -25,6 +25,7 @@ export { GlobalAiAssistantDrawer } from './GlobalAiAssistantDrawer';
 export { PageAiWorkbench } from './PageAiWorkbench';
 export { ShimmerOverlay } from './ShimmerOverlay';
 export { ImagePreviewList } from './ImagePreviewList';
+export { ImportMarkdownModal } from './ImportMarkdownModal';
 export { ProjectResourcesList } from './ProjectResourcesList';
 export { HelpModal } from './HelpModal';
 export { ProjectSettingsModal } from './ProjectSettingsModal';

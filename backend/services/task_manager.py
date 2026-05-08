@@ -2376,6 +2376,316 @@ def export_pptx_task(
             db.session.commit()
 
 
+def export_video_task(
+    task_id: str,
+    project_id: str,
+    filename: str,
+    file_service,
+    voice: str = 'zh-CN-XiaoxiaoNeural',
+    rate: str = '+0%',
+    speed: float = 1.0,
+    generate_narration: bool = True,
+    enable_ken_burns: bool = False,
+    include_no_image_pages: bool = False,
+    page_ids: list = None,
+    language: str = 'zh',
+    narration_config: dict | None = None,
+    app=None,
+):
+    """
+    后台任务：导出 TTS 播报视频 (MP4)
+    """
+    if app is None:
+        raise ValueError("Flask app instance must be provided")
+
+    with app.app_context():
+        import os
+        from models import Project, Settings
+        from services.tts_video_service import (
+            generate_narration_video,
+            check_ffmpeg_available,
+            check_ffmpeg_ass_filter_available,
+            create_placeholder_frame,
+        )
+
+        _settings = Settings.get_settings()
+        elevenlabs_config = None
+        if _settings.elevenlabs_enabled and _settings.elevenlabs_api_key:
+            elevenlabs_config = {
+                'api_key': _settings.elevenlabs_api_key,
+                'voice_id': voice,
+            }
+        logger.info(f"[export_video] voice={voice!r} elevenlabs_enabled={_settings.elevenlabs_enabled} elevenlabs_config={'set' if elevenlabs_config else 'None'}")
+
+        progress_messages = ["🚀 开始导出讲解视频..."]
+        max_messages = 10
+
+        def progress_callback(step: str, message: str, percent: int):
+            nonlocal progress_messages
+            try:
+                new_message = f"[{step}] {message}"
+                progress_messages.append(new_message)
+                if len(progress_messages) > max_messages:
+                    progress_messages = progress_messages[-max_messages:]
+
+                mapped_pct = int(20 + percent * 0.75)
+                mapped_pct = min(mapped_pct, 95)
+
+                task = Task.query.get(task_id)
+                if task:
+                    task.set_progress({
+                        "total": 100,
+                        "completed": mapped_pct,
+                        "failed": 0,
+                        "current_step": message,
+                        "percent": mapped_pct,
+                        "messages": progress_messages.copy(),
+                    })
+                    db.session.commit()
+            except Exception as e:
+                logger.warning(f"更新进度失败: {e}")
+
+        try:
+            task = Task.query.get(task_id)
+            if not task:
+                logger.error(f"Task {task_id} not found")
+                return
+
+            project = Project.query.get(project_id)
+            if not project:
+                raise ValueError(f"Project {project_id} not found")
+
+            export_allow_partial = project.export_allow_partial or False
+            fail_fast = not export_allow_partial
+            logger.info(f"视频导出设置: export_allow_partial={export_allow_partial}, fail_fast={fail_fast}")
+
+            task.status = 'PROCESSING'
+            task.set_progress({
+                "total": 100,
+                "completed": 0,
+                "failed": 0,
+                "current_step": "准备中...",
+                "percent": 0,
+                "messages": progress_messages,
+            })
+            db.session.commit()
+
+            ffmpeg_path = app.config.get('FFMPEG_PATH', 'ffmpeg')
+            if not check_ffmpeg_available(ffmpeg_path):
+                raise RuntimeError("FFmpeg 未安装或不在 PATH 中。请安装 FFmpeg 以使用视频导出功能。")
+
+            progress_callback("准备", "FFmpeg 可用", 2)
+            if not check_ffmpeg_ass_filter_available(ffmpeg_path):
+                progress_callback("准备", "当前 FFmpeg 缺少 ASS 字幕滤镜，若需字幕请先安装带 libass 的版本", 3)
+
+            pages = get_filtered_pages(project_id, page_ids)
+            if not pages:
+                raise ValueError("没有找到可导出的页面")
+
+            valid_pages = []
+            placeholder_dir = None
+            if include_no_image_pages:
+                video_width = app.config.get('VIDEO_OUTPUT_WIDTH', 1920)
+                video_height = app.config.get('VIDEO_OUTPUT_HEIGHT', 1080)
+                placeholder_dir = os.path.join(app.config['UPLOAD_FOLDER'], project_id, 'exports', f'_placeholder_{task_id}')
+                os.makedirs(placeholder_dir, exist_ok=True)
+
+            for page in pages:
+                if page.generated_image_path:
+                    img_path = file_service.get_absolute_path(page.generated_image_path)
+                    if os.path.exists(img_path):
+                        valid_pages.append((page, img_path))
+                        continue
+
+                if include_no_image_pages:
+                    outline_content = page.get_outline_content() or {}
+                    title = outline_content.get('title', f'Page {page.order_index + 1}')
+                    placeholder_path = os.path.join(placeholder_dir, f'placeholder_{page.order_index:03d}.png')
+                    try:
+                        create_placeholder_frame(
+                            placeholder_path, title=title,
+                            width=video_width, height=video_height,
+                            ffmpeg_path=ffmpeg_path,
+                        )
+                        valid_pages.append((page, placeholder_path))
+                    except Exception as e:
+                        logger.warning(f"生成占位帧失败 (page {page.id}): {e}")
+
+            if not valid_pages:
+                raise ValueError("没有找到可导出的页面（无图片且未启用占位帧）")
+
+            progress_callback("准备", f"找到 {len(valid_pages)} 页幻灯片", 5)
+
+            if generate_narration:
+                from services.prompts import (
+                    get_narration_generation_prompt,
+                    normalize_narration_generation_config,
+                    parse_narration_generation_result,
+                )
+                from services.ai_service_manager import get_ai_service
+
+                ai_service = get_ai_service()
+                narration_generated = 0
+                project_topic = (project.idea_prompt or '').strip() if project else ''
+                normalized_narration_config = normalize_narration_generation_config(
+                    narration_config,
+                    fallback_topic=project_topic,
+                )
+
+                pages_needing_narration = []
+                for i, (page, _) in enumerate(valid_pages):
+                    desc_content = page.get_description_content()
+                    desc_text = ''
+                    if desc_content:
+                        desc_text = desc_content.get('text', '')
+                        if not desc_text and desc_content.get('text_content'):
+                            tc = desc_content.get('text_content', [])
+                            desc_text = '\n'.join(tc) if isinstance(tc, list) else str(tc)
+                        desc_text = _append_extra_fields(desc_text, desc_content)
+
+                    outline_content = page.get_outline_content() or {}
+                    if not desc_text:
+                        title = outline_content.get('title', '')
+                        points = outline_content.get('points', [])
+                        if title or points:
+                            desc_text = f'{title}\n' + '\n'.join(f'- {p}' for p in points)
+
+                    if not desc_text:
+                        if fail_fast:
+                            raise RuntimeError(
+                                f"第 {page.order_index + 1} 页缺少可生成旁白的描述内容，当前项目未开启“允许返回半成品”，无法导出视频。"
+                            )
+                        continue
+
+                    pages_needing_narration.append((page, i + 1, outline_content, desc_text))
+
+                if pages_needing_narration:
+                    progress_callback("旁白", f"正在生成 {len(pages_needing_narration)} 页旁白...", 5)
+                    try:
+                        prompt_pages = [
+                            {
+                                'page_index': seq,
+                                'title': outline.get('title', ''),
+                                'points': outline.get('points', []),
+                                'description_text': desc_text,
+                            }
+                            for _, seq, outline, desc_text in pages_needing_narration
+                        ]
+                        prompt = get_narration_generation_prompt(
+                            prompt_pages,
+                            language=language,
+                            config=normalized_narration_config,
+                        )
+                        result = ai_service.text_provider.generate_text(prompt)
+                        parsed = parse_narration_generation_result(result)
+
+                        for page, seq, _, _ in pages_needing_narration:
+                            narration = parsed.get(seq, '')
+                            if narration:
+                                page.set_narration_text(narration)
+                                narration_generated += 1
+                            elif fail_fast:
+                                raise RuntimeError(
+                                    f"第 {page.order_index + 1} 页旁白生成结果为空，当前项目未开启“允许返回半成品”，已停止导出。"
+                                )
+                        db.session.commit()
+                    except RuntimeError:
+                        raise
+                    except Exception as e:
+                        if fail_fast:
+                            raise RuntimeError(f"旁白生成失败，已停止导出: {e}") from e
+                        logger.warning(f"批量生成旁白失败: {e}")
+
+                progress_callback("旁白", f"已生成 {narration_generated} 页旁白", 20)
+
+            progress_callback("旁白", "旁白准备完成", 20)
+
+            pages_data = []
+            missing_narration_pages = []
+            for page, img_path in valid_pages:
+                db.session.refresh(page)
+                narration = page.narration_text
+                if not narration or not narration.strip():
+                    missing_narration_pages.append(page.order_index + 1)
+                pages_data.append({
+                    'image_path': img_path,
+                    'narration_text': narration,
+                    'page_index': page.order_index,
+                })
+
+            if missing_narration_pages and fail_fast:
+                pages = '、'.join(str(idx) for idx in missing_narration_pages)
+                raise RuntimeError(
+                    f"以下页面缺少旁白文本：第 {pages} 页。当前项目未开启“允许返回半成品”，已停止导出。"
+                )
+
+            exports_dir = os.path.join(app.config['UPLOAD_FOLDER'], project_id, 'exports')
+            os.makedirs(exports_dir, exist_ok=True)
+
+            if not filename.endswith('.mp4'):
+                filename += '.mp4'
+
+            output_path = os.path.join(exports_dir, filename)
+            if os.path.exists(output_path):
+                base_name = filename.rsplit('.', 1)[0]
+                timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+                filename = f"{base_name}_{timestamp}.mp4"
+                output_path = os.path.join(exports_dir, filename)
+
+            video_width = app.config.get('VIDEO_OUTPUT_WIDTH', 1920)
+            video_height = app.config.get('VIDEO_OUTPUT_HEIGHT', 1080)
+            video_fps = app.config.get('VIDEO_FPS', 25)
+            silent_duration = app.config.get('DEFAULT_SILENT_CLIP_DURATION', 3.0)
+
+            generate_narration_video(
+                pages_data=pages_data,
+                output_path=output_path,
+                voice=voice,
+                rate=rate,
+                width=video_width,
+                height=video_height,
+                fps=video_fps,
+                enable_ken_burns=enable_ken_burns,
+                ffmpeg_path=ffmpeg_path,
+                progress_callback=progress_callback,
+                silent_duration=silent_duration,
+                fail_fast=fail_fast,
+                elevenlabs_config=elevenlabs_config,
+                speed=speed,
+            )
+
+            download_path = f"/files/{project_id}/exports/{filename}"
+            progress_messages.append("✅ 视频导出完成！")
+
+            task = Task.query.get(task_id)
+            if task:
+                task.status = 'COMPLETED'
+                task.completed_at = datetime.utcnow()
+                task.set_progress({
+                    "total": 100,
+                    "completed": 100,
+                    "failed": 0,
+                    "current_step": "✓ 导出完成",
+                    "percent": 100,
+                    "messages": progress_messages,
+                    "download_url": download_path,
+                    "filename": filename,
+                })
+                db.session.commit()
+
+        except Exception as e:
+            logger.error(f"✗ 视频导出任务 {task_id} 失败: {e}", exc_info=True)
+            task = Task.query.get(task_id)
+            if task:
+                task.status = 'FAILED'
+                task.error_message = str(e)
+                task.completed_at = datetime.utcnow()
+                db.session.commit()
+        finally:
+            if placeholder_dir and os.path.exists(placeholder_dir):
+                import shutil
+                shutil.rmtree(placeholder_dir, ignore_errors=True)
+
 def export_pdf_task(
     task_id: str,
     project_id: str,
