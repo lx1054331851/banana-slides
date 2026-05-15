@@ -37,7 +37,7 @@ export const PromptTemplateEditor: React.FC<PromptTemplateEditorProps> = ({
   }
 
   return (
-    <Card className={cn('flex min-h-0 flex-col gap-5 overflow-y-auto p-5 md:p-6', className)} data-testid="prompt-template-editor">
+    <Card className={cn('flex min-h-0 flex-col gap-5 overflow-hidden p-5 md:p-6', className)} data-testid="prompt-template-editor">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-foreground-primary">{template.title}</h2>
@@ -58,24 +58,24 @@ export const PromptTemplateEditor: React.FC<PromptTemplateEditorProps> = ({
         </label>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
-        <label className="block">
+      <div className="grid min-h-[360px] flex-1 gap-4 lg:min-h-0 lg:grid-cols-2">
+        <label className="flex min-h-0 flex-col">
           <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-foreground-secondary">默认提示词</span>
           <textarea
             aria-label="默认提示词"
             value={template.default_content}
             readOnly
-            className="h-[420px] w-full resize-none rounded-lg border border-gray-200 dark:border-border-primary bg-gray-50 dark:bg-background-primary p-3 font-mono text-sm text-gray-700 dark:text-foreground-secondary focus:outline-none"
+            className="min-h-[240px] flex-1 resize-none rounded-lg border border-gray-200 dark:border-border-primary bg-gray-50 dark:bg-background-primary p-3 font-mono text-sm text-gray-700 dark:text-foreground-secondary focus:outline-none"
           />
         </label>
-        <label className="block">
+        <label className="flex min-h-0 flex-col">
           <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-foreground-secondary">自定义提示词</span>
           <textarea
             aria-label="自定义提示词"
             value={customContent}
             onChange={(event) => onCustomContentChange(event.target.value)}
             placeholder="填写完整提示词；启用后将覆盖默认提示词。"
-            className="h-[420px] w-full resize-none rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary p-3 font-mono text-sm text-gray-900 dark:text-foreground-primary focus:border-banana-500 focus:outline-none focus:ring-2 focus:ring-banana-500"
+            className="min-h-[240px] flex-1 resize-none rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary p-3 font-mono text-sm text-gray-900 dark:text-foreground-primary focus:border-banana-500 focus:outline-none focus:ring-2 focus:ring-banana-500"
           />
         </label>
       </div>
