@@ -101,6 +101,16 @@ describe('PromptManager', () => {
     expect(mockGetPromptTemplates).toHaveBeenCalledTimes(1);
   });
 
+  it('refreshes prompt templates from the header action', async () => {
+    render(<PromptManager />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '刷新' }));
+
+    await waitFor(() => {
+      expect(mockGetPromptTemplates).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('saves custom prompt content and enabled state', async () => {
     render(<PromptManager />);
 

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Home, RotateCcw } from 'lucide-react';
+import { FileText, RefreshCw, RotateCcw } from 'lucide-react';
 import { Button, Card, Loading, PageHeader, useToast } from '@/components/shared';
 import * as api from '@/api/endpoints';
 import type { PromptTemplate } from '@/types';
@@ -127,8 +127,14 @@ export const PromptManager: React.FC = () => {
         backLabel="返回"
         homeLabel="首页"
         actions={(
-          <Button variant="ghost" size="sm" icon={<Home size={16} />} onClick={() => navigate('/settings')}>
-            设置
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />}
+            onClick={loadTemplates}
+            disabled={isLoading}
+          >
+            {isLoading ? '刷新中...' : '刷新'}
           </Button>
         )}
       />
