@@ -37,6 +37,43 @@ export const PromptTemplateEditor: React.FC<PromptTemplateEditorProps> = ({
     setExpandedEditor((current) => (current === editor ? null : editor));
   };
 
+  // Renders one prompt editor pane for the split view or fullscreen focus view.
+  const renderPromptPane = (editor: Exclude<ExpandedEditor, null>, fullscreen = false) => {
+    const isDefault = editor === 'default';
+    const label = isDefault ? '默认提示词' : '自定义提示词';
+
+    return (
+      <div className={cn('min-h-0 flex-col', fullscreen ? 'flex flex-1' : 'flex')}>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary">{label}</span>
+          <button
+            type="button"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-banana-500 dark:text-foreground-tertiary dark:hover:bg-background-primary dark:hover:text-foreground-primary"
+            onClick={() => toggleExpandedEditor(editor)}
+            aria-label={fullscreen ? `收起${label}编辑区` : `全屏${label}编辑区`}
+            title={fullscreen ? '退出全屏' : '全屏编辑'}
+          >
+            {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+        </div>
+        <textarea
+          aria-label={fullscreen ? `全屏${label}` : label}
+          value={isDefault ? template.default_content : customContent}
+          readOnly={isDefault}
+          onChange={isDefault ? undefined : (event) => onCustomContentChange(event.target.value)}
+          placeholder={isDefault ? undefined : '填写完整提示词；启用后将覆盖默认提示词。'}
+          className={cn(
+            'min-h-[240px] flex-1 resize-none rounded-lg border border-gray-200 p-3 font-mono text-sm focus:outline-none dark:border-border-primary',
+            fullscreen && 'min-h-0 text-[15px] leading-7',
+            isDefault
+              ? 'bg-gray-50 text-gray-700 dark:bg-background-primary dark:text-foreground-secondary'
+              : 'bg-white text-gray-900 focus:border-banana-500 focus:ring-2 focus:ring-banana-500 dark:bg-background-secondary dark:text-foreground-primary',
+          )}
+        />
+      </div>
+    );
+  };
+
   if (!template) {
     return (
       <Card className={cn('min-h-0 overflow-y-auto p-6', className)}>
@@ -67,53 +104,9 @@ export const PromptTemplateEditor: React.FC<PromptTemplateEditorProps> = ({
         </label>
       </div>
 
-      <div
-        className={cn(
-          'grid min-h-[360px] flex-1 gap-4 lg:min-h-0',
-          expandedEditor ? 'lg:grid-cols-1' : 'lg:grid-cols-2',
-        )}
-      >
-        <div className={cn('min-h-0 flex-col', expandedEditor === 'custom' ? 'hidden' : 'flex')}>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary">默认提示词</span>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-banana-500 dark:text-foreground-tertiary dark:hover:bg-background-primary dark:hover:text-foreground-primary"
-              onClick={() => toggleExpandedEditor('default')}
-              aria-label={expandedEditor === 'default' ? '收起默认提示词编辑区' : '扩大默认提示词编辑区'}
-              title={expandedEditor === 'default' ? '收起编辑区' : '扩大编辑区'}
-            >
-              {expandedEditor === 'default' ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            </button>
-          </div>
-          <textarea
-            aria-label="默认提示词"
-            value={template.default_content}
-            readOnly
-            className="min-h-[240px] flex-1 resize-none rounded-lg border border-gray-200 dark:border-border-primary bg-gray-50 dark:bg-background-primary p-3 font-mono text-sm text-gray-700 dark:text-foreground-secondary focus:outline-none"
-          />
-        </div>
-        <div className={cn('min-h-0 flex-col', expandedEditor === 'default' ? 'hidden' : 'flex')}>
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary">自定义提示词</span>
-            <button
-              type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-banana-500 dark:text-foreground-tertiary dark:hover:bg-background-primary dark:hover:text-foreground-primary"
-              onClick={() => toggleExpandedEditor('custom')}
-              aria-label={expandedEditor === 'custom' ? '收起自定义提示词编辑区' : '扩大自定义提示词编辑区'}
-              title={expandedEditor === 'custom' ? '收起编辑区' : '扩大编辑区'}
-            >
-              {expandedEditor === 'custom' ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            </button>
-          </div>
-          <textarea
-            aria-label="自定义提示词"
-            value={customContent}
-            onChange={(event) => onCustomContentChange(event.target.value)}
-            placeholder="填写完整提示词；启用后将覆盖默认提示词。"
-            className="min-h-[240px] flex-1 resize-none rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary p-3 font-mono text-sm text-gray-900 dark:text-foreground-primary focus:border-banana-500 focus:outline-none focus:ring-2 focus:ring-banana-500"
-          />
-        </div>
+      <div className="grid min-h-[360px] flex-1 gap-4 lg:min-h-0 lg:grid-cols-2">
+        {renderPromptPane('default')}
+        {renderPromptPane('custom')}
       </div>
 
       <div className="flex flex-wrap justify-end gap-2">
@@ -124,6 +117,42 @@ export const PromptTemplateEditor: React.FC<PromptTemplateEditorProps> = ({
           保存
         </Button>
       </div>
+
+      {expandedEditor && (
+        <div className="fixed inset-0 z-50 flex bg-gray-50 p-3 dark:bg-background-primary md:p-6" data-testid="prompt-editor-fullscreen">
+          <div className="flex min-h-0 w-full flex-col rounded-lg border border-gray-200 bg-white p-4 shadow-xl dark:border-border-primary dark:bg-background-secondary md:p-5">
+            <div className="mb-4 flex flex-col gap-3 border-b border-gray-100 pb-4 dark:border-border-primary md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-foreground-primary">{template.title}</h2>
+                <p className="mt-1 text-xs text-gray-500 dark:text-foreground-tertiary">
+                  Key: <span className="font-mono">{template.key}</span>
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {expandedEditor === 'custom' && (
+                  <label className="mr-1 inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-foreground-secondary">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-banana-500"
+                      checked={enabled}
+                      onChange={(event) => onEnabledChange(event.target.checked)}
+                      aria-label="全屏启用自定义提示词"
+                    />
+                    启用
+                  </label>
+                )}
+                <Button variant="ghost" icon={<RotateCcw size={16} />} onClick={onReset}>
+                  恢复默认
+                </Button>
+                <Button icon={<Save size={16} />} onClick={onSave} loading={isSaving}>
+                  保存
+                </Button>
+              </div>
+            </div>
+            {renderPromptPane(expandedEditor, true)}
+          </div>
+        </div>
+      )}
     </Card>
   );
 };

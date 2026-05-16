@@ -127,19 +127,19 @@ describe('PromptManager', () => {
     });
   });
 
-  it('expands and restores a prompt editor area', async () => {
+  it('opens and closes a fullscreen prompt editor area', async () => {
     render(<PromptManager />);
 
     expect(await screen.findByLabelText('默认提示词')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '扩大自定义提示词编辑区' }));
+    fireEvent.click(screen.getByRole('button', { name: '全屏自定义提示词编辑区' }));
 
-    expect(screen.getByLabelText('默认提示词').parentElement).toHaveClass('hidden');
-    expect(screen.getByLabelText('自定义提示词')).toBeInTheDocument();
+    expect(screen.getByTestId('prompt-editor-fullscreen')).toBeInTheDocument();
+    expect(screen.getByLabelText('全屏自定义提示词')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '收起自定义提示词编辑区' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '收起自定义提示词编辑区' }));
 
-    expect(screen.getByLabelText('默认提示词').parentElement).not.toHaveClass('hidden');
+    expect(screen.queryByTestId('prompt-editor-fullscreen')).not.toBeInTheDocument();
     expect(screen.getByLabelText('自定义提示词')).toBeInTheDocument();
   });
 
