@@ -1350,13 +1350,6 @@ export const Home: React.FC = () => {
                 className="text-sm md:text-base border-2 border-gray-200 dark:border-border-primary dark:bg-background-tertiary dark:text-white focus-within:border-banana-400 dark:focus-within:border-banana transition-colors duration-200"
                 toolbarLeft={
                   <div className="flex items-center gap-1">
-                    <div className="flex items-center gap-1">
-                      <HomeScenarioPicker
-                        value={projectScenario}
-                        options={scenarioOptions}
-                        onChange={setProjectScenario}
-                      />
-                    </div>
                     <button
                       type="button"
                       onClick={handlePaperclipClick}
@@ -1371,6 +1364,13 @@ export const Home: React.FC = () => {
                       label={i18n.language?.startsWith('zh') ? '画面比例' : 'Aspect Ratio'}
                       onChange={setAspectRatio}
                     />
+                    <div className="flex items-center gap-1">
+                      <HomeScenarioPicker
+                        value={projectScenario}
+                        options={scenarioOptions}
+                        onChange={setProjectScenario}
+                      />
+                    </div>
                   {activeTextMode === 'description' && (
                     <button
                       type="button"
