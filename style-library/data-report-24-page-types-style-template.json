@@ -1,0 +1,400 @@
+{
+  "design_system_spec": {
+    "meta": {
+      "style_name": "服装品牌线上数据分析报告 - 24类页面风格模板",
+      "scenario": "data_report",
+      "report_domain": "fashion_brand_online_analysis",
+      "vibe_engine": {
+        "directive": "面向服装品牌线上数据分析报告场景，优先保证研究感、证据链、图表可读性和章节逻辑完整性。整体视觉应体现行业洞察、数据严谨和品牌审美，不得退化为普通商务PPT。",
+        "current_archetype": "Fashion_Data_Report_24PageTypes",
+        "logic_rationale": "将品牌认知、市场分析、专题洞察、策略输出拆解为24类页面模板，减少不同分析任务共用同一结构造成的信息密度失衡与生成漂移。"
+      },
+      "aspect_ratio": "9:16",
+      "resolution": "4K Vertical (2304x4096)",
+      "layout_guidelines": {
+        "strategy": "每页围绕一个分析任务组织内容。标题优先是结论式或判断式；图表页必须保留解释区；高密度数据页必须优先保证表头、关键列、异常值的可读性。",
+        "directive": "CRITICAL: Text content, especially titles and data labels, must be adapted to fit its container aesthetically. Do not rely solely on font size."
+      }
+    },
+    "visual_dna": {
+      "purpose": "直接映射给图像生成模型的数据报告视觉约束片段",
+      "environment": "Premium research report layout, fashion industry intelligence, structured editorial analysis, strong section hierarchy",
+      "texture": "Subtle paper grain, light grid, low-noise data dashboard texture, optional textile-inspired micro pattern",
+      "lighting": "Soft neutral lighting, restrained accent emphasis, chart readability first",
+      "composition": "Editorial report composition, modular layout, stable grid, explicit chart zones, clear conclusion anchors"
+    },
+    "global_margins": {
+      "scale": "7%",
+      "style": "竖版研究报告安全边距",
+      "purpose": "确保标题、页码、图表标签、表格边界和页脚信息在竖版导出和阅读时不贴边。"
+    },
+    "background_layer": {
+      "fill_color": "#F6F7F8",
+      "pattern": {
+        "type": "gradient",
+        "style": "冷白到浅灰的低对比渐变，可叠加极弱网格线、织物纹理或数据底纹（不超过4%强度）",
+        "purpose": "建立研究报告的专业底色，并为品牌行业视觉保留精细材质空间。"
+      }
+    },
+    "color_palette": {
+      "primary": {
+        "hex": "#111111",
+        "semantic": "主标题、关键判断、主结构锚点",
+        "usage": "标题、章节编号、坐标轴重点、重要数据标签"
+      },
+      "accent": {
+        "hex": "#D31334",
+        "semantic": "异常值、增长机会、核心强调",
+        "usage": "关键数字、策略建议、品牌特征、异常点提示"
+      },
+      "secondary": {
+        "hex": "#3F3F46",
+        "semantic": "正文、辅助分析、次级结构",
+        "usage": "说明文字、图例、注释、辅助卡片标题"
+      },
+      "auxiliary_charting": {
+        "colors": [
+          "#111111",
+          "#D31334",
+          "#2563EB",
+          "#0F766E",
+          "#D97706",
+          "#6D28D9"
+        ],
+        "logic": "黑色=基准/主线；红色=机会/异常；蓝色=趋势/平台；青绿=效率/结构；橙色=增长/风险；紫色=品牌标签/创新。"
+      },
+      "neutral": {
+        "border": "#D4D4D8",
+        "divider": "#E4E4E7",
+        "light_bg": "#FFFFFF",
+        "soft_bg": "#FAFAFA"
+      },
+      "text": {
+        "primary": "#18181B",
+        "secondary": "#52525B",
+        "muted": "#A1A1AA",
+        "highlight": "#D31334",
+        "on_dark": "#FFFFFF"
+      }
+    },
+    "content_processing_rules": {
+      "text_conciseness": {
+        "directive": "When generating page titles, prioritize analytical and conclusion-driven headlines.",
+        "action": "标题优先改写为“对象 + 变化/判断 + 含义”结构，避免空泛的栏目式标题。"
+      },
+      "user_input_filtering": {
+        "directive": "CRITICAL: Deeply analyze user input to distinguish between renderable report content and meta instructions.",
+        "thinking_process_requirement": "分类、说明、批注、字段解释、占位提示、prompt注解默认不进入最终画面；只有可展示的数据、标题、结论和标签才能上版。",
+        "examples_to_exclude": [
+          "分类说明字段",
+          "描述性注释",
+          "Prompt notes",
+          "Placeholder instructions",
+          "Editor comments",
+          "System parsing hints"
+        ],
+        "action": "只保留可视内容，压缩长句，突出结论、证据、标签和关键数字。"
+      },
+      "report_specific_rendering": {
+        "directive": "Never render schema descriptions or helper labels into the final page.",
+        "action": "若输入同时包含字段名与字段解释，仅渲染字段值中真正属于报告正文的内容。"
+      }
+    },
+    "graphic_elements": {
+      "logo": {
+        "protection_rule": "CRITICAL: If the user provides a logo, treat it as an immutable asset and do not redesign or hallucinate it.",
+        "shape_and_ratio": "严格保持原始长宽比和图形结构。",
+        "allowed_modifications": "仅允许等比例缩放、基于底色安全性的单色化与留白优化。"
+      },
+      "containers": {
+        "summary_box": {
+          "background": "#FFFFFF",
+          "border": "1px solid #D4D4D8",
+          "corner_radius": "12px",
+          "effect": "用于承载执行摘要、关键结论、图表解释和策略提示。"
+        },
+        "data_card": {
+          "background": "#FFFFFF",
+          "border": "1px solid #E4E4E7",
+          "corner_radius": "14px",
+          "effect": "用于KPI卡片、品牌信息卡、结构化指标块。"
+        },
+        "insight_panel": {
+          "background": "#FAFAFA",
+          "border": "1px solid #E4E4E7",
+          "corner_radius": "16px",
+          "effect": "用于洞察说明、图谱注释、页侧分析补充。"
+        }
+      },
+      "iconography": {
+        "style": "Minimal Editorial Line Icons",
+        "effects": "低噪音、小面积辅助，不应压过品牌与图表信息。"
+      },
+      "lines_and_dividers": {
+        "color": "#E4E4E7",
+        "style": "solid",
+        "weight": "1px",
+        "function": "建立模块边界、章节节奏和图表分区。"
+      }
+    },
+    "slide_templates": {
+      "report_cover_page": {
+        "page_type": "报告封面",
+        "layout": "Report Title + Institution + Hero Visual",
+        "layout_goal": "建立报告身份、行业气质和研究级专业感，视觉上更像正式洞察报告而非普通演示文稿。",
+        "background": {
+          "container_type": "hero_visual_slot",
+          "asset_treatment_rules": {
+            "overlay": "根据背景明暗自动叠加20-45%覆层，保护主标题可读性",
+            "required_adjustments": [
+              {
+                "type": "contrast",
+                "action": "increase_if_text_is_low_contrast"
+              }
+            ],
+            "safety_check": "若背景信息过杂，优先让出标题区和机构信息区留白。"
+          },
+          "fallback_generation_prompt": "fashion intelligence report cover, premium editorial composition, clean typography zone, subtle textile-inspired abstract visual",
+          "user_asset_priority_rule": "CRITICAL: If a user-provided image exists, it MUST be used. DO NOT generate."
+        },
+        "elements": {
+          "title_block": "主标题、年份/周期、副标题、机构信息形成4层以内结构。",
+          "hero_area": "允许使用一张强主视觉或抽象数据视觉，不叠加多个主焦点。"
+        }
+      },
+      "executive_summary_page": {
+        "page_type": "执行摘要",
+        "layout": "Top Conclusion + Key Findings + Recommendation Strip",
+        "layout_goal": "让管理者在一页内快速掌握结论、机会与风险。",
+        "elements": {
+          "headline_conclusion": "顶部先给一句总判断。",
+          "key_findings": "中部用2-4个高价值结论块概括核心发现。",
+          "action_hint": "底部可保留简洁行动建议或下一步方向。"
+        }
+      },
+      "catalog_page": {
+        "page_type": "目录",
+        "layout": "Structured Chapter List",
+        "layout_goal": "建立阅读路径，让章节层级清晰可扫读。",
+        "elements": {
+          "chapter_list": "序号、章节标题、可选一句章节说明。",
+          "progress_signal": "当前章节或重点章节允许用强调色标记。"
+        }
+      },
+      "methodology_page": {
+        "page_type": "研究方法",
+        "layout": "Method Framework + Data Scope + Metric Notes",
+        "layout_goal": "交代数据来源、时间范围、样本口径和指标定义，建立报告可信度。",
+        "elements": {
+          "source_block": "明确平台、数据源和时间周期。",
+          "metric_block": "指标解释必须结构化，避免大段堆字。",
+          "scope_notice": "样本边界和限制条件应弱化但可读。"
+        }
+      },
+      "section_header_page": {
+        "page_type": "章节页",
+        "layout": "Large Section Marker + Short Transition Copy",
+        "layout_goal": "在长报告中形成清晰章节切换和阅读节奏。",
+        "background": {
+          "overlay": "允许更强情绪化底图或色块，但章节标题必须高对比。"
+        },
+        "elements": {
+          "section_number": "PART / 01 / 02 等编号可作为大锚点。",
+          "section_title": "章节标题必须短而有方向感。",
+          "transition_copy": "可选一句引导说明，不宜超过两行。"
+        }
+      },
+      "brand_overview_page": {
+        "page_type": "品牌概览页",
+        "layout": "Brand Snapshot Cards + Core Labels",
+        "layout_goal": "快速回答品牌是谁、卖什么、面向谁、处在什么价格带。",
+        "elements": {
+          "brand_snapshot": "品牌背景、成立信息、核心品类、目标人群、价格带用结构化卡片承载。",
+          "keyword_labels": "品牌标签应简短、可视化、避免长句。"
+        }
+      },
+      "brand_history_page": {
+        "page_type": "品牌历程页",
+        "layout": "Vertical Timeline + Milestone Highlights",
+        "layout_goal": "表达品牌演进、关键节点和阶段变化。",
+        "elements": {
+          "timeline_axis": "时间轴主线清晰，节点以4-8个为宜。",
+          "milestone_notes": "每个节点保留年份、事件和一句解释。"
+        }
+      },
+      "brand_persona_page": {
+        "page_type": "品牌画像页",
+        "layout": "Tag Constellation + Persona Blocks",
+        "layout_goal": "呈现品牌风格、消费者心智、场景印象和功能标签。",
+        "elements": {
+          "persona_tags": "标签要短促且有聚类关系。",
+          "perception_blocks": "从风格、功能、场景、人群四个维度组织认知信息。"
+        }
+      },
+      "brand_positioning_page": {
+        "page_type": "品牌定位页",
+        "layout": "Positioning Matrix + Differentiation Summary",
+        "layout_goal": "表达品牌在市场中的位置、档位与竞品差异。",
+        "elements": {
+          "positioning_map": "可使用二维定位图、分层图或带状对标结构。",
+          "differentiation_summary": "右侧或下方总结差异化卖点与竞争位势。"
+        }
+      },
+      "kpi_overview_page": {
+        "page_type": "核心指标总览页",
+        "layout": "KPI Board + Trend Cues",
+        "layout_goal": "集中呈现销售、增速、价格、上新、爆款等核心经营指标。",
+        "elements": {
+          "kpi_cards": "3-8个指标卡，数字为主角，变化趋势次之。",
+          "trend_notes": "关键增减变化允许用小趋势标识辅助解释。"
+        }
+      },
+      "market_overview_page": {
+        "page_type": "市场概览页",
+        "layout": "Macro Trend + Segment Overview",
+        "layout_goal": "交代行业赛道规模、变化趋势和市场环境。",
+        "elements": {
+          "macro_chart": "至少一个趋势图或结构图承载宏观变化。",
+          "segment_summary": "用简洁文本总结市场阶段、竞争格局或周期特征。"
+        }
+      },
+      "brand_benchmark_page": {
+        "page_type": "品牌对标页",
+        "layout": "Peer Comparison Grid",
+        "layout_goal": "比较目标品牌与竞品在规模、增速、价格、品类、爆款结构上的差异。",
+        "elements": {
+          "comparison_grid": "对比维度必须统一，左右或多列结构严格对齐。",
+          "delta_highlight": "优势项、短板项和异常差值必须高亮。"
+        }
+      },
+      "category_structure_page": {
+        "page_type": "品类结构页",
+        "layout": "Category Share + Contribution Analysis",
+        "layout_goal": "表达不同品类的规模、贡献、增速和结构迁移。",
+        "elements": {
+          "share_chart": "使用堆叠、占比或分布图体现结构。",
+          "contribution_note": "指出主力品类、增长来源和潜在缺口。"
+        }
+      },
+      "price_band_page": {
+        "page_type": "价格带分布页",
+        "layout": "Price Ladder + Band Distribution",
+        "layout_goal": "解释主销价格段、迁移趋势和价格竞争格局。",
+        "elements": {
+          "price_distribution": "价格带层次必须清楚，避免密集标签拥挤。",
+          "competitive_signal": "突出重点价格带的品牌位置或拥挤度。"
+        }
+      },
+      "channel_platform_page": {
+        "page_type": "渠道平台表现页",
+        "layout": "Platform Comparison + Channel Insights",
+        "layout_goal": "比较不同平台或渠道的表现差异、角色分工与增长特征。",
+        "elements": {
+          "platform_matrix": "按平台列或按指标列组织，结构必须一致。",
+          "channel_insights": "总结各平台的定位、效率和适配品类。"
+        }
+      },
+      "sku_diagnosis_page": {
+        "page_type": "商品SKU诊断页",
+        "layout": "SKU Pyramid + Hotspot Diagnosis",
+        "layout_goal": "分析爆款、新品、长尾和滞销款的表现与问题。",
+        "elements": {
+          "sku_layers": "按爆款/潜力/长尾等层级展示商品结构。",
+          "diagnosis_notes": "明确指出异常SKU、机会品类或上新问题。"
+        }
+      },
+      "data_table_page": {
+        "page_type": "数据明细页",
+        "layout": "Dense Table + Highlighted Outliers",
+        "layout_goal": "承载高密度数据表、排名表和下钻明细，同时维持阅读秩序。",
+        "elements": {
+          "table_body": "优先保证表头、首列、关键数字和异常值可读。",
+          "outlier_highlight": "用颜色、字重或边框突出异常项，不靠大段说明。"
+        }
+      },
+      "insight_text_page": {
+        "page_type": "洞察图文页",
+        "layout": "Conclusion-Led Narrative",
+        "layout_goal": "围绕一个重点发现讲清楚现象、原因和意义。",
+        "elements": {
+          "headline_judgment": "标题必须包含判断，不只是主题名。",
+          "evidence_and_so_what": "正文要覆盖现象证据、解释和影响。"
+        }
+      },
+      "insight_chart_page": {
+        "page_type": "洞察图表页",
+        "layout": "Chart Focus + Insight Annotation",
+        "layout_goal": "以图表作为主要证据，再用简洁文字解释结论。",
+        "vertical_rhythm": {
+          "top_headline": "15%",
+          "middle_chart": "62%",
+          "bottom_insight": "23%"
+        },
+        "elements": {
+          "chart_container": "图表为主角，标签和图例克制但清晰。",
+          "annotation_box": "必须保留1句主结论和2-3条证据说明。"
+        }
+      },
+      "matrix_map_page": {
+        "page_type": "矩阵图谱页",
+        "layout": "Matrix / Network / Ecosystem Map",
+        "layout_goal": "适合科技矩阵、品牌图谱、生态网络、场景关系图。",
+        "elements": {
+          "map_body": "用几何秩序或网络结构表达关系，不允许装饰性噪音压过信息。",
+          "legend_and_clusters": "需有清晰聚类、象限或图例。"
+        }
+      },
+      "timeline_lifecycle_page": {
+        "page_type": "时间轴生命周期页",
+        "layout": "Stage Timeline + Transition Markers",
+        "layout_goal": "表达产品生命周期、品牌阶段和演进节奏。",
+        "elements": {
+          "timeline_structure": "阶段分区必须清楚，可同时承载节点与区间。",
+          "transition_labels": "阶段名称应短，避免长句压缩主轴。"
+        }
+      },
+      "consumer_persona_page": {
+        "page_type": "人群画像页",
+        "layout": "Audience Segments + Need Tags",
+        "layout_goal": "呈现消费者群体特征、偏好、场景和需求画像。",
+        "elements": {
+          "segment_blocks": "分组清晰，允许卡片或气泡结构。",
+          "need_tags": "需求标签、场景标签和行为特征需形成可扫描结构。"
+        }
+      },
+      "strategy_recommendation_page": {
+        "page_type": "策略建议页",
+        "layout": "Action Priorities + Strategic Roadmap",
+        "layout_goal": "把洞察转化为策略建议、动作优先级和落地方向。",
+        "elements": {
+          "priority_actions": "建议项控制在3-5条，突出轻重缓急。",
+          "roadmap_or_framework": "允许用路径图、列表或矩阵承载策略结构。"
+        }
+      },
+      "back_cover_page": {
+        "page_type": "封底页",
+        "layout": "Closing Statement + Copyright / Contact",
+        "layout_goal": "完成收束，保留版权、免责声明或联系信息。",
+        "elements": {
+          "closing_message": "结束语、感谢语或保密声明是主信息。",
+          "support_info": "版权、联系方式和附注信息降权处理。"
+        }
+      }
+    },
+    "typography_rules": {
+      "font_family": "PingFang SC, Source Han Sans SC, HarmonyOS Sans SC, Arial, sans-serif",
+      "headline": {
+        "style": "高对比、强判断、克制字重变化",
+        "guideline": "主标题优先两行内解决；英文辅助信息必须弱化，不与中文主标题争抢。"
+      },
+      "body": {
+        "style": "高可读正文，适合长篇报告阅读",
+        "guideline": "正文优先短句和结构化分行；每块正文不超过4-6行。"
+      },
+      "numeric_emphasis": {
+        "style": "关键数字可放大、加粗或用强调色标出",
+        "guideline": "数字层级必须服务结论，不得满页到处强调。"
+      }
+    }
+  }
+}
