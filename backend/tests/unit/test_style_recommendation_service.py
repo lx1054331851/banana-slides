@@ -5,7 +5,7 @@ class _FakeAIService:
     def __init__(self):
         self.calls = []
 
-    def generate_json(self, prompt, thinking_budget=0):
+    def generate_json_stream(self, prompt, thinking_budget=0):
         self.calls.append((prompt, thinking_budget))
         if len(self.calls) == 1:
             raise RuntimeError("upstream timeout")
@@ -39,7 +39,7 @@ def test_generate_style_recommendation_json_respects_single_recommendation_promp
         def __init__(self):
             self.prompt = None
 
-        def generate_json(self, prompt, thinking_budget=0):
+        def generate_json_stream(self, prompt, thinking_budget=0):
             self.prompt = prompt
             return {"recommendations": [{"name": "single", "style_json": {}, "sample_pages": {}}]}
 

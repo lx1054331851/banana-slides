@@ -433,6 +433,77 @@ class AIService:
         except json.JSONDecodeError as e:
             logger.warning(f"JSON解析失败，将重新生成。原始文本: {cleaned_text[:200]}... 错误: {str(e)}")
             raise
+
+    def _clean_json_response_text(self, response_text: str) -> str:
+        if not response_text:
+            return ""
+        raw = response_text.strip()
+        fenced_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw, re.IGNORECASE)
+        if fenced_match:
+            return fenced_match.group(1).strip()
+        if raw.startswith("```json"):
+            raw = raw[len("```json"):].strip()
+        elif raw.startswith("```"):
+            raw = raw[len("```"):].strip()
+        if raw.endswith("```"):
+            raw = raw[:-3].strip()
+        return raw
+
+    def _extract_json_candidate(self, response_text: str) -> str:
+        cleaned = self._clean_json_response_text(response_text)
+        if not cleaned:
+            return cleaned
+
+        candidates = [cleaned]
+
+        first_obj = cleaned.find('{')
+        last_obj = cleaned.rfind('}')
+        if first_obj != -1 and last_obj != -1 and last_obj > first_obj:
+            candidates.append(cleaned[first_obj:last_obj + 1])
+
+        first_arr = cleaned.find('[')
+        last_arr = cleaned.rfind(']')
+        if first_arr != -1 and last_arr != -1 and last_arr > first_arr:
+            candidates.append(cleaned[first_arr:last_arr + 1])
+
+        for candidate in candidates:
+            try:
+                json.loads(candidate)
+                return candidate
+            except json.JSONDecodeError:
+                continue
+        return cleaned
+
+    @retry(
+        stop=stop_after_attempt(3),
+        retry=retry_if_exception_type((json.JSONDecodeError, ValueError)),
+        reraise=True
+    )
+    def generate_json_stream(self, prompt: str, thinking_budget: int = 1000) -> Union[Dict, List]:
+        """
+        通过流式文本累计生成 JSON，结束后统一解析。
+        对于大响应可尽早收到分块，减少长时间无输出的网关风险。
+        """
+        actual_budget = self._get_text_thinking_budget()
+        if actual_budget > 0:
+            try:
+                actual_budget = min(actual_budget, int(thinking_budget))
+            except (TypeError, ValueError):
+                pass
+
+        chunks: List[str] = []
+        for chunk in self.text_provider.generate_text_stream(prompt, thinking_budget=actual_budget):
+            if chunk:
+                chunks.append(chunk)
+
+        response_text = "".join(chunks)
+        cleaned_text = self._extract_json_candidate(response_text)
+
+        try:
+            return json.loads(cleaned_text)
+        except json.JSONDecodeError as e:
+            logger.warning(f"流式JSON解析失败，将重新生成。原始文本: {cleaned_text[:200]}... 错误: {str(e)}")
+            raise
     
     @retry(
         stop=stop_after_attempt(3),

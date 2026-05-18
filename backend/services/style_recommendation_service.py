@@ -30,7 +30,7 @@ def generate_style_recommendation_json(
     )
 
     try:
-        return ai_service.generate_json(full_prompt, thinking_budget=thinking_budget)
+        return ai_service.generate_json_stream(full_prompt, thinking_budget=thinking_budget)
     except Exception as exc:
         minimal_prompt = get_style_recommendations_prompt_minimal(
             project_dict=project_dict,
@@ -46,4 +46,4 @@ def generate_style_recommendation_json(
             len(full_prompt),
             len(minimal_prompt),
         )
-        return ai_service.generate_json(minimal_prompt, thinking_budget=thinking_budget)
+        return ai_service.generate_json_stream(minimal_prompt, thinking_budget=thinking_budget)
