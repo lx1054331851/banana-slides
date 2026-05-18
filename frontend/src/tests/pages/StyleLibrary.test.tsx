@@ -411,6 +411,44 @@ describe('StyleLibrary page', () => {
     });
   });
 
+  it('keeps dismissed failed preset task cards hidden after reopening', async () => {
+    mockListStylePresetTasks.mockResolvedValue(({
+      data: {
+        tasks: [
+          {
+            task_id: 'failed-task-1',
+            task_type: 'STYLE_PRESET_GENERATE',
+            status: 'FAILED',
+            error_message: '1 preview image(s) failed to generate',
+            progress: {
+              stage: 'failed',
+              preset_name: 'Preset 1',
+              template_json: '{"template":1}',
+            },
+          },
+        ],
+      },
+    }) as any);
+
+    const firstRender = render(<StyleLibrary />);
+
+    const dismiss = await screen.findByTestId('style-preset-task-failed-task-1-dismiss');
+    fireEvent.click(dismiss);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('style-preset-task-failed-task-1')).not.toBeInTheDocument();
+    });
+
+    firstRender.unmount();
+
+    render(<StyleLibrary />);
+
+    await waitFor(() => {
+      expect(mockListStylePresetTasks.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+    expect(screen.queryByTestId('style-preset-task-failed-task-1')).not.toBeInTheDocument();
+  });
+
   it('hides failed preset generation task after missing preview slots are filled', async () => {
     mockListStylePresets.mockResolvedValueOnce(({
       data: {
