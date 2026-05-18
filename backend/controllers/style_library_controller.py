@@ -192,6 +192,31 @@ def list_style_preset_tasks():
         return error_response('SERVER_ERROR', str(e), 500)
 
 
+@style_library_bp.route('/style-presets/tasks/<task_id>', methods=['DELETE'])
+def delete_style_preset_task(task_id: str):
+    """
+    DELETE /api/style-presets/tasks/{task_id} - delete a failed style preset task record
+    """
+    try:
+        task = Task.query.filter(
+            Task.id == task_id,
+            Task.project_id == 'global',
+            Task.task_type.in_(_STYLE_PRESET_TASK_TYPES),
+        ).first()
+        if not task:
+            return not_found('Task')
+        if task.status in _RUNNING_TASK_STATUSES:
+            return bad_request('Running task cannot be deleted')
+
+        db.session.delete(task)
+        db.session.commit()
+        return success_response(message="Style preset task deleted successfully")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delete_style_preset_task failed: {str(e)}", exc_info=True)
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
 @style_library_bp.route('/style-presets/generate', methods=['POST'])
 def generate_style_preset():
     """

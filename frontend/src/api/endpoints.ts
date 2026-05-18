@@ -1927,6 +1927,11 @@ export const listStylePresetTasks = async (): Promise<ApiResponse<{ tasks: Task[
   return response.data;
 };
 
+export const deleteStylePresetTask = async (taskId: string): Promise<ApiResponse> => {
+  const response = await apiClient.delete<ApiResponse>(`/api/style-presets/tasks/${taskId}`);
+  return response.data;
+};
+
 export const startStylePresetGeneration = async (data: {
   name?: string;
   template_json: string;

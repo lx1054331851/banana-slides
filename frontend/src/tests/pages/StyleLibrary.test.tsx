@@ -67,6 +67,7 @@ vi.mock('@/api/endpoints', () => ({
   uploadPresetTemplate: vi.fn(async () => ({ data: null })),
   deleteStyleTemplate: mockDeleteStyleTemplate,
   deleteStylePreset: mockDeleteStylePreset,
+  deleteStylePresetTask: vi.fn(async () => ({ data: {} })),
   deletePresetTemplate: vi.fn(async () => ({ data: {} })),
   listStylePresetTasks: mockListStylePresetTasks,
   startStylePresetGeneration: mockStartStylePresetGeneration,
@@ -342,7 +343,7 @@ describe('StyleLibrary page', () => {
     });
   });
 
-  it('allows dismissing failed preset task cards', async () => {
+  it('allows clearing failed preset task cards', async () => {
     mockListStylePresetTasks.mockResolvedValueOnce(({
       data: {
         tasks: [

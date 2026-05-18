@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ImageLightbox, useConfirm, useToast } from '@/components/shared';
 import {
   createStylePreset,
+  deleteStylePresetTask,
   deleteStylePreset,
   getStoredOutputLanguage,
   listStylePresetTasks,
@@ -32,10 +33,10 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
   const [isManualCreating, setIsManualCreating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [deletingPresetId, setDeletingPresetId] = useState<string | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [pendingPreviewGeneration, setPendingPreviewGeneration] = useState<{ presetId: string; previewKey: PreviewKey } | null>(null);
   const [viewerPresetId, setViewerPresetId] = useState<string>('');
   const [previewModal, setPreviewModal] = useState<{ title: string; items: { src: string; title?: string }[]; initialIndex: number } | null>(null);
-  const [dismissedTaskIds, setDismissedTaskIds] = useState<string[]>([]);
   const runningTaskIdsRef = useRef<string>('');
 
   const selectedPreset = useMemo(
@@ -70,9 +71,8 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
   }, [presets]);
 
   const visibleTasks = useMemo(() => {
-    const dismissed = new Set(dismissedTaskIds);
-    return tasks.filter((task) => !dismissed.has(task.task_id) && !hasResolvedTaskFailure(task));
-  }, [dismissedTaskIds, hasResolvedTaskFailure, tasks]);
+    return tasks.filter((task) => !hasResolvedTaskFailure(task));
+  }, [hasResolvedTaskFailure, tasks]);
 
 
   const loadPresets = useCallback(async () => {
@@ -94,7 +94,6 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
     try {
       const response = await listStylePresetTasks();
       const nextTasks = (response.data?.tasks || []) as StylePresetTaskRecord[];
-      setDismissedTaskIds((prev) => prev.filter((taskId) => nextTasks.some((task) => task.task_id === taskId)));
       const previousRunningIds = runningTaskIdsRef.current;
       const nextRunningIds = nextTasks.filter(isTaskRunning).map((task) => task.task_id).join(',');
       runningTaskIdsRef.current = nextRunningIds;
@@ -244,6 +243,19 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
     }
   }, [loadTasks, show]);
 
+  const handleDeleteTask = useCallback(async (taskId: string) => {
+    setDeletingTaskId(taskId);
+    try {
+      await deleteStylePresetTask(taskId);
+      setTasks((prev) => prev.filter((task) => task.task_id !== taskId));
+      show({ message: '失败任务已清理', type: 'success' });
+    } catch (error: any) {
+      show({ message: `清理失败任务失败：${error?.message || '未知错误'}`, type: 'error' });
+    } finally {
+      setDeletingTaskId(null);
+    }
+  }, [show]);
+
   const handleRetryTask = useCallback(async (task: StylePresetTaskRecord) => {
     const previewKey = getTaskPreviewKey(task);
     const presetId = String(task.progress?.preset_id || '');
@@ -291,7 +303,7 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
         <JsonPresetTaskBoard
           tasks={visibleTasks}
           onRetryTask={(task) => void handleRetryTask(task)}
-          onDismissTask={(taskId) => setDismissedTaskIds((prev) => (prev.includes(taskId) ? prev : [...prev, taskId]))}
+          onDismissTask={(taskId) => void handleDeleteTask(taskId)}
         />
         <JsonPresetList
           presets={presets}
@@ -305,6 +317,9 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
         />
         {(isLoadingPresets || isLoadingTasks) && !presets.length && !tasks.length ? (
           <div className="text-xs text-gray-500 dark:text-foreground-tertiary">加载中...</div>
+        ) : null}
+        {deletingTaskId ? (
+          <div className="text-xs text-gray-500 dark:text-foreground-tertiary">正在清理失败任务...</div>
         ) : null}
       </div>
 
