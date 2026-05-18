@@ -1981,6 +1981,51 @@ export const SlidePreview: React.FC = () => {
       data-testid="preview-editor-canvas"
     >
       <div className={editorGridClasses}>
+        {useRenovationPreviewForm && (
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
+            <div className="rounded-2xl border border-[#eadfbf] bg-white px-4 py-3 shadow-sm dark:border-border-primary dark:bg-background-secondary">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">标题</div>
+              <input
+                ref={outlineTitleInputRef}
+                type="text"
+                value={editOutlineTitle}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setEditOutlineTitle(value);
+                  persistCurrentPageDraft({ title: value });
+                  scheduleTextAutoSave({ title: value });
+                }}
+                placeholder={t('preview.enterTitle')}
+                data-testid="preview-text-title-input"
+                className="min-h-[44px] w-full appearance-none bg-transparent text-base font-semibold text-slate-900 outline-none placeholder:text-[#b2a78d] dark:text-[#f5f7ff] dark:placeholder:text-[#5f6883]"
+              />
+            </div>
+            <div className="rounded-2xl border border-[#eadfbf] bg-white px-4 py-3 shadow-sm dark:border-border-primary dark:bg-background-secondary">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
+                {t('preview.pageType')}
+              </div>
+              <select
+                value={editPageType}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setEditPageType(value);
+                  persistCurrentPageDraft({ pageType: value });
+                  scheduleTextAutoSave({ pageType: value });
+                }}
+                data-testid="preview-page-type-select"
+                className="min-h-[44px] w-full rounded-xl border border-[#eadfbf] bg-[#fffdf8] px-3 text-sm text-slate-800 outline-none focus:border-banana-400 dark:border-[#36415b] dark:bg-[#101521] dark:text-[#f5f7ff]"
+              >
+                <option value="">{t('preview.pageTypePlaceholder')}</option>
+                {PPT_PAGE_TYPE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
         {!useRenovationPreviewForm && (
           <div className="rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 dark:border-[#2d3447] dark:bg-[#151a26]">
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">标题</div>
