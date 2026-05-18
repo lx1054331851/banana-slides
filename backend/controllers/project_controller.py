@@ -327,6 +327,7 @@ def _smart_merge_pages(project_id, pages_data):
         page.part = page_data.get('part')
         page.set_outline_content({
             'title': page_data.get('title'),
+            'page_type': page_data.get('page_type') or '标准图文页',
             'points': page_data.get('points', [])
         })
         description_text = page_data.get('description_text')

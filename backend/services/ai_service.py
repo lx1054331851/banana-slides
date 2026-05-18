@@ -777,8 +777,8 @@ class AIService:
             if isinstance(raw_page, dict):
                 return raw_page
             if isinstance(raw_page, str):
-                return {"title": raw_page}
-            return {"title": str(raw_page)}
+                return {"title": raw_page, "page_type": "标准图文页"}
+            return {"title": str(raw_page), "page_type": "标准图文页"}
 
         pages = []
         if not outline:

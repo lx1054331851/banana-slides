@@ -86,25 +86,41 @@ DETAIL_LEVEL_SPECS = {
 
 _OUTLINE_JSON_FORMAT = """\
 1. Simple format (for short PPTs without major sections):
-[{"title": "title1", "points": ["point1", "point2"]}, {"title": "title2", "points": ["point1", "point2"]}]
+[{"title": "title1", "page_type": "封面页", "points": ["point1", "point2"]}, {"title": "title2", "page_type": "标准图文页", "points": ["point1", "point2"]}]
 
 2. Part-based format (for longer PPTs with major sections):
 [
     {
     "part": "Part 1: Introduction",
     "pages": [
-        {"title": "Welcome", "points": ["point1", "point2"]},
-        {"title": "Overview", "points": ["point1", "point2"]}
+        {"title": "Welcome", "page_type": "封面页", "points": ["point1", "point2"]},
+        {"title": "Overview", "page_type": "目录页", "points": ["point1", "point2"]}
     ]
     },
     {
     "part": "Part 2: Main Content",
     "pages": [
-        {"title": "Topic 1", "points": ["point1", "point2"]},
-        {"title": "Topic 2", "points": ["point1", "point2"]}
+        {"title": "Topic 1", "page_type": "标准图文页", "points": ["point1", "point2"]},
+        {"title": "Topic 2", "page_type": "图表页", "points": ["point1", "point2"]}
     ]
     }
 ]"""
+
+_PPT_STANDARD_PAGE_TYPES = """\
+标准页面类型清单（page_type 必须从中选择一个）：
+- 封面页
+- 目录页
+- 章节过渡页
+- 议程时间线页
+- 标准图文页
+- 要点列表页
+- 对比页
+- 流程页
+- 框架矩阵页
+- 图表页
+- 案例展示页
+- 结尾页
+"""
 
 _PAGE_DETAIL_JSON_OUTPUT_FORMAT = """\
 ```json
@@ -330,8 +346,21 @@ You can organize the content in two ways:
 
 {_OUTLINE_JSON_FORMAT}
 
+{_PPT_STANDARD_PAGE_TYPES}
+
 Choose the format that best fits the content. Use parts when the PPT has clear major sections.
 Unless otherwise specified, the first page should be kept simplest, containing only the title, subtitle, and presenter information.
+Every page object must include:
+- title
+- page_type
+- points
+
+Hard constraints for page_type:
+- page_type is required for every page
+- page_type must be selected from the standard page types above
+- the chosen page_type must match the actual role of that page
+- first page should usually be `封面页`
+- last page should usually be `结尾页` or another clearly justified closing type
 
 The user's request: {idea_prompt}.
 {_format_requirements(project_context.outline_requirements)}Now generate the outline, don't include any other text.
@@ -382,6 +411,10 @@ Constraints:
 - Unless otherwise specified, the first page should be kept simplest, containing only the title, subtitle, and presenter information.
 - Keep content at the outline level: focus on intent, topic, and logic, not polished final wording.
 - Each outline page will eventually be converted into an actual slide. Therefore, if a slide should not appear in the final deck, do not output that page from the beginning.
+- For each page, explicitly add a line `Page Type: xxx` immediately after the `## Page Title` line.
+- `xxx` must be chosen from this standard page type list:
+{_PPT_STANDARD_PAGE_TYPES}
+- The selected page type must match the real function of the page.
 
 The user's request: {idea_prompt}.
 {_format_requirements(project_context.outline_requirements)}Now generate the outline, strictly follow the format provided above, don't include any other text. Output `<!-- END -->` on the last line when finished.
@@ -409,6 +442,8 @@ You can organize the content in two ways:
 
 {_OUTLINE_JSON_FORMAT}
 
+{_PPT_STANDARD_PAGE_TYPES}
+
 Important rules:
 - DO NOT modify, rewrite, or change any text from the original outline
 - DO NOT add new content that wasn't in the original text
@@ -417,6 +452,8 @@ Important rules:
 - Preserve all titles, bullet points, and text exactly as they appear
 - If the text has clear sections/parts, use the part-based format
 - Extract titles and points from the original text, keeping them exactly as written
+- For every page object, add a required `page_type` field
+- `page_type` must be inferred from the page role and selected from the standard page type list above
 
 Now parse the outline text above into the structured format. Return only the JSON, don't include any other text.
 {get_language_instruction(language)}
@@ -473,12 +510,16 @@ You can organize the content in two ways:
 
 {_OUTLINE_JSON_FORMAT}
 
+{_PPT_STANDARD_PAGE_TYPES}
+
 Important rules:
 - Extract the outline structure from the description text
 - Identify page titles and key points
 - If the text has clear sections/parts, use the part-based format
 - Preserve the logical structure and organization from the original text
 - The points should be concise summaries of the main content for each page
+- For every page object, add a required `page_type` field
+- `page_type` must be inferred from the page role and selected from the standard page type list above
 
 Now extract the outline structure from the description text above. Return only the JSON, don't include any other text.
 {get_language_instruction(language)}
