@@ -67,7 +67,7 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
 }) => {
   const visualPaneBodyRef = useRef<HTMLDivElement | null>(null);
   const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
-  const [availableAspectRatio, setAvailableAspectRatio] = useState<number | null>(null);
+  const [availableSize, setAvailableSize] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
     setImageAspectRatio(null);
@@ -75,7 +75,7 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
 
   useEffect(() => {
     if (isFullscreen) {
-      setAvailableAspectRatio(null);
+      setAvailableSize(null);
       return;
     }
 
@@ -85,7 +85,7 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
     const updateRatio = () => {
       const { width, height } = node.getBoundingClientRect();
       if (width > 0 && height > 0) {
-        setAvailableAspectRatio(width / height);
+        setAvailableSize({ width, height });
       }
     };
 
@@ -95,28 +95,38 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
     return () => observer.disconnect();
   }, [isFullscreen, imageVersions.length, selectedPageHasImage]);
 
-  const fitByWidth = useMemo(() => {
-    if (!selectedPageHasImage) return true;
-    if (!imageAspectRatio || !availableAspectRatio) return true;
-    return imageAspectRatio >= availableAspectRatio;
-  }, [availableAspectRatio, imageAspectRatio, selectedPageHasImage]);
-
   const previewCanvasStyle = useMemo(() => {
     if (isFullscreen) return undefined;
 
     const resolvedAspectRatio = selectedPageHasImage && imageAspectRatio
       ? `${imageAspectRatio}`
       : aspectRatioStyle;
+    const maxWidth = availableSize?.width ?? undefined;
+    const maxHeight = availableSize?.height ?? undefined;
+
+    if (selectedPageHasImage && imageAspectRatio && maxWidth && maxHeight) {
+      const fittedWidth = Math.min(maxWidth, maxHeight * imageAspectRatio);
+      const fittedHeight = fittedWidth / imageAspectRatio;
+
+      return {
+        aspectRatio: resolvedAspectRatio,
+        width: `${fittedWidth}px`,
+        height: `${fittedHeight}px`,
+        maxWidth: '100%',
+        maxHeight: '100%',
+        flexShrink: 0,
+      } satisfies React.CSSProperties;
+    }
 
     return {
       aspectRatio: resolvedAspectRatio,
-      width: fitByWidth ? '100%' : 'auto',
-      height: fitByWidth ? 'auto' : '100%',
+      width: '100%',
+      height: '100%',
       maxWidth: '100%',
       maxHeight: '100%',
       flexShrink: 0,
     } satisfies React.CSSProperties;
-  }, [aspectRatioStyle, fitByWidth, imageAspectRatio, isFullscreen, selectedPageHasImage]);
+  }, [aspectRatioStyle, availableSize, imageAspectRatio, isFullscreen, selectedPageHasImage]);
 
   return (
     <section
