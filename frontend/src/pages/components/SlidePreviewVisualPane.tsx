@@ -79,8 +79,8 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
           ? (imageOrientation === 'portrait' ? 'auto' : '100%')
           : '100%',
         height: selectedPageHasImage
-          ? (imageOrientation === 'portrait' ? '100%' : 'auto')
-          : 'auto',
+          ? (imageOrientation === 'portrait' ? '100%' : '100%')
+          : '100%',
         maxWidth: '100%',
         maxHeight: '100%',
       } satisfies React.CSSProperties;
@@ -92,10 +92,10 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
     >
       <div className="flex h-full flex-col">
         <div className="flex-1 overflow-auto px-2 pb-2 pt-1 md:px-3 md:pb-3 md:pt-2">
-          <div className={`flex h-full min-h-[320px] ${selectedPageHasImage ? 'items-center justify-stretch' : 'items-center justify-center'}`}>
-            <div className={selectedPageHasImage ? 'h-full w-full' : 'w-full'}>
-              <div className={`flex ${selectedPageHasImage ? 'h-full min-h-0 flex-col items-center justify-center gap-4' : ''}`}>
-                <div className={selectedPageHasImage ? 'flex min-h-0 flex-1 items-center justify-center self-stretch' : ''}>
+          <div className="flex h-full min-h-[320px] items-center justify-stretch">
+            <div className="h-full w-full">
+              <div className={`flex ${selectedPageHasImage ? 'h-full min-h-0 flex-col items-center justify-center gap-4' : 'h-full min-h-0'}`}>
+                <div className={selectedPageHasImage ? 'flex min-h-0 flex-1 items-center justify-center self-stretch' : 'flex min-h-0 flex-1 items-center justify-center self-stretch'}>
                   <div
                     ref={previewContainerRef}
                     className={`relative overflow-hidden touch-manipulation ${isFullscreen
