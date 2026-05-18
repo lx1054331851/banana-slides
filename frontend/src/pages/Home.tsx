@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Sparkles, FileText, FileEdit, Paperclip, Palette, Lightbulb, Settings, FolderOpen, HelpCircle, History, Sun, Moon, Globe, Monitor, Upload, RefreshCw } from 'lucide-react';
+import { Sparkles, FileText, FileEdit, Paperclip, Palette, Lightbulb, Settings, FolderOpen, HelpCircle, History, Sun, Moon, Globe, Monitor, Upload, RefreshCw, ChevronDown } from 'lucide-react';
 import { Button, Card, useToast, MaterialSelector, ReferenceFileList, ReferenceFileSelector, FilePreviewModal, HelpModal } from '@/components/shared';
 import { MarkdownTextarea, type MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
 import { uploadReferenceFile, type ReferenceFile, type Material, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject } from '@/api/endpoints';
