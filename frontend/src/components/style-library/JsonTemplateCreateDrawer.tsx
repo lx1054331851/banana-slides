@@ -103,7 +103,7 @@ export const JsonTemplateCreateDrawer: React.FC<JsonTemplateCreateDrawerProps> =
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto p-4 md:p-5 space-y-4">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 md:p-5">
           <div className="space-y-1">
             <div className="text-xs font-medium text-gray-700 dark:text-foreground-secondary">{namePlaceholder}</div>
             <input
@@ -115,7 +115,7 @@ export const JsonTemplateCreateDrawer: React.FC<JsonTemplateCreateDrawerProps> =
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="mt-4 flex min-h-0 flex-1 flex-col space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-medium text-gray-700 dark:text-foreground-secondary">{jsonPlaceholder}</div>
               <div className="text-[11px] text-gray-500 dark:text-foreground-tertiary">{jsonHint}</div>
@@ -123,10 +123,9 @@ export const JsonTemplateCreateDrawer: React.FC<JsonTemplateCreateDrawerProps> =
             <textarea
               value={jsonText}
               onChange={(event) => onJsonChange(event.target.value)}
-              rows={16}
               placeholder={jsonPlaceholder}
               data-testid="style-library-create-template-json"
-              className="w-full px-3 py-2 text-xs leading-6 font-mono rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-tertiary dark:text-white"
+              className="min-h-[320px] flex-1 resize-none w-full px-3 py-2 text-xs leading-6 font-mono rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-tertiary dark:text-white"
             />
           </div>
         </div>
