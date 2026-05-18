@@ -422,7 +422,6 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                 style_json_text = ""
                 if rec.get('style_json') is not None:
                     style_json_text = json.dumps(rec['style_json'], ensure_ascii=False)
-                extra_req = _build_style_extra_requirements(style_json_text, style_requirements)
                 for slot in core_slots:
                     jobs.append({
                         'rec_id': rec['id'],
@@ -430,7 +429,11 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                         'preview_key': slot['preview_key'],
                         'page_index': slot['page_index'],
                         'sample_pages': rec.get('sample_pages') or {},
-                        'extra_req': extra_req,
+                        'extra_req': _build_slot_scoped_extra_requirements(
+                            style_json_text,
+                            sample_key=slot['sample_key'],
+                            style_requirements=style_requirements,
+                        ),
                     })
 
             max_workers = max(1, min(max_workers, len(jobs) if jobs else 1))
@@ -567,7 +570,6 @@ def regenerate_single_style_previews_task(task_id: str, project_id: str, rec_id:
 
             # Keep style_requirements synced from project.template_style
             style_requirements = (project.template_style if project else "") or ""
-            extra_req = _build_style_extra_requirements(style_json_text, style_requirements)
 
             ai_service = get_ai_service(routing_bundle=routing_bundle)
             file_service = FileService(app.config['UPLOAD_FOLDER'])
@@ -600,7 +602,11 @@ def regenerate_single_style_previews_task(task_id: str, project_id: str, rec_id:
                     page_index=slot['page_index'],
                     outline=outline,
                     sample_pages=sample_pages or {},
-                    extra_req=extra_req,
+                    extra_req=_build_slot_scoped_extra_requirements(
+                        style_json_text,
+                        sample_key=slot['sample_key'],
+                        style_requirements=style_requirements,
+                    ),
                     aspect_ratio=aspect_ratio,
                     resolution=resolution,
                     language=language or app.config.get('OUTPUT_LANGUAGE', 'zh'),
@@ -841,7 +847,6 @@ def generate_style_preset_task(task_id: str,
             max_workers = max(1, min(int(app.config.get('STYLE_PREVIEW_WORKERS', 2)), len(core_slots)))
             completed = 1
             failed = 0
-            extra_req = _build_style_extra_requirements(style_json_text_final, style_requirements)
             preview_errors: Dict[str, str] = {}
 
             def render_slide(slot: dict[str, Any]) -> tuple[str, str]:
@@ -853,7 +858,11 @@ def generate_style_preset_task(task_id: str,
                     page_index=slot['page_index'],
                     outline=outline,
                     sample_pages=sample_pages,
-                    extra_req=extra_req,
+                    extra_req=_build_slot_scoped_extra_requirements(
+                        style_json_text_final,
+                        sample_key=slot['sample_key'],
+                        style_requirements=style_requirements,
+                    ),
                     aspect_ratio=aspect_ratio,
                     resolution=resolution,
                     language=output_language,
@@ -974,7 +983,6 @@ def regenerate_style_preset_image_task(task_id: str,
             slot = next((item for item in PREVIEW_SLOT_DEFINITIONS if item['preview_key'] == preview_key), None)
             if not slot:
                 raise ValueError(f'Unknown preview_key: {preview_key}')
-            extra_req = _build_style_extra_requirements(preset.style_json, '')
             _, url = _render_preset_preview_slide_with_retry(
                 ai_service=ai_service,
                 file_service=file_service,
@@ -983,7 +991,11 @@ def regenerate_style_preset_image_task(task_id: str,
                 page_index=slot['page_index'],
                 outline=outline,
                 sample_pages=sample_pages,
-                extra_req=extra_req,
+                extra_req=_build_slot_scoped_extra_requirements(
+                    preset.style_json,
+                    sample_key=slot['sample_key'],
+                    style_requirements='',
+                ),
                 aspect_ratio=aspect_ratio,
                 resolution=resolution,
                 language=language or app.config.get('OUTPUT_LANGUAGE', 'zh'),
