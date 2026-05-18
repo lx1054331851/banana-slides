@@ -1,0 +1,290 @@
+{
+  "design_system_spec": {
+    "meta": {
+      "style_name": "通用商务演示 - 12类PPT页面风格模板",
+      "scenario": "ppt",
+      "vibe_engine": {
+        "directive": "面向通用PPT演示场景，优先保证信息层级清晰、投屏可读性强、叙事节奏明确。整体风格允许根据行业切换配色与材质，但不得破坏12类页面的结构差异。",
+        "current_archetype": "Presentation_System_12PageTypes",
+        "logic_rationale": "将传统“封面/目录/图文/图表/结尾”粗粒度风格模板细化为12类页面模板，减少不同内容页面共用同一结构导致的生成漂移。"
+      },
+      "aspect_ratio": "16:9",
+      "resolution": "4K Ultra HD (3840x2160)",
+      "layout_guidelines": {
+        "strategy": "每页只承载一个主结论。标题优先控制在10-16字内；正文单区块不超过3-5条；重要数字、动作词、结论词必须形成清晰视觉锚点。",
+        "directive": "CRITICAL: Text content, especially titles, must be adapted to fit its container aesthetically. Do not rely solely on font size."
+      }
+    },
+    "visual_dna": {
+      "purpose": "直接映射给图像生成模型的通用视觉约束片段",
+      "environment": "Professional keynote stage, clean presentation canvas, strong information hierarchy, ample negative space",
+      "texture": "Subtle paper grain or micro-grid texture with low visual noise, optional industry-specific material overlay",
+      "lighting": "Soft directional lighting, restrained accent glow, high readability first",
+      "composition": "Editorial presentation layout, structured modules, stable alignment, clear focal zone for title and key content"
+    },
+    "global_margins": {
+      "scale": "6%",
+      "style": "投屏安全边距",
+      "purpose": "确保标题、页码、图表与卡片在投屏和导出时不贴边。"
+    },
+    "background_layer": {
+      "fill_color": "#F7F8FA",
+      "pattern": {
+        "type": "gradient",
+        "style": "浅灰到白的低对比渐变，可叠加极弱网格线或行业材质纹理（不超过3%强度）",
+        "purpose": "保持商务感和兼容性，为不同品牌主题留出二次着色空间。"
+      }
+    },
+    "color_palette": {
+      "primary": {
+        "hex": "#1E40AF",
+        "semantic": "主结论、关键动作、结构锚点",
+        "usage": "标题强调、章节编号、目录序号、关键数字、图表主线"
+      },
+      "auxiliary_charting": {
+        "colors": [
+          "#1E40AF",
+          "#0F766E",
+          "#D97706",
+          "#7C3AED"
+        ],
+        "logic": "蓝色=主线/战略；青绿=效率/执行；橙色=增长/风险提示；紫色=能力/创新。"
+      },
+      "neutral": {
+        "border": "#D7DCE5",
+        "divider": "#E5E7EB",
+        "light_bg": "#FFFFFF"
+      },
+      "text": {
+        "primary": "#111827",
+        "secondary": "#6B7280",
+        "highlight": "#1E40AF",
+        "on_image": "#FFFFFF"
+      }
+    },
+    "content_processing_rules": {
+      "text_conciseness": {
+        "directive": "When generating titles, prioritize concise assertion-driven headlines.",
+        "action": "标题优先改写为“对象/动作 + 结果/判断”，避免纯标签式标题。"
+      },
+      "user_input_filtering": {
+        "directive": "CRITICAL: Deeply analyze user input to distinguish between content and meta-commentary.",
+        "thinking_process_requirement": "布局建议、批注、占位说明、说明性括号文本默认不进入可见正文；只有可展示信息才能上版。",
+        "examples_to_exclude": [
+          "Style guides and prompt notes",
+          "Draft comments and editor notes",
+          "Conversational filler sentences",
+          "Placeholder instructions",
+          "Citations and source markers"
+        ],
+        "action": "剔除元指令，把长句压缩为结论句、证据句和关键词。"
+      }
+    },
+    "graphic_elements": {
+      "logo": {
+        "protection_rule": "CRITICAL: If the user provides a logo, treat it as an immutable asset and do not redesign or hallucinate it.",
+        "shape_and_ratio": "严格保持原始长宽比和图形结构。",
+        "allowed_modifications": "仅允许等比例缩放与基于背景安全性的整体单色化。"
+      },
+      "containers": {
+        "summary_box": {
+          "background": "#FFFFFF",
+          "border": "1px solid #D7DCE5",
+          "corner_radius": "12px",
+          "effect": "轻卡片感，适合承载结论、要点和数据说明。"
+        },
+        "feature_card": {
+          "background": "#F9FAFB",
+          "border": "1px solid #E5E7EB",
+          "corner_radius": "16px",
+          "effect": "用于案例、流程步骤、能力模块等重复结构单元。"
+        }
+      },
+      "iconography": {
+        "style": "Minimalist Linear",
+        "effects": "低噪音、轻描边、小面积点缀，不喧宾夺主。"
+      },
+      "lines_and_dividers": {
+        "color": "#E5E7EB",
+        "style": "solid",
+        "weight": "1px",
+        "function": "建立分区、节奏与阅读路径。"
+      }
+    },
+    "slide_templates": {
+      "cover_page": {
+        "page_type": "cover",
+        "layout": "Hero Title + Subtitle + Presenter Info",
+        "layout_goal": "第一眼建立主题、气质与专业度，信息极简但视觉记忆点鲜明。",
+        "background": {
+          "container_type": "image_slot",
+          "asset_treatment_rules": {
+            "overlay": "根据背景明暗自动叠加20-50%覆层，优先保护标题对比度",
+            "required_adjustments": [
+              {
+                "type": "contrast",
+                "action": "increase_if_text_is_low_contrast"
+              }
+            ],
+            "safety_check": "若背景与标题冲突，优先让出标题区留白，不得牺牲主标题可读性。"
+          },
+          "fallback_generation_prompt": "premium presentation cover, strong focal image, clean title zone, elegant keynote style",
+          "user_asset_priority_rule": "CRITICAL: If a user-provided image exists, it MUST be used. DO NOT generate."
+        },
+        "elements": {
+          "title_block": "主标题最大，副标题次之，汇报信息最弱；信息总层级不超过3层。",
+          "anchor_graphic": "允许使用单一强主视觉或抽象图形，不堆叠多个视觉中心。"
+        }
+      },
+      "toc_page": {
+        "page_type": "catalog",
+        "layout": "Structured Agenda List",
+        "layout_goal": "帮助观众快速建立整份PPT的阅读地图。",
+        "elements": {
+          "list_item": "左侧序号/章节编号，右侧标题，可选一行简短注释。",
+          "progress_cue": "当前章节可用主色强调，其余章节降权处理。"
+        }
+      },
+      "section_header_page": {
+        "page_type": "section_header",
+        "layout": "Minimalist Transition",
+        "layout_goal": "制造章节切换节奏，让观众感知叙事推进。",
+        "background": {
+          "overlay": "章节页允许更强情绪化背景，但文字区必须保持高对比。"
+        },
+        "elements": {
+          "section_number": "PART / 01 / 02 等编号可作为视觉主锚点",
+          "section_title": "章节标题必须短促有力，不宜出现大段说明文字。"
+        }
+      },
+      "agenda_timeline_page": {
+        "page_type": "agenda_timeline",
+        "layout": "Horizontal or Vertical Timeline",
+        "layout_goal": "表达演讲议程、项目阶段、时间节点或推进计划。",
+        "vertical_rhythm": {
+          "top_headline": "18%",
+          "timeline_zone": "62%",
+          "annotation_zone": "20%"
+        },
+        "elements": {
+          "timeline_axis": "清晰的主轴线和节点，节点数量以4-6个为宜。",
+          "milestone_card": "每个节点只保留关键词、时间和一句解释。"
+        }
+      },
+      "content_page": {
+        "page_type": "detail_text_split",
+        "layout": "Header + Split Content",
+        "layout_goal": "适合单观点拆解、概念说明、论据展开。",
+        "vertical_rhythm": {
+          "top_section": "20%",
+          "middle_section": "80%"
+        },
+        "elements": {
+          "content_area": "左列结论与论据，右列图示、配图或辅助结构。",
+          "title": "标题前可用短横线、小编号或小标签作为结构锚点。"
+        }
+      },
+      "bullet_keypoints_page": {
+        "page_type": "bullet_keypoints",
+        "layout": "Key Points Stack",
+        "layout_goal": "适合3-6条核心结论、原则、发现或建议的直接表达。",
+        "elements": {
+          "headline_block": "顶部先给一句总判断。",
+          "keypoints_list": "每条要点控制在1行主句+1行补充，重点词用颜色或字重突出。"
+        }
+      },
+      "comparison_page": {
+        "page_type": "comparison",
+        "layout": "Two-Column or Before-After Comparison",
+        "layout_goal": "适合方案对比、竞品对比、前后变化、优劣分析。",
+        "elements": {
+          "comparison_columns": "左右两侧结构必须严格对齐，维度一致。",
+          "delta_highlight": "变化值、优势点、风险点必须形成明显对比色。"
+        }
+      },
+      "process_flow_page": {
+        "page_type": "process_flow",
+        "layout": "Step Flow or Closed Loop",
+        "layout_goal": "表达流程、方法论、执行路径、业务闭环。",
+        "elements": {
+          "flow_steps": "用4-6个步骤卡片或节点表达，强调前后顺序。",
+          "connector_logic": "连接线、箭头、循环结构必须清晰，不允许装饰性复杂连线压过文字。"
+        }
+      },
+      "framework_matrix_page": {
+        "page_type": "framework_matrix",
+        "layout": "Matrix / Pyramid / Layered Framework",
+        "layout_goal": "适合2x2矩阵、能力模型、金字塔、分层结构。",
+        "elements": {
+          "framework_body": "优先使用几何秩序表达关系，不靠长段文字解释。",
+          "quadrant_or_layer_labels": "每个象限或层级名称必须简短，避免文本溢出。"
+        }
+      },
+      "data_page": {
+        "page_type": "detail_chart",
+        "layout": "Chart Focus with Insight Box",
+        "layout_goal": "用图表承载主证据，结论区解释“So What”。",
+        "vertical_rhythm": {
+          "top_headline": "16%",
+          "middle_chart": "60%",
+          "bottom_insight": "24%"
+        },
+        "elements": {
+          "chart_container": "图表是视觉主角，轴线、标签、图例必须克制而可读。",
+          "key_insight_box": {
+            "style": "summary_box",
+            "content": "包含1句主结论和2-3条证据，关键数字必须被高亮。"
+          }
+        }
+      },
+      "case_showcase_page": {
+        "page_type": "case_showcase",
+        "layout": "Case Cards or Gallery",
+        "layout_goal": "适合展示案例、产品、客户、场景或成果集锦。",
+        "elements": {
+          "case_cards": "2-4个卡片并列，每个卡片包含标题、亮点、成果或截图。",
+          "visual_balance": "卡片间距和封面图比例统一，避免拼贴感。"
+        }
+      },
+      "closing_page": {
+        "page_type": "closing",
+        "layout": "Summary / Q&A / Call To Action",
+        "layout_goal": "完成收束、强化记忆点，并引导下一步动作。",
+        "elements": {
+          "final_message": "可用总结句、感谢语、Q&A或行动号召作为主文案。",
+          "support_info": "联系方式、二维码、补充说明应弱化处理，不与主文案争抢焦点。"
+        }
+      }
+    },
+    "typography_rules": {
+      "font_family": "HarmonyOS Sans SC, 思源黑体 SC, PingFang SC, Arial, sans-serif",
+      "hierarchy": {
+        "cover_title": {
+          "size": "Huge (54-64pt)",
+          "weight": "ExtraBold",
+          "line_break": "Semantic only"
+        },
+        "slide_title": {
+          "size": "Large (34-42pt)",
+          "weight": "Bold",
+          "overflow_rule": "优先缩短标题，不优先暴力缩字号。"
+        },
+        "section_header": {
+          "size": "Medium (22-28pt)",
+          "weight": "Bold",
+          "max_lines": 1
+        },
+        "body_text": {
+          "size": "Small (14-16pt)",
+          "weight": "Regular",
+          "line_height": "1.55"
+        },
+        "data_label": {
+          "size": "Small (12-14pt)",
+          "weight": "Medium",
+          "line_height": "1.3"
+        }
+      }
+    }
+  }
+}
