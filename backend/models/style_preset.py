@@ -20,23 +20,13 @@ class StylePreset(db.Model):
 
     @staticmethod
     def _normalize_preview_images(data):
-        keys = (
-            'cover_url',
-            'catalog_url',
-            'section_header_url',
-            'agenda_timeline_url',
-            'detail_text_split_url',
-            'bullet_keypoints_url',
-            'comparison_url',
-            'process_flow_url',
-            'framework_matrix_url',
-            'detail_chart_url',
-            'case_showcase_url',
-            'closing_url',
-        )
         if not isinstance(data, dict):
-            return {k: '' for k in keys}
-        return {k: str(data.get(k) or '') for k in keys}
+            return {}
+        return {
+            str(k): str(v or '')
+            for k, v in data.items()
+            if isinstance(k, str) and k.strip()
+        }
 
     def get_preview_images(self):
         if not self.preview_images_json:

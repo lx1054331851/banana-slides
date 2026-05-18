@@ -16,7 +16,7 @@ from models import db, Task, Project, ReferenceFile, StylePreset
 from services.ai_service_manager import get_ai_service
 from services.file_service import FileService
 from services.prompts import get_style_recommendations_prompt
-from utils.style_guidance import build_preview_style_json_for_page_type
+from utils.style_guidance import build_preview_style_json_for_page_type, extract_style_template_page_slots
 
 logger = logging.getLogger(__name__)
 
@@ -62,12 +62,33 @@ CORE_PREVIEW_SAMPLE_KEYS = (
 )
 
 
-def _empty_preview_images() -> Dict[str, str]:
-    return {slot['preview_key']: '' for slot in PREVIEW_SLOT_DEFINITIONS}
+def _resolve_preview_slots(style_json_text: Optional[str] = None) -> list[dict[str, Any]]:
+    dynamic_slots = extract_style_template_page_slots(style_json_text)
+    return dynamic_slots or list(PREVIEW_SLOT_DEFINITIONS)
 
 
-def _normalize_sample_pages(sample_pages: Any) -> Dict[str, str]:
-    normalized = {key: '' for key in DEFAULT_PREVIEW_SAMPLE_PAGES.keys()}
+def _resolve_core_preview_keys(slots: list[dict[str, Any]]) -> tuple[str, ...]:
+    slot_keys = {slot['sample_key'] for slot in slots}
+    filtered = tuple(key for key in CORE_PREVIEW_SAMPLE_KEYS if key in slot_keys)
+    if filtered:
+        return filtered
+    return tuple(slot['sample_key'] for slot in slots)
+
+
+def _empty_preview_images(slots: Optional[list[dict[str, Any]]] = None) -> Dict[str, str]:
+    resolved_slots = slots or PREVIEW_SLOT_DEFINITIONS
+    return {slot['preview_key']: '' for slot in resolved_slots}
+
+
+def _normalize_sample_pages(sample_pages: Any, slots: Optional[list[dict[str, Any]]] = None) -> Dict[str, str]:
+    resolved_slots = slots or PREVIEW_SLOT_DEFINITIONS
+    normalized = {
+        slot['sample_key']: DEFAULT_PREVIEW_SAMPLE_PAGES.get(
+            slot['sample_key'],
+            f"{slot['title']}页面描述"
+        )
+        for slot in resolved_slots
+    }
     if not isinstance(sample_pages, dict):
         return normalized
 
@@ -85,8 +106,9 @@ def _normalize_sample_pages(sample_pages: Any) -> Dict[str, str]:
     return normalized
 
 
-def _build_preview_outline() -> list[dict]:
-    return [{'title': slot['title'], 'points': []} for slot in PREVIEW_SLOT_DEFINITIONS]
+def _build_preview_outline(slots: Optional[list[dict[str, Any]]] = None) -> list[dict]:
+    resolved_slots = slots or PREVIEW_SLOT_DEFINITIONS
+    return [{'title': slot['title'], 'points': []} for slot in resolved_slots]
 
 
 def _build_slot_scoped_extra_requirements(
@@ -355,6 +377,7 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
             recs = _normalize_style_recommendations(result)
             if len(recs) != 3:
                 logger.warning(f"Expected 3 recommendations, got {len(recs)}")
+            template_slots = _resolve_preview_slots(template_json_text)
 
             # Prepare progress payload
             normalized_recs: list[dict] = []
@@ -365,7 +388,9 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                 style_json_obj = rec.get('style_json') if isinstance(rec, dict) else None
                 sample_pages = rec.get('sample_pages') if isinstance(rec, dict) else None
 
-                sample_pages = _normalize_sample_pages(sample_pages)
+                style_json_text = json.dumps(style_json_obj, ensure_ascii=False) if style_json_obj is not None else template_json_text
+                resolved_slots = _resolve_preview_slots(style_json_text or template_json_text)
+                sample_pages = _normalize_sample_pages(sample_pages, resolved_slots)
 
                 normalized_recs.append({
                     'id': rec_id,
@@ -373,12 +398,17 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                     'rationale': rationale,
                     'style_json': style_json_obj,
                     'sample_pages': sample_pages,
-                    'preview_images': _empty_preview_images(),
+                    'preview_images': _empty_preview_images(resolved_slots),
+                    'preview_slots': resolved_slots,
                 })
 
             # Ensure progress initialized
             progress = task.get_progress() or {}
-            total = len(normalized_recs) * len(CORE_PREVIEW_SAMPLE_KEYS) if generate_previews else len(normalized_recs)
+            total_preview_jobs = sum(
+                len(_resolve_core_preview_keys(rec.get('preview_slots') or template_slots))
+                for rec in normalized_recs
+            )
+            total = total_preview_jobs if generate_previews else len(normalized_recs)
             completed_init = 0 if generate_previews else len(normalized_recs)
             progress.update({
                 'mode': 'recommendations_and_previews' if generate_previews else 'recommendations_only',
@@ -407,9 +437,6 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
             aspect_ratio = (project.image_aspect_ratio if project else None) or app.config.get('DEFAULT_ASPECT_RATIO', '16:9')
             resolution = app.config.get('DEFAULT_RESOLUTION', '2K')
 
-            outline = _build_preview_outline()
-            core_slots = [slot for slot in PREVIEW_SLOT_DEFINITIONS if slot['sample_key'] in CORE_PREVIEW_SAMPLE_KEYS]
-
             completed = 0
             failed = 0
             slide_extra_retries = int(app.config.get('STYLE_PREVIEW_SLIDE_RETRIES', 1))
@@ -422,12 +449,17 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                 style_json_text = ""
                 if rec.get('style_json') is not None:
                     style_json_text = json.dumps(rec['style_json'], ensure_ascii=False)
+                resolved_slots = rec.get('preview_slots') or template_slots
+                outline = _build_preview_outline(resolved_slots)
+                core_preview_keys = _resolve_core_preview_keys(resolved_slots)
+                core_slots = [slot for slot in resolved_slots if slot['sample_key'] in core_preview_keys]
                 for slot in core_slots:
                     jobs.append({
                         'rec_id': rec['id'],
                         'slide_key': slot['sample_key'],
                         'preview_key': slot['preview_key'],
                         'page_index': slot['page_index'],
+                        'outline': outline,
                         'sample_pages': rec.get('sample_pages') or {},
                         'extra_req': _build_slot_scoped_extra_requirements(
                             style_json_text,
@@ -446,7 +478,7 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                     rec_id=job['rec_id'],
                     slide_key=job['slide_key'],
                     page_index=job['page_index'],
-                    outline=outline,
+                    outline=job['outline'],
                     sample_pages=job['sample_pages'],
                     extra_req=job['extra_req'],
                     aspect_ratio=aspect_ratio,
@@ -508,7 +540,7 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                 task.completed_at = datetime.utcnow()
                 # Ensure total is correct even if recs < 3
                 p = task.get_progress() or {}
-                p.setdefault('total', len(normalized_recs) * len(CORE_PREVIEW_SAMPLE_KEYS))
+                p.setdefault('total', total_preview_jobs)
                 p['completed'] = completed
                 p['failed'] = failed
                 task.set_progress(p)
@@ -534,7 +566,8 @@ def _find_sample_pages_from_latest_task(project_id: str, rec_id: str) -> Optiona
             if isinstance(r, dict) and r.get('id') == rec_id:
                 sp = r.get('sample_pages')
                 if isinstance(sp, dict):
-                    return _normalize_sample_pages(sp)
+                    preview_slots = r.get('preview_slots') if isinstance(r.get('preview_slots'), list) else None
+                    return _normalize_sample_pages(sp, preview_slots)
     return None
 
 
@@ -576,8 +609,10 @@ def regenerate_single_style_previews_task(task_id: str, project_id: str, rec_id:
             aspect_ratio = (project.image_aspect_ratio if project else None) or app.config.get('DEFAULT_ASPECT_RATIO', '16:9')
             resolution = app.config.get('DEFAULT_RESOLUTION', '2K')
 
-            outline = _build_preview_outline()
-            core_slots = [slot for slot in PREVIEW_SLOT_DEFINITIONS if slot['sample_key'] in CORE_PREVIEW_SAMPLE_KEYS]
+            resolved_slots = _resolve_preview_slots(style_json_text)
+            outline = _build_preview_outline(resolved_slots)
+            core_preview_keys = _resolve_core_preview_keys(resolved_slots)
+            core_slots = [slot for slot in resolved_slots if slot['sample_key'] in core_preview_keys]
 
             completed = 0
             failed = 0
@@ -586,7 +621,7 @@ def regenerate_single_style_previews_task(task_id: str, project_id: str, rec_id:
             task.set_progress(progress)
             db.session.commit()
 
-            preview_urls: Dict[str, str] = _empty_preview_images()
+            preview_urls: Dict[str, str] = _empty_preview_images(resolved_slots)
 
             slide_extra_retries = int(app.config.get('STYLE_PREVIEW_SLIDE_RETRIES', 1))
             max_workers = int(app.config.get('STYLE_PREVIEW_WORKERS', 2))
@@ -678,11 +713,14 @@ def _normalize_single_style_recommendation(result: Any) -> dict:
     sample_pages = rec.get('sample_pages') if isinstance(rec, dict) else None
     if not isinstance(sample_pages, dict):
         sample_pages = {}
+    style_json_text = json.dumps(style_json_obj, ensure_ascii=False)
+    resolved_slots = _resolve_preview_slots(style_json_text)
     return {
         'name': (rec.get('name') or '').strip() if isinstance(rec, dict) else '',
         'rationale': (rec.get('rationale') or '').strip() if isinstance(rec, dict) else '',
         'style_json': style_json_obj,
-        'sample_pages': _normalize_sample_pages(sample_pages),
+        'sample_pages': _normalize_sample_pages(sample_pages, resolved_slots),
+        'preview_slots': resolved_slots,
     }
 
 
@@ -754,7 +792,8 @@ def _find_sample_pages_from_latest_style_preset_task(preset_id: str) -> Optional
             continue
         sample_pages = progress.get('sample_pages')
         if isinstance(sample_pages, dict):
-            return _normalize_sample_pages(sample_pages)
+            preview_slots = progress.get('preview_slots') if isinstance(progress.get('preview_slots'), list) else None
+            return _normalize_sample_pages(sample_pages, preview_slots)
     return None
 
 
@@ -779,17 +818,20 @@ def generate_style_preset_task(task_id: str,
                 return
 
             task.status = 'PROCESSING'
+            template_slots = _resolve_preview_slots(template_json_text)
+            template_core_preview_keys = _resolve_core_preview_keys(template_slots)
             progress = task.get_progress() or {}
             progress.update({
                 'stage': 'json_generating',
                 'current_step': 'generating_recommendations',
-                'total': 1 + len(CORE_PREVIEW_SAMPLE_KEYS),
+                'total': 1 + len(template_core_preview_keys),
                 'completed': 0,
                 'failed': 0,
                 'template_json': template_json_text,
                 'style_requirements': style_requirements,
                 'preset_name': (preset_name or '').strip(),
                 'preview_images': {},
+                'preview_slots': template_slots,
             })
             task.set_progress(progress)
             db.session.commit()
@@ -810,9 +852,10 @@ def generate_style_preset_task(task_id: str,
             normalized = _normalize_single_style_recommendation(result)
             final_name = (preset_name or '').strip() or normalized['name'] or '未命名模板'
             style_json_text_final = json.dumps(normalized['style_json'], ensure_ascii=False)
+            resolved_slots = normalized.get('preview_slots') or _resolve_preview_slots(style_json_text_final)
 
             preset = StylePreset(name=final_name, style_json=style_json_text_final)
-            preset.preview_images_json = json.dumps(_empty_preview_images(), ensure_ascii=False)
+            preset.preview_images_json = json.dumps(_empty_preview_images(resolved_slots), ensure_ascii=False)
             db.session.add(preset)
             db.session.commit()
 
@@ -834,6 +877,7 @@ def generate_style_preset_task(task_id: str,
                 'style_json': style_json_text_final,
                 'sample_pages': sample_pages,
                 'preview_images': preview_urls,
+                'preview_slots': resolved_slots,
             })
             task.set_progress(progress)
             db.session.commit()
@@ -841,8 +885,9 @@ def generate_style_preset_task(task_id: str,
             file_service = FileService(app.config['UPLOAD_FOLDER'])
             aspect_ratio = app.config.get('DEFAULT_ASPECT_RATIO', '16:9')
             resolution = app.config.get('DEFAULT_RESOLUTION', '2K')
-            outline = _build_preview_outline()
-            core_slots = [slot for slot in PREVIEW_SLOT_DEFINITIONS if slot['sample_key'] in CORE_PREVIEW_SAMPLE_KEYS]
+            outline = _build_preview_outline(resolved_slots)
+            core_preview_keys = _resolve_core_preview_keys(resolved_slots)
+            core_slots = [slot for slot in resolved_slots if slot['sample_key'] in core_preview_keys]
             slide_extra_retries = int(app.config.get('STYLE_PREVIEW_SLIDE_RETRIES', 1))
             max_workers = max(1, min(int(app.config.get('STYLE_PREVIEW_WORKERS', 2)), len(core_slots)))
             completed = 1
@@ -955,6 +1000,7 @@ def regenerate_style_preset_image_task(task_id: str,
                 raise ValueError(f'StylePreset {preset_id} not found')
 
             sample_pages = _find_sample_pages_from_latest_style_preset_task(preset_id) or {}
+            resolved_slots = _resolve_preview_slots(preset.style_json)
             task = Task.query.get(task_id)
             if not task:
                 return
@@ -971,6 +1017,7 @@ def regenerate_style_preset_image_task(task_id: str,
                 'preview_key': preview_key,
                 'preview_images': preset.get_preview_images(),
                 'sample_pages': sample_pages,
+                'preview_slots': resolved_slots,
             })
             task.set_progress(progress)
             db.session.commit()
@@ -979,8 +1026,8 @@ def regenerate_style_preset_image_task(task_id: str,
             file_service = FileService(app.config['UPLOAD_FOLDER'])
             aspect_ratio = app.config.get('DEFAULT_ASPECT_RATIO', '16:9')
             resolution = app.config.get('DEFAULT_RESOLUTION', '2K')
-            outline = _build_preview_outline()
-            slot = next((item for item in PREVIEW_SLOT_DEFINITIONS if item['preview_key'] == preview_key), None)
+            outline = _build_preview_outline(resolved_slots)
+            slot = next((item for item in resolved_slots if item['preview_key'] == preview_key), None)
             if not slot:
                 raise ValueError(f'Unknown preview_key: {preview_key}')
             _, url = _render_preset_preview_slide_with_retry(

@@ -2,28 +2,13 @@ import React from 'react';
 import { AlertCircle, Loader2, RefreshCw, X } from 'lucide-react';
 import { Button, Card } from '@/components/shared';
 import type { StylePresetTaskRecord } from './types';
-import { getTaskDisplayName, getTaskPreviewKey, getTaskStage, isTaskRunning } from './types';
+import { getTaskDisplayName, getTaskPreviewKey, getTaskStage, humanizePreviewKey, isTaskRunning } from './types';
 
 interface JsonPresetTaskBoardProps {
   tasks: StylePresetTaskRecord[];
   onRetryTask: (task: StylePresetTaskRecord) => void;
   onDismissTask: (taskId: string) => void;
 }
-
-const previewKeyLabelMap: Record<string, string> = {
-  cover_url: '首页',
-  catalog_url: '目录',
-  section_header_url: '章节过渡',
-  agenda_timeline_url: '议程时间线',
-  detail_text_split_url: '标准图文',
-  bullet_keypoints_url: '要点列表',
-  comparison_url: '对比',
-  process_flow_url: '流程',
-  framework_matrix_url: '框架矩阵',
-  detail_chart_url: '图表',
-  case_showcase_url: '案例展示',
-  closing_url: '结尾',
-};
 
 function getTaskSummary(task: StylePresetTaskRecord): string {
   const stage = getTaskStage(task);
@@ -36,7 +21,7 @@ function getTaskSummary(task: StylePresetTaskRecord): string {
   if (stage === 'preview_generating') return `阶段 2/2：正在生成预览图 ${Math.max(0, completed - 1)}/${Math.max(0, total - 1)}${failed ? `，失败 ${failed}` : ''}`;
   if (stage === 'single_preview_generating') {
     const previewKey = getTaskPreviewKey(task);
-    const label = previewKey ? (previewKeyLabelMap[previewKey] || previewKey) : '预览图';
+    const label = previewKey ? humanizePreviewKey(previewKey) : '预览图';
     return `正在补生成 ${label} 预览图 ${completed}/${Math.max(1, total)}`;
   }
   if (task.status === 'FAILED') return task.error_message || '生成失败';

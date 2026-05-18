@@ -17,24 +17,11 @@ from services.provider_routing import resolve_routing_bundle
 from services.task_manager import task_manager
 from services.style_preview_service import generate_style_preset_task, regenerate_style_preset_image_task
 from utils import success_response, error_response, not_found, bad_request, allowed_file
+from utils.style_guidance import extract_style_template_page_slots
 
 logger = logging.getLogger(__name__)
 
 style_library_bp = Blueprint('style_library', __name__, url_prefix='/api')
-_PREVIEW_IMAGE_KEYS = (
-    'cover_url',
-    'catalog_url',
-    'section_header_url',
-    'agenda_timeline_url',
-    'detail_text_split_url',
-    'bullet_keypoints_url',
-    'comparison_url',
-    'process_flow_url',
-    'framework_matrix_url',
-    'detail_chart_url',
-    'case_showcase_url',
-    'closing_url',
-)
 _STYLE_PRESET_TASK_TYPES = ('STYLE_PRESET_GENERATE', 'STYLE_PRESET_IMAGE_REGENERATE')
 _RUNNING_TASK_STATUSES = ('PENDING', 'PROCESSING', 'RUNNING')
 
@@ -48,13 +35,19 @@ def _validate_json_text(text: str):
     return json.loads(s)
 
 
-def _normalize_preview_images_payload(payload):
+def _get_preview_image_keys_from_style_json(style_json_text: str):
+    slots = extract_style_template_page_slots(style_json_text)
+    return [slot['preview_key'] for slot in slots]
+
+
+def _normalize_preview_images_payload(payload, allowed_keys=None):
     if payload is None:
         payload = {}
     if not isinstance(payload, dict):
         raise ValueError("preview_images must be an object")
+    normalized_keys = [str(key) for key in (allowed_keys or payload.keys()) if isinstance(key, str) and str(key).strip()]
     normalized = {}
-    for key in _PREVIEW_IMAGE_KEYS:
+    for key in normalized_keys:
         normalized[key] = str(payload.get(key) or '').strip()
     return normalized
 
@@ -131,8 +124,6 @@ def delete_style_template(template_id: str):
 
 def _validate_preview_key(preview_key: str) -> str:
     normalized = secure_filename(str(preview_key or '').strip().lower())
-    if normalized not in _PREVIEW_IMAGE_KEYS:
-        raise ValueError(f"preview_key must be one of {', '.join(_PREVIEW_IMAGE_KEYS)}")
     return normalized
 
 
@@ -269,7 +260,10 @@ def regenerate_style_preset_preview_image(preset_id: str, preview_key: str):
         if not preset:
             return not_found('StylePreset')
 
+        allowed_preview_keys = set(_get_preview_image_keys_from_style_json(preset.style_json))
         normalized_preview_key = _validate_preview_key(preview_key)
+        if normalized_preview_key not in allowed_preview_keys:
+            return bad_request(f"preview_key must be one of {', '.join(sorted(allowed_preview_keys))}")
         data = request.get_json(silent=True) or {}
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
         generation_override = data.get('generation_override') or {}
@@ -333,8 +327,9 @@ def create_style_preset():
             _validate_json_text(style_json_text)
         except Exception as e:
             return bad_request(f"style_json must be valid JSON: {str(e)}")
+        allowed_preview_keys = _get_preview_image_keys_from_style_json(style_json_text)
         try:
-            normalized_preview_images = _normalize_preview_images_payload(preview_images_payload)
+            normalized_preview_images = _normalize_preview_images_payload(preview_images_payload, allowed_preview_keys)
         except Exception as e:
             return bad_request(str(e))
 
@@ -345,7 +340,7 @@ def create_style_preset():
 
         # Copy preview images into /uploads/style-presets/{preset_id}/
         file_service = FileService(current_app.config['UPLOAD_FOLDER'])
-        stored_preview_images = {k: '' for k in _PREVIEW_IMAGE_KEYS}
+        stored_preview_images = {k: '' for k in allowed_preview_keys}
         for key, source_url in normalized_preview_images.items():
             if not source_url:
                 continue

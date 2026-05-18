@@ -1877,20 +1877,7 @@ export interface StyleTemplate {
   updated_at?: string;
 }
 
-export interface StylePresetPreviewImages {
-  cover_url: string;
-  catalog_url: string;
-  section_header_url: string;
-  agenda_timeline_url: string;
-  detail_text_split_url: string;
-  bullet_keypoints_url: string;
-  comparison_url: string;
-  process_flow_url: string;
-  framework_matrix_url: string;
-  detail_chart_url: string;
-  case_showcase_url: string;
-  closing_url: string;
-}
+export type StylePresetPreviewImages = Record<string, string>;
 
 export interface StylePreset {
   id: string;

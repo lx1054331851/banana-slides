@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Optional
+import re
+from typing import Any, Dict, List, Optional
 
 PAGE_STYLE_GUIDE_DEFAULT_BINDING = "__page_default__"
 
@@ -81,6 +82,55 @@ def _try_parse_style_json(style_json: Optional[str]) -> Optional[Dict[str, Any]]
     return parsed if isinstance(parsed, dict) else None
 
 
+def _slugify_page_key(text: str) -> str:
+    value = re.sub(r'[^a-z0-9]+', '_', str(text or '').strip().lower())
+    value = re.sub(r'_+', '_', value).strip('_')
+    return value or 'page'
+
+
+def extract_style_template_page_slots(style_json: Optional[str]) -> List[Dict[str, Any]]:
+    """
+    Extract ordered page-slot metadata from design_system_spec.slide_templates.
+
+    Returns items shaped like:
+    {
+      "sample_key": "brand_overview_page",
+      "preview_key": "brand_overview_page_url",
+      "page_index": 1,
+      "title": "品牌概览页",
+      "template_key": "brand_overview_page",
+      "page_type": "品牌概览页",
+    }
+    """
+    parsed = _try_parse_style_json(style_json)
+    if not parsed:
+        return []
+
+    design_system = parsed.get("design_system_spec")
+    if not isinstance(design_system, dict):
+        return []
+
+    slide_templates = design_system.get("slide_templates")
+    if not isinstance(slide_templates, dict):
+        return []
+
+    slots: List[Dict[str, Any]] = []
+    for index, (template_key, template_value) in enumerate(slide_templates.items(), start=1):
+        if not isinstance(template_value, dict):
+            continue
+        page_type = str(template_value.get("page_type") or template_key or "").strip() or f"页面{index}"
+        sample_key = _slugify_page_key(str(template_key or page_type))
+        slots.append({
+            "sample_key": sample_key,
+            "preview_key": f"{sample_key}_url",
+            "page_index": index,
+            "title": page_type,
+            "template_key": str(template_key),
+            "page_type": page_type,
+        })
+    return slots
+
+
 def build_preview_style_json_for_page_type(
     style_json: Optional[str],
     *,
@@ -106,7 +156,7 @@ def build_preview_style_json_for_page_type(
     if not isinstance(slide_templates, dict):
         return style_json
 
-    requested_key = (page_type_key or "").strip()
+    requested_key = _slugify_page_key(page_type_key or "")
     matched_template_key = None
     matched_template_value = None
 
@@ -115,7 +165,10 @@ def build_preview_style_json_for_page_type(
             if not isinstance(template_value, dict):
                 continue
             page_type = str(template_value.get("page_type") or "").strip()
-            if page_type == requested_key or template_key == requested_key:
+            if (
+                _slugify_page_key(page_type) == requested_key
+                or _slugify_page_key(str(template_key)) == requested_key
+            ):
                 matched_template_key = template_key
                 matched_template_value = template_value
                 break

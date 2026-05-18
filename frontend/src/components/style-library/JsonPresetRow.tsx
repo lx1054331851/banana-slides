@@ -4,7 +4,7 @@ import { Button } from '@/components/shared';
 import { getImageUrl } from '@/api/client';
 import type { StylePreset, StylePresetPreviewImages } from '@/api/endpoints';
 import type { PreviewKey } from './types';
-import { PREVIEW_ORDER, getPresetDisplayName } from './types';
+import { getPreviewOrder, getPresetDisplayName } from './types';
 
 interface JsonPresetRowProps {
   preset: StylePreset;
@@ -26,6 +26,7 @@ export const JsonPresetRow: React.FC<JsonPresetRowProps> = ({
   onGeneratePreview,
 }) => {
   const preview: Partial<StylePresetPreviewImages> = preset.preview_images || {};
+  const previewOrder = getPreviewOrder(preview);
 
   return (
     <div
@@ -54,7 +55,7 @@ export const JsonPresetRow: React.FC<JsonPresetRowProps> = ({
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-        {PREVIEW_ORDER.map(([key, label]) => {
+        {previewOrder.map(([key, label]) => {
           const src = preview[key] ? getImageUrl(preview[key]) : '';
           const isGenerating = generatingPreviewKey === key;
           return (

@@ -17,7 +17,7 @@ import { JsonPresetList } from './JsonPresetList';
 import { JsonPresetCreateDrawer } from './JsonPresetCreateDrawer';
 import { JsonPresetJsonViewer } from './JsonPresetJsonViewer';
 import type { JsonPresetWorkspaceProps, PreviewKey, StylePresetTaskRecord } from './types';
-import { PREVIEW_ORDER, getPresetDisplayName, getTaskPreviewKey, isTaskRunning } from './types';
+import { getPreviewOrder, getPresetDisplayName, getTaskPreviewKey, isTaskRunning } from './types';
 
 const MAX_RUNNING_TASKS = 4;
 
@@ -60,7 +60,7 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
     }
 
     const failedPreviewKeys = Object.keys(task.progress?.preview_errors || {})
-      .filter((key): key is PreviewKey => PREVIEW_ORDER.some(([previewKey]) => previewKey === key));
+      .filter((key): key is PreviewKey => Boolean(key));
 
     if (failedPreviewKeys.length > 0) {
       return failedPreviewKeys.every((key) => Boolean(previewImages[key]));
@@ -123,7 +123,8 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
 
   const openPresetPreview = useCallback((preset: StylePreset, previewKey?: PreviewKey) => {
     const previewImages: Partial<StylePresetPreviewImages> = preset.preview_images || {};
-    const items = PREVIEW_ORDER
+    const previewOrder = getPreviewOrder(previewImages)
+    const items = previewOrder
       .map(([key, label]) => {
         const url = previewImages[key];
         return url ? { src: getImageUrl(url), title: `${getPresetDisplayName(preset)}-${label}` } : null;

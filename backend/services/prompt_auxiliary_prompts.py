@@ -40,6 +40,46 @@ LANGUAGE_CONFIG = {
 }
 
 
+def _extract_sample_page_specs(template_json_text: str) -> List[Dict[str, str]]:
+    try:
+        parsed = json.loads(template_json_text or '{}')
+    except Exception:
+        return []
+    if not isinstance(parsed, dict):
+        return []
+    design_system = parsed.get('design_system_spec')
+    if not isinstance(design_system, dict):
+        return []
+    slide_templates = design_system.get('slide_templates')
+    if not isinstance(slide_templates, dict):
+        return []
+    specs: List[Dict[str, str]] = []
+    for template_key, template_value in slide_templates.items():
+        if not isinstance(template_value, dict):
+            continue
+        page_type = str(template_value.get('page_type') or template_key or '').strip() or str(template_key)
+        sample_key = re.sub(r'[^a-z0-9]+', '_', str(template_key).strip().lower())
+        sample_key = re.sub(r'_+', '_', sample_key).strip('_') or 'page'
+        specs.append({
+            'sample_key': sample_key,
+            'page_type': page_type,
+        })
+    return specs
+
+
+def _build_sample_pages_json_example(specs: List[Dict[str, str]]) -> str:
+    if not specs:
+        specs = [
+            {'sample_key': 'cover', 'page_type': '封面页'},
+            {'sample_key': 'detail', 'page_type': '详情页'},
+        ]
+    lines = []
+    for index, spec in enumerate(specs):
+        comma = ',' if index < len(specs) - 1 else ''
+        lines.append(f'        "{spec["sample_key"]}": "{spec["page_type"]}页面描述"{comma}')
+    return "\n".join(lines)
+
+
 def get_language_instruction(language: str = None) -> str:
     """Return language instruction text for auxiliary prompt builders."""
     lang = language or 'zh'
@@ -787,6 +827,9 @@ def get_style_recommendations_prompt(project_dict: Dict,
     template_json_text = _truncate(template_json_text or "", max_template_chars)
 
     style_req = (style_requirements or "").strip()
+    sample_page_specs = _extract_sample_page_specs(template_json_text)
+    sample_pages_example = _build_sample_pages_json_example(sample_page_specs)
+    sample_page_keys = '/'.join(spec['sample_key'] for spec in sample_page_specs) if sample_page_specs else 'cover/detail'
 
     prompt = f"""\
 你是一位顶级 PPT 视觉设计总监 + 风格系统设计师。你的任务是：
@@ -794,7 +837,7 @@ def get_style_recommendations_prompt(project_dict: Dict,
 2) 阅读用户提供的「风格模板 JSON 骨架」
 3) 结合用户的「附加风格要求」
 4) 输出 3 组不同但都适配内容的「风格指导 JSON」（必须严格遵循模板骨架的结构与字段）
-5) 为每组风格提供 4 个用于预览的 PPT 页面描述（封面/目录/详情/结尾），用于生成样例图片
+5) 为每组风格提供与模板骨架 slide_templates 一一对应的页面描述，用于生成样例图片
 
 <project_context>
 creation_type: {creation_type}
@@ -824,18 +867,7 @@ description_text:
       "rationale": "为什么适配本内容（短）",
       "style_json": {{ /* 必须严格遵循模板骨架结构（同 key / 同层级），填满占位符/空值 */ }},
       "sample_pages": {{
-        "cover": "封面页页面描述（含标题/副标题/演讲者信息等文字要求）",
-        "catalog": "目录页页面描述（含目录结构文字要求）",
-        "section_header": "章节过渡页页面描述",
-        "agenda_timeline": "议程时间线页页面描述",
-        "detail_text_split": "标准图文页页面描述",
-        "bullet_keypoints": "要点列表页页面描述",
-        "comparison": "对比页页面描述",
-        "process_flow": "流程页页面描述",
-        "framework_matrix": "框架矩阵页页面描述",
-        "detail_chart": "图表页页面描述",
-        "case_showcase": "案例展示页页面描述",
-        "closing": "结尾页页面描述（致谢/Q&A/联系方式等文字要求）"
+{sample_pages_example}
       }}
     }}
   ]
@@ -847,7 +879,7 @@ description_text:
 - 模板骨架中的“示例值/演示值”（如“示例”“example”“Tech_Performance_Dark”等）仅用于说明字段含义，禁止机械照抄；必须结合当前内容与风格要求重新生成字段值。
 - 禁止 3 组推荐出现同质化配色：在未被用户明确要求“统一暗色”时，至少 1 组为浅色或高亮背景，且至少 2 组在主色相与明度上显著不同。
 - 若 style_requirements 为空或含糊，不要默认落入“黑金/暗色科技发布会”风格，应优先生成“中性商务亮色 + 信息可读性优先”的方案作为其中一组。
-- sample_pages 必须包含 12 个键：cover/catalog/section_header/agenda_timeline/detail_text_split/bullet_keypoints/comparison/process_flow/framework_matrix/detail_chart/case_showcase/closing，值为中文页面描述文本，且要能直接用于生成对应类型的 PPT 页面。
+- sample_pages 必须包含与模板骨架 slide_templates 一一对应的全部键：{sample_page_keys}，值为中文页面描述文本，且要能直接用于生成对应类型页面。
 - 只输出 JSON。
 {get_language_instruction(language)}
 """
@@ -881,6 +913,9 @@ def get_style_recommendations_prompt_minimal(project_dict: Dict,
     context = _truncate(context, max_context_chars)
     template_json_text = _truncate(template_json_text or "", max_template_chars)
     style_req = (style_requirements or "").strip()
+    sample_page_specs = _extract_sample_page_specs(template_json_text)
+    sample_pages_example = _build_sample_pages_json_example(sample_page_specs)
+    sample_page_keys = '/'.join(spec['sample_key'] for spec in sample_page_specs) if sample_page_specs else 'cover/detail'
 
     prompt = f"""\
 你是 PPT 视觉设计总监。请基于项目内容、风格模板 JSON 骨架和附加要求，输出 3 组不同的风格指导方案。
@@ -905,18 +940,7 @@ def get_style_recommendations_prompt_minimal(project_dict: Dict,
       "rationale": "适配原因",
       "style_json": {{}},
       "sample_pages": {{
-        "cover": "封面页描述",
-        "catalog": "目录页描述",
-        "section_header": "章节过渡页描述",
-        "agenda_timeline": "议程时间线页描述",
-        "detail_text_split": "标准图文页描述",
-        "bullet_keypoints": "要点列表页描述",
-        "comparison": "对比页描述",
-        "process_flow": "流程页描述",
-        "framework_matrix": "框架矩阵页描述",
-        "detail_chart": "图表页描述",
-        "case_showcase": "案例展示页描述",
-        "closing": "结尾页描述"
+{sample_pages_example}
       }}
     }}
   ]
@@ -926,7 +950,7 @@ def get_style_recommendations_prompt_minimal(project_dict: Dict,
 - recommendations 必须刚好 3 个。
 - style_json 必须遵循模板骨架字段。
 - 三组风格应有明显差异，避免同质化暗色科技风。
-- sample_pages 必须包含 12 个键：cover/catalog/section_header/agenda_timeline/detail_text_split/bullet_keypoints/comparison/process_flow/framework_matrix/detail_chart/case_showcase/closing。
+- sample_pages 必须包含与模板骨架 slide_templates 一一对应的全部键：{sample_page_keys}。
 - 只输出 JSON，不要 markdown。
 {get_language_instruction(language)}
 """

@@ -34,20 +34,38 @@ export interface JsonPresetWorkspaceProps {
   refreshKey?: number;
 }
 
-export const PREVIEW_ORDER: Array<[PreviewKey, string]> = [
-  ['cover_url', '首页'],
-  ['catalog_url', '目录'],
-  ['section_header_url', '章节过渡'],
-  ['agenda_timeline_url', '议程时间线'],
-  ['detail_text_split_url', '标准图文'],
-  ['bullet_keypoints_url', '要点列表'],
-  ['comparison_url', '对比'],
-  ['process_flow_url', '流程'],
-  ['framework_matrix_url', '框架矩阵'],
-  ['detail_chart_url', '图表'],
-  ['case_showcase_url', '案例展示'],
-  ['closing_url', '结尾'],
-];
+const PREVIEW_LABEL_MAP: Record<string, string> = {
+  cover_url: '首页',
+  catalog_url: '目录',
+  section_header_url: '章节过渡',
+  agenda_timeline_url: '议程时间线',
+  detail_text_split_url: '标准图文',
+  bullet_keypoints_url: '要点列表',
+  comparison_url: '对比',
+  process_flow_url: '流程',
+  framework_matrix_url: '框架矩阵',
+  detail_chart_url: '图表',
+  case_showcase_url: '案例展示',
+  closing_url: '结尾',
+};
+
+export function humanizePreviewKey(previewKey: string): string {
+  if (PREVIEW_LABEL_MAP[previewKey]) return PREVIEW_LABEL_MAP[previewKey];
+  const base = String(previewKey || '').replace(/_url$/i, '');
+  return base
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+export function getPreviewOrder(previewImages?: Partial<StylePresetPreviewImages>, samplePages?: Record<string, string>): Array<[PreviewKey, string]> {
+  const keys = new Set<string>([
+    ...Object.keys(previewImages || {}),
+    ...Object.keys(samplePages || {}).map((key) => `${key}_url`),
+  ]);
+  return Array.from(keys).map((key) => [key as PreviewKey, humanizePreviewKey(key)]);
+}
 
 export const RUNNING_TASK_STATUSES = new Set(['PENDING', 'PROCESSING', 'RUNNING']);
 
@@ -73,5 +91,5 @@ export function getTaskPresetId(task: StylePresetTaskRecord): string {
 
 export function getTaskPreviewKey(task: StylePresetTaskRecord): PreviewKey | null {
   const key = task.progress?.preview_key;
-  return PREVIEW_ORDER.some(([previewKey]) => previewKey === key) ? key as PreviewKey : null;
+  return key ? key as PreviewKey : null;
 }
