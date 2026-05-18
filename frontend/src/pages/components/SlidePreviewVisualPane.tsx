@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import type { PageAiRegionBounds } from '@/types';
 
@@ -65,12 +65,22 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
   onFloatingFullscreenButtonClick,
   onSwitchVersion,
 }) => {
+  const [imageOrientation, setImageOrientation] = useState<'landscape' | 'portrait'>('landscape');
+
+  useEffect(() => {
+    setImageOrientation('landscape');
+  }, [imageUrl]);
+
   const previewCanvasStyle = isFullscreen
     ? undefined
     : {
         aspectRatio: aspectRatioStyle,
-        width: selectedPageHasImage ? 'auto' : '100%',
-        height: selectedPageHasImage ? '100%' : 'auto',
+        width: selectedPageHasImage
+          ? (imageOrientation === 'portrait' ? 'auto' : '100%')
+          : '100%',
+        height: selectedPageHasImage
+          ? (imageOrientation === 'portrait' ? '100%' : 'auto')
+          : 'auto',
         maxWidth: '100%',
         maxHeight: '100%',
       } satisfies React.CSSProperties;
@@ -104,6 +114,11 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                           ref={imageRef}
                           src={imageUrl}
                           alt={`Slide ${selectedIndex + 1}`}
+                          onLoad={(event) => {
+                            const { naturalWidth, naturalHeight } = event.currentTarget;
+                            if (!naturalWidth || !naturalHeight) return;
+                            setImageOrientation(naturalHeight > naturalWidth ? 'portrait' : 'landscape');
+                          }}
                           className={`h-full w-full select-none ${isFullscreen ? 'object-contain' : 'object-contain'}`}
                           draggable={false}
                           crossOrigin="anonymous"
