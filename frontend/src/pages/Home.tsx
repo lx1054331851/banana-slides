@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Sparkles, FileText, FileEdit, Paperclip, Palette, Lightbulb, Settings, FolderOpen, HelpCircle, History, Sun, Moon, Globe, Monitor, ChevronDown, Upload, RefreshCw } from 'lucide-react';
+import { Sparkles, FileText, FileEdit, Paperclip, Palette, Lightbulb, Settings, FolderOpen, HelpCircle, History, Sun, Moon, Globe, Monitor, Upload, RefreshCw } from 'lucide-react';
 import { Button, Card, useToast, MaterialSelector, ReferenceFileList, ReferenceFileSelector, FilePreviewModal, HelpModal } from '@/components/shared';
 import { MarkdownTextarea, type MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
 import { uploadReferenceFile, type ReferenceFile, type Material, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject } from '@/api/endpoints';
@@ -10,8 +10,8 @@ import { devLog } from '@/utils/logger';
 import { useTheme } from '@/hooks/useTheme';
 import { useImagePaste, buildMaterialsMarkdown } from '@/hooks/useImagePaste';
 import { useT } from '@/hooks/useT';
-import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
 import mammoth from 'mammoth/mammoth.browser';
+import { HomeAspectRatioPicker } from './components/HomeAspectRatioPicker';
 
 type TextCreationType = 'idea' | 'outline' | 'description';
 type CreationType = TextCreationType | 'ppt_renovation';
@@ -303,7 +303,6 @@ export const Home: React.FC = () => {
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
 
   const [aspectRatio, setAspectRatio] = useState('16:9');
-  const [isAspectRatioOpen, setIsAspectRatioOpen] = useState(false);
   const [renovationFile, setRenovationFile] = useState<File | null>(null);
   const [keepLayout, setKeepLayout] = useState(false);
   const [sourceText, setSourceText] = useState('');
@@ -1332,33 +1331,11 @@ export const Home: React.FC = () => {
                       <Paperclip size={18} />
                     </button>
                     {/* 画面比例选择 */}
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setIsAspectRatioOpen(!isAspectRatioOpen)}
-                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:text-foreground-secondary dark:hover:bg-background-hover rounded transition-colors"
-                        title={i18n.language?.startsWith('zh') ? '画面比例' : 'Aspect Ratio'}
-                      >
-                        <span>{aspectRatio}</span>
-                        <ChevronDown size={12} className={`transition-transform ${isAspectRatioOpen ? 'rotate-180' : ''}`} />
-                      </button>
-                      {isAspectRatioOpen && (
-                        <>
-                          <div className="fixed inset-0 z-40" onClick={() => setIsAspectRatioOpen(false)} />
-                          <div className="absolute left-0 bottom-full mb-1 z-50 bg-white dark:bg-background-elevated border border-gray-200 dark:border-border-primary rounded-lg shadow-lg dark:shadow-none py-1 min-w-[80px]">
-                            {ASPECT_RATIO_OPTIONS.map((opt) => (
-                              <button
-                                key={opt.value}
-                                onClick={() => { setAspectRatio(opt.value); setIsAspectRatioOpen(false); }}
-                                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100 dark:hover:bg-background-hover transition-colors ${aspectRatio === opt.value ? 'text-banana font-semibold' : 'text-gray-700 dark:text-foreground-secondary'}`}
-                              >
-                                {opt.label}
-                              </button>
-                            ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
+                    <HomeAspectRatioPicker
+                      value={aspectRatio}
+                      label={i18n.language?.startsWith('zh') ? '画面比例' : 'Aspect Ratio'}
+                      onChange={setAspectRatio}
+                    />
                   {activeTextMode === 'description' && (
                     <button
                       type="button"
