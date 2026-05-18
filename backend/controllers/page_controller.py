@@ -24,6 +24,7 @@ from services.task_manager import (
     generate_single_page_image_task,
     edit_page_image_task,
     get_renovation_page_sources,
+    save_image_with_version,
 )
 from datetime import datetime
 from pathlib import Path
@@ -31,6 +32,7 @@ from werkzeug.utils import secure_filename
 import shutil
 import tempfile
 import json
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -997,6 +999,52 @@ def edit_page_image(project_id, page_id):
         db.session.rollback()
         return error_response('AI_SERVICE_ERROR', str(e), 503)
 
+
+
+@page_bp.route('/<project_id>/pages/<page_id>/upload/image', methods=['POST'])
+def upload_page_image(project_id, page_id):
+    """
+    POST /api/projects/{project_id}/pages/{page_id}/upload/image - Upload a local image as the current page image
+    """
+    try:
+        page = Page.query.get(page_id)
+        if not page or page.project_id != project_id:
+            return not_found('Page')
+
+        project = Project.query.get(project_id)
+        if not project:
+            return not_found('Project')
+
+        image_file = request.files.get('image')
+        if not image_file or not image_file.filename:
+            return bad_request("image file is required")
+
+        try:
+            with Image.open(image_file.stream) as uploaded_image:
+                normalized_image = uploaded_image.copy()
+        except Exception:
+            return bad_request("Invalid image file")
+
+        file_service = FileService(current_app.config['UPLOAD_FOLDER'])
+        project.updated_at = datetime.utcnow()
+
+        save_image_with_version(
+            normalized_image,
+            project_id,
+            page_id,
+            file_service,
+            page_obj=page,
+            image_format='PNG',
+            prompt_text=f"upload:{secure_filename(image_file.filename)}",
+            operation_type='upload',
+        )
+
+        db.session.refresh(page)
+        return success_response(page.to_dict(include_versions=True))
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"upload_page_image failed: {e}", exc_info=True)
+        return error_response('SERVER_ERROR', str(e), 500)
 
 
 @page_bp.route('/<project_id>/pages/<page_id>/image-versions', methods=['GET'])

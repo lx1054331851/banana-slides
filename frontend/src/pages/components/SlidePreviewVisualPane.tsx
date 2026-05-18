@@ -35,12 +35,14 @@ type SlidePreviewVisualPaneProps = {
   activePreviewReferenceId: string | null;
   selectionRect: SelectionRect | null;
   imageVersions: ImageVersionItem[];
+  isUploadingPageImage?: boolean;
   onSelectionMouseDown?: React.MouseEventHandler<HTMLDivElement>;
   onSelectionMouseMove?: React.MouseEventHandler<HTMLDivElement>;
   onSelectionMouseUp?: React.MouseEventHandler<HTMLDivElement>;
   onFloatingFullscreenButtonMouseDown: React.MouseEventHandler<HTMLButtonElement>;
   onFloatingFullscreenButtonClick: React.MouseEventHandler<HTMLButtonElement>;
   onSwitchVersion: (versionId: string) => void;
+  onUploadPageImage?: (file: File) => void | Promise<void>;
 };
 
 export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
@@ -58,14 +60,17 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
   activePreviewReferenceId,
   selectionRect,
   imageVersions,
+  isUploadingPageImage = false,
   onSelectionMouseDown,
   onSelectionMouseMove,
   onSelectionMouseUp,
   onFloatingFullscreenButtonMouseDown,
   onFloatingFullscreenButtonClick,
   onSwitchVersion,
+  onUploadPageImage,
 }) => {
   const visualPaneBodyRef = useRef<HTMLDivElement | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
   const [availableSize, setAvailableSize] = useState<{ width: number; height: number } | null>(null);
 
@@ -127,6 +132,14 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
       flexShrink: 0,
     } satisfies React.CSSProperties;
   }, [aspectRatioStyle, availableSize, imageAspectRatio, isFullscreen, selectedPageHasImage]);
+
+  const handleUploadInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && onUploadPageImage) {
+      void onUploadPageImage(file);
+    }
+    event.target.value = '';
+  };
 
   return (
     <section
@@ -219,8 +232,30 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                         )}
                       </>
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#f7f5ef] text-sm text-slate-400 dark:bg-background-secondary dark:text-foreground-tertiary">
-                        尚未生成图片
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-4 rounded-2xl bg-[#f7f5ef] px-6 text-center dark:bg-background-secondary">
+                        <div className="space-y-1">
+                          <div className="text-sm font-medium text-slate-500 dark:text-foreground-secondary">
+                            {t('preview.notGenerated')}
+                          </div>
+                          <div className="text-xs text-slate-400 dark:text-foreground-tertiary">
+                            {t('preview.uploadPageImageHint')}
+                          </div>
+                        </div>
+                        <input
+                          ref={uploadInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleUploadInputChange}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => uploadInputRef.current?.click()}
+                          disabled={isUploadingPageImage || !onUploadPageImage}
+                          className="inline-flex h-10 items-center justify-center rounded-full bg-banana-500 px-4 text-sm font-medium text-black shadow-[0_10px_24px_rgba(245,181,0,0.22)] transition hover:bg-banana-400 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isUploadingPageImage ? t('preview.uploadingPageImage') : t('preview.uploadPageImage')}
+                        </button>
                       </div>
                     )}
                   </div>

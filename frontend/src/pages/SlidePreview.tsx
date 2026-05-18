@@ -189,6 +189,7 @@ export const SlidePreview: React.FC = () => {
     generateImages,
     generateDescriptions,
     editPageImage,
+    uploadPageImage,
     saveAllPages,
     deletePageById,
     reorderPages,
@@ -227,6 +228,7 @@ export const SlidePreview: React.FC = () => {
   const isExporting = activeExportTasks.length > 0;
 
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isUploadingPageImage, setIsUploadingPageImage] = useState(false);
   const selectedPageIdRef = useRef<string | null>(null);
   const {
     isMobileView,
@@ -2349,6 +2351,24 @@ export const SlidePreview: React.FC = () => {
     imageRef.current.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
   };
 
+  const handleUploadPageImage = useCallback(async (file: File) => {
+    const targetPage = currentProject?.pages[selectedIndex];
+    if (!targetPage?.id) return;
+
+    setIsUploadingPageImage(true);
+    try {
+      await uploadPageImage(targetPage.id, file);
+      show({ message: t('preview.uploadPageImageSuccess'), type: 'success' });
+    } catch (error: any) {
+      show({
+        message: error?.response?.data?.error?.message || error?.message || t('preview.uploadPageImageFailed'),
+        type: 'error',
+      });
+    } finally {
+      setIsUploadingPageImage(false);
+    }
+  }, [currentProject?.pages, selectedIndex, show, t, uploadPageImage]);
+
   const currentPageDescriptionText = getDescriptionText(selectedPage?.description_content);
   const currentPageExtraFields = getDescriptionExtraFields(selectedPage?.description_content);
   const currentPageStyleGuideBindings = getDescriptionStyleGuideBindings(selectedPage?.description_content);
@@ -2628,12 +2648,14 @@ export const SlidePreview: React.FC = () => {
                       activePreviewReferenceId={activePreviewReferenceId}
                       selectionRect={selectionRect}
                       imageVersions={imageVersions}
+                      isUploadingPageImage={isUploadingPageImage}
                       onSelectionMouseDown={handleSelectionMouseDown}
                       onSelectionMouseMove={handleSelectionMouseMove}
                       onSelectionMouseUp={handleSelectionMouseUp}
                       onFloatingFullscreenButtonMouseDown={handleFloatingFullscreenButtonMouseDown}
                       onFloatingFullscreenButtonClick={handleFloatingFullscreenButtonClick}
                       onSwitchVersion={(versionId) => void handleSwitchVersion(versionId)}
+                      onUploadPageImage={handleUploadPageImage}
                     />
 
                     {!isMobileView && !isEditorPaneHidden && (

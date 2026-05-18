@@ -37,6 +37,7 @@ const storeI18n = {
       regenerateFailed: '重新生成失败',
       batchGenerateFailed: '批量生成失败',
       editImageFailed: '编辑图片失败',
+      uploadImageFailed: '上传页面图片失败',
       exportLinkFailed: '导出链接获取失败',
       exportFailed: '导出失败',
       exportEditableFailed: '导出可编辑PPTX失败',
@@ -73,6 +74,7 @@ const storeI18n = {
       regenerateFailed: 'Failed to regenerate',
       batchGenerateFailed: 'Batch generation failed',
       editImageFailed: 'Failed to edit image',
+      uploadImageFailed: 'Failed to upload page image',
       exportLinkFailed: 'Failed to get export link',
       exportFailed: 'Export failed',
       exportEditableFailed: 'Failed to export editable PPTX',
@@ -137,6 +139,7 @@ interface ProjectState {
     },
     generationOverride?: GenerationOverride
   ) => Promise<void>;
+  uploadPageImage: (pageId: string, image: File) => Promise<void>;
   
   // 导出
   exportPPTX: (pageIds?: string[]) => Promise<void>;
@@ -1405,6 +1408,36 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       set({
         pageGeneratingTasks: newTasks,
         error: normalizeErrorMessage(backendMessage || error.message || t('store.editImageFailed')),
+      });
+      throw error;
+    }
+  },
+
+  uploadPageImage: async (pageId, image) => {
+    const { currentProject } = get();
+    if (!currentProject) return;
+
+    set({ error: null });
+    try {
+      const response = await api.uploadPageImage(currentProject.id!, pageId, image);
+      if (response.data) {
+        const updatedPageData = response.data;
+        const { currentProject: latestProject } = get();
+        if (latestProject) {
+          const newPages = latestProject.pages.map((page) =>
+            page.id === pageId ? { ...page, ...updatedPageData } : page
+          );
+          set({ currentProject: { ...latestProject, pages: newPages } });
+        }
+      } else {
+        await get().syncProject();
+      }
+    } catch (error: any) {
+      const backendMessage =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message;
+      set({
+        error: normalizeErrorMessage(backendMessage || error.message || t('store.uploadImageFailed')),
       });
       throw error;
     }

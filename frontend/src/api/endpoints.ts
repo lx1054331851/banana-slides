@@ -632,6 +632,22 @@ export const editPageImage = async (
   }
 };
 
+export const uploadPageImage = async (
+  projectId: string,
+  pageId: string,
+  image: File
+): Promise<ApiResponse<Page>> => {
+  const formData = new FormData();
+  formData.append('image', image);
+
+  const response = await apiClient.post<ApiResponse<Page>>(
+    `/api/projects/${projectId}/pages/${pageId}/upload/image`,
+    formData,
+    { timeout: IMAGE_OPERATION_TIMEOUT_MS }
+  );
+  return response.data;
+};
+
 /**
  * 获取页面图片历史版本
  */
