@@ -71,3 +71,22 @@ def test_style_recommendation_prompt_truncates_large_template_json():
 
     assert '...(内容过长，已截断' in prompt
     assert '...(内容过长，已截断' in minimal
+
+
+def test_style_recommendation_prompt_supports_single_recommendation():
+    prompt = prompts.get_style_recommendations_prompt(
+        project_dict={},
+        reference_files_content=[],
+        template_json_text='{"layout":"minimal"}',
+        recommendation_count=1,
+    )
+    minimal = prompts.get_style_recommendations_prompt_minimal(
+        project_dict={},
+        template_json_text='{"layout":"minimal"}',
+        recommendation_count=1,
+    )
+
+    assert '输出 1 组' in prompt
+    assert 'recommendations 必须刚好 1 个' in prompt
+    assert '输出 1 组' in minimal
+    assert 'recommendations 必须刚好 1 个' in minimal

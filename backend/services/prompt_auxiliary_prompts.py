@@ -772,6 +772,7 @@ def get_style_recommendations_prompt(project_dict: Dict,
                                      template_json_text: str,
                                      style_requirements: str = "",
                                      language: str = None,
+                                     recommendation_count: int = 3,
                                      max_total_file_chars: int = 24000,
                                      max_file_chars: int = 6000,
                                      max_idea_chars: int = 4000,
@@ -779,7 +780,7 @@ def get_style_recommendations_prompt(project_dict: Dict,
                                      max_description_chars: int = 8000,
                                      max_template_chars: int = 24000) -> str:
     """
-    基于原始内容 + 用户提供的风格模板 JSON 骨架 + 附加风格要求，推荐 3 组风格指导 JSON，并为每组给出 4 个样例页面描述。
+    基于原始内容 + 用户提供的风格模板 JSON 骨架 + 附加风格要求，推荐若干组风格指导 JSON，并为每组给出样例页面描述。
 
     Returns:
         一段用于文本模型的 prompt（要求只输出 JSON，不带代码块）。
@@ -827,6 +828,7 @@ def get_style_recommendations_prompt(project_dict: Dict,
     template_json_text = _truncate(template_json_text or "", max_template_chars)
 
     style_req = (style_requirements or "").strip()
+    recommendation_count = max(1, int(recommendation_count or 1))
     sample_page_specs = _extract_sample_page_specs(template_json_text)
     sample_pages_example = _build_sample_pages_json_example(sample_page_specs)
     sample_page_keys = '/'.join(spec['sample_key'] for spec in sample_page_specs) if sample_page_specs else 'cover/detail'
@@ -836,7 +838,7 @@ def get_style_recommendations_prompt(project_dict: Dict,
 1) 阅读用户的原始内容（主题/大纲/描述/上传文件内容）
 2) 阅读用户提供的「风格模板 JSON 骨架」
 3) 结合用户的「附加风格要求」
-4) 输出 3 组不同但都适配内容的「风格指导 JSON」（必须严格遵循模板骨架的结构与字段）
+4) 输出 {recommendation_count} 组不同但都适配内容的「风格指导 JSON」（必须严格遵循模板骨架的结构与字段）
 5) 为每组风格提供与模板骨架 slide_templates 一一对应的页面描述，用于生成样例图片
 
 <project_context>
@@ -874,11 +876,11 @@ description_text:
 }}
 
 强约束：
-- recommendations 必须刚好 3 个。
+- recommendations 必须刚好 {recommendation_count} 个。
 - 每个 style_json 必须是合法 JSON 对象，且结构必须与模板骨架完全一致（字段不能少，不能多，不能改名）。
 - 模板骨架中的“示例值/演示值”（如“示例”“example”“Tech_Performance_Dark”等）仅用于说明字段含义，禁止机械照抄；必须结合当前内容与风格要求重新生成字段值。
-- 禁止 3 组推荐出现同质化配色：在未被用户明确要求“统一暗色”时，至少 1 组为浅色或高亮背景，且至少 2 组在主色相与明度上显著不同。
-- 若 style_requirements 为空或含糊，不要默认落入“黑金/暗色科技发布会”风格，应优先生成“中性商务亮色 + 信息可读性优先”的方案作为其中一组。
+- 若 recommendation_count > 1，禁止多组推荐出现同质化配色：在未被用户明确要求“统一暗色”时，至少 1 组为浅色或高亮背景，且至少 2 组在主色相与明度上显著不同。
+- 若 style_requirements 为空或含糊，不要默认落入“黑金/暗色科技发布会”风格；当 recommendation_count = 1 时，应优先输出“中性商务亮色 + 信息可读性优先”的方案。
 - sample_pages 必须包含与模板骨架 slide_templates 一一对应的全部键：{sample_page_keys}，值为中文页面描述文本，且要能直接用于生成对应类型页面。
 - 只输出 JSON。
 {get_language_instruction(language)}
@@ -893,6 +895,7 @@ def get_style_recommendations_prompt_minimal(project_dict: Dict,
                                              template_json_text: str,
                                              style_requirements: str = "",
                                              language: str = None,
+                                             recommendation_count: int = 3,
                                              max_context_chars: int = 2500,
                                              max_template_chars: int = 6000) -> str:
     """生成更短的风格推荐 prompt，用于大上下文失败后的降级重试。"""
@@ -910,6 +913,7 @@ def get_style_recommendations_prompt_minimal(project_dict: Dict,
         str(project_dict.get('outline_text') or ''),
         str(project_dict.get('description_text') or ''),
     ]).strip()
+    recommendation_count = max(1, int(recommendation_count or 1))
     context = _truncate(context, max_context_chars)
     template_json_text = _truncate(template_json_text or "", max_template_chars)
     style_req = (style_requirements or "").strip()
@@ -918,7 +922,7 @@ def get_style_recommendations_prompt_minimal(project_dict: Dict,
     sample_page_keys = '/'.join(spec['sample_key'] for spec in sample_page_specs) if sample_page_specs else 'cover/detail'
 
     prompt = f"""\
-你是 PPT 视觉设计总监。请基于项目内容、风格模板 JSON 骨架和附加要求，输出 3 组不同的风格指导方案。
+你是 PPT 视觉设计总监。请基于项目内容、风格模板 JSON 骨架和附加要求，输出 {recommendation_count} 组风格指导方案。
 
 <project_context>
 {context}
@@ -947,9 +951,10 @@ def get_style_recommendations_prompt_minimal(project_dict: Dict,
 }}
 
 强约束：
-- recommendations 必须刚好 3 个。
+- recommendations 必须刚好 {recommendation_count} 个。
 - style_json 必须遵循模板骨架字段。
-- 三组风格应有明显差异，避免同质化暗色科技风。
+- 若 recommendation_count > 1，多组风格应有明显差异，避免同质化暗色科技风。
+- 若 recommendation_count = 1，在用户要求不明确时优先输出信息可读性优先的中性商务方案。
 - sample_pages 必须包含与模板骨架 slide_templates 一一对应的全部键：{sample_page_keys}。
 - 只输出 JSON，不要 markdown。
 {get_language_instruction(language)}

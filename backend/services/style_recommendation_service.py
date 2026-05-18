@@ -17,6 +17,7 @@ def generate_style_recommendation_json(
     template_json_text: str,
     style_requirements: str = "",
     language: str | None = None,
+    recommendation_count: int = 3,
     thinking_budget: int = 0,
 ) -> Any:
     full_prompt = get_style_recommendations_prompt(
@@ -25,6 +26,7 @@ def generate_style_recommendation_json(
         template_json_text=template_json_text,
         style_requirements=style_requirements,
         language=language,
+        recommendation_count=recommendation_count,
     )
 
     try:
@@ -35,6 +37,7 @@ def generate_style_recommendation_json(
             template_json_text=template_json_text,
             style_requirements=style_requirements,
             language=language,
+            recommendation_count=recommendation_count,
         )
         logger.warning(
             "Style recommendation full prompt failed, retrying with minimal prompt: "
