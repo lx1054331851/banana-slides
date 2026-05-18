@@ -91,7 +91,7 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
       className="min-w-0 overflow-hidden"
     >
       <div className="flex h-full flex-col">
-        <div className="flex-1 overflow-auto px-2 pb-2 pt-1 md:px-3 md:pb-3 md:pt-2">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2 pt-1 md:px-3 md:pb-3 md:pt-2">
           <div className="flex h-full min-h-[320px] items-center justify-stretch">
             <div className="h-full w-full">
               <div className={`flex ${selectedPageHasImage ? 'h-full min-h-0 flex-col items-center justify-center gap-4' : 'h-full min-h-0'}`}>
