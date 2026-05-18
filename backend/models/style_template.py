@@ -12,6 +12,7 @@ class StyleTemplate(db.Model):
 
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = db.Column(db.String(200), nullable=True)
+    scenario = db.Column(db.String(50), nullable=False, default='ppt')
     template_json = db.Column(db.Text, nullable=False)  # JSON skeleton text
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -20,6 +21,7 @@ class StyleTemplate(db.Model):
         return {
             'id': self.id,
             'name': self.name,
+            'scenario': self.scenario or 'ppt',
             'template_json': self.template_json,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,

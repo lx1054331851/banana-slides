@@ -1873,6 +1873,7 @@ export const extractStyleFromImage = async (
 export interface StyleTemplate {
   id: string;
   name?: string | null;
+  scenario?: 'ppt' | 'data_report';
   template_json: string;
   created_at?: string;
   updated_at?: string;
@@ -1894,7 +1895,7 @@ export const listStyleTemplates = async (): Promise<ApiResponse<{ templates: Sty
   return response.data;
 };
 
-export const createStyleTemplate = async (data: { name?: string; template_json: string }): Promise<ApiResponse<StyleTemplate>> => {
+export const createStyleTemplate = async (data: { name?: string; scenario?: 'ppt' | 'data_report'; template_json: string }): Promise<ApiResponse<StyleTemplate>> => {
   const response = await apiClient.post<ApiResponse<StyleTemplate>>('/api/style-templates', data);
   return response.data;
 };

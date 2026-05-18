@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 style_library_bp = Blueprint('style_library', __name__, url_prefix='/api')
 _STYLE_PRESET_TASK_TYPES = ('STYLE_PRESET_GENERATE', 'STYLE_PRESET_IMAGE_REGENERATE')
 _RUNNING_TASK_STATUSES = ('PENDING', 'PROCESSING', 'RUNNING')
+_SUPPORTED_STYLE_SCENARIOS = {'ppt', 'data_report'}
 
 
 def _validate_json_text(text: str):
@@ -33,6 +34,30 @@ def _validate_json_text(text: str):
     if not s:
         raise ValueError("JSON text is required")
     return json.loads(s)
+
+
+def _infer_scenario_from_template_json(parsed_json) -> str:
+    try:
+        if isinstance(parsed_json, dict):
+            design_system_spec = parsed_json.get('design_system_spec')
+            if isinstance(design_system_spec, dict):
+                meta = design_system_spec.get('meta')
+                if isinstance(meta, dict):
+                    scenario = str(meta.get('scenario') or '').strip()
+                    if scenario in _SUPPORTED_STYLE_SCENARIOS:
+                        return scenario
+    except Exception:
+        pass
+    return 'ppt'
+
+
+def _resolve_style_template_scenario(raw_scenario: str | None, parsed_json) -> str:
+    scenario = str(raw_scenario or '').strip()
+    if scenario:
+        if scenario not in _SUPPORTED_STYLE_SCENARIOS:
+            raise ValueError('scenario must be one of: ppt, data_report')
+        return scenario
+    return _infer_scenario_from_template_json(parsed_json)
 
 
 def _get_preview_image_keys_from_style_json(style_json_text: str):
@@ -83,18 +108,22 @@ def list_style_templates():
 def create_style_template():
     """
     POST /api/style-templates
-    Body: { name?: string, template_json: string }
+    Body: { name?: string, scenario?: string, template_json: string }
     """
     try:
         data = request.get_json() or {}
         name = (data.get('name') or '').strip() or None
         template_json_text = (data.get('template_json') or '').strip()
         try:
-            _validate_json_text(template_json_text)
+            parsed_json = _validate_json_text(template_json_text)
         except Exception as e:
             return bad_request(f"template_json must be valid JSON: {str(e)}")
+        try:
+            scenario = _resolve_style_template_scenario(data.get('scenario'), parsed_json)
+        except Exception as e:
+            return bad_request(str(e))
 
-        obj = StyleTemplate(name=name, template_json=template_json_text)
+        obj = StyleTemplate(name=name, scenario=scenario, template_json=template_json_text)
         db.session.add(obj)
         db.session.commit()
         return success_response(obj.to_dict(), status_code=201)

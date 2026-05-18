@@ -19,8 +19,8 @@ const {
   mockListStyleTemplates: vi.fn(async () => ({
     data: {
       templates: [
-        { id: 't1', name: 'Template 1', template_json: '{"template":1}' },
-        { id: 't2', name: 'Template 2', template_json: '{"template":2}' },
+        { id: 't1', name: 'Template 1', scenario: 'ppt', template_json: '{"template":1}' },
+        { id: 't2', name: 'Template 2', scenario: 'data_report', template_json: '{"template":2}' },
       ],
     },
   })),
@@ -199,6 +199,9 @@ describe('StyleLibrary page', () => {
     fireEvent.change(screen.getByTestId('style-library-create-template-name'), {
       target: { value: 'New Template' },
     });
+    fireEvent.change(screen.getByTestId('style-library-create-template-scenario'), {
+      target: { value: 'data_report' },
+    });
     fireEvent.change(screen.getByTestId('style-library-create-template-json'), {
       target: { value: '{"hero":{"title":"Demo"}}' },
     });
@@ -209,6 +212,7 @@ describe('StyleLibrary page', () => {
     });
     expect(mockCreateStyleTemplate).toHaveBeenCalledWith({
       name: 'New Template',
+      scenario: 'data_report',
       template_json: '{\n  "hero": {\n    "title": "Demo"\n  }\n}',
     });
 
