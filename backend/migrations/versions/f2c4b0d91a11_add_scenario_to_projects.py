@@ -7,6 +7,7 @@ Create Date: 2026-05-18 16:40:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
@@ -17,10 +18,22 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column('projects', sa.Column('scenario', sa.String(length=50), nullable=True))
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    existing_columns = {column['name'] for column in inspector.get_columns('projects')}
+
+    if 'scenario' not in existing_columns:
+        op.add_column('projects', sa.Column('scenario', sa.String(length=50), nullable=True))
+
     op.execute("UPDATE projects SET scenario = 'ppt' WHERE scenario IS NULL")
-    op.alter_column('projects', 'scenario', existing_type=sa.String(length=50), nullable=False)
+    with op.batch_alter_table('projects') as batch_op:
+        batch_op.alter_column('scenario', existing_type=sa.String(length=50), nullable=False)
 
 
 def downgrade():
-    op.drop_column('projects', 'scenario')
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    existing_columns = {column['name'] for column in inspector.get_columns('projects')}
+    if 'scenario' in existing_columns:
+        with op.batch_alter_table('projects') as batch_op:
+            batch_op.drop_column('scenario')
