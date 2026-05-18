@@ -831,8 +831,10 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
 
   // Click on toolbar empty area → focus editor
   const handleToolbarMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // Only handle clicks on the toolbar itself, not on buttons inside
-    if (e.target === e.currentTarget || !(e.target as HTMLElement).closest('button, a, input, [role="button"]')) {
+    // Only steal focus for non-interactive toolbar chrome.
+    // Native controls like select must receive the original mouse event,
+    // otherwise their popup/menu cannot open.
+    if (e.target === e.currentTarget || !(e.target as HTMLElement).closest('button, a, input, select, textarea, label, summary, [role="button"], [role="menuitem"], [role="option"], [data-allow-toolbar-interaction]')) {
       e.preventDefault(); // prevent editor blur
       editorRef.current?.focus();
       restoreSavedSelectionRange();
