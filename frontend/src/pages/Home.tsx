@@ -1358,12 +1358,6 @@ export const Home: React.FC = () => {
                     >
                       <Paperclip size={18} />
                     </button>
-                    {/* 画面比例选择 */}
-                    <HomeAspectRatioPicker
-                      value={aspectRatio}
-                      label={i18n.language?.startsWith('zh') ? '画面比例' : 'Aspect Ratio'}
-                      onChange={setAspectRatio}
-                    />
                     <div className="flex items-center gap-1">
                       <HomeScenarioPicker
                         value={projectScenario}
@@ -1371,6 +1365,12 @@ export const Home: React.FC = () => {
                         onChange={setProjectScenario}
                       />
                     </div>
+                    {/* 画面比例选择 */}
+                    <HomeAspectRatioPicker
+                      value={aspectRatio}
+                      label={i18n.language?.startsWith('zh') ? '画面比例' : 'Aspect Ratio'}
+                      onChange={setAspectRatio}
+                    />
                   {activeTextMode === 'description' && (
                     <button
                       type="button"
