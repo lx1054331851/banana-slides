@@ -2754,6 +2754,7 @@ export const SlidePreview: React.FC = () => {
       <SlidePreviewDialogs
         t={t}
         projectId={projectId}
+        projectScenario={currentProject?.scenario || 'ppt'}
         isTemplateModalOpen={isTemplateModalOpen}
         closeTemplateModal={closeTemplateModal}
         activeTemplateTab={activeTemplateTab}

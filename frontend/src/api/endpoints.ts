@@ -1884,6 +1884,7 @@ export type StylePresetPreviewImages = Record<string, string>;
 export interface StylePreset {
   id: string;
   name?: string | null;
+  scenario?: 'ppt' | 'data_report';
   style_json: string;
   preview_images?: StylePresetPreviewImages;
   created_at?: string;

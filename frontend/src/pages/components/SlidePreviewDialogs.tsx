@@ -9,11 +9,12 @@ import { TemplateSelector } from '@/components/shared/TemplateSelector';
 import { HistoryVersionModal } from './HistoryVersionModal';
 import { ResolutionWarningModal } from './ResolutionWarningModal';
 import { BatchGenerateDialogs } from './BatchGenerateDialogs';
-import type { ProviderProfileSummary } from '@/types';
+import type { ProjectScenario, ProviderProfileSummary } from '@/types';
 
 type SlidePreviewDialogsProps = {
   t: (key: string, options?: Record<string, unknown>) => string;
   projectId?: string;
+  projectScenario?: ProjectScenario;
   isTemplateModalOpen: boolean;
   closeTemplateModal: () => void;
   activeTemplateTab: any;
@@ -118,6 +119,7 @@ type SlidePreviewDialogsProps = {
 export const SlidePreviewDialogs: React.FC<SlidePreviewDialogsProps> = ({
   t,
   projectId,
+  projectScenario,
   isTemplateModalOpen,
   closeTemplateModal,
   activeTemplateTab,
@@ -228,6 +230,7 @@ export const SlidePreviewDialogs: React.FC<SlidePreviewDialogsProps> = ({
       >
         <TemplateSelector
           projectId={projectId || null}
+          projectScenario={projectScenario}
           activeTab={activeTemplateTab}
           onActiveTabChange={setActiveTemplateTab}
           draftSelection={draftTemplateSelection}

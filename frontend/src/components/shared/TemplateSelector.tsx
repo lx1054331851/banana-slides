@@ -11,6 +11,7 @@ import {
   type StylePreset,
   type StylePresetPreviewImages,
 } from '@/api/endpoints';
+import type { ProjectScenario } from '@/types';
 import { useT } from '@/hooks/useT';
 import { Button } from './Button';
 import { useToast } from './Toast';
@@ -147,6 +148,7 @@ const templateI18n = {
 
 interface TemplateSelectorProps {
   projectId?: string | null;
+  projectScenario?: ProjectScenario;
   activeTab: TemplateSelectorTab;
   onActiveTabChange: (tab: TemplateSelectorTab) => void;
   draftSelection: TemplateSelection | null;
@@ -208,6 +210,18 @@ const buildStyleSelection = (preset: StylePreset): TemplateSelection => ({
     closing_url: preset.preview_images?.closing_url || '',
   },
 });
+
+const inferStylePresetScenario = (preset: StylePreset): ProjectScenario => {
+  if (preset.scenario === 'data_report') return 'data_report';
+  if (preset.scenario === 'ppt') return 'ppt';
+  try {
+    const parsed = JSON.parse(preset.style_json || '{}');
+    const scenario = parsed?.design_system_spec?.meta?.scenario;
+    return scenario === 'data_report' ? 'data_report' : 'ppt';
+  } catch {
+    return 'ppt';
+  }
+};
 
 const buildMaterialSelection = (material: Material): TemplateSelection => ({
   kind: 'material',
@@ -289,6 +303,7 @@ const TemplateCard: React.FC<{
 
 export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
   projectId,
+  projectScenario = 'ppt',
   activeTab,
   onActiveTabChange,
   draftSelection,
@@ -382,9 +397,10 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
 
   const filteredStylePresets = useMemo(() => {
     const keyword = jsonSearch.trim().toLowerCase();
-    if (!keyword) return stylePresets;
-    return stylePresets.filter((preset) => `${preset.name || ''} ${preset.id}`.toLowerCase().includes(keyword));
-  }, [jsonSearch, stylePresets]);
+    const scenarioMatched = stylePresets.filter((preset) => inferStylePresetScenario(preset) === projectScenario);
+    if (!keyword) return scenarioMatched;
+    return scenarioMatched.filter((preset) => `${preset.name || ''} ${preset.id}`.toLowerCase().includes(keyword));
+  }, [jsonSearch, projectScenario, stylePresets]);
 
   useEffect(() => {
     setImageVisible(INITIAL_BATCH);
