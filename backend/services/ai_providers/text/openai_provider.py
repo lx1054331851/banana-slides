@@ -5,7 +5,7 @@ import base64
 import logging
 import os
 import time
-from typing import Generator
+from typing import Generator, Any
 from openai import APIConnectionError, APITimeoutError, APIStatusError, RateLimitError
 from .base import TextProvider, strip_think_tags
 from config import get_config
@@ -29,6 +29,22 @@ def _is_retryable_openai_error(exc: Exception) -> bool:
 def _compute_backoff_seconds(attempt_number: int) -> float:
     # 0.5s, 1s, 2s, 4s ... capped at 8s
     return min(8.0, 0.5 * (2 ** max(attempt_number - 1, 0)))
+
+
+def _extract_responses_output_text(response: Any) -> str:
+    output_text = getattr(response, "output_text", None)
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text
+
+    pieces: list[str] = []
+    outputs = getattr(response, "output", None) or []
+    for item in outputs:
+        contents = getattr(item, "content", None) or []
+        for content in contents:
+            text = getattr(content, "text", None)
+            if isinstance(text, str) and text:
+                pieces.append(text)
+    return "\n".join(pieces)
 
 
 def _rewrite_openai_text_error(exc: Exception, *, azure_endpoint: str | None, model: str) -> Exception:
@@ -84,6 +100,7 @@ class OpenAITextProvider(TextProvider):
         self.model = model
         self.azure_endpoint = azure_endpoint
         self.max_attempts = max(int(getattr(cfg, "OPENAI_MAX_RETRIES", 0)) + 1, 1)
+        self.text_api_mode = str(getattr(cfg, "OPENAI_TEXT_API_MODE", "chat_completions") or "chat_completions").strip().lower()
     
     def generate_text(self, prompt: str, thinking_budget: int = 0) -> str:
         """
@@ -98,6 +115,13 @@ class OpenAITextProvider(TextProvider):
         """
         for attempt in range(1, self.max_attempts + 1):
             try:
+                if self.text_api_mode == "responses":
+                    response = self.client.responses.create(
+                        model=self.model,
+                        input=prompt,
+                    )
+                    return strip_think_tags(_extract_responses_output_text(response))
+
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[
@@ -109,11 +133,12 @@ class OpenAITextProvider(TextProvider):
                 if _is_retryable_openai_error(exc) and attempt < self.max_attempts:
                     delay = _compute_backoff_seconds(attempt)
                     logger.warning(
-                        "OpenAI 文本请求失败，准备重试 (%s/%s)，等待 %.1fs，model=%s，error=%s",
+                        "OpenAI 文本请求失败，准备重试 (%s/%s)，等待 %.1fs，model=%s，mode=%s，error=%s",
                         attempt,
                         self.max_attempts,
                         delay,
                         self.model,
+                        self.text_api_mode,
                         exc,
                     )
                     time.sleep(delay)

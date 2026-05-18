@@ -111,6 +111,9 @@ class Config:
     OPENAI_API_BASE = os.getenv('OPENAI_API_BASE', 'https://aihubmix.com/v1')
     OPENAI_TIMEOUT = float(os.getenv('OPENAI_TIMEOUT', '480.0'))  # 8 分钟：留出 gpt-image-2 生图(~225s)+传输的余量
     OPENAI_MAX_RETRIES = int(os.getenv('OPENAI_MAX_RETRIES', '2'))  # 减少重试次数，避免过多重试导致累积超时
+    # 文本调用协议：chat_completions（默认）或 responses。
+    # 一些 OpenAI 兼容网关对 responses 的大上下文稳定性更好，可按需切换。
+    OPENAI_TEXT_API_MODE = os.getenv('OPENAI_TEXT_API_MODE', 'chat_completions')
     # OpenAI 图片专用调用策略（仅影响 IMAGE_MODEL_SOURCE=openai 的图片生成）
     # auto: 优先 images 端点，必要时回退 chat/completions
     # images: 只走 images 端点（无参考图 generations，有参考图 edits）
@@ -176,6 +179,9 @@ class Config:
     MAX_IMAGE_WORKERS = int(os.getenv('MAX_IMAGE_WORKERS', '8'))
     # 异步任务卡死保护：任务处于 PENDING/PROCESSING 超过该时间会被判定为失败（秒）
     TASK_STALE_TIMEOUT_SECONDS = int(os.getenv('TASK_STALE_TIMEOUT_SECONDS', '300'))
+    # 风格模板任务（尤其是 24 页 data_report 模板）在生成 style_json 推荐稿时耗时明显更长，
+    # 这里单独放宽其“陈旧任务”判定，避免后台仍在执行时被列表页误判失败。
+    STYLE_PRESET_TASK_STALE_TIMEOUT_SECONDS = int(os.getenv('STYLE_PRESET_TASK_STALE_TIMEOUT_SECONDS', '1800'))
     
     # 图片生成配置
     DEFAULT_ASPECT_RATIO = "16:9"
