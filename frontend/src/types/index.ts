@@ -3,6 +3,7 @@ export type PageStatus = 'DRAFT' | 'GENERATING_DESCRIPTION' | 'DESCRIPTION_GENER
 
 // 项目状态
 export type ProjectStatus = 'DRAFT' | 'OUTLINE_GENERATED' | 'DESCRIPTIONS_GENERATED' | 'COMPLETED';
+export type ProjectScenario = 'ppt' | 'data_report';
 
 // 大纲内容
 export interface OutlineContent {
@@ -165,6 +166,7 @@ export type ExportInpaintMethod = 'generative' | 'baidu' | 'hybrid';
 export interface Project {
   project_id: string;  // 后端返回 project_id
   id?: string;         // 前端使用的别名
+  scenario?: ProjectScenario;
   idea_prompt: string;
   outline_text?: string;  // 用户输入的大纲文本（用于outline类型）
   description_text?: string;  // 用户输入的描述文本（用于description类型）
@@ -225,6 +227,7 @@ export interface CreateProjectRequest {
   template_image?: File;
   template_style?: string;
   image_aspect_ratio?: string;
+  scenario?: ProjectScenario;
 }
 
 // API响应

@@ -54,6 +54,8 @@ logger = logging.getLogger(__name__)
 
 project_bp = Blueprint('projects', __name__, url_prefix='/api/projects')
 
+SUPPORTED_PROJECT_SCENARIOS = {'ppt', 'data_report'}
+
 
 def _merge_description_requirements(base_requirements: str | None, override_requirements: str | None) -> str | None:
     """
@@ -415,9 +417,12 @@ def create_project():
             return bad_request("creation_type is required")
         
         creation_type = data.get('creation_type')
-        
+        scenario = data.get('scenario') or 'ppt'
+
         if creation_type not in ['idea', 'outline', 'descriptions']:
             return bad_request("Invalid creation_type")
+        if scenario not in SUPPORTED_PROJECT_SCENARIOS:
+            return bad_request("Invalid scenario")
         
         # Validate and set aspect ratio if provided
         image_aspect_ratio = '16:9'
@@ -436,6 +441,7 @@ def create_project():
             description_text=data.get('description_text'),
             template_style=data.get('template_style'),
             template_style_json=data.get('template_style_json'),
+            scenario=scenario,
             image_aspect_ratio=image_aspect_ratio,
             status='DRAFT'
         )
@@ -538,6 +544,12 @@ def update_project(project_id):
         # Update template_style_json if provided
         if 'template_style_json' in data:
             project.template_style_json = data['template_style_json']
+
+        if 'scenario' in data:
+            scenario = data.get('scenario') or 'ppt'
+            if scenario not in SUPPORTED_PROJECT_SCENARIOS:
+                return bad_request("Invalid scenario")
+            project.scenario = scenario
 
         # Update presentation_meta if provided
         if 'presentation_meta' in data:

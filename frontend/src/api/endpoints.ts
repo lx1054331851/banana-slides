@@ -51,6 +51,7 @@ export const createProject = async (data: CreateProjectRequest): Promise<ApiResp
     description_text: data.description_text,
     template_style: data.template_style,
     image_aspect_ratio: data.image_aspect_ratio,
+    scenario: data.scenario || 'ppt',
   });
   return response.data;
 };

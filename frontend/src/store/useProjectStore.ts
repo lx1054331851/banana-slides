@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Project, GenerationOverride } from '@/types';
+import type { Project, GenerationOverride, ProjectScenario } from '@/types';
 import * as api from '@/api/endpoints';
 import { normalizeProject, normalizeErrorMessage } from '@/utils';
 import { devLog } from '@/utils/logger';
@@ -103,7 +103,7 @@ interface ProjectState {
   setError: (error: string | null) => void;
   
   // 项目操作
-  initializeProject: (type: 'idea' | 'outline' | 'description', content: string, templateImage?: File, templateStyle?: string, referenceFileIds?: string[], aspectRatio?: string) => Promise<void>;
+  initializeProject: (type: 'idea' | 'outline' | 'description', content: string, templateImage?: File, templateStyle?: string, referenceFileIds?: string[], aspectRatio?: string, scenario?: ProjectScenario) => Promise<void>;
   syncProject: (projectId?: string) => Promise<void>;
   
   // 页面操作
@@ -278,7 +278,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
   setError: (error) => set({ error }),
 
   // 初始化项目
-  initializeProject: async (type, content, templateImage, templateStyle, referenceFileIds, aspectRatio) => {
+  initializeProject: async (type, content, templateImage, templateStyle, referenceFileIds, aspectRatio, scenario) => {
     set({ isGlobalLoading: true, error: null });
     try {
       const request: any = {};
@@ -300,6 +300,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       if (aspectRatio) {
         request.image_aspect_ratio = aspectRatio;
       }
+      request.scenario = scenario || 'ppt';
 
       // 1. 创建项目
       const response = await api.createProject(request);

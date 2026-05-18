@@ -5,6 +5,7 @@ import { Sparkles, FileText, FileEdit, Paperclip, Palette, Lightbulb, Settings, 
 import { Button, Card, useToast, MaterialSelector, ReferenceFileList, ReferenceFileSelector, FilePreviewModal, HelpModal } from '@/components/shared';
 import { MarkdownTextarea, type MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
 import { uploadReferenceFile, type ReferenceFile, type Material, associateFileToProject, triggerFileParse, associateMaterialsToProject, createPptRenovationProject } from '@/api/endpoints';
+import type { ProjectScenario } from '@/types';
 import { useProjectStore } from '@/store/useProjectStore';
 import { devLog } from '@/utils/logger';
 import { useTheme } from '@/hooks/useTheme';
@@ -127,6 +128,11 @@ const homeI18n = {
         outline: '大纲',
         description: '长描述',
       },
+      scenarios: {
+        label: '项目场景',
+        ppt: 'PPT',
+        data_report: '数据报告',
+      },
       tabDescriptions: {
         text_generation: '通过一句话、大纲或长描述三种方式生成 PPT',
         idea: '输入你的想法，AI 将为你生成完整的 PPT',
@@ -218,6 +224,11 @@ const homeI18n = {
         outline: 'Outline',
         description: 'Long Description',
       },
+      scenarios: {
+        label: 'Project Scenario',
+        ppt: 'PPT',
+        data_report: 'Data Report',
+      },
       tabDescriptions: {
         text_generation: 'Generate PPTs from a short idea, an outline, or a detailed description',
         idea: 'Enter your idea, AI will generate a complete PPT for you',
@@ -303,6 +314,7 @@ export const Home: React.FC = () => {
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
 
   const [aspectRatio, setAspectRatio] = useState('16:9');
+  const [projectScenario, setProjectScenario] = useState<ProjectScenario>('ppt');
   const [renovationFile, setRenovationFile] = useState<File | null>(null);
   const [keepLayout, setKeepLayout] = useState(false);
   const [sourceText, setSourceText] = useState('');
@@ -914,7 +926,15 @@ export const Home: React.FC = () => {
         .filter(f => f.parse_status === 'completed')
         .map(f => f.id);
 
-      await initializeProject(activeTextMode, content, undefined, undefined, refFileIds.length > 0 ? refFileIds : undefined, aspectRatio);
+      await initializeProject(
+        activeTextMode,
+        content,
+        undefined,
+        undefined,
+        refFileIds.length > 0 ? refFileIds : undefined,
+        aspectRatio,
+        projectScenario,
+      );
       
       // 根据类型跳转到不同页面
       const projectId = localStorage.getItem('currentProjectId');
@@ -1322,6 +1342,19 @@ export const Home: React.FC = () => {
                 className="text-sm md:text-base border-2 border-gray-200 dark:border-border-primary dark:bg-background-tertiary dark:text-white focus-within:border-banana-400 dark:focus-within:border-banana transition-colors duration-200"
                 toolbarLeft={
                   <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-border-primary bg-white/90 dark:bg-background-elevated px-2 py-1">
+                      <span className="text-xs text-gray-500 dark:text-foreground-tertiary whitespace-nowrap">
+                        {t('home.scenarios.label')}
+                      </span>
+                      <select
+                        value={projectScenario}
+                        onChange={(e) => setProjectScenario(e.target.value as ProjectScenario)}
+                        className="bg-transparent text-xs md:text-sm text-gray-700 dark:text-foreground-secondary outline-none"
+                      >
+                        <option value="ppt">{t('home.scenarios.ppt')}</option>
+                        <option value="data_report">{t('home.scenarios.data_report')}</option>
+                      </select>
+                    </div>
                     <button
                       type="button"
                       onClick={handlePaperclipClick}

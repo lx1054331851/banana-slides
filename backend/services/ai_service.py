@@ -149,6 +149,7 @@ class ProjectContext:
             self.outline_text = project_or_dict.outline_text
             self.description_text = project_or_dict.description_text
             self.creation_type = project_or_dict.creation_type or 'idea'
+            self.scenario = getattr(project_or_dict, 'scenario', None) or 'ppt'
             self.outline_requirements = project_or_dict.outline_requirements
             self.description_requirements = project_or_dict.description_requirements
             self.template_style_json = getattr(project_or_dict, 'template_style_json', None)
@@ -158,6 +159,7 @@ class ProjectContext:
             self.outline_text = project_or_dict.get('outline_text')
             self.description_text = project_or_dict.get('description_text')
             self.creation_type = project_or_dict.get('creation_type', 'idea')
+            self.scenario = project_or_dict.get('scenario') or 'ppt'
             self.outline_requirements = project_or_dict.get('outline_requirements')
             self.description_requirements = project_or_dict.get('description_requirements')
             self.template_style_json = project_or_dict.get('template_style_json')
@@ -171,6 +173,7 @@ class ProjectContext:
             'outline_text': self.outline_text,
             'description_text': self.description_text,
             'creation_type': self.creation_type,
+            'scenario': self.scenario,
             'outline_requirements': self.outline_requirements,
             'description_requirements': self.description_requirements,
             'template_style_json': self.template_style_json,

@@ -122,6 +122,34 @@ _PPT_STANDARD_PAGE_TYPES = """\
 - 结尾页
 """
 
+_DATA_REPORT_STANDARD_PAGE_TYPES = """\
+标准页面类型清单（page_type 必须从中选择一个）：
+- 报告封面
+- 执行摘要
+- 目录
+- 研究方法
+- 章节页
+- 品牌概览页
+- 品牌历程页
+- 品牌画像页
+- 品牌定位页
+- 核心指标总览页
+- 市场概览页
+- 品牌对标页
+- 品类结构页
+- 价格带分布页
+- 渠道平台表现页
+- 商品SKU诊断页
+- 数据明细页
+- 洞察图文页
+- 洞察图表页
+- 矩阵图谱页
+- 时间轴生命周期页
+- 人群画像页
+- 策略建议页
+- 封底页
+"""
+
 _PAGE_DETAIL_JSON_OUTPUT_FORMAT = """\
 ```json
 {
@@ -171,6 +199,31 @@ def _get_original_input(project_context: 'ProjectContext') -> str:
     if project_context.creation_type == 'descriptions' and project_context.description_text:
         return f"用户提供的描述：\n{project_context.description_text}"
     return project_context.idea_prompt or ""
+
+
+def _get_project_scenario(project_context: 'ProjectContext') -> str:
+    scenario = getattr(project_context, 'scenario', None)
+    if scenario == 'data_report':
+        return 'data_report'
+    return 'ppt'
+
+
+def _get_standard_page_types_text(project_context: 'ProjectContext') -> str:
+    return _DATA_REPORT_STANDARD_PAGE_TYPES if _get_project_scenario(project_context) == 'data_report' else _PPT_STANDARD_PAGE_TYPES
+
+
+def _get_scenario_prompt_hint(project_context: 'ProjectContext') -> str:
+    scenario = _get_project_scenario(project_context)
+    if scenario == 'data_report':
+        return dedent("""\
+        当前项目场景是：数据报告（data_report）。
+        你生成的大纲必须按“服装品牌线上数据分析报告”的逻辑组织内容，优先体现品牌认知、市场经营分析、专题洞察与策略输出。
+        不要按演讲型 PPT 的节奏去写，不要把所有分析页都泛化成普通图文页。
+        """)
+    return dedent("""\
+    当前项目场景是：PPT（ppt）。
+    你生成的大纲必须按演讲/汇报型 PPT 的逻辑组织内容，强调叙事节奏、表达效率和页面角色分工。
+    """)
 
 
 def _get_original_input_labeled(project_context: 'ProjectContext') -> str:
@@ -339,6 +392,9 @@ def get_outline_generation_prompt(project_context: 'ProjectContext', language: s
     """生成 PPT 大纲的 prompt（JSON 输出）"""
     idea_prompt = project_context.idea_prompt or ""
 
+    standard_page_types = _get_standard_page_types_text(project_context)
+    scenario_hint = _get_scenario_prompt_hint(project_context)
+
     prompt = (f"""\
 You are a helpful assistant that generates an outline for a ppt.
 
@@ -346,7 +402,8 @@ You can organize the content in two ways:
 
 {_OUTLINE_JSON_FORMAT}
 
-{_PPT_STANDARD_PAGE_TYPES}
+{standard_page_types}
+{scenario_hint}
 
 Choose the format that best fits the content. Use parts when the PPT has clear major sections.
 Unless otherwise specified, the first page should be kept simplest, containing only the title, subtitle, and presenter information.
@@ -373,6 +430,9 @@ The user's request: {idea_prompt}.
 def get_outline_generation_prompt_markdown(project_context: 'ProjectContext', language: str = None) -> str:
     """生成 PPT 大纲的 prompt（Markdown 输出，用于流式生成）"""
     idea_prompt = project_context.idea_prompt or ""
+
+    standard_page_types = _get_standard_page_types_text(project_context)
+    scenario_hint = _get_scenario_prompt_hint(project_context)
 
     prompt = (f"""\
 You are a helpful assistant that generates a PPT outline.
@@ -413,8 +473,9 @@ Constraints:
 - Each outline page will eventually be converted into an actual slide. Therefore, if a slide should not appear in the final deck, do not output that page from the beginning.
 - For each page, explicitly add a line `Page Type: xxx` immediately after the `## Page Title` line.
 - `xxx` must be chosen from this standard page type list:
-{_PPT_STANDARD_PAGE_TYPES}
+{standard_page_types}
 - The selected page type must match the real function of the page.
+{scenario_hint}
 
 The user's request: {idea_prompt}.
 {_format_requirements(project_context.outline_requirements)}Now generate the outline, strictly follow the format provided above, don't include any other text. Output `<!-- END -->` on the last line when finished.
@@ -427,6 +488,9 @@ The user's request: {idea_prompt}.
 def get_outline_parsing_prompt(project_context: 'ProjectContext', language: str = None) -> str:
     """解析用户提供的大纲文本的 prompt（JSON 输出）"""
     outline_text = project_context.outline_text or ""
+
+    standard_page_types = _get_standard_page_types_text(project_context)
+    scenario_hint = _get_scenario_prompt_hint(project_context)
 
     prompt = (f"""\
 You are a helpful assistant that parses a user-provided PPT outline text into a structured format.
@@ -442,7 +506,8 @@ You can organize the content in two ways:
 
 {_OUTLINE_JSON_FORMAT}
 
-{_PPT_STANDARD_PAGE_TYPES}
+{standard_page_types}
+{scenario_hint}
 
 Important rules:
 - DO NOT modify, rewrite, or change any text from the original outline
@@ -492,6 +557,8 @@ Now parse the outline text above into the Markdown format. Output `<!-- END -->`
 def get_description_to_outline_prompt(project_context: 'ProjectContext', language: str = None) -> str:
     """从描述文本解析出大纲的 prompt（JSON 输出）"""
     description_text = project_context.description_text or ""
+    standard_page_types = _get_standard_page_types_text(project_context)
+    scenario_hint = _get_scenario_prompt_hint(project_context)
 
     prompt = (f"""\
 You are a helpful assistant that analyzes a user-provided PPT description text and extracts the outline structure from it.
@@ -510,7 +577,8 @@ You can organize the content in two ways:
 
 {_OUTLINE_JSON_FORMAT}
 
-{_PPT_STANDARD_PAGE_TYPES}
+{standard_page_types}
+{scenario_hint}
 
 Important rules:
 - Extract the outline structure from the description text
