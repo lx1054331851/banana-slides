@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import type { PageAiRegionBounds } from '@/types';
 
@@ -65,25 +65,54 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
   onFloatingFullscreenButtonClick,
   onSwitchVersion,
 }) => {
-  const [imageOrientation, setImageOrientation] = useState<'landscape' | 'portrait'>('landscape');
+  const visualPaneBodyRef = useRef<HTMLDivElement | null>(null);
+  const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
+  const [availableAspectRatio, setAvailableAspectRatio] = useState<number | null>(null);
 
   useEffect(() => {
-    setImageOrientation('landscape');
+    setImageAspectRatio(null);
   }, [imageUrl]);
 
-  const previewCanvasStyle = isFullscreen
-    ? undefined
-    : {
-        aspectRatio: aspectRatioStyle,
-        width: selectedPageHasImage
-          ? (imageOrientation === 'portrait' ? 'auto' : '100%')
-          : '100%',
-        height: selectedPageHasImage
-          ? (imageOrientation === 'portrait' ? '100%' : '100%')
-          : '100%',
-        maxWidth: '100%',
-        maxHeight: '100%',
-      } satisfies React.CSSProperties;
+  useEffect(() => {
+    if (isFullscreen) {
+      setAvailableAspectRatio(null);
+      return;
+    }
+
+    const node = visualPaneBodyRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+
+    const updateRatio = () => {
+      const { width, height } = node.getBoundingClientRect();
+      if (width > 0 && height > 0) {
+        setAvailableAspectRatio(width / height);
+      }
+    };
+
+    updateRatio();
+    const observer = new ResizeObserver(updateRatio);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [isFullscreen, imageVersions.length, selectedPageHasImage]);
+
+  const fitByWidth = useMemo(() => {
+    if (!selectedPageHasImage) return true;
+    if (!imageAspectRatio || !availableAspectRatio) return true;
+    return imageAspectRatio >= availableAspectRatio;
+  }, [availableAspectRatio, imageAspectRatio, selectedPageHasImage]);
+
+  const previewCanvasStyle = useMemo(() => {
+    if (isFullscreen) return undefined;
+
+    return {
+      aspectRatio: aspectRatioStyle,
+      width: fitByWidth ? '100%' : 'auto',
+      height: fitByWidth ? 'auto' : '100%',
+      maxWidth: '100%',
+      maxHeight: '100%',
+      flexShrink: 0,
+    } satisfies React.CSSProperties;
+  }, [aspectRatioStyle, fitByWidth, isFullscreen]);
 
   return (
     <section
@@ -91,11 +120,11 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
       className="min-w-0 overflow-hidden"
     >
       <div className="flex h-full flex-col">
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2 pt-1 md:px-3 md:pb-3 md:pt-2">
-          <div className="flex h-full min-h-[320px] items-center justify-stretch">
-            <div className="h-full w-full">
+        <div className="flex-1 overflow-hidden px-2 pb-2 pt-1 md:px-3 md:pb-3 md:pt-2">
+          <div ref={visualPaneBodyRef} className="flex h-full min-h-[320px] items-center justify-stretch overflow-hidden">
+            <div className="h-full w-full overflow-hidden">
               <div className={`flex ${selectedPageHasImage ? 'h-full min-h-0 flex-col items-center justify-center gap-4' : 'h-full min-h-0'}`}>
-                <div className={selectedPageHasImage ? 'flex min-h-0 flex-1 items-center justify-center self-stretch' : 'flex min-h-0 flex-1 items-center justify-center self-stretch'}>
+                <div className="flex min-h-0 flex-1 items-center justify-center self-stretch overflow-hidden">
                   <div
                     ref={previewContainerRef}
                     className={`relative overflow-hidden touch-manipulation ${isFullscreen
@@ -117,7 +146,7 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                           onLoad={(event) => {
                             const { naturalWidth, naturalHeight } = event.currentTarget;
                             if (!naturalWidth || !naturalHeight) return;
-                            setImageOrientation(naturalHeight > naturalWidth ? 'portrait' : 'landscape');
+                            setImageAspectRatio(naturalWidth / naturalHeight);
                           }}
                           className={`h-full w-full select-none ${isFullscreen ? 'object-contain' : 'object-contain'}`}
                           draggable={false}
