@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, ArrowRight, Plus, FileText, Sparkle, Download, Upload, PanelLeftClose, PanelLeftOpen, LayoutGrid, List, ArrowUp } from 'lucide-react';
+import { ArrowLeft, Save, ArrowRight, Plus, FileText, Sparkle, Download, Upload, PanelLeftClose, PanelLeftOpen, LayoutGrid, List, ArrowUp, Trash2, X } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 import mammoth from 'mammoth/mammoth.browser';
 
@@ -18,6 +18,7 @@ const outlineI18n = {
       noPages: "还没有页面", noPagesHint: "点击「添加页面」手动创建，或「自动生成大纲」让 AI 帮你完成",
       parseOutline: "解析大纲", autoGenerate: "自动生成大纲",
       reParseOutline: "重新解析大纲", reGenerate: "重新生成大纲", export: "导出大纲", import: "导入",
+      multiSelectDelete: "多选删除", cancelMultiSelect: "取消选择", deleteSelected: "删除已选", selectedCount: "已选 {{count}} 项",
       aiPlaceholder: "例如：增加一页关于XXX的内容、删除第3页、合并前两页... · Ctrl+Enter提交",
       aiPlaceholderShort: "例如：增加/删除页面... · Ctrl+Enter",
       viewMode: { list: "列表", grid: "网格" },
@@ -46,6 +47,9 @@ const outlineI18n = {
         unsupportedFile: "仅支持 .docx / .txt / .md 文件",
         saveFailed: "保存失败",
         deleteFailed: "删除页面失败",
+        confirmDeleteSelected: "确定删除选中的 {{count}} 页吗？此操作不可撤销。",
+        confirmDeleteSelectedTitle: "确认批量删除",
+        deleteSelectedSuccess: "已删除 {{count}} 页",
       }
     }
   },
@@ -61,6 +65,7 @@ const outlineI18n = {
       noPages: "No pages yet", noPagesHint: "Click \"Add Page\" to create manually, or \"Auto Generate\" to let AI help you",
       parseOutline: "Parse Outline", autoGenerate: "Auto Generate Outline",
       reParseOutline: "Re-parse Outline", reGenerate: "Regenerate Outline", export: "Export Outline", import: "Import",
+      multiSelectDelete: "Multi-delete", cancelMultiSelect: "Cancel", deleteSelected: "Delete Selected", selectedCount: "{{count}} selected",
       aiPlaceholder: "e.g., Add a page about XXX, delete page 3, merge first two pages... · Ctrl+Enter to submit",
       aiPlaceholderShort: "e.g., Add/delete pages... · Ctrl+Enter",
       viewMode: { list: "List", grid: "Grid" },
@@ -89,6 +94,9 @@ const outlineI18n = {
         unsupportedFile: "Only .docx, .txt, or .md files are supported",
         saveFailed: "Save failed",
         deleteFailed: "Failed to delete page",
+        confirmDeleteSelected: "Delete the selected {{count}} page(s)? This cannot be undone.",
+        confirmDeleteSelectedTitle: "Confirm Bulk Delete",
+        deleteSelectedSuccess: "{{count}} page(s) deleted",
       }
     }
   }
@@ -188,6 +196,8 @@ export const OutlineEditor: React.FC = () => {
   } = useProjectStore();
 
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [selectedPageIds, setSelectedPageIds] = useState<string[]>([]);
   const [isAiRefining, setIsAiRefining] = useState(false);
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(true);
@@ -218,6 +228,54 @@ export const OutlineEditor: React.FC = () => {
     }
   }, [deletePageById, show, t]);
 
+  const toggleMultiSelectMode = useCallback(() => {
+    setIsMultiSelectMode((prev) => !prev);
+    setSelectedPageIds([]);
+    setExpandedCardId(null);
+  }, []);
+
+  const handleTogglePageSelection = useCallback((pageId: string) => {
+    setSelectedPageIds((prev) => (
+      prev.includes(pageId)
+        ? prev.filter((id) => id !== pageId)
+        : [...prev, pageId]
+    ));
+  }, []);
+
+  const handleDeleteSelectedPages = useCallback(() => {
+    if (selectedPageIds.length === 0) return;
+
+    confirm(
+      t('outline.messages.confirmDeleteSelected', { count: String(selectedPageIds.length) }),
+      async () => {
+        let deletedCount = 0;
+        for (const pageId of selectedPageIds) {
+          const ok = await deletePageById(pageId);
+          if (ok) {
+            deletedCount += 1;
+          }
+        }
+
+        if (deletedCount === selectedPageIds.length) {
+          show({
+            message: t('outline.messages.deleteSelectedSuccess', { count: String(deletedCount) }),
+            type: 'success',
+          });
+        } else {
+          show({ message: t('outline.messages.deleteFailed'), type: 'error' });
+        }
+
+        setSelectedPageIds([]);
+        setIsMultiSelectMode(false);
+        setSelectedPageId(null);
+      },
+      {
+        title: t('outline.messages.confirmDeleteSelectedTitle'),
+        variant: 'danger',
+      }
+    );
+  }, [confirm, deletePageById, selectedPageIds, show, t]);
+
   // 左侧可编辑文本区域 — desktop and mobile use separate refs to avoid
   // the shared-ref bug where insertAtCursor targets the wrong (hidden) instance.
   const desktopTextareaRef = useRef<MarkdownTextareaRef>(null);
@@ -247,6 +305,12 @@ export const OutlineEditor: React.FC = () => {
       setSourceFile(null);
     }
   }, [currentProject?.id]);
+
+  useEffect(() => {
+    if (!currentProject) return;
+    const validIds = new Set(currentProject.pages.map((page) => page.id || page.page_id).filter(Boolean));
+    setSelectedPageIds((prev) => prev.filter((pageId) => validIds.has(pageId)));
+  }, [currentProject]);
 
   const saveInputText = useCallback(async (text: string, creationType: string | undefined) => {
     if (!projectId || !creationType) return;
@@ -732,6 +796,37 @@ export const OutlineEditor: React.FC = () => {
             >
               {t('outline.import')}
             </Button>
+            {isMultiSelectMode ? (
+              <>
+                <Button
+                  variant="secondary"
+                  icon={<X size={16} className="md:w-[18px] md:h-[18px]" />}
+                  onClick={toggleMultiSelectMode}
+                  className="flex-1 sm:flex-initial text-sm md:text-base"
+                >
+                  {t('outline.cancelMultiSelect')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon={<Trash2 size={16} className="md:w-[18px] md:h-[18px]" />}
+                  onClick={handleDeleteSelectedPages}
+                  disabled={selectedPageIds.length === 0}
+                  className="flex-1 sm:flex-initial text-sm md:text-base text-red-600 border-red-200 hover:bg-red-50 disabled:text-gray-400"
+                >
+                  {t('outline.deleteSelected')}
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="secondary"
+                icon={<Trash2 size={16} className="md:w-[18px] md:h-[18px]" />}
+                onClick={toggleMultiSelectMode}
+                disabled={currentProject.pages.length === 0}
+                className="flex-1 sm:flex-initial text-sm md:text-base"
+              >
+                {t('outline.multiSelectDelete')}
+              </Button>
+            )}
             <input ref={importFileRef} type="file" accept=".md,.txt" className="hidden" onChange={handleImportOutline} />
             {/* 手机端：保存按钮 */}
             <Button
@@ -745,6 +840,11 @@ export const OutlineEditor: React.FC = () => {
             <span className="text-xs md:text-sm text-gray-500 dark:text-foreground-tertiary whitespace-nowrap">
               {t('outline.pageCount', { count: String(currentProject.pages.length) })}
             </span>
+            {isMultiSelectMode && (
+              <span className="text-xs md:text-sm text-banana-700 dark:text-banana-400 whitespace-nowrap">
+                {t('outline.selectedCount', { count: String(selectedPageIds.length) })}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
             <button
@@ -1012,12 +1112,25 @@ export const OutlineEditor: React.FC = () => {
                         showToast={show}
                         onUpdate={(data) => page.id && updatePageLocal(page.id, data)}
                         onDelete={() => handleDeletePage(page)}
-                        onClick={() => setSelectedPageId(page.id || null)}
+                        onClick={() => {
+                          if (isMultiSelectMode) {
+                            const pageId = page.id || page.page_id;
+                            if (pageId) handleTogglePageSelection(pageId);
+                            return;
+                          }
+                          setSelectedPageId(page.id || null);
+                        }}
                         isSelected={selectedPageId === page.id}
                         isAiRefining={isAiRefining}
                         viewMode={viewMode}
                         isExpanded={expandedCardId === page.id}
                         onToggleExpand={(next) => setExpandedCardId(next ? (page.id || null) : null)}
+                        showSelectionCheckbox={isMultiSelectMode}
+                        isSelectionChecked={selectedPageIds.includes(page.id || page.page_id)}
+                        onSelectionToggle={() => {
+                          const pageId = page.id || page.page_id;
+                          if (pageId) handleTogglePageSelection(pageId);
+                        }}
                       />
                     ))}
                   </div>

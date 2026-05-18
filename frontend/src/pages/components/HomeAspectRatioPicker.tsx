@@ -7,6 +7,7 @@ import { cn } from '@/utils';
 type FloatingMenuPosition = {
   top: number;
   left: number;
+  openUpward: boolean;
 };
 
 interface HomeAspectRatioPickerProps {
@@ -73,6 +74,7 @@ export const HomeAspectRatioPicker: React.FC<HomeAspectRatioPickerProps> = ({
       setMenuPosition({
         top: openUpward ? rect.top - gap : rect.bottom + gap,
         left,
+        openUpward,
       });
     };
 
@@ -105,13 +107,12 @@ export const HomeAspectRatioPicker: React.FC<HomeAspectRatioPickerProps> = ({
           <div className="fixed inset-0 z-[60]" aria-hidden="true" />
           <div
             ref={menuRef}
-            className="fixed z-[70] min-w-[80px] overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-border-primary dark:bg-background-elevated dark:shadow-none"
+            className="fixed z-[70] w-[88px] overflow-y-auto overflow-x-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-border-primary dark:bg-background-elevated dark:shadow-none"
             style={{
               top: menuPosition.top,
               left: menuPosition.left,
-              transform: menuPosition.top < (buttonRef.current?.getBoundingClientRect().top ?? 0)
-                ? 'translateY(-100%)'
-                : undefined,
+              maxHeight: MENU_HEIGHT,
+              transform: menuPosition.openUpward ? 'translateY(-100%)' : undefined,
             }}
             role="menu"
             aria-label={label}

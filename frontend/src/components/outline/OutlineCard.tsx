@@ -48,6 +48,9 @@ interface OutlineCardProps {
   viewMode?: 'list' | 'grid';
   isExpanded?: boolean;
   onToggleExpand?: (next: boolean) => void;
+  showSelectionCheckbox?: boolean;
+  isSelectionChecked?: boolean;
+  onSelectionToggle?: () => void;
 }
 
 export const OutlineCard: React.FC<OutlineCardProps> = ({
@@ -64,6 +67,9 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
   viewMode = 'list',
   isExpanded = false,
   onToggleExpand,
+  showSelectionCheckbox = false,
+  isSelectionChecked = false,
+  onSelectionToggle,
 }) => {
   const t = useT(outlineCardI18n);
   const { confirm, ConfirmDialog } = useConfirm();
@@ -132,12 +138,25 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
     <Card
       className={`p-4 relative ${
         isSelected ? 'border-2 border-banana-500 shadow-yellow' : ''
-      } ${isExpanded ? 'h-full' : (isGridView && !isEditing ? 'h-72' : '')}`}
-      onClick={!isEditing ? onClick : undefined}
+      } ${showSelectionCheckbox && isSelectionChecked ? 'ring-2 ring-banana-400 border-banana-300' : ''} ${isExpanded ? 'h-full' : (isGridView && !isEditing ? 'h-72' : '')}`}
+      onClick={!isEditing ? (showSelectionCheckbox ? onSelectionToggle : onClick) : undefined}
     >
       <ShimmerOverlay show={isAiRefining} />
 
       <div className="flex items-start gap-3 relative z-10 h-full">
+        {showSelectionCheckbox && (
+          <label
+            className="mt-0.5 flex-shrink-0 cursor-pointer"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              checked={isSelectionChecked}
+              onChange={() => onSelectionToggle?.()}
+              className="h-4 w-4 rounded border-gray-300 text-banana-500 focus:ring-banana-500"
+            />
+          </label>
+        )}
         {/* 拖拽手柄 */}
         <div
           {...dragHandleProps}
@@ -254,7 +273,7 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
         </div>
 
         {/* 操作按钮 */}
-        {!isEditing && (
+        {!isEditing && !showSelectionCheckbox && (
           <div className="flex-shrink-0 flex gap-2">
             <button
               type="button"
