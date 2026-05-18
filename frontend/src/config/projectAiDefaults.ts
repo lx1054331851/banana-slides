@@ -1,4 +1,5 @@
 export const PROJECT_DEFAULT_IMAGE_SOURCE = 'gemini';
+export const PROJECT_OPENAI_IMAGE_SOURCE = 'openai';
 
 export const PROJECT_IMAGE_MODEL_CATALOG = [
   {
@@ -26,6 +27,7 @@ export type ProjectSupportedImageModel = (typeof PROJECT_IMAGE_MODEL_CATALOG)[nu
 
 export const PROJECT_SUPPORTED_IMAGE_MODELS = PROJECT_IMAGE_MODEL_CATALOG.map((item) => item.model);
 export const PROJECT_SUPPORTED_IMAGE_SOURCES = Array.from(new Set(PROJECT_IMAGE_MODEL_CATALOG.map((item) => item.source)));
+export const PROJECT_BUILTIN_IMAGE_SOURCES = [...PROJECT_SUPPORTED_IMAGE_SOURCES];
 
 export const PROJECT_DEFAULT_IMAGE_MODEL: ProjectSupportedImageModel = PROJECT_SUPPORTED_IMAGE_MODELS[0];
 export const PROJECT_DEFAULT_IMAGE_RESOLUTION = '4K';
@@ -55,6 +57,9 @@ export const normalizeProjectDefaultImageModel = (value?: string): ProjectSuppor
 // Normalize provider source to supported values, fallback from model mapping.
 export const normalizeProjectDefaultImageSource = (source?: string, model?: string): ProjectImageModelSource => {
   const normalizedSource = String(source || '').trim();
+  if (normalizedSource.startsWith('profile:')) {
+    return normalizedSource as ProjectImageModelSource;
+  }
   if (PROJECT_SUPPORTED_IMAGE_SOURCES.includes(normalizedSource as ProjectImageModelSource)) {
     return normalizedSource as ProjectImageModelSource;
   }

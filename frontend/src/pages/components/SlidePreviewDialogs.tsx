@@ -9,6 +9,7 @@ import { TemplateSelector } from '@/components/shared/TemplateSelector';
 import { HistoryVersionModal } from './HistoryVersionModal';
 import { ResolutionWarningModal } from './ResolutionWarningModal';
 import { BatchGenerateDialogs } from './BatchGenerateDialogs';
+import type { ProviderProfileSummary } from '@/types';
 
 type SlidePreviewDialogsProps = {
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -75,6 +76,7 @@ type SlidePreviewDialogsProps = {
   projectDefaultImageSource: any;
   projectDefaultImageModel: string;
   projectDefaultImageResolution: string;
+  providerProfiles: ProviderProfileSummary[];
   setProjectDefaultImageSource: (value: any) => void;
   setProjectDefaultImageModel: (value: string) => void;
   setProjectDefaultImageResolution: (value: string) => void;
@@ -178,6 +180,7 @@ export const SlidePreviewDialogs: React.FC<SlidePreviewDialogsProps> = ({
   projectDefaultImageSource,
   projectDefaultImageModel,
   projectDefaultImageResolution,
+  providerProfiles,
   setProjectDefaultImageSource,
   setProjectDefaultImageModel,
   setProjectDefaultImageResolution,
@@ -297,6 +300,7 @@ export const SlidePreviewDialogs: React.FC<SlidePreviewDialogsProps> = ({
             generationDefaultImageSource={projectDefaultImageSource}
             generationDefaultImageModel={projectDefaultImageModel}
             generationDefaultImageResolution={projectDefaultImageResolution}
+            providerProfiles={providerProfiles}
             onGenerationDefaultImageSourceChange={setProjectDefaultImageSource}
             onGenerationDefaultImageModelChange={setProjectDefaultImageModel}
             onGenerationDefaultImageResolutionChange={setProjectDefaultImageResolution}

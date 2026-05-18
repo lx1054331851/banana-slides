@@ -95,6 +95,7 @@ import { useImagePaste } from '@/hooks/useImagePaste';
 import {
   setCurrentImageVersion,
   getSettings,
+  getProviderProfiles,
   refineDescriptions,
   addPage,
   getTaskStatus,
@@ -110,6 +111,7 @@ import type {
   PageAiMessage,
   PageAiReference,
   PageAiRegionBounds,
+  ProviderProfileSummary,
 } from '@/types';
 import { normalizeErrorMessage } from '@/utils';
 import {
@@ -457,6 +459,7 @@ export const SlidePreview: React.FC = () => {
   const [projectDefaultImageSource, setProjectDefaultImageSource] = useState<string>(PROJECT_DEFAULT_IMAGE_SOURCE);
   const [projectDefaultImageModel, setProjectDefaultImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   const [projectDefaultImageResolution, setProjectDefaultImageResolution] = useState<string>(PROJECT_DEFAULT_IMAGE_RESOLUTION);
+  const [providerProfiles, setProviderProfiles] = useState<ProviderProfileSummary[]>([]);
   const [editRunImageModel, setEditRunImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   const normalizedProjectImageModel = useMemo(
     () => normalizeProjectDefaultImageModel(projectDefaultImageModel),
@@ -941,6 +944,16 @@ export const SlidePreview: React.FC = () => {
         console.error('Failed to load user templates:', error);
       }
     };
+    const loadProviderProfiles = async () => {
+      try {
+        const response = await getProviderProfiles();
+        setProviderProfiles(response.data?.profiles || []);
+      } catch (error) {
+        console.warn('Failed to load provider profiles:', error);
+        setProviderProfiles([]);
+      }
+    };
+    void loadProviderProfiles();
     loadTemplates();
   }, [projectId, currentProject, syncProject]);
 
@@ -2760,6 +2773,7 @@ export const SlidePreview: React.FC = () => {
         projectDefaultImageSource={projectDefaultImageSource}
         projectDefaultImageModel={projectDefaultImageModel}
         projectDefaultImageResolution={projectDefaultImageResolution}
+        providerProfiles={providerProfiles}
         setProjectDefaultImageSource={setProjectDefaultImageSource}
         setProjectDefaultImageModel={setProjectDefaultImageModel}
         setProjectDefaultImageResolution={setProjectDefaultImageResolution}

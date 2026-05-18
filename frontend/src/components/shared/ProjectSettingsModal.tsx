@@ -2,13 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { X, FileText, Download, Sparkles, AlertTriangle, HelpCircle, Image as ImageIcon, Plus } from 'lucide-react';
 import { Button, Textarea, Input } from '@/components/shared';
 import { useT } from '@/hooks/useT';
+import type { ProviderProfileSummary } from '@/types';
 import type { ExportExtractorMethod, ExportInpaintMethod } from '@/types';
 import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
 import {
   PROJECT_DEFAULT_IMAGE_MODEL,
   PROJECT_DEFAULT_IMAGE_RESOLUTION,
   PROJECT_IMAGE_MODEL_CATALOG,
-  PROJECT_SUPPORTED_IMAGE_SOURCES,
+  PROJECT_BUILTIN_IMAGE_SOURCES,
   PROJECT_SUPPORTED_IMAGE_MODELS,
   getImageSourceForModel,
   getSupportedResolutionsForModel,
@@ -162,6 +163,7 @@ interface ProjectSettingsModalProps {
   generationDefaultImageSource?: string;
   generationDefaultImageModel?: string;
   generationDefaultImageResolution?: string;
+  providerProfiles?: ProviderProfileSummary[];
   onGenerationDefaultImageSourceChange?: (value: string) => void;
   onGenerationDefaultImageModelChange?: (value: string) => void;
   onGenerationDefaultImageResolutionChange?: (value: string) => void;
@@ -300,6 +302,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   generationDefaultImageSource = '',
   generationDefaultImageModel = '',
   generationDefaultImageResolution = PROJECT_DEFAULT_IMAGE_RESOLUTION,
+  providerProfiles = [],
   onGenerationDefaultImageSourceChange,
   onGenerationDefaultImageModelChange,
   onGenerationDefaultImageResolutionChange,
@@ -333,6 +336,21 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
     () => normalizeProjectDefaultImageSource(generationDefaultImageSource, selectedImageModel),
     [generationDefaultImageSource, selectedImageModel]
   );
+  const availableImageProfiles = useMemo(
+    () => providerProfiles.filter((profile) => (profile.capabilities || []).includes('image')),
+    [providerProfiles]
+  );
+  const imageSourceOptions = useMemo(() => {
+    const builtins = PROJECT_BUILTIN_IMAGE_SOURCES.map((source) => ({
+      value: source,
+      label: source === 'openai' ? 'OpenAI Compatible' : 'Gemini',
+    }));
+    const profiles = availableImageProfiles.map((profile) => ({
+      value: `profile:${profile.id}`,
+      label: `Profile · ${profile.id} (${String(profile.provider || '').toUpperCase()})`,
+    }));
+    return [...builtins, ...profiles];
+  }, [availableImageProfiles]);
   const presetDescriptionFieldSet = useMemo(
     () => new Set(presetDescriptionFields.length > 0 ? presetDescriptionFields : FALLBACK_DESCRIPTION_FIELDS),
     [presetDescriptionFields]
@@ -567,16 +585,20 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                         onChange={(e) => {
                           const nextSource = e.target.value;
                           onGenerationDefaultImageSourceChange?.(nextSource);
-                          const sourceModels = PROJECT_IMAGE_MODEL_CATALOG.filter((item) => item.source === nextSource);
+                          const sourceModels = PROJECT_IMAGE_MODEL_CATALOG.filter((item) =>
+                            nextSource.startsWith('profile:')
+                              ? item.source === 'openai'
+                              : item.source === nextSource
+                          );
                           if (sourceModels.length > 0) {
                             onGenerationDefaultImageModelChange?.(sourceModels[0].model);
                           }
                         }}
                         className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
                       >
-                        {PROJECT_SUPPORTED_IMAGE_SOURCES.map((source) => (
-                          <option key={source} value={source}>
-                            {source === 'openai' ? 'azure-openai' : source}
+                        {imageSourceOptions.map((source) => (
+                          <option key={source.value} value={source.value}>
+                            {source.label}
                           </option>
                         ))}
                       </select>
@@ -590,7 +612,11 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                         onChange={(e) => {
                           const nextModel = e.target.value;
                           onGenerationDefaultImageModelChange?.(nextModel);
-                          onGenerationDefaultImageSourceChange?.(getImageSourceForModel(nextModel, selectedImageSource));
+                          if (selectedImageSource.startsWith('profile:')) {
+                            onGenerationDefaultImageSourceChange?.(selectedImageSource);
+                          } else {
+                            onGenerationDefaultImageSourceChange?.(getImageSourceForModel(nextModel, selectedImageSource));
+                          }
                         }}
                         className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
                       >

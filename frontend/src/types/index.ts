@@ -59,6 +59,18 @@ export interface GenerationOverride {
   image_caption?: OverrideRoute;
 }
 
+export interface ProviderProfileSummary {
+  id: string;
+  provider: 'openai' | 'gemini' | string;
+  api_base?: string | null;
+  api_key_env?: string | null;
+  api_key_present?: boolean;
+  adapter?: string;
+  adapter_options?: Record<string, any>;
+  capabilities?: string[];
+  model_defaults?: Record<string, any>;
+}
+
 export type PageAiReferenceSourceType = 'region' | 'upload' | 'material' | 'template' | 'description';
 
 export interface PageAiRegionBounds {
