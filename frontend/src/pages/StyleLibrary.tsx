@@ -364,8 +364,9 @@ export const StyleLibrary: React.FC = () => {
             icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />}
             onClick={() => void loadPageData()}
             disabled={isLoading}
+            className="min-w-[96px]"
           >
-            {isLoading ? t('nav.loading') : t('nav.refresh')}
+            {t('nav.refresh')}
           </Button>
         )}
         backTestId="style-library-nav-back"
