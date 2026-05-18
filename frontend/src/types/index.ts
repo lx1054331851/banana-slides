@@ -7,6 +7,7 @@ export type ProjectStatus = 'DRAFT' | 'OUTLINE_GENERATED' | 'DESCRIPTIONS_GENERA
 // 大纲内容
 export interface OutlineContent {
   title: string;
+  page_type?: string;
   points: string[];
 }
 

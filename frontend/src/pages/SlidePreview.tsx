@@ -132,6 +132,7 @@ import {
 
 type TextSaveOverrides = {
   title?: string;
+  pageType?: string;
   points?: string;
   description?: string;
   extraFields?: Record<string, string>;
@@ -155,6 +156,21 @@ const VIDEO_VOICE_OPTIONS = [
     { id: 'ja-JP-NanamiNeural', label: 'Nanami（女声）', lang: 'ja' },
     { id: 'ja-JP-KeitaNeural', label: 'Keita（男声）', lang: 'ja' },
   ]},
+];
+
+const PPT_PAGE_TYPE_OPTIONS = [
+  '封面页',
+  '目录页',
+  '章节过渡页',
+  '议程时间线页',
+  '标准图文页',
+  '要点列表页',
+  '对比页',
+  '流程页',
+  '框架矩阵页',
+  '图表页',
+  '案例展示页',
+  '结尾页',
 ];
 
 export const SlidePreview: React.FC = () => {
@@ -291,6 +307,7 @@ export const SlidePreview: React.FC = () => {
   const [editPrompt, setEditPrompt] = useState('');
   // 大纲和描述编辑状态
   const [editOutlineTitle, setEditOutlineTitle] = useState('');
+  const [editPageType, setEditPageType] = useState('');
   const [editOutlinePoints, setEditOutlinePoints] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editStyleGuideBindings, setEditStyleGuideBindings] = useState<StyleGuideBindings>({});
@@ -379,6 +396,7 @@ export const SlidePreview: React.FC = () => {
     selectedIndex,
     formatDescriptionForEditor,
     setEditOutlineTitle,
+    setEditPageType,
     setEditOutlinePoints,
     setEditDescription,
     setEditExtraFields,
@@ -1249,6 +1267,7 @@ export const SlidePreview: React.FC = () => {
     setOutlineQuickEditPageId(targetPageId);
     setSelectedIndex(nextIndex);
     setEditOutlineTitle(targetPage.outline_content?.title || '');
+    setEditPageType(targetPage.outline_content?.page_type || '');
     setEditOutlinePoints(targetPage.outline_content?.points?.join('\n') || '');
     setOutlineQuickEditMode('edit');
     setIsOutlineQuickEditOpen(true);
@@ -1286,11 +1305,13 @@ export const SlidePreview: React.FC = () => {
     if (!targetPage?.id) return null;
 
     const originalTitle = targetPage.outline_content?.title || '';
+    const originalPageType = targetPage.outline_content?.page_type || '';
     const originalPoints = targetPage.outline_content?.points?.join('\n') || '';
-    if (editOutlineTitle !== originalTitle || editOutlinePoints !== originalPoints) {
+    if (editOutlineTitle !== originalTitle || editPageType !== originalPageType || editOutlinePoints !== originalPoints) {
       updatePageLocal(targetPage.id, {
         outline_content: {
           title: editOutlineTitle,
+          page_type: editPageType || '标准图文页',
           points: editOutlinePoints.split('\n').filter((p) => p.trim()),
         },
       });
@@ -1305,6 +1326,7 @@ export const SlidePreview: React.FC = () => {
     selectedIndex,
     outlineQuickEditPageId,
     editOutlineTitle,
+    editPageType,
     editOutlinePoints,
     updatePageLocal,
     show,
@@ -1317,6 +1339,7 @@ export const SlidePreview: React.FC = () => {
     const page = currentProject.pages[selectedIndex];
     if (!page?.id) return false;
     const nextOutlineTitle = options?.overrides?.title ?? editOutlineTitle;
+    const nextPageType = options?.overrides?.pageType ?? editPageType;
     const nextOutlinePoints = options?.overrides?.points ?? editOutlinePoints;
     const nextDescriptionDraft = options?.overrides?.description ?? editDescription;
     const nextExtraFields = options?.overrides?.extraFields ?? editExtraFields;
@@ -1332,10 +1355,12 @@ export const SlidePreview: React.FC = () => {
 
     // 检查大纲是否有变化
     const originalTitle = page.outline_content?.title || '';
+    const originalPageType = page.outline_content?.page_type || '';
     const originalPoints = page.outline_content?.points?.join('\n') || '';
-    if (nextOutlineTitle !== originalTitle || nextOutlinePoints !== originalPoints) {
+    if (nextOutlineTitle !== originalTitle || nextPageType !== originalPageType || nextOutlinePoints !== originalPoints) {
       updates.outline_content = {
         title: nextOutlineTitle,
+        page_type: nextPageType || '标准图文页',
         points: nextOutlinePoints.split('\n').filter((p) => p.trim()),
       };
     }
@@ -1373,6 +1398,7 @@ export const SlidePreview: React.FC = () => {
       updatePageLocal(page.id, updates);
       persistCurrentPageDraft({
         title: nextOutlineTitle,
+        pageType: nextPageType,
         points: nextOutlinePoints,
         description: nextEditorDescriptionText,
         extraFields: nextExtraFields,
@@ -1387,7 +1413,7 @@ export const SlidePreview: React.FC = () => {
       return true;
     }
     return false;
-  }, [currentProject, selectedIndex, editOutlineTitle, editOutlinePoints, editDescription, editExtraFields, editStyleGuideBindings, updatePageLocal, persistCurrentPageDraft, show, t]);
+  }, [currentProject, selectedIndex, editOutlineTitle, editPageType, editOutlinePoints, editDescription, editExtraFields, editStyleGuideBindings, updatePageLocal, persistCurrentPageDraft, show, t]);
 
   // 调度页面文本的自动保存，连续输入时只在停顿后触发一次。
   const scheduleTextAutoSave = useCallback((overrides?: TextSaveOverrides) => {
@@ -1617,7 +1643,7 @@ export const SlidePreview: React.FC = () => {
       );
       await Promise.all(parsed.map(({ title, points, text: desc, part, extra_fields }, index) =>
         addPage(projectId, {
-          outline_content: { title, points },
+          outline_content: { title, page_type: '标准图文页', points },
           description_content: desc ? { text: desc, ...(extra_fields ? { extra_fields } : {}) } : undefined,
           part,
           order_index: startIndex + index,
@@ -1970,6 +1996,29 @@ export const SlidePreview: React.FC = () => {
               data-testid="preview-text-title-input"
               className="min-h-[48px] w-full appearance-none bg-transparent text-xl font-semibold text-slate-900 outline-none placeholder:text-[#b2a78d] dark:text-[#f5f7ff] dark:placeholder:text-[#5f6883] sm:text-2xl"
             />
+            <div className="mt-4">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
+                {t('preview.pageType')}
+              </div>
+              <select
+                value={editPageType}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setEditPageType(value);
+                  persistCurrentPageDraft({ pageType: value });
+                  scheduleTextAutoSave({ pageType: value });
+                }}
+                data-testid="preview-page-type-select"
+                className="min-h-[44px] w-full rounded-xl border border-[#eadfbf] bg-[#fffdf8] px-3 text-sm text-slate-800 outline-none focus:border-banana-400 dark:border-[#36415b] dark:bg-[#101521] dark:text-[#f5f7ff]"
+              >
+                <option value="">{t('preview.pageTypePlaceholder')}</option>
+                {PPT_PAGE_TYPE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         )}
 

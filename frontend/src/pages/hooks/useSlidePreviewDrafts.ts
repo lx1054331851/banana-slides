@@ -10,6 +10,7 @@ import {
 
 export type PageDraft = {
   title: string;
+  pageType: string;
   points: string;
   description: string;
   extraFields: Record<string, string>;
@@ -21,6 +22,7 @@ type UseSlidePreviewDraftsParams = {
   selectedIndex: number;
   formatDescriptionForEditor: (descriptionText: string, project?: Project | null) => string;
   setEditOutlineTitle: (value: string) => void;
+  setEditPageType: (value: string) => void;
   setEditOutlinePoints: (value: string) => void;
   setEditDescription: (value: string) => void;
   setEditExtraFields: (value: Record<string, string>) => void;
@@ -32,6 +34,7 @@ export const useSlidePreviewDrafts = ({
   selectedIndex,
   formatDescriptionForEditor,
   setEditOutlineTitle,
+  setEditPageType,
   setEditOutlinePoints,
   setEditDescription,
   setEditExtraFields,
@@ -44,6 +47,7 @@ export const useSlidePreviewDrafts = ({
     const page = currentProject.pages[selectedIndex];
     if (!page) {
       setEditOutlineTitle('');
+      setEditPageType('');
       setEditOutlinePoints('');
       setEditDescription('');
       setEditExtraFields({});
@@ -57,6 +61,7 @@ export const useSlidePreviewDrafts = ({
     const pageDraft = pageDrafts[pageKey];
     if (pageDraft) {
       setEditOutlineTitle(pageDraft.title);
+      setEditPageType(pageDraft.pageType);
       setEditOutlinePoints(pageDraft.points);
       setEditDescription(pageDraft.description);
       setEditExtraFields(pageDraft.extraFields);
@@ -65,6 +70,7 @@ export const useSlidePreviewDrafts = ({
     }
 
     setEditOutlineTitle(page.outline_content?.title || '');
+    setEditPageType(page.outline_content?.page_type || '');
     setEditOutlinePoints(page.outline_content?.points?.join('\n') || '');
     setEditDescription(formatDescriptionForEditor(getDescriptionText(page.description_content), currentProject));
     setEditExtraFields(getDescriptionExtraFields(page.description_content));
@@ -76,6 +82,7 @@ export const useSlidePreviewDrafts = ({
     selectedIndex,
     setEditDescription,
     setEditExtraFields,
+    setEditPageType,
     setEditOutlinePoints,
     setEditOutlineTitle,
     setEditStyleGuideBindings,
@@ -90,6 +97,7 @@ export const useSlidePreviewDrafts = ({
     setPageDrafts((prev) => {
       const baseDraft = prev[pageKey] || {
         title: page?.outline_content?.title || '',
+        pageType: page?.outline_content?.page_type || '',
         points: page?.outline_content?.points?.join('\n') || '',
         description: formatDescriptionForEditor(getDescriptionText(page?.description_content), currentProject),
         extraFields: getDescriptionExtraFields(page?.description_content),
@@ -126,6 +134,7 @@ export const useSlidePreviewDrafts = ({
     const page = project?.pages?.[selectedIndex];
     if (!page) {
       setEditOutlineTitle('');
+      setEditPageType('');
       setEditOutlinePoints('');
       setEditDescription('');
       setEditExtraFields({});
@@ -134,6 +143,7 @@ export const useSlidePreviewDrafts = ({
     }
 
     setEditOutlineTitle(page.outline_content?.title || '');
+    setEditPageType(page.outline_content?.page_type || '');
     setEditOutlinePoints(page.outline_content?.points?.join('\n') || '');
     setEditDescription(formatDescriptionForEditor(getDescriptionText(page.description_content), project));
     setEditExtraFields(getDescriptionExtraFields(page.description_content));
@@ -143,6 +153,7 @@ export const useSlidePreviewDrafts = ({
     selectedIndex,
     setEditDescription,
     setEditExtraFields,
+    setEditPageType,
     setEditOutlinePoints,
     setEditOutlineTitle,
     setEditStyleGuideBindings,

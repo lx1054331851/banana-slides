@@ -72,6 +72,16 @@ def build_combined_style_requirements(
     return "\n\n".join(parts).strip()
 
 
+def resolve_effective_page_type(outline_content: Any) -> Optional[str]:
+    """Resolve effective page_type from outline content."""
+    if not isinstance(outline_content, dict):
+        return None
+    page_type = outline_content.get("page_type")
+    if isinstance(page_type, str) and page_type.strip():
+        return page_type.strip()
+    return None
+
+
 def _try_parse_style_json(style_json: Optional[str]) -> Optional[Dict[str, Any]]:
     if not isinstance(style_json, str) or not style_json.strip():
         return None

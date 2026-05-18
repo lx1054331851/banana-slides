@@ -11,6 +11,8 @@ from utils.image_resolution_policy import (
 )
 from utils.style_guidance import (
     build_combined_style_requirements,
+    build_preview_style_json_for_page_type,
+    resolve_effective_page_type,
     resolve_page_style_guide_json,
 )
 from utils.text_normalization import normalize_user_text, normalize_user_text_list
@@ -642,6 +644,7 @@ def generate_page_image(project_id, page_id):
         page_data = page.get_outline_content() or {}
         if page.part:
             page_data['part'] = page.part
+        effective_page_type = resolve_effective_page_type(page_data)
         
         # 获取描述文本（可能是 text 字段或 text_content 数组）
         desc_text = desc_content.get('text', '')
@@ -666,9 +669,13 @@ def generate_page_image(project_id, page_id):
                 has_material_images = True
         
         # 合并额外要求 + 风格JSON + 风格描述（页级风格覆盖优先于全局）
+        scoped_style_json = build_preview_style_json_for_page_type(
+            effective_style_json,
+            page_type_key=effective_page_type,
+        ) if effective_style_json else effective_style_json
         combined_requirements = build_combined_style_requirements(
             extra_requirements=project.extra_requirements,
-            style_json=effective_style_json,
+            style_json=scoped_style_json,
             style_text=project.template_style,
         )
         
