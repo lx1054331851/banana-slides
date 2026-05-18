@@ -796,7 +796,18 @@ def generate_outline_stream(project_id):
         return not_found('Project')
 
     data = request.get_json() or {}
+    generation_override = data.get('generation_override') or {}
+    if generation_override and not isinstance(generation_override, dict):
+        return bad_request("generation_override must be an object")
     language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+
+    try:
+        routing_bundle = resolve_routing_bundle(
+            project=project,
+            generation_override=generation_override,
+        )
+    except Exception as e:
+        return bad_request(str(e))
 
     # Capture app reference for use inside the generator (which runs outside request context)
     app = current_app._get_current_object()
@@ -806,7 +817,7 @@ def generate_outline_stream(project_id):
             try:
                 # Re-fetch project inside app context to attach to this session
                 proj = db.session.get(Project, project_id)
-                ai_service = get_ai_service()
+                ai_service = get_ai_service(routing_bundle=routing_bundle)
                 reference_files_content = _get_project_reference_files_content(project_id)
 
                 # Validate input based on creation type
