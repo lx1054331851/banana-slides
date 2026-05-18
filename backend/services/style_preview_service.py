@@ -16,6 +16,7 @@ from models import db, Task, Project, ReferenceFile, StylePreset
 from services.ai_service_manager import get_ai_service
 from services.file_service import FileService
 from services.prompts import get_style_recommendations_prompt
+from services.style_recommendation_service import generate_style_recommendation_json
 from utils.style_guidance import build_preview_style_json_for_page_type, extract_style_template_page_slots
 
 logger = logging.getLogger(__name__)
@@ -352,8 +353,9 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
             task.set_progress(progress)
             db.session.commit()
 
-            prompt = get_style_recommendations_prompt(
-                project_dict=project.to_dict(include_pages=False) if project else {},
+            prompt_project_dict = project.to_dict(include_pages=False) if project else {}
+            full_prompt = get_style_recommendations_prompt(
+                project_dict=prompt_project_dict,
                 reference_files_content=reference_files_content,
                 template_json_text=template_json_text,
                 style_requirements=style_requirements,
@@ -362,7 +364,7 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
 
             # Record prompt size for debugging slow calls
             progress = task.get_progress() or {}
-            progress['prompt_chars'] = len(prompt) if prompt else 0
+            progress['prompt_chars'] = len(full_prompt) if full_prompt else 0
             progress['template_json_chars'] = len(template_json_text) if template_json_text else 0
             progress['reference_files_count'] = len(reference_files_content or [])
             task.set_progress(progress)
@@ -370,7 +372,15 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
 
             # For style recommendations we prefer low latency; explicitly disable thinking per-call
             result = _call_with_transient_retry(
-                fn=lambda: ai_service.generate_json(prompt, thinking_budget=0),
+                fn=lambda: generate_style_recommendation_json(
+                    ai_service=ai_service,
+                    project_dict=prompt_project_dict,
+                    reference_files_content=reference_files_content,
+                    template_json_text=template_json_text,
+                    style_requirements=style_requirements,
+                    language=language,
+                    thinking_budget=0,
+                ),
                 description='style_recommendations.generate_json',
                 max_attempts=int(app.config.get('STYLE_PREVIEW_RECOMMENDATION_RETRIES', 3)),
             )
@@ -837,15 +847,16 @@ def generate_style_preset_task(task_id: str,
             db.session.commit()
 
             ai_service = get_ai_service(routing_bundle=routing_bundle)
-            prompt = get_style_recommendations_prompt(
-                project_dict={},
-                reference_files_content=[],
-                template_json_text=template_json_text,
-                style_requirements=style_requirements,
-                language=language,
-            )
             result = _call_with_transient_retry(
-                fn=lambda: ai_service.generate_json(prompt, thinking_budget=0),
+                fn=lambda: generate_style_recommendation_json(
+                    ai_service=ai_service,
+                    project_dict={},
+                    reference_files_content=[],
+                    template_json_text=template_json_text,
+                    style_requirements=style_requirements,
+                    language=language,
+                    thinking_budget=0,
+                ),
                 description='style_preset.generate_json',
                 max_attempts=int(app.config.get('STYLE_PREVIEW_RECOMMENDATION_RETRIES', 3)),
             )

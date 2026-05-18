@@ -164,7 +164,7 @@ def _recover_stale_style_task(task: Task) -> None:
     if not task_manager.is_task_active(task.id):
         fail_reason = 'Task is not active. The server may have restarted or the worker crashed.'
     else:
-        stale_timeout = int(current_app.config.get('TASK_STALE_TIMEOUT_SECONDS', 1800) or 0)
+        stale_timeout = int(current_app.config.get('STYLE_PRESET_TASK_STALE_TIMEOUT_SECONDS', 1800) or 0)
         if stale_timeout > 0 and task.created_at:
             running_seconds = int((datetime.utcnow() - task.created_at).total_seconds())
             if running_seconds > stale_timeout:

@@ -86,6 +86,7 @@ def test_delete_style_preset_cleans_preview_files(client, app):
     assert payload['success'] is True
     assert not preset_dir.exists()
 from unittest.mock import patch
+from datetime import datetime, timedelta
 
 
 def test_list_style_preset_tasks_returns_active_and_failed(client, app):
@@ -169,6 +170,29 @@ def test_generate_style_preset_starts_async_task(mock_resolve_routing_bundle, mo
     assert payload['data']['progress']['stage'] == 'json_generating'
     mock_resolve_routing_bundle.assert_called_once()
     mock_submit_task.assert_called_once()
+
+
+def test_list_style_preset_tasks_uses_style_specific_stale_timeout(client, app):
+    from models import db, Task
+
+    with app.app_context():
+        app.config['TASK_STALE_TIMEOUT_SECONDS'] = 1
+        app.config['STYLE_PRESET_TASK_STALE_TIMEOUT_SECONDS'] = 9999
+        task = Task(project_id='global', task_type='STYLE_PRESET_GENERATE', status='PROCESSING')
+        task.created_at = datetime.utcnow() - timedelta(seconds=5)
+        task.set_progress({'stage': 'json_generating', 'current_step': 'generating_recommendations'})
+        db.session.add(task)
+        db.session.commit()
+        task_id = task.id
+
+    with patch('controllers.style_library_controller.task_manager.is_task_active', return_value=True):
+        response = client.get('/api/style-presets/tasks')
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    tasks = payload['data']['tasks']
+    matched = next(item for item in tasks if item['id'] == task_id)
+    assert matched['status'] == 'PROCESSING'
 
 
 @patch('controllers.style_library_controller.task_manager.submit_task')
