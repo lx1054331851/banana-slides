@@ -13,6 +13,7 @@ import { useImagePaste, buildMaterialsMarkdown } from '@/hooks/useImagePaste';
 import { useT } from '@/hooks/useT';
 import mammoth from 'mammoth/mammoth.browser';
 import { HomeAspectRatioPicker } from './components/HomeAspectRatioPicker';
+import { HomeScenarioPicker } from './components/HomeScenarioPicker';
 
 type TextCreationType = 'idea' | 'outline' | 'description';
 type CreationType = TextCreationType | 'ppt_renovation';
@@ -332,6 +333,13 @@ export const Home: React.FC = () => {
 
   const activeTab: CreationType = mainTab === 'ppt_renovation' ? 'ppt_renovation' : activeTextMode;
   const content = textDrafts[activeTextMode];
+  const scenarioOptions = useMemo(
+    () => [
+      { value: 'ppt' as ProjectScenario, label: t('home.scenarios.ppt') },
+      { value: 'data_report' as ProjectScenario, label: t('home.scenarios.data_report') },
+    ],
+    [t]
+  );
 
   const setTextDraft = useCallback((mode: TextCreationType, value: React.SetStateAction<string>) => {
     setTextDrafts((prev) => {
@@ -1346,14 +1354,12 @@ export const Home: React.FC = () => {
                       <span className="text-xs text-gray-500 dark:text-foreground-tertiary whitespace-nowrap">
                         {t('home.scenarios.label')}
                       </span>
-                      <select
+                      <HomeScenarioPicker
                         value={projectScenario}
-                        onChange={(e) => setProjectScenario(e.target.value as ProjectScenario)}
-                        className="bg-transparent text-xs md:text-sm text-gray-700 dark:text-foreground-secondary outline-none"
-                      >
-                        <option value="ppt">{t('home.scenarios.ppt')}</option>
-                        <option value="data_report">{t('home.scenarios.data_report')}</option>
-                      </select>
+                        label={t('home.scenarios.label')}
+                        options={scenarioOptions}
+                        onChange={setProjectScenario}
+                      />
                     </div>
                     <button
                       type="button"

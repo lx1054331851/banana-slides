@@ -176,12 +176,9 @@ describe('Home', () => {
   it('allows changing project scenario from the toolbar select', () => {
     render(<Home />);
 
-    const scenarioSelect = screen.getByDisplayValue('PPT') as HTMLSelectElement;
-    expect(scenarioSelect.value).toBe('ppt');
+    fireEvent.click(screen.getByRole('button', { name: 'PPT' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: '数据报告' }));
 
-    fireEvent.change(scenarioSelect, { target: { value: 'data_report' } });
-
-    expect(scenarioSelect.value).toBe('data_report');
-    expect(screen.getByDisplayValue('数据报告')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '数据报告' })).toBeInTheDocument();
   });
 });
