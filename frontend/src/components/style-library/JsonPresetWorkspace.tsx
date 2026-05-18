@@ -59,7 +59,14 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
       return Boolean(previewKey && previewImages[previewKey]);
     }
 
-    return PREVIEW_ORDER.every(([key]) => Boolean(previewImages[key]));
+    const failedPreviewKeys = Object.keys(task.progress?.preview_errors || {})
+      .filter((key): key is PreviewKey => PREVIEW_ORDER.some(([previewKey]) => previewKey === key));
+
+    if (failedPreviewKeys.length > 0) {
+      return failedPreviewKeys.every((key) => Boolean(previewImages[key]));
+    }
+
+    return false;
   }, [presets]);
 
   const visibleTasks = useMemo(() => {

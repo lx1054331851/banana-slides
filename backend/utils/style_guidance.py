@@ -1,6 +1,7 @@
 """Helpers for resolving page-level style guide overrides."""
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, Optional
 
 PAGE_STYLE_GUIDE_DEFAULT_BINDING = "__page_default__"
@@ -68,3 +69,65 @@ def build_combined_style_requirements(
     if style_text and style_text.strip():
         parts.append(f"附加风格要求：\n{style_text.strip()}")
     return "\n\n".join(parts).strip()
+
+
+def _try_parse_style_json(style_json: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not isinstance(style_json, str) or not style_json.strip():
+        return None
+    try:
+        parsed = json.loads(style_json)
+    except Exception:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def build_preview_style_json_for_page_type(
+    style_json: Optional[str],
+    *,
+    page_type_key: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Reduce a full style JSON to only:
+    1) global design_system_spec fields
+    2) the matching slide_templates node for the requested page type
+
+    If parsing fails or the expected structure is missing, fall back to the
+    original style_json text so current behavior remains compatible.
+    """
+    parsed = _try_parse_style_json(style_json)
+    if not parsed:
+        return style_json
+
+    design_system = parsed.get("design_system_spec")
+    if not isinstance(design_system, dict):
+        return style_json
+
+    slide_templates = design_system.get("slide_templates")
+    if not isinstance(slide_templates, dict):
+        return style_json
+
+    requested_key = (page_type_key or "").strip()
+    matched_template_key = None
+    matched_template_value = None
+
+    if requested_key:
+        for template_key, template_value in slide_templates.items():
+            if not isinstance(template_value, dict):
+                continue
+            page_type = str(template_value.get("page_type") or "").strip()
+            if page_type == requested_key or template_key == requested_key:
+                matched_template_key = template_key
+                matched_template_value = template_value
+                break
+
+    if matched_template_key is None or matched_template_value is None:
+        return style_json
+
+    reduced_design_system: Dict[str, Any] = {}
+    for key, value in design_system.items():
+        if key == "slide_templates":
+            reduced_design_system[key] = {matched_template_key: matched_template_value}
+        else:
+            reduced_design_system[key] = value
+
+    return json.dumps({"design_system_spec": reduced_design_system}, ensure_ascii=False)

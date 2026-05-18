@@ -33,9 +33,9 @@ const {
           style_json: '{"preset":1}',
           preview_images: {
             cover_url: '/files/style-presets/s1/cover.webp',
-            toc_url: '/files/style-presets/s1/toc.webp',
-            detail_url: '/files/style-presets/s1/detail.webp',
-            ending_url: '/files/style-presets/s1/ending.webp',
+            catalog_url: '/files/style-presets/s1/catalog.webp',
+            detail_text_split_url: '/files/style-presets/s1/detail.webp',
+            closing_url: '/files/style-presets/s1/ending.webp',
           },
         },
       ],
@@ -325,9 +325,9 @@ describe('StyleLibrary page', () => {
 
     const row = await screen.findByTestId('preset-row-s1');
     expect(within(row).getByTestId('preset-s1-preview-cover_url')).toBeInTheDocument();
-    expect(within(row).getByTestId('preset-s1-preview-toc_url')).toBeInTheDocument();
-    expect(within(row).getByTestId('preset-s1-preview-detail_url')).toBeInTheDocument();
-    expect(within(row).getByTestId('preset-s1-preview-ending_url')).toBeInTheDocument();
+    expect(within(row).getByTestId('preset-s1-preview-catalog_url')).toBeInTheDocument();
+    expect(within(row).getByTestId('preset-s1-preview-detail_text_split_url')).toBeInTheDocument();
+    expect(within(row).getByTestId('preset-s1-preview-closing_url')).toBeInTheDocument();
   });
 
   it('formats preset JSON viewer into multi-line pretty JSON', async () => {
@@ -357,9 +357,9 @@ describe('StyleLibrary page', () => {
               template_json: '{"template":1}',
               preview_images: {
                 cover_url: '',
-                toc_url: '',
-                detail_url: '',
-                ending_url: '',
+                catalog_url: '',
+                detail_text_split_url: '',
+                closing_url: '',
               },
             },
           },
@@ -377,10 +377,64 @@ describe('StyleLibrary page', () => {
     });
   });
 
+  it('hides failed preset generation task after missing preview slots are filled', async () => {
+    mockListStylePresets.mockResolvedValueOnce(({
+      data: {
+        presets: [
+          {
+            id: 's1',
+            name: 'Preset 1',
+            style_json: '{"preset":1}',
+            preview_images: {
+              cover_url: '/files/style-presets/s1/cover.webp',
+              catalog_url: '/files/style-presets/s1/catalog.webp',
+              section_header_url: '',
+              agenda_timeline_url: '',
+              detail_text_split_url: '/files/style-presets/s1/detail.webp',
+              bullet_keypoints_url: '',
+              comparison_url: '',
+              process_flow_url: '',
+              framework_matrix_url: '',
+              detail_chart_url: '',
+              case_showcase_url: '',
+              closing_url: '/files/style-presets/s1/ending.webp',
+            },
+          },
+        ],
+      },
+    }) as any);
+    mockListStylePresetTasks.mockResolvedValueOnce(({
+      data: {
+        tasks: [
+          {
+            task_id: 'failed-task-2',
+            task_type: 'STYLE_PRESET_GENERATE',
+            status: 'FAILED',
+            error_message: '1 preview image(s) failed to generate',
+            progress: {
+              stage: 'failed',
+              preset_id: 's1',
+              preset_name: 'Preset 1',
+              preview_errors: {
+                catalog_url: 'Connection error.',
+              },
+            },
+          },
+        ],
+      },
+    }) as any);
+
+    render(<StyleLibrary />);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('style-preset-task-failed-task-2')).not.toBeInTheDocument();
+    });
+  });
+
   it('opens lightbox with correct initial index when preview clicked', async () => {
     render(<StyleLibrary />);
 
-    const detailPreview = await screen.findByTestId('preset-s1-preview-detail_url');
+    const detailPreview = await screen.findByTestId('preset-s1-preview-detail_text_split_url');
     fireEvent.click(detailPreview);
 
     await waitFor(() => {

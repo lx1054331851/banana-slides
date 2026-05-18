@@ -16,6 +16,7 @@ from models import db, Task, Project, ReferenceFile, StylePreset
 from services.ai_service_manager import get_ai_service
 from services.file_service import FileService
 from services.prompts import get_style_recommendations_prompt
+from utils.style_guidance import build_preview_style_json_for_page_type
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,16 @@ def _normalize_sample_pages(sample_pages: Any) -> Dict[str, str]:
 
 def _build_preview_outline() -> list[dict]:
     return [{'title': slot['title'], 'points': []} for slot in PREVIEW_SLOT_DEFINITIONS]
+
+
+def _build_slot_scoped_extra_requirements(
+    style_json_text: str,
+    *,
+    sample_key: str,
+    style_requirements: str = "",
+) -> str:
+    scoped_style_json = build_preview_style_json_for_page_type(style_json_text, page_type_key=sample_key)
+    return _build_style_extra_requirements(scoped_style_json or style_json_text, style_requirements)
 
 
 def _get_project_reference_files_content(project_id: str | None) -> list[dict[str, str]]:
