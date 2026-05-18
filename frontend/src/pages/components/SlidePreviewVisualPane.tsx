@@ -104,15 +104,19 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
   const previewCanvasStyle = useMemo(() => {
     if (isFullscreen) return undefined;
 
+    const resolvedAspectRatio = selectedPageHasImage && imageAspectRatio
+      ? `${imageAspectRatio}`
+      : aspectRatioStyle;
+
     return {
-      aspectRatio: aspectRatioStyle,
+      aspectRatio: resolvedAspectRatio,
       width: fitByWidth ? '100%' : 'auto',
       height: fitByWidth ? 'auto' : '100%',
       maxWidth: '100%',
       maxHeight: '100%',
       flexShrink: 0,
     } satisfies React.CSSProperties;
-  }, [aspectRatioStyle, fitByWidth, isFullscreen]);
+  }, [aspectRatioStyle, fitByWidth, imageAspectRatio, isFullscreen, selectedPageHasImage]);
 
   return (
     <section
