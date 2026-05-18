@@ -114,6 +114,7 @@
     "slide_templates": {
       "cover_page": {
         "page_type": "cover",
+        "page_type_zh": "封面页",
         "layout": "Hero Title + Subtitle + Presenter Info",
         "layout_goal": "第一眼建立主题、气质与专业度，信息极简但视觉记忆点鲜明。",
         "background": {
@@ -138,6 +139,7 @@
       },
       "toc_page": {
         "page_type": "catalog",
+        "page_type_zh": "目录页",
         "layout": "Structured Agenda List",
         "layout_goal": "帮助观众快速建立整份PPT的阅读地图。",
         "elements": {
@@ -147,6 +149,7 @@
       },
       "section_header_page": {
         "page_type": "section_header",
+        "page_type_zh": "章节过渡页",
         "layout": "Minimalist Transition",
         "layout_goal": "制造章节切换节奏，让观众感知叙事推进。",
         "background": {
@@ -159,6 +162,7 @@
       },
       "agenda_timeline_page": {
         "page_type": "agenda_timeline",
+        "page_type_zh": "议程时间线页",
         "layout": "Horizontal or Vertical Timeline",
         "layout_goal": "表达演讲议程、项目阶段、时间节点或推进计划。",
         "vertical_rhythm": {
@@ -173,6 +177,7 @@
       },
       "content_page": {
         "page_type": "detail_text_split",
+        "page_type_zh": "标准图文页",
         "layout": "Header + Split Content",
         "layout_goal": "适合单观点拆解、概念说明、论据展开。",
         "vertical_rhythm": {
@@ -186,6 +191,7 @@
       },
       "bullet_keypoints_page": {
         "page_type": "bullet_keypoints",
+        "page_type_zh": "要点列表页",
         "layout": "Key Points Stack",
         "layout_goal": "适合3-6条核心结论、原则、发现或建议的直接表达。",
         "elements": {
@@ -195,6 +201,7 @@
       },
       "comparison_page": {
         "page_type": "comparison",
+        "page_type_zh": "对比页",
         "layout": "Two-Column or Before-After Comparison",
         "layout_goal": "适合方案对比、竞品对比、前后变化、优劣分析。",
         "elements": {
@@ -204,6 +211,7 @@
       },
       "process_flow_page": {
         "page_type": "process_flow",
+        "page_type_zh": "流程页",
         "layout": "Step Flow or Closed Loop",
         "layout_goal": "表达流程、方法论、执行路径、业务闭环。",
         "elements": {
@@ -213,6 +221,7 @@
       },
       "framework_matrix_page": {
         "page_type": "framework_matrix",
+        "page_type_zh": "框架矩阵页",
         "layout": "Matrix / Pyramid / Layered Framework",
         "layout_goal": "适合2x2矩阵、能力模型、金字塔、分层结构。",
         "elements": {
@@ -222,6 +231,7 @@
       },
       "data_page": {
         "page_type": "detail_chart",
+        "page_type_zh": "图表页",
         "layout": "Chart Focus with Insight Box",
         "layout_goal": "用图表承载主证据，结论区解释“So What”。",
         "vertical_rhythm": {
@@ -239,6 +249,7 @@
       },
       "case_showcase_page": {
         "page_type": "case_showcase",
+        "page_type_zh": "案例展示页",
         "layout": "Case Cards or Gallery",
         "layout_goal": "适合展示案例、产品、客户、场景或成果集锦。",
         "elements": {
@@ -248,6 +259,7 @@
       },
       "closing_page": {
         "page_type": "closing",
+        "page_type_zh": "结尾页",
         "layout": "Summary / Q&A / Call To Action",
         "layout_goal": "完成收束、强化记忆点，并引导下一步动作。",
         "elements": {
