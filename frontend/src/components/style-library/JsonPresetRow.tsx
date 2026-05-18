@@ -38,7 +38,7 @@ export const JsonPresetRow: React.FC<JsonPresetRowProps> = ({
           <div className="text-sm font-semibold text-gray-900 dark:text-white truncate" title={getPresetDisplayName(preset)}>
             {getPresetDisplayName(preset)}
           </div>
-          <div className="text-xs text-gray-500 dark:text-foreground-tertiary mt-1">可直接应用的 style_json 与 4 张预览图</div>
+          <div className="text-xs text-gray-500 dark:text-foreground-tertiary mt-1">可直接应用的 style_json 与多张页型预览图</div>
         </button>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="ghost" size="sm" icon={<Eye size={14} />} onClick={() => onPreview(preset)}>
@@ -53,7 +53,7 @@ export const JsonPresetRow: React.FC<JsonPresetRowProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
         {PREVIEW_ORDER.map(([key, label]) => {
           const src = preview[key] ? getImageUrl(preview[key]) : '';
           const isGenerating = generatingPreviewKey === key;

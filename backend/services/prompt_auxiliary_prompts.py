@@ -825,9 +825,17 @@ description_text:
       "style_json": {{ /* 必须严格遵循模板骨架结构（同 key / 同层级），填满占位符/空值 */ }},
       "sample_pages": {{
         "cover": "封面页页面描述（含标题/副标题/演讲者信息等文字要求）",
-        "toc": "目录页页面描述（含目录结构文字要求）",
-        "detail": "详情页页面描述（含若干要点/图表/布局说明等文字要求）",
-        "ending": "结尾页页面描述（致谢/Q&A/联系方式等文字要求）"
+        "catalog": "目录页页面描述（含目录结构文字要求）",
+        "section_header": "章节过渡页页面描述",
+        "agenda_timeline": "议程时间线页页面描述",
+        "detail_text_split": "标准图文页页面描述",
+        "bullet_keypoints": "要点列表页页面描述",
+        "comparison": "对比页页面描述",
+        "process_flow": "流程页页面描述",
+        "framework_matrix": "框架矩阵页页面描述",
+        "detail_chart": "图表页页面描述",
+        "case_showcase": "案例展示页页面描述",
+        "closing": "结尾页页面描述（致谢/Q&A/联系方式等文字要求）"
       }}
     }}
   ]
@@ -839,7 +847,7 @@ description_text:
 - 模板骨架中的“示例值/演示值”（如“示例”“example”“Tech_Performance_Dark”等）仅用于说明字段含义，禁止机械照抄；必须结合当前内容与风格要求重新生成字段值。
 - 禁止 3 组推荐出现同质化配色：在未被用户明确要求“统一暗色”时，至少 1 组为浅色或高亮背景，且至少 2 组在主色相与明度上显著不同。
 - 若 style_requirements 为空或含糊，不要默认落入“黑金/暗色科技发布会”风格，应优先生成“中性商务亮色 + 信息可读性优先”的方案作为其中一组。
-- sample_pages 必须包含 cover/toc/detail/ending 四个键，值为中文页面描述文本，且要能直接用于生成 PPT 页面。
+- sample_pages 必须包含 12 个键：cover/catalog/section_header/agenda_timeline/detail_text_split/bullet_keypoints/comparison/process_flow/framework_matrix/detail_chart/case_showcase/closing，值为中文页面描述文本，且要能直接用于生成对应类型的 PPT 页面。
 - 只输出 JSON。
 {get_language_instruction(language)}
 """
@@ -898,9 +906,17 @@ def get_style_recommendations_prompt_minimal(project_dict: Dict,
       "style_json": {{}},
       "sample_pages": {{
         "cover": "封面页描述",
-        "toc": "目录页描述",
-        "detail": "详情页描述",
-        "ending": "结尾页描述"
+        "catalog": "目录页描述",
+        "section_header": "章节过渡页描述",
+        "agenda_timeline": "议程时间线页描述",
+        "detail_text_split": "标准图文页描述",
+        "bullet_keypoints": "要点列表页描述",
+        "comparison": "对比页描述",
+        "process_flow": "流程页描述",
+        "framework_matrix": "框架矩阵页描述",
+        "detail_chart": "图表页描述",
+        "case_showcase": "案例展示页描述",
+        "closing": "结尾页描述"
       }}
     }}
   ]
@@ -910,7 +926,7 @@ def get_style_recommendations_prompt_minimal(project_dict: Dict,
 - recommendations 必须刚好 3 个。
 - style_json 必须遵循模板骨架字段。
 - 三组风格应有明显差异，避免同质化暗色科技风。
-- sample_pages 必须包含 cover/toc/detail/ending。
+- sample_pages 必须包含 12 个键：cover/catalog/section_header/agenda_timeline/detail_text_split/bullet_keypoints/comparison/process_flow/framework_matrix/detail_chart/case_showcase/closing。
 - 只输出 JSON，不要 markdown。
 {get_language_instruction(language)}
 """

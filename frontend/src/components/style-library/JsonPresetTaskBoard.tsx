@@ -10,6 +10,21 @@ interface JsonPresetTaskBoardProps {
   onDismissTask: (taskId: string) => void;
 }
 
+const previewKeyLabelMap: Record<string, string> = {
+  cover_url: '首页',
+  catalog_url: '目录',
+  section_header_url: '章节过渡',
+  agenda_timeline_url: '议程时间线',
+  detail_text_split_url: '标准图文',
+  bullet_keypoints_url: '要点列表',
+  comparison_url: '对比',
+  process_flow_url: '流程',
+  framework_matrix_url: '框架矩阵',
+  detail_chart_url: '图表',
+  case_showcase_url: '案例展示',
+  closing_url: '结尾',
+};
+
 function getTaskSummary(task: StylePresetTaskRecord): string {
   const stage = getTaskStage(task);
   const progress = (task.progress || {}) as NonNullable<StylePresetTaskRecord['progress']>;
@@ -18,10 +33,10 @@ function getTaskSummary(task: StylePresetTaskRecord): string {
   const failed = typeof progress.failed === 'number' ? progress.failed : 0;
 
   if (stage === 'json_generating') return '阶段 1/2：正在填充 JSON';
-  if (stage === 'preview_generating') return `阶段 2/2：正在生成预览图 ${Math.max(0, completed - 1)}/4${failed ? `，失败 ${failed}` : ''}`;
+  if (stage === 'preview_generating') return `阶段 2/2：正在生成预览图 ${Math.max(0, completed - 1)}/${Math.max(0, total - 1)}${failed ? `，失败 ${failed}` : ''}`;
   if (stage === 'single_preview_generating') {
     const previewKey = getTaskPreviewKey(task);
-    const label = previewKey === 'cover_url' ? '首页' : previewKey === 'toc_url' ? '目录' : previewKey === 'detail_url' ? '详情' : '结尾';
+    const label = previewKey ? (previewKeyLabelMap[previewKey] || previewKey) : '预览图';
     return `正在补生成 ${label} 预览图 ${completed}/${Math.max(1, total)}`;
   }
   if (task.status === 'FAILED') return task.error_message || '生成失败';

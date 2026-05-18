@@ -21,7 +21,20 @@ from utils import success_response, error_response, not_found, bad_request, allo
 logger = logging.getLogger(__name__)
 
 style_library_bp = Blueprint('style_library', __name__, url_prefix='/api')
-_PREVIEW_IMAGE_KEYS = ('cover_url', 'toc_url', 'detail_url', 'ending_url')
+_PREVIEW_IMAGE_KEYS = (
+    'cover_url',
+    'catalog_url',
+    'section_header_url',
+    'agenda_timeline_url',
+    'detail_text_split_url',
+    'bullet_keypoints_url',
+    'comparison_url',
+    'process_flow_url',
+    'framework_matrix_url',
+    'detail_chart_url',
+    'case_showcase_url',
+    'closing_url',
+)
 _STYLE_PRESET_TASK_TYPES = ('STYLE_PRESET_GENERATE', 'STYLE_PRESET_IMAGE_REGENERATE')
 _RUNNING_TASK_STATUSES = ('PENDING', 'PROCESSING', 'RUNNING')
 
@@ -119,7 +132,7 @@ def delete_style_template(template_id: str):
 def _validate_preview_key(preview_key: str) -> str:
     normalized = secure_filename(str(preview_key or '').strip().lower())
     if normalized not in _PREVIEW_IMAGE_KEYS:
-        raise ValueError('preview_key must be one of cover_url/toc_url/detail_url/ending_url')
+        raise ValueError(f"preview_key must be one of {', '.join(_PREVIEW_IMAGE_KEYS)}")
     return normalized
 
 

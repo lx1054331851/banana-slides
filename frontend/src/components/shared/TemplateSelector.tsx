@@ -175,7 +175,15 @@ const buildPresetSelection = (template: PresetTemplate): TemplateSelection => ({
 
 const getStylePresetCover = (preset: StylePreset) => {
   const preview: Partial<StylePresetPreviewImages> = preset.preview_images || {};
-  return preview.cover_url || preview.toc_url || preview.detail_url || preview.ending_url || '';
+  return preview.cover_url
+    || preview.catalog_url
+    || preview.detail_text_split_url
+    || preview.detail_chart_url
+    || preview.comparison_url
+    || preview.process_flow_url
+    || preview.framework_matrix_url
+    || preview.closing_url
+    || '';
 };
 
 const buildStyleSelection = (preset: StylePreset): TemplateSelection => ({
@@ -187,9 +195,17 @@ const buildStyleSelection = (preset: StylePreset): TemplateSelection => ({
   styleJson: preset.style_json,
   previewImages: {
     cover_url: preset.preview_images?.cover_url || '',
-    toc_url: preset.preview_images?.toc_url || '',
-    detail_url: preset.preview_images?.detail_url || '',
-    ending_url: preset.preview_images?.ending_url || '',
+    catalog_url: preset.preview_images?.catalog_url || '',
+    section_header_url: preset.preview_images?.section_header_url || '',
+    agenda_timeline_url: preset.preview_images?.agenda_timeline_url || '',
+    detail_text_split_url: preset.preview_images?.detail_text_split_url || '',
+    bullet_keypoints_url: preset.preview_images?.bullet_keypoints_url || '',
+    comparison_url: preset.preview_images?.comparison_url || '',
+    process_flow_url: preset.preview_images?.process_flow_url || '',
+    framework_matrix_url: preset.preview_images?.framework_matrix_url || '',
+    detail_chart_url: preset.preview_images?.detail_chart_url || '',
+    case_showcase_url: preset.preview_images?.case_showcase_url || '',
+    closing_url: preset.preview_images?.closing_url || '',
   },
 });
 
@@ -211,9 +227,9 @@ const isSameSelection = (
 
 const previewSlotMeta: Array<{ key: keyof StylePresetPreviewImages; labelKey: keyof typeof templateI18n.zh.template.previewSlots }> = [
   { key: 'cover_url', labelKey: 'cover' },
-  { key: 'toc_url', labelKey: 'toc' },
-  { key: 'detail_url', labelKey: 'detail' },
-  { key: 'ending_url', labelKey: 'ending' },
+  { key: 'catalog_url', labelKey: 'toc' },
+  { key: 'detail_text_split_url', labelKey: 'detail' },
+  { key: 'closing_url', labelKey: 'ending' },
 ];
 
 const TemplateCard: React.FC<{

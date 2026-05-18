@@ -25,7 +25,7 @@ export interface StylePresetTaskRecord extends Task {
     template_json?: string;
     preset_name_input?: string;
     style_json?: string;
-    sample_pages?: Record<'cover' | 'toc' | 'detail' | 'ending', string>;
+    sample_pages?: Record<string, string>;
   };
 }
 
@@ -36,9 +36,17 @@ export interface JsonPresetWorkspaceProps {
 
 export const PREVIEW_ORDER: Array<[PreviewKey, string]> = [
   ['cover_url', '首页'],
-  ['toc_url', '目录'],
-  ['detail_url', '详情'],
-  ['ending_url', '结尾'],
+  ['catalog_url', '目录'],
+  ['section_header_url', '章节过渡'],
+  ['agenda_timeline_url', '议程时间线'],
+  ['detail_text_split_url', '标准图文'],
+  ['bullet_keypoints_url', '要点列表'],
+  ['comparison_url', '对比'],
+  ['process_flow_url', '流程'],
+  ['framework_matrix_url', '框架矩阵'],
+  ['detail_chart_url', '图表'],
+  ['case_showcase_url', '案例展示'],
+  ['closing_url', '结尾'],
 ];
 
 export const RUNNING_TASK_STATUSES = new Set(['PENDING', 'PROCESSING', 'RUNNING']);
@@ -65,5 +73,5 @@ export function getTaskPresetId(task: StylePresetTaskRecord): string {
 
 export function getTaskPreviewKey(task: StylePresetTaskRecord): PreviewKey | null {
   const key = task.progress?.preview_key;
-  return key === 'cover_url' || key === 'toc_url' || key === 'detail_url' || key === 'ending_url' ? key : null;
+  return PREVIEW_ORDER.some(([previewKey]) => previewKey === key) ? key as PreviewKey : null;
 }

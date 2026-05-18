@@ -19,6 +19,74 @@ from services.prompts import get_style_recommendations_prompt
 
 logger = logging.getLogger(__name__)
 
+PREVIEW_SLOT_DEFINITIONS = [
+    {'sample_key': 'cover', 'preview_key': 'cover_url', 'page_index': 1, 'title': '封面'},
+    {'sample_key': 'catalog', 'preview_key': 'catalog_url', 'page_index': 2, 'title': '目录'},
+    {'sample_key': 'section_header', 'preview_key': 'section_header_url', 'page_index': 3, 'title': '章节过渡'},
+    {'sample_key': 'agenda_timeline', 'preview_key': 'agenda_timeline_url', 'page_index': 4, 'title': '议程时间线'},
+    {'sample_key': 'detail_text_split', 'preview_key': 'detail_text_split_url', 'page_index': 5, 'title': '标准图文'},
+    {'sample_key': 'bullet_keypoints', 'preview_key': 'bullet_keypoints_url', 'page_index': 6, 'title': '要点列表'},
+    {'sample_key': 'comparison', 'preview_key': 'comparison_url', 'page_index': 7, 'title': '对比'},
+    {'sample_key': 'process_flow', 'preview_key': 'process_flow_url', 'page_index': 8, 'title': '流程'},
+    {'sample_key': 'framework_matrix', 'preview_key': 'framework_matrix_url', 'page_index': 9, 'title': '框架矩阵'},
+    {'sample_key': 'detail_chart', 'preview_key': 'detail_chart_url', 'page_index': 10, 'title': '图表'},
+    {'sample_key': 'case_showcase', 'preview_key': 'case_showcase_url', 'page_index': 11, 'title': '案例展示'},
+    {'sample_key': 'closing', 'preview_key': 'closing_url', 'page_index': 12, 'title': '结尾'},
+]
+
+DEFAULT_PREVIEW_SAMPLE_PAGES = {
+    'cover': '封面页页面描述（含标题/副标题/演讲者信息等文字要求）',
+    'catalog': '目录页页面描述（含目录结构文字要求）',
+    'section_header': '章节过渡页页面描述（含章节编号、章节标题和过渡语气）',
+    'agenda_timeline': '议程时间线页页面描述（含阶段、时间节点和推进顺序）',
+    'detail_text_split': '标准图文页页面描述（含主结论、若干要点和配图/图示布局说明）',
+    'bullet_keypoints': '要点列表页页面描述（含一句总判断和3-6条核心要点）',
+    'comparison': '对比页页面描述（含左右对比维度、差异点和结论）',
+    'process_flow': '流程页页面描述（含步骤、连接关系和闭环逻辑）',
+    'framework_matrix': '框架矩阵页页面描述（含象限/层级/能力模型说明）',
+    'detail_chart': '图表页页面描述（含图表类型、关键数据和结论说明）',
+    'case_showcase': '案例展示页页面描述（含2-4个案例卡片、亮点和成果）',
+    'closing': '结尾页页面描述（致谢/Q&A/行动号召/联系方式等文字要求）',
+}
+
+CORE_PREVIEW_SAMPLE_KEYS = (
+    'cover',
+    'catalog',
+    'detail_text_split',
+    'comparison',
+    'process_flow',
+    'framework_matrix',
+    'detail_chart',
+    'closing',
+)
+
+
+def _empty_preview_images() -> Dict[str, str]:
+    return {slot['preview_key']: '' for slot in PREVIEW_SLOT_DEFINITIONS}
+
+
+def _normalize_sample_pages(sample_pages: Any) -> Dict[str, str]:
+    normalized = {key: '' for key in DEFAULT_PREVIEW_SAMPLE_PAGES.keys()}
+    if not isinstance(sample_pages, dict):
+        return normalized
+
+    alias_map = {
+        'toc': 'catalog',
+        'detail': 'detail_text_split',
+        'ending': 'closing',
+    }
+    for raw_key, value in sample_pages.items():
+        if not isinstance(raw_key, str):
+            continue
+        mapped_key = alias_map.get(raw_key, raw_key)
+        if mapped_key in normalized:
+            normalized[mapped_key] = str(value or '')
+    return normalized
+
+
+def _build_preview_outline() -> list[dict]:
+    return [{'title': slot['title'], 'points': []} for slot in PREVIEW_SLOT_DEFINITIONS]
+
 
 def _get_project_reference_files_content(project_id: str | None) -> list[dict[str, str]]:
     reference_files = ReferenceFile.query.filter_by(
@@ -286,31 +354,20 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                 style_json_obj = rec.get('style_json') if isinstance(rec, dict) else None
                 sample_pages = rec.get('sample_pages') if isinstance(rec, dict) else None
 
-                if not isinstance(sample_pages, dict):
-                    sample_pages = {}
+                sample_pages = _normalize_sample_pages(sample_pages)
 
                 normalized_recs.append({
                     'id': rec_id,
                     'name': name or f"Style {len(normalized_recs) + 1}",
                     'rationale': rationale,
                     'style_json': style_json_obj,
-                    'sample_pages': {
-                        'cover': sample_pages.get('cover', ''),
-                        'toc': sample_pages.get('toc', ''),
-                        'detail': sample_pages.get('detail', ''),
-                        'ending': sample_pages.get('ending', ''),
-                    },
-                    'preview_images': {
-                        'cover_url': '',
-                        'toc_url': '',
-                        'detail_url': '',
-                        'ending_url': '',
-                    }
+                    'sample_pages': sample_pages,
+                    'preview_images': _empty_preview_images(),
                 })
 
             # Ensure progress initialized
             progress = task.get_progress() or {}
-            total = 12 if generate_previews else len(normalized_recs)
+            total = len(normalized_recs) * len(CORE_PREVIEW_SAMPLE_KEYS) if generate_previews else len(normalized_recs)
             completed_init = 0 if generate_previews else len(normalized_recs)
             progress.update({
                 'mode': 'recommendations_and_previews' if generate_previews else 'recommendations_only',
@@ -339,14 +396,8 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
             aspect_ratio = (project.image_aspect_ratio if project else None) or app.config.get('DEFAULT_ASPECT_RATIO', '16:9')
             resolution = app.config.get('DEFAULT_RESOLUTION', '2K')
 
-            outline = [
-                {'title': '封面', 'points': []},
-                {'title': '目录', 'points': []},
-                {'title': '详情', 'points': []},
-                {'title': '结尾', 'points': []},
-            ]
-
-            slide_keys = [('cover', 1), ('toc', 2), ('detail', 3), ('ending', 4)]
+            outline = _build_preview_outline()
+            core_slots = [slot for slot in PREVIEW_SLOT_DEFINITIONS if slot['sample_key'] in CORE_PREVIEW_SAMPLE_KEYS]
 
             completed = 0
             failed = 0
@@ -361,11 +412,12 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                 if rec.get('style_json') is not None:
                     style_json_text = json.dumps(rec['style_json'], ensure_ascii=False)
                 extra_req = _build_style_extra_requirements(style_json_text, style_requirements)
-                for slide_key, page_index in slide_keys:
+                for slot in core_slots:
                     jobs.append({
                         'rec_id': rec['id'],
-                        'slide_key': slide_key,
-                        'page_index': page_index,
+                        'slide_key': slot['sample_key'],
+                        'preview_key': slot['preview_key'],
+                        'page_index': slot['page_index'],
                         'sample_pages': rec.get('sample_pages') or {},
                         'extra_req': extra_req,
                     })
@@ -388,16 +440,16 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                     language=language or app.config.get('OUTPUT_LANGUAGE', 'zh'),
                     extra_retries=slide_extra_retries,
                 )
-                return job['rec_id'], slide_key, url
+                return job['rec_id'], job['preview_key'], url
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 future_map = {executor.submit(render_preview_job, job): job for job in jobs}
                 for future in as_completed(future_map):
                     job = future_map[future]
                     rec_id = str(job['rec_id'])
-                    slide_key = str(job['slide_key'])
+                    preview_key = str(job['preview_key'])
                     try:
-                        rec_id, slide_key, url = future.result()
+                        rec_id, preview_key, url = future.result()
                         completed += 1
                         db.session.expire_all()
                         task = Task.query.get(task_id)
@@ -408,7 +460,7 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                             for r in p_recs:
                                 if r.get('id') == rec_id:
                                     r.setdefault('preview_images', {})
-                                    r['preview_images'][f"{slide_key}_url"] = url
+                                    r['preview_images'][preview_key] = url
                                     break
                             p['completed'] = completed
                             p['failed'] = failed
@@ -418,13 +470,13 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                     except Exception as e:
                         if _is_transient_image_network_error(e):
                             logger.error(
-                                "Preview generation failed after retries (transient network): rec=%s slide=%s err=%s",
-                                rec_id, slide_key, str(e)
+                                "Preview generation failed after retries (transient network): rec=%s preview=%s err=%s",
+                                rec_id, preview_key, str(e)
                             )
                         else:
                             logger.error(
-                                "Preview generation failed: rec=%s slide=%s err=%s",
-                                rec_id, slide_key, str(e), exc_info=True
+                                "Preview generation failed: rec=%s preview=%s err=%s",
+                                rec_id, preview_key, str(e), exc_info=True
                             )
                         failed += 1
                         db.session.expire_all()
@@ -442,7 +494,7 @@ def generate_style_recommendations_and_previews_task(task_id: str, project_id: s
                 task.completed_at = datetime.utcnow()
                 # Ensure total is correct even if recs < 3
                 p = task.get_progress() or {}
-                p.setdefault('total', 12)
+                p.setdefault('total', len(normalized_recs) * len(CORE_PREVIEW_SAMPLE_KEYS))
                 p['completed'] = completed
                 p['failed'] = failed
                 task.set_progress(p)
@@ -468,12 +520,7 @@ def _find_sample_pages_from_latest_task(project_id: str, rec_id: str) -> Optiona
             if isinstance(r, dict) and r.get('id') == rec_id:
                 sp = r.get('sample_pages')
                 if isinstance(sp, dict):
-                    return {
-                        'cover': sp.get('cover', ''),
-                        'toc': sp.get('toc', ''),
-                        'detail': sp.get('detail', ''),
-                        'ending': sp.get('ending', ''),
-                    }
+                    return _normalize_sample_pages(sp)
     return None
 
 
@@ -484,7 +531,7 @@ def regenerate_single_style_previews_task(task_id: str, project_id: str, rec_id:
                                          language: str = None,
                                          routing_bundle=None):
     """
-    Background task: regenerate 4 preview images for a given rec_id.
+    Background task: regenerate core preview images for a given rec_id.
     """
     if app is None:
         raise ValueError("Flask app instance must be provided")
@@ -516,36 +563,30 @@ def regenerate_single_style_previews_task(task_id: str, project_id: str, rec_id:
             aspect_ratio = (project.image_aspect_ratio if project else None) or app.config.get('DEFAULT_ASPECT_RATIO', '16:9')
             resolution = app.config.get('DEFAULT_RESOLUTION', '2K')
 
-            outline = [
-                {'title': '封面', 'points': []},
-                {'title': '目录', 'points': []},
-                {'title': '详情', 'points': []},
-                {'title': '结尾', 'points': []},
-            ]
-
-            slide_keys = [('cover', 1), ('toc', 2), ('detail', 3), ('ending', 4)]
+            outline = _build_preview_outline()
+            core_slots = [slot for slot in PREVIEW_SLOT_DEFINITIONS if slot['sample_key'] in CORE_PREVIEW_SAMPLE_KEYS]
 
             completed = 0
             failed = 0
             progress = task.get_progress() or {}
-            progress.update({'total': 4, 'completed': 0, 'failed': 0, 'rec_id': rec_id})
+            progress.update({'total': len(core_slots), 'completed': 0, 'failed': 0, 'rec_id': rec_id})
             task.set_progress(progress)
             db.session.commit()
 
-            preview_urls: Dict[str, str] = {}
+            preview_urls: Dict[str, str] = _empty_preview_images()
 
             slide_extra_retries = int(app.config.get('STYLE_PREVIEW_SLIDE_RETRIES', 1))
             max_workers = int(app.config.get('STYLE_PREVIEW_WORKERS', 2))
-            max_workers = max(1, min(max_workers, len(slide_keys)))
+            max_workers = max(1, min(max_workers, len(core_slots)))
 
-            def render_slide(slide_key: str, page_index: int) -> tuple[str, str]:
-                return _render_preview_slide_with_retry(
+            def render_slide(slot: dict[str, Any]) -> tuple[str, str]:
+                _, url = _render_preview_slide_with_retry(
                     ai_service=ai_service,
                     file_service=file_service,
                     project_id=project_id,
                     rec_id=rec_id,
-                    slide_key=slide_key,
-                    page_index=page_index,
+                    slide_key=slot['sample_key'],
+                    page_index=slot['page_index'],
                     outline=outline,
                     sample_pages=sample_pages or {},
                     extra_req=extra_req,
@@ -554,28 +595,29 @@ def regenerate_single_style_previews_task(task_id: str, project_id: str, rec_id:
                     language=language or app.config.get('OUTPUT_LANGUAGE', 'zh'),
                     extra_retries=slide_extra_retries,
                 )
+                return slot['preview_key'], url
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 future_map = {
-                    executor.submit(render_slide, slide_key, page_index): slide_key
-                    for slide_key, page_index in slide_keys
+                    executor.submit(render_slide, slot): slot['preview_key']
+                    for slot in core_slots
                 }
                 for future in as_completed(future_map):
-                    slide_key = future_map[future]
+                    preview_key = future_map[future]
                     try:
-                        slide_key, url = future.result()
-                        preview_urls[f"{slide_key}_url"] = url
+                        preview_key, url = future.result()
+                        preview_urls[preview_key] = url
                         completed += 1
                     except Exception as e:
                         if _is_transient_image_network_error(e):
                             logger.error(
-                                "Regenerate preview failed after retries (transient network): rec=%s slide=%s err=%s",
-                                rec_id, slide_key, str(e)
+                                "Regenerate preview failed after retries (transient network): rec=%s preview=%s err=%s",
+                                rec_id, preview_key, str(e)
                             )
                         else:
                             logger.error(
-                                "Regenerate preview failed: rec=%s slide=%s err=%s",
-                                rec_id, slide_key, str(e), exc_info=True
+                                "Regenerate preview failed: rec=%s preview=%s err=%s",
+                                rec_id, preview_key, str(e), exc_info=True
                             )
                         failed += 1
                     task = Task.query.get(task_id)
@@ -623,12 +665,7 @@ def _normalize_single_style_recommendation(result: Any) -> dict:
         'name': (rec.get('name') or '').strip() if isinstance(rec, dict) else '',
         'rationale': (rec.get('rationale') or '').strip() if isinstance(rec, dict) else '',
         'style_json': style_json_obj,
-        'sample_pages': {
-            'cover': sample_pages.get('cover', ''),
-            'toc': sample_pages.get('toc', ''),
-            'detail': sample_pages.get('detail', ''),
-            'ending': sample_pages.get('ending', ''),
-        }
+        'sample_pages': _normalize_sample_pages(sample_pages),
     }
 
 
@@ -700,12 +737,7 @@ def _find_sample_pages_from_latest_style_preset_task(preset_id: str) -> Optional
             continue
         sample_pages = progress.get('sample_pages')
         if isinstance(sample_pages, dict):
-            return {
-                'cover': sample_pages.get('cover', ''),
-                'toc': sample_pages.get('toc', ''),
-                'detail': sample_pages.get('detail', ''),
-                'ending': sample_pages.get('ending', ''),
-            }
+            return _normalize_sample_pages(sample_pages)
     return None
 
 
@@ -734,7 +766,7 @@ def generate_style_preset_task(task_id: str,
             progress.update({
                 'stage': 'json_generating',
                 'current_step': 'generating_recommendations',
-                'total': 5,
+                'total': 1 + len(CORE_PREVIEW_SAMPLE_KEYS),
                 'completed': 0,
                 'failed': 0,
                 'template_json': template_json_text,
@@ -763,12 +795,7 @@ def generate_style_preset_task(task_id: str,
             style_json_text_final = json.dumps(normalized['style_json'], ensure_ascii=False)
 
             preset = StylePreset(name=final_name, style_json=style_json_text_final)
-            preset.preview_images_json = json.dumps({
-                'cover_url': '',
-                'toc_url': '',
-                'detail_url': '',
-                'ending_url': '',
-            }, ensure_ascii=False)
+            preset.preview_images_json = json.dumps(_empty_preview_images(), ensure_ascii=False)
             db.session.add(preset)
             db.session.commit()
 
@@ -797,27 +824,22 @@ def generate_style_preset_task(task_id: str,
             file_service = FileService(app.config['UPLOAD_FOLDER'])
             aspect_ratio = app.config.get('DEFAULT_ASPECT_RATIO', '16:9')
             resolution = app.config.get('DEFAULT_RESOLUTION', '2K')
-            outline = [
-                {'title': '封面', 'points': []},
-                {'title': '目录', 'points': []},
-                {'title': '详情', 'points': []},
-                {'title': '结尾', 'points': []},
-            ]
-            slide_keys = [('cover', 1), ('toc', 2), ('detail', 3), ('ending', 4)]
+            outline = _build_preview_outline()
+            core_slots = [slot for slot in PREVIEW_SLOT_DEFINITIONS if slot['sample_key'] in CORE_PREVIEW_SAMPLE_KEYS]
             slide_extra_retries = int(app.config.get('STYLE_PREVIEW_SLIDE_RETRIES', 1))
-            max_workers = max(1, min(int(app.config.get('STYLE_PREVIEW_WORKERS', 2)), len(slide_keys)))
+            max_workers = max(1, min(int(app.config.get('STYLE_PREVIEW_WORKERS', 2)), len(core_slots)))
             completed = 1
             failed = 0
             extra_req = _build_style_extra_requirements(style_json_text_final, style_requirements)
             preview_errors: Dict[str, str] = {}
 
-            def render_slide(slide_key: str, page_index: int) -> tuple[str, str]:
-                return _render_preset_preview_slide_with_retry(
+            def render_slide(slot: dict[str, Any]) -> tuple[str, str]:
+                _, url = _render_preset_preview_slide_with_retry(
                     ai_service=ai_service,
                     file_service=file_service,
                     preset_id=preset_id,
-                    slide_key=slide_key,
-                    page_index=page_index,
+                    slide_key=slot['sample_key'],
+                    page_index=slot['page_index'],
                     outline=outline,
                     sample_pages=sample_pages,
                     extra_req=extra_req,
@@ -826,22 +848,23 @@ def generate_style_preset_task(task_id: str,
                     language=output_language,
                     extra_retries=slide_extra_retries,
                 )
+                return slot['preview_key'], url
 
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 future_map = {
-                    executor.submit(render_slide, slide_key, page_index): slide_key
-                    for slide_key, page_index in slide_keys
+                    executor.submit(render_slide, slot): slot['preview_key']
+                    for slot in core_slots
                 }
                 for future in as_completed(future_map):
-                    slide_key = future_map[future]
+                    preview_key = future_map[future]
                     try:
-                        slide_key, url = future.result()
-                        preview_urls[f'{slide_key}_url'] = url
+                        preview_key, url = future.result()
+                        preview_urls[preview_key] = url
                         completed += 1
                     except Exception as e:
                         failed += 1
-                        preview_errors[f'{slide_key}_url'] = str(e)
-                        logger.error('Style preset preview failed: preset=%s slide=%s err=%s', preset_id, slide_key, str(e), exc_info=True)
+                        preview_errors[preview_key] = str(e)
+                        logger.error('Style preset preview failed: preset=%s preview=%s err=%s', preset_id, preview_key, str(e), exc_info=True)
                     preset_obj = StylePreset.query.get(preset_id)
                     if preset_obj:
                         preset_obj.preview_images_json = json.dumps(preview_urls, ensure_ascii=False)
@@ -936,21 +959,17 @@ def regenerate_style_preset_image_task(task_id: str,
             file_service = FileService(app.config['UPLOAD_FOLDER'])
             aspect_ratio = app.config.get('DEFAULT_ASPECT_RATIO', '16:9')
             resolution = app.config.get('DEFAULT_RESOLUTION', '2K')
-            outline = [
-                {'title': '封面', 'points': []},
-                {'title': '目录', 'points': []},
-                {'title': '详情', 'points': []},
-                {'title': '结尾', 'points': []},
-            ]
-            slide_to_page = {'cover': 1, 'toc': 2, 'detail': 3, 'ending': 4}
-            slide_key = preview_key.replace('_url', '')
+            outline = _build_preview_outline()
+            slot = next((item for item in PREVIEW_SLOT_DEFINITIONS if item['preview_key'] == preview_key), None)
+            if not slot:
+                raise ValueError(f'Unknown preview_key: {preview_key}')
             extra_req = _build_style_extra_requirements(preset.style_json, '')
-            slide_key, url = _render_preset_preview_slide_with_retry(
+            _, url = _render_preset_preview_slide_with_retry(
                 ai_service=ai_service,
                 file_service=file_service,
                 preset_id=preset_id,
-                slide_key=slide_key,
-                page_index=slide_to_page[slide_key],
+                slide_key=slot['sample_key'],
+                page_index=slot['page_index'],
                 outline=outline,
                 sample_pages=sample_pages,
                 extra_req=extra_req,
