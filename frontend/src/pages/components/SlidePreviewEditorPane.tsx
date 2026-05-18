@@ -112,21 +112,13 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
               onMouseDown={onEditorVerticalSplitResizeStart}
             />
             <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
-            <div className="relative z-20 flex h-full items-center justify-center">
-              <button
-                type="button"
-                aria-label="调整上下分区"
-                className="h-3 w-28 cursor-row-resize rounded-full bg-transparent hover:bg-banana-200/40"
-                onMouseDown={onEditorVerticalSplitResizeStart}
-              />
-              <div
-                role="separator"
-                aria-label="联动调整左右与上下分区"
-                className="absolute top-1/2 z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 cursor-move rounded-md bg-transparent hover:bg-banana-200/40"
-                style={{ left: `-${Math.ceil(PREVIEW_SPLIT_DIVIDER_PX / 2)}px` }}
-                onMouseDown={onLinkedSplitResizeStart}
-              />
-            </div>
+            <div
+              role="separator"
+              aria-label="联动调整左右与上下分区"
+              className="absolute top-1/2 z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 cursor-move rounded-md bg-transparent hover:bg-banana-200/40"
+              style={{ left: `-${Math.ceil(PREVIEW_SPLIT_DIVIDER_PX / 2)}px` }}
+              onMouseDown={onLinkedSplitResizeStart}
+            />
           </div>
         )}
         {!useRenovationPreviewForm && (
