@@ -4,6 +4,7 @@ import { Button, PageAiWorkbench } from '@/components/shared';
 import { PROJECT_SUPPORTED_IMAGE_MODELS } from '@/config/projectAiDefaults';
 import {
   PREVIEW_SPLIT_DIVIDER_PX,
+  PREVIEW_SPLIT_HIT_AREA_PX,
   PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX,
   PREVIEW_EDITOR_CANVAS_MIN_HEIGHT,
   PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT,
@@ -103,23 +104,29 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
           <div
             role="separator"
             aria-orientation="horizontal"
-            className={`group relative flex select-none items-center justify-center cursor-row-resize ${isResizingEditorVerticalSplit ? 'bg-transparent' : 'bg-transparent'}`}
-            onMouseDown={onEditorVerticalSplitResizeStart}
+            className="group relative select-none"
           >
-            <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
-            <button
-              type="button"
-              aria-label="调整上下分区"
-              className="relative z-10 h-3 w-28 cursor-row-resize rounded-full bg-transparent hover:bg-banana-200/40"
+            <div
+              className={`absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 cursor-row-resize ${isResizingEditorVerticalSplit ? 'bg-banana-300/70 dark:bg-banana-500/40' : 'bg-transparent'}`}
+              style={{ height: `${PREVIEW_SPLIT_HIT_AREA_PX}px` }}
               onMouseDown={onEditorVerticalSplitResizeStart}
             />
-            <div
-              role="separator"
-              aria-label="联动调整左右与上下分区"
-              className="absolute top-1/2 z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 cursor-move rounded-md bg-transparent hover:bg-banana-200/40"
-              style={{ left: `-${Math.ceil(PREVIEW_SPLIT_DIVIDER_PX / 2)}px` }}
-              onMouseDown={onLinkedSplitResizeStart}
-            />
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
+            <div className="relative z-20 flex h-full items-center justify-center">
+              <button
+                type="button"
+                aria-label="调整上下分区"
+                className="h-3 w-28 cursor-row-resize rounded-full bg-transparent hover:bg-banana-200/40"
+                onMouseDown={onEditorVerticalSplitResizeStart}
+              />
+              <div
+                role="separator"
+                aria-label="联动调整左右与上下分区"
+                className="absolute top-1/2 z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 cursor-move rounded-md bg-transparent hover:bg-banana-200/40"
+                style={{ left: `-${Math.ceil(PREVIEW_SPLIT_DIVIDER_PX / 2)}px` }}
+                onMouseDown={onLinkedSplitResizeStart}
+              />
+            </div>
           </div>
         )}
         {!useRenovationPreviewForm && (
