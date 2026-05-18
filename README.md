@@ -271,6 +271,36 @@ IMAGE_MODEL=gemini-3.1-flash-image-preview
 # JSON 数组：声明可用 profile（支持 source=profile:<id>）
 PROVIDER_PROFILES_JSON=[
   {
+    "id":"gs88",
+    "provider":"openai",
+    "api_base":"https://ai.gs88.shop/v1",
+    "api_key_env":"GS88_API_KEY",
+    "adapter":"openai_image_compat",
+    "capabilities":["image"],
+    "models":["gpt-image-2"],
+    "model_defaults":{"image":"gpt-image-2"}
+  },
+  {
+    "id":"147ai",
+    "provider":"openai",
+    "api_base":"https://nn.147ai.com/v1",
+    "api_key_env":"AI147_API_KEY",
+    "adapter":"openai_image_compat",
+    "capabilities":["image"],
+    "models":[
+      "gpt-image-2-low",
+      "gpt-image-2-medium",
+      "gpt-image-2-high",
+      "gemini-2.5-flash-image",
+      "gemini-2.5-flash-image-preview",
+      "gemini-3-pro-image-preview",
+      "gemini-3-pro-image-preview-stable",
+      "gemini-3.1-flash-image-preview",
+      "grok-4-image"
+    ],
+    "model_defaults":{"image":"gpt-image-2-low"}
+  },
+  {
     "id":"gemini_native_cn",
     "provider":"gemini",
     "api_base":"https://your-gemini-proxy.example.com",

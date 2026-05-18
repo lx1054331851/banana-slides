@@ -68,6 +68,7 @@ export interface ProviderProfileSummary {
   adapter?: string;
   adapter_options?: Record<string, any>;
   capabilities?: string[];
+  models?: string[];
   model_defaults?: Record<string, any>;
 }
 

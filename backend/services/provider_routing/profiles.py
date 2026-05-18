@@ -54,6 +54,7 @@ def _normalize_profile(raw: Dict[str, Any]) -> Dict[str, Any]:
         "adapter": adapter,
         "adapter_options": adapter_options,
         "capabilities": [str(c).strip().lower() for c in capabilities if str(c).strip()],
+        "models": [str(model).strip() for model in (profile.get("models") or []) if str(model).strip()],
         "model_defaults": profile.get("model_defaults") if isinstance(profile.get("model_defaults"), dict) else {},
     }
 
@@ -107,6 +108,7 @@ def list_provider_profiles_redacted() -> List[Dict[str, Any]]:
                 "adapter": item.get("adapter"),
                 "adapter_options": item.get("adapter_options") or {},
                 "capabilities": item.get("capabilities") or [],
+                "models": item.get("models") or [],
                 "model_defaults": item.get("model_defaults") or {},
             }
         )

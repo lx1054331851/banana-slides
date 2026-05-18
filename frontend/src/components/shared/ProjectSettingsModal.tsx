@@ -351,6 +351,28 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
     }));
     return [...builtins, ...profiles];
   }, [availableImageProfiles]);
+  const selectableImageModels = useMemo(() => {
+    if (!selectedImageSource.startsWith('profile:')) {
+      return PROJECT_IMAGE_MODEL_CATALOG;
+    }
+    const profileId = selectedImageSource.slice('profile:'.length);
+    const selectedProfile = availableImageProfiles.find((profile) => profile.id === profileId);
+    const profileModels = selectedProfile?.models || [];
+    if (!profileModels.length) {
+      return PROJECT_IMAGE_MODEL_CATALOG.filter((item) => item.source === 'openai');
+    }
+    const knownModelMap = new Map(PROJECT_IMAGE_MODEL_CATALOG.map((item) => [item.model, item]));
+    return profileModels.map((model) => {
+      const known = knownModelMap.get(model);
+      if (known) return known;
+      return {
+        source: 'openai',
+        model,
+        label: `Profile Model · ${model}`,
+        resolutions: ['1K', '2K', '4K'],
+      };
+    });
+  }, [availableImageProfiles, selectedImageSource]);
   const presetDescriptionFieldSet = useMemo(
     () => new Set(presetDescriptionFields.length > 0 ? presetDescriptionFields : FALLBACK_DESCRIPTION_FIELDS),
     [presetDescriptionFields]
@@ -585,7 +607,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                         onChange={(e) => {
                           const nextSource = e.target.value;
                           onGenerationDefaultImageSourceChange?.(nextSource);
-                          const sourceModels = PROJECT_IMAGE_MODEL_CATALOG.filter((item) =>
+                          const sourceModels = selectableImageModels.filter((item) =>
                             nextSource.startsWith('profile:')
                               ? item.source === 'openai'
                               : item.source === nextSource
@@ -620,7 +642,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                         }}
                         className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
                       >
-                        {PROJECT_IMAGE_MODEL_CATALOG.map((item) => (
+                        {selectableImageModels.map((item) => (
                           <option key={item.model} value={item.model}>
                             {item.label}
                           </option>
