@@ -184,6 +184,7 @@ export const OutlineEditor: React.FC = () => {
     generateOutline,
     generateOutlineStream,
     isGlobalLoading,
+    isOutlineStreaming,
   } = useProjectStore();
 
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
