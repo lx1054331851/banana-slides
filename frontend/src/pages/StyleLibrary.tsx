@@ -17,6 +17,7 @@ import {
 } from '@/api/endpoints';
 import { JsonPresetWorkspace } from '@/components/style-library/JsonPresetWorkspace';
 import { JsonTemplateCreateDrawer } from '@/components/style-library/JsonTemplateCreateDrawer';
+import type { ProjectScenario } from '@/types';
 
 type StyleTab = 'templates' | 'presets' | 'presetTemplates';
 
@@ -151,6 +152,7 @@ export const StyleLibrary: React.FC = () => {
   const [activeTab, setActiveTab] = useState<StyleTab>(resolveInitialTab);
   const [templates, setTemplates] = useState<StyleTemplate[]>([]);
   const [presetTemplates, setPresetTemplates] = useState<PresetTemplate[]>([]);
+  const [libraryScenario, setLibraryScenario] = useState<ProjectScenario>('ppt');
   const [isLoading, setIsLoading] = useState(false);
   const [workspaceRefreshKey, setWorkspaceRefreshKey] = useState(0);
 
@@ -172,6 +174,11 @@ export const StyleLibrary: React.FC = () => {
   const selectedTemplate = useMemo(
     () => templates.find((item) => item.id === selectedTemplateId) || null,
     [templates, selectedTemplateId],
+  );
+
+  const visibleTemplates = useMemo(
+    () => templates.filter((item) => (item.scenario || 'ppt') === libraryScenario),
+    [libraryScenario, templates],
   );
 
   const loadPageData = useCallback(async () => {
@@ -226,6 +233,10 @@ export const StyleLibrary: React.FC = () => {
     setTemplateJsonText('');
     setIsTemplateCreateDrawerOpen(true);
   }, []);
+
+  useEffect(() => {
+    setSelectedTemplateId((prev) => (prev && visibleTemplates.some((item) => item.id === prev) ? prev : (visibleTemplates[0]?.id || '')));
+  }, [visibleTemplates]);
 
   const handleSaveTemplate = useCallback(async () => {
     const rawJsonText = templateJsonText.trim();
@@ -363,7 +374,8 @@ export const StyleLibrary: React.FC = () => {
 
       <main className={`${PAGE_CONTAINER_CLASS} py-6 md:py-8 space-y-4`}>
         <Card className="p-2">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap justify-between">
+            <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={() => setActiveTab('presetTemplates')}
@@ -388,6 +400,27 @@ export const StyleLibrary: React.FC = () => {
             >
               {t('tabs.templates')}
             </button>
+            </div>
+            {activeTab !== 'presetTemplates' ? (
+              <div className="inline-flex items-center rounded-xl border border-gray-200 dark:border-border-primary p-1 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setLibraryScenario('ppt')}
+                  data-testid="style-library-scenario-ppt"
+                  className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${libraryScenario === 'ppt' ? 'bg-banana-500 text-black' : 'text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'}`}
+                >
+                  {t('templates.scenarioPpt')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLibraryScenario('data_report')}
+                  data-testid="style-library-scenario-data-report"
+                  className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${libraryScenario === 'data_report' ? 'bg-banana-500 text-black' : 'text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'}`}
+                >
+                  {t('templates.scenarioDataReport')}
+                </button>
+              </div>
+            ) : null}
           </div>
         </Card>
 
@@ -404,16 +437,16 @@ export const StyleLibrary: React.FC = () => {
             </div>
 
             <div className="text-xs text-gray-500 dark:text-foreground-tertiary">
-              {templates.length > 0 ? t('templates.count', { count: templates.length }) : t('templates.empty')}
+              {visibleTemplates.length > 0 ? t('templates.count', { count: visibleTemplates.length }) : t('templates.empty')}
             </div>
 
-            {templates.length === 0 ? (
+            {visibleTemplates.length === 0 ? (
               <div className="rounded-xl border border-dashed border-gray-200 dark:border-border-primary p-5 text-sm text-gray-500 dark:text-foreground-tertiary">
                 {t('templates.empty')}
               </div>
             ) : (
               <div className="space-y-3">
-                {templates.map((tpl) => (
+                {visibleTemplates.map((tpl) => (
                   <div
                     key={tpl.id}
                     data-testid={`template-row-${tpl.id}`}
@@ -522,7 +555,7 @@ export const StyleLibrary: React.FC = () => {
           </Card>
         ) : null}
 
-        {activeTab === 'presets' ? <JsonPresetWorkspace templates={templates} refreshKey={workspaceRefreshKey} /> : null}
+        {activeTab === 'presets' ? <JsonPresetWorkspace templates={templates} scenario={libraryScenario} refreshKey={workspaceRefreshKey} /> : null}
       </main>
 
         <JsonTemplateCreateDrawer

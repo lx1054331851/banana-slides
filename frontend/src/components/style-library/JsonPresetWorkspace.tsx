@@ -18,11 +18,11 @@ import { JsonPresetList } from './JsonPresetList';
 import { JsonPresetCreateDrawer } from './JsonPresetCreateDrawer';
 import { JsonPresetJsonViewer } from './JsonPresetJsonViewer';
 import type { JsonPresetWorkspaceProps, PreviewKey, StylePresetTaskRecord } from './types';
-import { getPreviewOrder, getPresetDisplayName, getTaskPreviewKey, isTaskRunning } from './types';
+import { getPreviewOrder, getPresetDisplayName, getTaskPreviewKey, inferStylePresetScenario, isTaskRunning } from './types';
 
 const MAX_RUNNING_TASKS = 4;
 
-export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templates, refreshKey = 0 }) => {
+export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templates, scenario, refreshKey = 0 }) => {
   const { show, ToastContainer } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
   const [presets, setPresets] = useState<StylePreset[]>([]);
@@ -45,6 +45,16 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
   );
 
   const runningTasks = useMemo(() => tasks.filter(isTaskRunning), [tasks]);
+
+  const scenarioTemplates = useMemo(
+    () => templates.filter((item) => (item.scenario || 'ppt') === scenario),
+    [scenario, templates],
+  );
+
+  const scenarioPresets = useMemo(
+    () => presets.filter((preset) => inferStylePresetScenario(preset) === scenario),
+    [presets, scenario],
+  );
 
 
   const hasResolvedTaskFailure = useCallback((task: StylePresetTaskRecord) => {
@@ -188,7 +198,7 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
   }, [confirm, loadPresets, loadTasks, viewerPresetId, show]);
 
   const handleGenerateTask = useCallback(async ({ templateId, name, requirements }: { templateId: string; name: string; requirements: string }) => {
-    const template = templates.find((item) => item.id === templateId);
+    const template = scenarioTemplates.find((item) => item.id === templateId);
     if (!template?.template_json) {
       show({ message: '请先选择一个 JSON 文本模版骨架', type: 'error' });
       return;
@@ -214,7 +224,7 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
     } finally {
       setIsGenerating(false);
     }
-  }, [loadTasks, runningTasks.length, show, templates]);
+  }, [loadTasks, runningTasks.length, scenarioTemplates, show]);
 
   const handleManualCreate = useCallback(async ({ name, styleJson }: { name: string; styleJson: string }) => {
     setIsManualCreating(true);
@@ -306,7 +316,8 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
           onDismissTask={(taskId) => void handleDeleteTask(taskId)}
         />
         <JsonPresetList
-          presets={presets}
+          presets={scenarioPresets}
+          scenario={scenario}
           deletingPresetId={deletingPresetId}
           generatingPreviewState={pendingPreviewGeneration}
           onViewJson={openPresetJson}
@@ -315,7 +326,7 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
           onGeneratePreview={(preset, previewKey) => void handleGeneratePreview(preset, previewKey)}
           onOpenCreateDrawer={() => setIsCreateDrawerOpen(true)}
         />
-        {(isLoadingPresets || isLoadingTasks) && !presets.length && !tasks.length ? (
+        {(isLoadingPresets || isLoadingTasks) && !scenarioPresets.length && !tasks.length ? (
           <div className="text-xs text-gray-500 dark:text-foreground-tertiary">加载中...</div>
         ) : null}
         {deletingTaskId ? (
@@ -325,7 +336,7 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
 
       <JsonPresetCreateDrawer
         isOpen={isCreateDrawerOpen}
-        templates={templates}
+        templates={scenarioTemplates}
         runningTaskCount={runningTasks.length}
         maxRunningTasks={MAX_RUNNING_TASKS}
         loadingGenerate={isGenerating}

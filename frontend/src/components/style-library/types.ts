@@ -1,5 +1,6 @@
 import type { Task } from '@/types';
 import type { StylePreset, StylePresetPreviewImages, StyleTemplate } from '@/api/endpoints';
+import type { ProjectScenario } from '@/types';
 
 export type PreviewKey = keyof StylePresetPreviewImages;
 
@@ -31,6 +32,7 @@ export interface StylePresetTaskRecord extends Task {
 
 export interface JsonPresetWorkspaceProps {
   templates: StyleTemplate[];
+  scenario: ProjectScenario;
   refreshKey?: number;
 }
 
@@ -92,4 +94,16 @@ export function getTaskPresetId(task: StylePresetTaskRecord): string {
 export function getTaskPreviewKey(task: StylePresetTaskRecord): PreviewKey | null {
   const key = task.progress?.preview_key;
   return key ? key as PreviewKey : null;
+}
+
+export function inferStylePresetScenario(preset: StylePreset): ProjectScenario {
+  if (preset.scenario === 'data_report') return 'data_report';
+  if (preset.scenario === 'ppt') return 'ppt';
+  try {
+    const parsed = JSON.parse(preset.style_json || '{}');
+    const scenario = parsed?.design_system_spec?.meta?.scenario;
+    return scenario === 'data_report' ? 'data_report' : 'ppt';
+  } catch {
+    return 'ppt';
+  }
 }

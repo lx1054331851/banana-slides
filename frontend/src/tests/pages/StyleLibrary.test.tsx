@@ -112,6 +112,34 @@ describe('StyleLibrary page', () => {
     expect(screen.getByTestId('style-library-presets-panel')).toBeInTheDocument();
   });
 
+  it('filters template skeletons by selected scenario', async () => {
+    render(<StyleLibrary />);
+
+    fireEvent.click(screen.getByTestId('style-library-tab-templates'));
+    await screen.findByTestId('template-row-t1');
+    expect(screen.queryByTestId('template-row-t2')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('style-library-scenario-data-report'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('template-row-t2')).toBeInTheDocument();
+      expect(screen.queryByTestId('template-row-t1')).not.toBeInTheDocument();
+    });
+  });
+
+  it('passes scenario filter into JSON preset workspace', async () => {
+    render(<StyleLibrary />);
+
+    await screen.findByTestId('preset-row-s1');
+    expect(screen.queryByText('当前展示数据报告场景的 style_json 与按页型动态生成的多张预览图')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('style-library-scenario-data-report'));
+
+    await waitFor(() => {
+      expect(screen.getByText('当前展示数据报告场景的 style_json 与按页型动态生成的多张预览图')).toBeInTheDocument();
+    });
+  });
+
   it('reads tab from query string on first render', async () => {
     window.history.pushState({}, '', '/style-library?tab=templates');
 
@@ -163,6 +191,7 @@ describe('StyleLibrary page', () => {
     render(<StyleLibrary />);
 
     fireEvent.click(screen.getByTestId('style-library-tab-templates'));
+    fireEvent.click(screen.getByTestId('style-library-scenario-data-report'));
     const row = await screen.findByTestId('template-row-t2');
     fireEvent.click(within(row).getByRole('button', { name: /Template 2/i }));
 
