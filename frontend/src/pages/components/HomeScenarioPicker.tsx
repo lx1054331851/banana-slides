@@ -17,7 +17,6 @@ interface ScenarioOption {
 
 interface HomeScenarioPickerProps {
   value: ProjectScenario;
-  label: string;
   options: ScenarioOption[];
   onChange: (value: ProjectScenario) => void;
 }
@@ -27,7 +26,6 @@ const MENU_HEIGHT = 160;
 
 export const HomeScenarioPicker: React.FC<HomeScenarioPickerProps> = ({
   value,
-  label,
   options,
   onChange,
 }) => {
@@ -103,8 +101,8 @@ export const HomeScenarioPicker: React.FC<HomeScenarioPickerProps> = ({
         ref={buttonRef}
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="flex items-center gap-1 px-2 py-1 text-xs md:text-sm text-gray-700 dark:text-foreground-secondary outline-none"
-        title={label}
+        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:text-foreground-tertiary dark:hover:text-foreground-secondary dark:hover:bg-background-hover rounded transition-colors"
+        title={currentOption?.label}
         aria-haspopup="menu"
         aria-expanded={isOpen}
       >
@@ -124,7 +122,7 @@ export const HomeScenarioPicker: React.FC<HomeScenarioPickerProps> = ({
               transform: menuPosition.openUpward ? 'translateY(-100%)' : undefined,
             }}
             role="menu"
-            aria-label={label}
+            aria-label={currentOption?.label || 'Scenario'}
           >
             {options.map((option) => (
               <button
@@ -135,7 +133,7 @@ export const HomeScenarioPicker: React.FC<HomeScenarioPickerProps> = ({
                   setIsOpen(false);
                 }}
                 className={cn(
-                  'w-full px-3 py-1.5 text-left text-xs md:text-sm transition-colors hover:bg-gray-100 dark:hover:bg-background-hover',
+                  'w-full px-3 py-1.5 text-left text-xs transition-colors hover:bg-gray-100 dark:hover:bg-background-hover',
                   value === option.value
                     ? 'font-semibold text-banana'
                     : 'text-gray-700 dark:text-foreground-secondary'

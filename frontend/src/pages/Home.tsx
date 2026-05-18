@@ -1350,13 +1350,9 @@ export const Home: React.FC = () => {
                 className="text-sm md:text-base border-2 border-gray-200 dark:border-border-primary dark:bg-background-tertiary dark:text-white focus-within:border-banana-400 dark:focus-within:border-banana transition-colors duration-200"
                 toolbarLeft={
                   <div className="flex items-center gap-1">
-                    <div className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-border-primary bg-white/90 dark:bg-background-elevated px-2 py-1">
-                      <span className="text-xs text-gray-500 dark:text-foreground-tertiary whitespace-nowrap">
-                        {t('home.scenarios.label')}
-                      </span>
+                    <div className="flex items-center gap-1">
                       <HomeScenarioPicker
                         value={projectScenario}
-                        label={t('home.scenarios.label')}
                         options={scenarioOptions}
                         onChange={setProjectScenario}
                       />
