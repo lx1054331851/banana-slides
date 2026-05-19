@@ -173,6 +173,33 @@ const PPT_PAGE_TYPE_OPTIONS = [
   '结尾页',
 ];
 
+const DATA_REPORT_PAGE_TYPE_OPTIONS = [
+  '报告封面',
+  '执行摘要',
+  '目录',
+  '研究方法',
+  '章节页',
+  '品牌概览页',
+  '品牌历程页',
+  '品牌画像页',
+  '品牌定位页',
+  '核心指标总览页',
+  '市场概览页',
+  '品牌对标页',
+  '品类结构页',
+  '价格带分布页',
+  '渠道平台表现页',
+  '商品SKU诊断页',
+  '数据明细页',
+  '洞察图文页',
+  '洞察图表页',
+  '矩阵图谱页',
+  '时间轴生命周期页',
+  '人群画像页',
+  '策略建议页',
+  '封底页',
+];
+
 export const SlidePreview: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1897,6 +1924,7 @@ export const SlidePreview: React.FC = () => {
   const isPptRenovationProject = currentProject?.creation_type === 'ppt_renovation';
   const isTextGenerationPreviewProject = currentProject?.creation_type !== 'ppt_renovation';
   const useRenovationPreviewForm = isPptRenovationProject || isTextGenerationPreviewProject;
+  const pageTypeOptions = currentProject?.scenario === 'data_report' ? DATA_REPORT_PAGE_TYPE_OPTIONS : PPT_PAGE_TYPE_OPTIONS;
   const activeStyleGuideBindingKey = buildStyleGuideBindingKey(currentImageVersionId);
   const projectStyleGuideJson = (() => {
     if (!useRenovationPreviewForm) return '';
@@ -2016,7 +2044,7 @@ export const SlidePreview: React.FC = () => {
                 className="min-h-[44px] w-full rounded-xl border border-[#eadfbf] bg-[#fffdf8] px-3 text-sm text-slate-800 outline-none focus:border-banana-400 dark:border-[#36415b] dark:bg-[#101521] dark:text-[#f5f7ff]"
               >
                 <option value="">{t('preview.pageTypePlaceholder')}</option>
-                {PPT_PAGE_TYPE_OPTIONS.map((option) => (
+                {pageTypeOptions.map((option) => (
                   <option key={option} value={option}>
                     {option}
                   </option>
@@ -2059,7 +2087,7 @@ export const SlidePreview: React.FC = () => {
                 className="min-h-[44px] w-full rounded-xl border border-[#eadfbf] bg-[#fffdf8] px-3 text-sm text-slate-800 outline-none focus:border-banana-400 dark:border-[#36415b] dark:bg-[#101521] dark:text-[#f5f7ff]"
               >
                 <option value="">{t('preview.pageTypePlaceholder')}</option>
-                {PPT_PAGE_TYPE_OPTIONS.map((option) => (
+                {pageTypeOptions.map((option) => (
                   <option key={option} value={option}>
                     {option}
                   </option>

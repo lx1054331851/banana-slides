@@ -1108,6 +1108,7 @@ export const OutlineEditor: React.FC = () => {
                         key={page.id || `page-${index}`}
                         page={page}
                         index={index}
+                        scenario={currentProject.scenario || 'ppt'}
                         projectId={projectId}
                         showToast={show}
                         onUpdate={(data) => page.id && updatePageLocal(page.id, data)}
