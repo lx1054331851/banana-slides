@@ -180,3 +180,14 @@ export const getSelectableImageModelsForChannel = (
     };
   });
 };
+
+export const getImageModelDisplayLabel = (
+  channelId: string,
+  model: string,
+  providerProfiles: ProviderProfileSummary[],
+): string => {
+  const channel = getImageChannelOptionById(channelId, providerProfiles);
+  const trimmedModel = String(model || '').trim();
+  if (!channel?.label) return trimmedModel;
+  return `${channel.label} -> ${trimmedModel}`;
+};

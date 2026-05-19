@@ -13,6 +13,7 @@ import {
   type ProjectSupportedImageModel,
 } from '@/config/projectAiDefaults';
 import {
+  getImageModelDisplayLabel,
   getImageChannelOptionById,
   getImageChannelOptions,
   getSelectableImageModelsForChannel,
@@ -626,7 +627,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                         }}
                         options={selectableImageModels.map((item) => ({
                           value: item.model,
-                          label: item.model,
+                          label: getImageModelDisplayLabel(selectedImageChannel, item.model, providerProfiles),
                         }))}
                       />
                     </div>
