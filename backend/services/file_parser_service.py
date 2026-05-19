@@ -15,6 +15,7 @@ from PIL import Image
 from markitdown import MarkItDown
 from services.ai_providers.lazyllm_env import ensure_lazyllm_namespace_key
 from services.ai_providers.text import strip_think_tags
+from services.ai_providers import get_caption_provider
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,37 @@ class FileParserService:
         
         self._image_caption_model = image_caption_model
         self._provider_format = _get_ai_provider_format(provider_format)
+        self._google_api_key = google_api_key
+        self._google_api_base = google_api_base
+        self._openai_api_key = openai_api_key
+        self._openai_api_base = openai_api_base
+        self._lazyllm_image_caption_source = lazyllm_image_caption_source
         self._caption_provider = None
+        self._gemini_client = None
+        self._openai_client = None
+        self._lazyllm_client = None
+
+    def _get_caption_provider(self):
+        """Resolve and cache the caption provider for markdown image description generation."""
+        if self._caption_provider is not None:
+            return self._caption_provider
+
+        route = None
+        if self._provider_format == 'gemini':
+            if not self._google_api_key:
+                raise ValueError("Missing Gemini API key for image captioning")
+        elif self._provider_format == 'openai':
+            if not self._openai_api_key:
+                raise ValueError("Missing OpenAI API key for image captioning")
+        elif self._provider_format == 'lazyllm':
+            if not self._lazyllm_image_caption_source:
+                raise ValueError("Missing LazyLLM source for image captioning")
+
+        self._caption_provider = get_caption_provider(
+            model=self._image_caption_model,
+            route=route,
+        )
+        return self._caption_provider
     
     def _get_gemini_client(self):
         """Lazily initialize Gemini client"""
