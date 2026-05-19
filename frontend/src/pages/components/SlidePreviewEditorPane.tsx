@@ -1,7 +1,6 @@
 import React from 'react';
 import { History } from 'lucide-react';
 import { Button, PageAiWorkbench } from '@/components/shared';
-import { PROJECT_SUPPORTED_IMAGE_MODELS } from '@/config/projectAiDefaults';
 import {
   PREVIEW_SPLIT_DIVIDER_PX,
   PREVIEW_SPLIT_HIT_AREA_PX,
@@ -29,6 +28,7 @@ type SlidePreviewEditorPaneProps = {
   pageAiTextareaRef: React.RefObject<any>;
   pageAiSlashActions: any[];
   editRunImageModel: string;
+  editRunImageModelOptions: readonly (string | { value: string; label: string })[];
   isPageAiSubmitting: boolean;
   isRegionSelectionMode: boolean;
   historyVersionsCount: number;
@@ -65,6 +65,7 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
   pageAiTextareaRef,
   pageAiSlashActions,
   editRunImageModel,
+  editRunImageModelOptions,
   isPageAiSubmitting,
   isRegionSelectionMode,
   historyVersionsCount,
@@ -158,7 +159,7 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
               slashActions={pageAiSlashActions}
               sendLabel={t('preview.generateImage')}
               modelValue={editRunImageModel}
-              modelOptions={PROJECT_SUPPORTED_IMAGE_MODELS}
+              modelOptions={editRunImageModelOptions}
               showModelPickerControl={false}
               isSubmitting={isPageAiSubmitting}
               isRegionSelectionActive={isRegionSelectionMode}

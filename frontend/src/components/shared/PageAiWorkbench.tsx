@@ -66,7 +66,7 @@ interface PageAiWorkbenchProps {
     onSelect: () => void;
   }>;
   modelValue: string;
-  modelOptions: readonly string[];
+  modelOptions: readonly (string | { value: string; label: string })[];
   showModelPickerControl?: boolean;
   modelControlPlacement?: 'toolbar' | 'top';
   isSubmitting: boolean;
@@ -136,6 +136,11 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [descriptionPickerPosition, setDescriptionPickerPosition] = useState<FloatingMenuPosition | null>(null);
   const [modelPickerPosition, setModelPickerPosition] = useState<FloatingMenuPosition | null>(null);
+  const normalizedModelOptions = modelOptions.map((option) => (
+    typeof option === 'string'
+      ? { value: option, label: option }
+      : option
+  ));
 
   const resolveFloatingMenuPosition = (
     trigger: HTMLElement,
@@ -520,14 +525,14 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
           }}
         >
           <div className="max-h-full overflow-y-auto">
-            {modelOptions.map((model) => {
-              const selected = model === modelValue;
+            {normalizedModelOptions.map((option) => {
+              const selected = option.value === modelValue;
               return (
                 <button
-                  key={model}
+                  key={option.value}
                   type="button"
                   onClick={() => {
-                    onModelChange(model);
+                    onModelChange(option.value);
                     setShowModelPicker(false);
                   }}
                   className={cn(
@@ -536,9 +541,9 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                       ? 'bg-[#fff7d9] text-slate-900 dark:bg-banana-500/10 dark:text-banana'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-foreground-secondary dark:hover:bg-background-hover dark:hover:text-foreground-primary'
                   )}
-                  title={model}
+                  title={option.label}
                 >
-                  <span className="min-w-0 truncate">{model}</span>
+                  <span className="min-w-0 truncate">{option.label}</span>
                   {selected && <Check size={16} className="flex-shrink-0 text-banana-600" />}
                 </button>
               );

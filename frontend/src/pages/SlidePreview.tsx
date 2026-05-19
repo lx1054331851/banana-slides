@@ -131,6 +131,7 @@ import {
 } from '@/config/projectAiDefaults';
 import {
   deriveImageChannelSelection,
+  getImageModelDisplayLabel,
   getSourceForImageChannel,
   setRuntimeBuiltinImageChannels,
 } from '@/config/projectAiChannels';
@@ -524,6 +525,13 @@ export const SlidePreview: React.FC = () => {
   );
   const normalizedProjectImageSource = useMemo(
     () => getSourceForImageChannel(projectDefaultImageChannel, providerProfiles),
+    [projectDefaultImageChannel, providerProfiles]
+  );
+  const editRunImageModelOptions = useMemo(
+    () => PROJECT_SUPPORTED_IMAGE_MODELS.map((model) => ({
+      value: model,
+      label: getImageModelDisplayLabel(projectDefaultImageChannel, model, providerProfiles),
+    })),
     [projectDefaultImageChannel, providerProfiles]
   );
   const normalizedRunImageModel = useMemo(
@@ -2740,6 +2748,7 @@ export const SlidePreview: React.FC = () => {
                       pageAiTextareaRef={pageAiTextareaRef}
                       pageAiSlashActions={pageAiSlashActions}
                       editRunImageModel={editRunImageModel}
+                      editRunImageModelOptions={editRunImageModelOptions}
                       isPageAiSubmitting={isPageAiSubmitting}
                       isRegionSelectionMode={isRegionSelectionMode}
                       historyVersionsCount={historyVersionsDescending.length}
