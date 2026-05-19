@@ -406,3 +406,33 @@ export const buildPreviewStyleJsonForPageType = (
 
   return JSON.stringify({ design_system_spec: reducedDesignSystem }, null, 4);
 };
+
+export const syncRenovationJsonPageType = (
+  jsonText: string,
+  pageType: string,
+  indent = 4,
+): string => {
+  const normalizedPageType = String(pageType || '').trim();
+  if (!normalizedPageType) return jsonText;
+
+  const raw = String(jsonText || '').trim();
+  if (!raw) return jsonText;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return jsonText;
+    }
+
+    return JSON.stringify(
+      {
+        ...(parsed as Record<string, unknown>),
+        page_type: normalizedPageType,
+      },
+      null,
+      indent,
+    );
+  } catch {
+    return jsonText;
+  }
+};

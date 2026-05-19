@@ -32,6 +32,7 @@ import {
   areStringRecordsEqual,
   buildPreviewStyleJsonForPageType,
   formatJsonForEditor,
+  syncRenovationJsonPageType,
   toCanonicalRenovationJsonText,
   toLocalizedRenovationJsonText,
 } from './SlidePreview.utils';
@@ -1524,6 +1525,11 @@ export const SlidePreview: React.FC = () => {
     }, 900);
   }, [handleSaveOutlineAndDescription]);
 
+  const syncDescriptionPageTypeForCurrentMode = useCallback((pageType: string, descriptionText: string) => {
+    if (!useRenovationPreviewForm) return descriptionText;
+    return syncRenovationJsonPageType(descriptionText, pageType, 4);
+  }, [useRenovationPreviewForm]);
+
   // 立即保存页面文本，并可携带 blur 时从编辑器读取到的最新值。
   const persistTextEditsNow = useCallback((options?: { silent?: boolean; overrides?: TextSaveOverrides }) => {
     if (textAutoSaveTimerRef.current) {
@@ -2213,9 +2219,19 @@ export const SlidePreview: React.FC = () => {
                               key={option}
                               type="button"
                               onClick={() => {
+                                const nextDescription = syncDescriptionPageTypeForCurrentMode(option, editDescription);
                                 setEditPageType(option);
+                                if (nextDescription !== editDescription) {
+                                  setEditDescription(nextDescription);
+                                }
                                 persistCurrentPageDraft({ pageType: option });
-                                scheduleTextAutoSave({ pageType: option });
+                                if (nextDescription !== editDescription) {
+                                  persistCurrentPageDraft({ description: nextDescription });
+                                }
+                                scheduleTextAutoSave({
+                                  pageType: option,
+                                  ...(nextDescription !== editDescription ? { description: nextDescription } : {}),
+                                });
                                 setIsPreviewPageTypeMenuOpen(false);
                               }}
                               className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${
