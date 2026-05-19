@@ -132,6 +132,7 @@ import {
 import {
   deriveImageChannelSelection,
   getImageModelDisplayLabel,
+  getSelectableImageModelsForChannel,
   getSourceForImageChannel,
   setRuntimeBuiltinImageChannels,
 } from '@/config/projectAiChannels';
@@ -528,9 +529,9 @@ export const SlidePreview: React.FC = () => {
     [projectDefaultImageChannel, providerProfiles]
   );
   const editRunImageModelOptions = useMemo(
-    () => PROJECT_SUPPORTED_IMAGE_MODELS.map((model) => ({
-      value: model,
-      label: getImageModelDisplayLabel(projectDefaultImageChannel, model, providerProfiles),
+    () => getSelectableImageModelsForChannel(projectDefaultImageChannel, providerProfiles).map((item) => ({
+      value: item.model,
+      label: getImageModelDisplayLabel(projectDefaultImageChannel, item.model, providerProfiles),
     })),
     [projectDefaultImageChannel, providerProfiles]
   );
