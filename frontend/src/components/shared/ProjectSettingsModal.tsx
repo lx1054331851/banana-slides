@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, FileText, Download, Sparkles, AlertTriangle, HelpCircle, Image as ImageIcon, Plus } from 'lucide-react';
-import { Button, Textarea, Input } from '@/components/shared';
+import { Button, Textarea, Input, Select } from '@/components/shared';
 import { useT } from '@/hooks/useT';
 import type { ProviderProfileSummary } from '@/types';
 import type { ExportExtractorMethod, ExportInpaintMethod } from '@/types';
@@ -589,10 +589,10 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                       <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
                         Provider
                       </label>
-                      <select
+                      <Select
                         value={selectedImageProvider}
-                        onChange={(e) => {
-                          const nextProvider = normalizeImageProvider(e.target.value);
+                        onChange={(value) => {
+                          const nextProvider = normalizeImageProvider(value);
                           const nextChannel = normalizeImageChannel('', nextProvider, providerProfiles);
                           onGenerationDefaultImageProviderChange?.(nextProvider);
                           onGenerationDefaultImageChannelChange?.(nextChannel);
@@ -601,72 +601,60 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                             onGenerationDefaultImageModelChange?.(nextModels[0].model);
                           }
                         }}
-                        className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
-                      >
-                        {IMAGE_PROVIDER_OPTIONS.map((provider) => (
-                          <option key={provider.value} value={provider.value}>
-                            {provider.label}
-                          </option>
-                        ))}
-                      </select>
+                        options={IMAGE_PROVIDER_OPTIONS.map((provider) => ({
+                          value: provider.value,
+                          label: provider.label,
+                        }))}
+                      />
                     </div>
                     <div className="w-full">
                       <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
                         Channel
                       </label>
-                      <select
+                      <Select
                         value={selectedImageChannel}
-                        onChange={(e) => {
-                          const nextChannel = e.target.value;
+                        onChange={(value) => {
+                          const nextChannel = value;
                           onGenerationDefaultImageChannelChange?.(nextChannel);
                           const nextModels = getSelectableImageModelsForChannel(nextChannel, providerProfiles);
                           if (nextModels.length > 0) {
                             onGenerationDefaultImageModelChange?.(nextModels[0].model);
                           }
                         }}
-                        className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
-                      >
-                        {availableImageChannels.map((channel) => (
-                          <option key={channel.id} value={channel.id}>
-                            {channel.label}
-                          </option>
-                        ))}
-                      </select>
+                        options={availableImageChannels.map((channel) => ({
+                          value: channel.id,
+                          label: channel.label,
+                        }))}
+                      />
                     </div>
                     <div className="w-full">
                       <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
                         图片模型
                       </label>
-                      <select
+                      <Select
                         value={selectedImageModel}
-                        onChange={(e) => {
-                          const nextModel = e.target.value;
+                        onChange={(value) => {
+                          const nextModel = value;
                           onGenerationDefaultImageModelChange?.(nextModel);
                         }}
-                        className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
-                      >
-                        {selectableImageModels.map((item) => (
-                          <option key={item.model} value={item.model}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
+                        options={selectableImageModels.map((item) => ({
+                          value: item.model,
+                          label: item.label,
+                        }))}
+                      />
                     </div>
                     <div className="w-full">
                       <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
                         图像清晰度
                       </label>
-                      <select
+                      <Select
                         value={selectedImageResolution}
-                        onChange={(e) => onGenerationDefaultImageResolutionChange?.(e.target.value)}
-                        className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
-                      >
-                        {visibleResolutionOptions.map((resolution) => (
-                          <option key={resolution} value={resolution}>
-                            {resolution}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(value) => onGenerationDefaultImageResolutionChange?.(value)}
+                        options={visibleResolutionOptions.map((resolution) => ({
+                          value: resolution,
+                          label: resolution,
+                        }))}
+                      />
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
