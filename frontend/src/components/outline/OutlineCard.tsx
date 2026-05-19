@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { GripVertical, Edit2, Trash2, Check, X, Maximize2, Minimize2 } from 'lucide-react';
+import { GripVertical, Edit2, Trash2, Check, X, Maximize2, Minimize2, ChevronDown } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 import { useImagePaste, buildMaterialsMarkdown } from '@/hooks/useImagePaste';
 import { Card, useConfirm, Markdown, ShimmerOverlay, MaterialSelector } from '@/components/shared';
@@ -95,7 +95,9 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
   const [editPoints, setEditPoints] = useState(outline.points.join('\n'));
   const [editPart, setEditPart] = useState(page.part || '');
   const [isMaterialSelectorOpen, setIsMaterialSelectorOpen] = useState(false);
+  const [isPageTypeMenuOpen, setIsPageTypeMenuOpen] = useState(false);
   const textareaRef = useRef<MarkdownTextareaRef>(null);
+  const pageTypeMenuRef = useRef<HTMLDivElement | null>(null);
   const isGridView = viewMode === 'grid';
   const previewText = outline.points.join('\n');
   const showExpandControl = isGridView && isEditing && !!onToggleExpand;
@@ -152,6 +154,19 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
       onToggleExpand?.(false);
     }
   }, [isExpanded, isEditing, onToggleExpand]);
+
+  useEffect(() => {
+    if (!isPageTypeMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!pageTypeMenuRef.current?.contains(event.target as Node)) {
+        setIsPageTypeMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isPageTypeMenuOpen]);
 
   return (
     <Card
@@ -242,17 +257,46 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
                 className="w-full px-3 py-2 border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-900 dark:text-foreground-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-banana-500"
                 placeholder={t('outlineCard.titleLabel')}
               />
-              <select
-                value={editPageType}
-                onChange={(e) => setEditPageType(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-900 dark:text-foreground-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-banana-500"
-              >
-                {PAGE_TYPE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
+              <div className="relative" ref={pageTypeMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsPageTypeMenuOpen((prev) => !prev)}
+                  className="flex w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 transition-colors hover:border-banana-300 focus:outline-none focus:ring-2 focus:ring-banana-500 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary dark:hover:border-banana-500/50"
+                >
+                  <span className="truncate">{editPageType || '标准图文页'}</span>
+                  <ChevronDown
+                    size={16}
+                    className={`flex-shrink-0 text-gray-400 transition-transform dark:text-foreground-tertiary ${isPageTypeMenuOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {isPageTypeMenuOpen && (
+                  <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-xl border border-gray-200 bg-white p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated dark:shadow-[0_18px_40px_rgba(0,0,0,0.36)]">
+                    <div className="max-h-64 overflow-y-auto">
+                      {PAGE_TYPE_OPTIONS.map((option) => {
+                        const selected = option === editPageType;
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => {
+                              setEditPageType(option);
+                              setIsPageTypeMenuOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                              selected
+                                ? 'bg-[#fff7d9] text-slate-900 dark:bg-banana-500/10 dark:text-banana'
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-foreground-secondary dark:hover:bg-background-hover dark:hover:text-foreground-primary'
+                            }`}
+                          >
+                            <span className="min-w-0 truncate">{option}</span>
+                            {selected && <Check size={16} className="flex-shrink-0 text-banana-600" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
               <div>
                 <MarkdownTextarea
                   ref={textareaRef}
