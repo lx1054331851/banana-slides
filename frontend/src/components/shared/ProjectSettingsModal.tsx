@@ -353,6 +353,10 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   const selectableImageModels = useMemo(() => {
     return getSelectableImageModelsForChannel(selectedImageChannel, providerProfiles);
   }, [providerProfiles, selectedImageChannel]);
+  const selectedImageProvider = useMemo(
+    () => getImageChannelOptionById(selectedImageChannel, providerProfiles)?.provider || generationDefaultImageProvider || 'gemini',
+    [generationDefaultImageProvider, providerProfiles, selectedImageChannel]
+  );
   const presetDescriptionFieldSet = useMemo(
     () => new Set(presetDescriptionFields.length > 0 ? presetDescriptionFields : FALLBACK_DESCRIPTION_FIELDS),
     [presetDescriptionFields]
