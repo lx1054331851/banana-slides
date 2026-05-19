@@ -28,6 +28,10 @@ def rows_exist(conn, table, row_id):
 
 
 def insert_or_replace(conn, table, row, replace=False):
+    """Insert bundle data into target table, filling compatibility defaults when needed."""
+    row = dict(row)
+    if table == 'style_templates' and not row.get('scenario'):
+        row['scenario'] = 'ppt'
     exists = rows_exist(conn, table, row['id'])
     if exists and not replace:
         return 'skipped'
