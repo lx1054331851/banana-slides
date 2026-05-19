@@ -2129,14 +2129,14 @@ export const SlidePreview: React.FC = () => {
                   {showRunModelMenu && (
                     <div className="absolute right-0 top-full z-40 mt-2 w-[300px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated dark:shadow-[0_18px_40px_rgba(0,0,0,0.36)]">
                       <div className="max-h-[320px] overflow-y-auto">
-                        {PROJECT_SUPPORTED_IMAGE_MODELS.map((model) => {
-                          const selected = model === editRunImageModel;
+                        {editRunImageModelOptions.map((option) => {
+                          const selected = option.value === editRunImageModel;
                           return (
                             <button
-                              key={model}
+                              key={option.value}
                               type="button"
                               onClick={() => {
-                                setEditRunImageModel(model);
+                                setEditRunImageModel(option.value);
                                 setShowRunModelMenu(false);
                               }}
                               className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
@@ -2144,9 +2144,9 @@ export const SlidePreview: React.FC = () => {
                                   ? 'bg-[#fff7d9] text-slate-900 dark:bg-banana-500/10 dark:text-banana'
                                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-foreground-secondary dark:hover:bg-background-hover dark:hover:text-foreground-primary'
                               }`}
-                              title={model}
+                              title={option.label}
                             >
-                              <span className="min-w-0 truncate">{model}</span>
+                              <span className="min-w-0 truncate">{option.label}</span>
                               {selected && <Check size={16} className="flex-shrink-0 text-banana-600" />}
                             </button>
                           );
