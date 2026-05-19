@@ -108,10 +108,38 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
       : aspectRatioStyle;
     const maxWidth = availableSize?.width ?? undefined;
     const maxHeight = availableSize?.height ?? undefined;
+    const parseAspectRatioValue = (value: React.CSSProperties['aspectRatio']): number | null => {
+      if (typeof value !== 'string') return null;
+      const normalized = value.replace(/\s+/g, '');
+      const parts = normalized.includes('/') ? normalized.split('/') : normalized.includes(':') ? normalized.split(':') : [];
+      if (parts.length !== 2) {
+        const numeric = Number(normalized);
+        return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+      }
+      const width = Number(parts[0]);
+      const height = Number(parts[1]);
+      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+      return width / height;
+    };
 
     if (selectedPageHasImage && imageAspectRatio && maxWidth && maxHeight) {
       const fittedWidth = Math.min(maxWidth, maxHeight * imageAspectRatio);
       const fittedHeight = fittedWidth / imageAspectRatio;
+
+      return {
+        aspectRatio: resolvedAspectRatio,
+        width: `${fittedWidth}px`,
+        height: `${fittedHeight}px`,
+        maxWidth: '100%',
+        maxHeight: '100%',
+        flexShrink: 0,
+      } satisfies React.CSSProperties;
+    }
+
+    const targetAspectRatio = parseAspectRatioValue(resolvedAspectRatio);
+    if (targetAspectRatio && maxWidth && maxHeight) {
+      const fittedWidth = Math.min(maxWidth, maxHeight * targetAspectRatio);
+      const fittedHeight = fittedWidth / targetAspectRatio;
 
       return {
         aspectRatio: resolvedAspectRatio,
