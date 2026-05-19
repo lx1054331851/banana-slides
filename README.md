@@ -234,16 +234,17 @@ IMAGE_OPENAI_CHAT_FALLBACK=true
 IMAGE_OPENAI_STRICT_PARAMS=true
 ```
 
-`viviai` 示例（Gemini 原生更稳定，建议图片走 gemini provider）：
+`viviai` 示例（已建议并入 profile 渠道统一管理）：
 
 ```env
 IMAGE_MODEL_SOURCE=gemini
-IMAGE_API_BASE=https://api.viviai.cc
 IMAGE_MODEL=gemini-3.1-flash-image-preview
+IMAGE_API_KEY=your-viviai-image-key
+PROVIDER_PROFILES_FILE=./config/provider_profiles.example.json
 ```
 
 手动切换步骤：
-1. 修改 `.env` 中 `IMAGE_MODEL_SOURCE` 与 `IMAGE_API_BASE`，或调整 `PROVIDER_PROFILES_FILE` 指向的图片渠道配置文件。
+1. 修改 `.env` 中 `IMAGE_MODEL_SOURCE` / `IMAGE_MODEL`，或调整 `PROVIDER_PROFILES_FILE` 指向的图片渠道配置文件。
 2. 重启后端服务，使新环境变量生效。
 3. 在设置页“服务测试 -> 图像生成模型”执行一次测试，确认当前中转配置可用。
 
@@ -268,7 +269,7 @@ PROVIDER_ADAPTER_DEFAULT=native
 
 当前保留的图片渠道建议为：
 
-- `viviai`：Gemini 原生代理，走 `IMAGE_MODEL_SOURCE=gemini`
+- `viviai`：Gemini 原生代理，建议通过 `PROVIDER_PROFILES_FILE`
 - `gs88`：OpenAI 兼容图片渠道，建议通过 `PROVIDER_PROFILES_FILE`
 - `147ai`：OpenAI 兼容图片渠道，建议通过 `PROVIDER_PROFILES_FILE`
 

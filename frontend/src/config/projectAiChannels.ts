@@ -16,23 +16,7 @@ export const IMAGE_PROVIDER_OPTIONS = [
   { value: 'openai', label: 'OpenAI' },
 ] as const;
 
-export const BUILTIN_IMAGE_CHANNELS: ImageChannelOption[] = [
-  {
-    id: 'viviai',
-    provider: 'gemini',
-    label: 'VIVIAI',
-    kind: 'relay',
-    source: 'gemini',
-    enabled: false,
-    configured: false,
-    config_status: 'missing',
-    config_note: 'Requires IMAGE_API_BASE / API key mapping in env',
-    adapter: 'native',
-    api_base: 'https://api.viviai.cc',
-    capabilities: ['image'],
-    model_defaults: { image: 'gemini-3.1-flash-image-preview' },
-  },
-];
+export const BUILTIN_IMAGE_CHANNELS: ImageChannelOption[] = [];
 
 let runtimeBuiltinImageChannels: ImageChannelOption[] = [...BUILTIN_IMAGE_CHANNELS];
 
@@ -132,9 +116,10 @@ export const deriveImageChannelSelection = (
 
   const provider = String(route?.provider || resolveImageProviderFromSource(source) || 'gemini');
   const matched = availableChannels.find((channel) => channel.source === source && channel.provider === provider);
+  const providerChannels = availableChannels.filter((channel) => channel.provider === provider);
   return {
     provider,
-    channel: matched?.id || (provider === 'openai' ? 'official-openai' : 'official-gemini'),
+    channel: matched?.id || providerChannels[0]?.id || '',
     model: normalizedModel || PROJECT_DEFAULT_IMAGE_MODEL,
     resolution: normalizedResolution,
   };
@@ -154,7 +139,7 @@ export const normalizeImageChannel = (
   if (channels.some((channel) => channel.id === channelId)) {
     return String(channelId);
   }
-  return channels[0]?.id || (provider === 'openai' ? 'gs88' : 'viviai');
+  return channels[0]?.id || '';
 };
 
 export const getSourceForImageChannel = (

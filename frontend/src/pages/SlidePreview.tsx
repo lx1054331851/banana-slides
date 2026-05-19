@@ -513,7 +513,7 @@ export const SlidePreview: React.FC = () => {
     currentProject?.image_aspect_ratio || '16:9'
   );
   const [projectDefaultImageProvider, setProjectDefaultImageProvider] = useState<string>('gemini');
-  const [projectDefaultImageChannel, setProjectDefaultImageChannel] = useState<string>('official-gemini');
+  const [projectDefaultImageChannel, setProjectDefaultImageChannel] = useState<string>('');
   const [projectDefaultImageModel, setProjectDefaultImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   const [projectDefaultImageResolution, setProjectDefaultImageResolution] = useState<string>(PROJECT_DEFAULT_IMAGE_RESOLUTION);
   const [providerProfiles, setProviderProfiles] = useState<ProviderProfileSummary[]>([]);

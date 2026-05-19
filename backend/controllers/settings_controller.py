@@ -31,29 +31,7 @@ settings_bp = Blueprint(
 
 
 def _build_builtin_image_channels():
-    def _has_value(key: str) -> bool:
-        return bool(current_app.config.get(key) or os.getenv(key))
-
-    google_base = current_app.config.get("IMAGE_API_BASE") or current_app.config.get("GOOGLE_API_BASE") or os.getenv("IMAGE_API_BASE") or os.getenv("GOOGLE_API_BASE")
-
-    return [
-        {
-            "id": "viviai",
-            "channel": "viviai",
-            "label": "VIVIAI",
-            "kind": "relay",
-            "provider": "gemini",
-            "enabled": bool(google_base and "viviai" in str(google_base)),
-            "configured": bool(google_base and "viviai" in str(google_base) and _has_value("GOOGLE_API_KEY")),
-            "config_status": "configured" if (google_base and "viviai" in str(google_base) and _has_value("GOOGLE_API_KEY")) else ("partial" if google_base and "viviai" in str(google_base) else "missing"),
-            "config_note": "Active when IMAGE_API_BASE / GOOGLE_API_BASE points to viviai and key is present",
-            "api_base": google_base or None,
-            "api_key_present": _has_value("GOOGLE_API_KEY"),
-            "capabilities": ["image"],
-            "models": ["gemini-3.1-flash-image-preview"],
-            "model_defaults": {"image": "gemini-3.1-flash-image-preview"},
-        },
-    ]
+    return []
 
 
 @contextmanager
