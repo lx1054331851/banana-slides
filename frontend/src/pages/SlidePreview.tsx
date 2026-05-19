@@ -2021,6 +2021,49 @@ export const SlidePreview: React.FC = () => {
     return next;
   };
 
+  const syncStyleGuideBindingsForPageType = useCallback((
+    nextPageType: string,
+    baseBindings: StyleGuideBindings,
+  ): StyleGuideBindings => {
+    if (!useRenovationPreviewForm) return baseBindings;
+
+    const previousTemplateStyleGuide = buildPreviewStyleJsonForPageType(
+      currentProject?.template_style_json || '',
+      effectivePreviewPageType,
+    );
+    const nextTemplateStyleGuide = buildPreviewStyleJsonForPageType(
+      currentProject?.template_style_json || '',
+      nextPageType,
+    );
+
+    if (!nextTemplateStyleGuide.trim()) return baseBindings;
+
+    const nextBindings = { ...baseBindings };
+    const currentBoundValue = (baseBindings[activeStyleGuideBindingKey] || '').trim();
+    const defaultBoundValue = (baseBindings[PAGE_STYLE_GUIDE_DEFAULT_BINDING] || '').trim();
+    const previousTemplateValue = previousTemplateStyleGuide.trim();
+    const shouldReplaceCurrentBound = !currentBoundValue || currentBoundValue === previousTemplateValue;
+    const shouldReplaceDefaultBound = !defaultBoundValue || defaultBoundValue === previousTemplateValue;
+
+    if (!shouldReplaceCurrentBound && !shouldReplaceDefaultBound) {
+      return baseBindings;
+    }
+
+    if (shouldReplaceDefaultBound) {
+      nextBindings[PAGE_STYLE_GUIDE_DEFAULT_BINDING] = nextTemplateStyleGuide;
+    }
+    if (activeStyleGuideBindingKey !== PAGE_STYLE_GUIDE_DEFAULT_BINDING && shouldReplaceCurrentBound) {
+      nextBindings[activeStyleGuideBindingKey] = nextTemplateStyleGuide;
+    }
+
+    return nextBindings;
+  }, [
+    activeStyleGuideBindingKey,
+    currentProject?.template_style_json,
+    effectivePreviewPageType,
+    useRenovationPreviewForm,
+  ]);
+
   // 记录风格指导输入并携带最新值触发自动保存。
   const handleStyleGuideTextChange = (value: string) => {
     setEditStyleGuideBindings((prev) => {
@@ -2219,17 +2262,25 @@ export const SlidePreview: React.FC = () => {
                               type="button"
                               onClick={() => {
                                 const nextDescription = syncDescriptionPageTypeForCurrentMode(option, editDescription);
+                                const nextStyleGuideBindings = syncStyleGuideBindingsForPageType(option, editStyleGuideBindings);
                                 setEditPageType(option);
                                 if (nextDescription !== editDescription) {
                                   setEditDescription(nextDescription);
+                                }
+                                if (nextStyleGuideBindings !== editStyleGuideBindings) {
+                                  setEditStyleGuideBindings(nextStyleGuideBindings);
                                 }
                                 persistCurrentPageDraft({ pageType: option });
                                 if (nextDescription !== editDescription) {
                                   persistCurrentPageDraft({ description: nextDescription });
                                 }
+                                if (nextStyleGuideBindings !== editStyleGuideBindings) {
+                                  persistCurrentPageDraft({ styleGuideBindings: nextStyleGuideBindings });
+                                }
                                 scheduleTextAutoSave({
                                   pageType: option,
                                   ...(nextDescription !== editDescription ? { description: nextDescription } : {}),
+                                  ...(nextStyleGuideBindings !== editStyleGuideBindings ? { styleGuideBindings: nextStyleGuideBindings } : {}),
                                 });
                                 setIsPreviewPageTypeMenuOpen(false);
                               }}
