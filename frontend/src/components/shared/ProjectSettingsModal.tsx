@@ -672,6 +672,12 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                   <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
                     更高的清晰度会生成更详细的图像，但需要更长时间。Azure OpenAI `gpt-image-2` 支持 1K/2K/4K（后端会自动换算为兼容的 size）。
                   </p>
+                  {availableImageChannels.find((channel) => channel.id === selectedImageChannel)?.config_note && (
+                    <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
+                      当前渠道状态：
+                      {availableImageChannels.find((channel) => channel.id === selectedImageChannel)?.config_note}
+                    </p>
+                  )}
                   {onSaveGenerationDefaults && (
                     <Button
                       variant="secondary"

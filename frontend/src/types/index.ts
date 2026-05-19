@@ -69,6 +69,10 @@ export interface ProviderProfileSummary {
   channel?: string;
   label?: string;
   kind?: string;
+  enabled?: boolean;
+  configured?: boolean;
+  config_status?: 'configured' | 'partial' | 'missing' | string;
+  config_note?: string;
   api_base?: string | null;
   api_key_env?: string | null;
   api_key_present?: boolean;
@@ -85,6 +89,10 @@ export interface ImageChannelOption {
   label: string;
   kind: 'official' | 'cloud' | 'proxy' | 'relay' | string;
   source: string;
+  enabled?: boolean;
+  configured?: boolean;
+  config_status?: 'configured' | 'partial' | 'missing' | string;
+  config_note?: string;
   adapter?: string;
   api_base?: string | null;
   capabilities?: string[];

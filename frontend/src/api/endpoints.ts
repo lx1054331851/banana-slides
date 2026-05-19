@@ -7,6 +7,7 @@ import type {
   Page,
   ImageVersion,
   GenerationOverride,
+  ImageChannelOption,
   ProviderProfileSummary,
 } from '@/types';
 import type { Settings } from '../types/index';
@@ -1734,8 +1735,8 @@ export interface TestSettingsOverride {
   image_thinking_budget?: number;
 }
 
-export const getProviderProfiles = async (): Promise<ApiResponse<{ profiles: ProviderProfileSummary[] }>> => {
-  const response = await apiClient.get<ApiResponse<{ profiles: ProviderProfileSummary[] }>>(
+export const getProviderProfiles = async (): Promise<ApiResponse<{ profiles: ProviderProfileSummary[]; builtin_channels?: ImageChannelOption[] }>> => {
+  const response = await apiClient.get<ApiResponse<{ profiles: ProviderProfileSummary[]; builtin_channels?: ImageChannelOption[] }>>(
     '/api/settings/provider-profiles'
   );
   return response.data;

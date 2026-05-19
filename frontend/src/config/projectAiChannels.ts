@@ -23,6 +23,10 @@ export const BUILTIN_IMAGE_CHANNELS: ImageChannelOption[] = [
     label: 'Gemini Official',
     kind: 'official',
     source: 'gemini',
+    enabled: true,
+    configured: true,
+    config_status: 'configured',
+    config_note: 'Uses current Gemini env/settings route',
     adapter: 'native',
     capabilities: ['image'],
   },
@@ -32,6 +36,10 @@ export const BUILTIN_IMAGE_CHANNELS: ImageChannelOption[] = [
     label: 'VIVIAI',
     kind: 'relay',
     source: 'gemini',
+    enabled: false,
+    configured: false,
+    config_status: 'missing',
+    config_note: 'Requires IMAGE_API_BASE / API key mapping in env',
     adapter: 'native',
     api_base: 'https://api.viviai.cc',
     capabilities: ['image'],
@@ -43,6 +51,10 @@ export const BUILTIN_IMAGE_CHANNELS: ImageChannelOption[] = [
     label: 'OpenAI Official',
     kind: 'official',
     source: 'openai',
+    enabled: true,
+    configured: true,
+    config_status: 'configured',
+    config_note: 'Uses current OpenAI env/settings route',
     adapter: 'native',
     capabilities: ['image'],
   },
@@ -52,6 +64,10 @@ export const BUILTIN_IMAGE_CHANNELS: ImageChannelOption[] = [
     label: 'Azure OpenAI',
     kind: 'cloud',
     source: 'azure-openai',
+    enabled: false,
+    configured: false,
+    config_status: 'missing',
+    config_note: 'Requires Azure endpoint and key in env',
     adapter: 'native',
     capabilities: ['image'],
   },
@@ -61,6 +77,10 @@ export const BUILTIN_IMAGE_CHANNELS: ImageChannelOption[] = [
     label: 'VVEAI',
     kind: 'relay',
     source: 'openai',
+    enabled: false,
+    configured: false,
+    config_status: 'missing',
+    config_note: 'Requires relay base URL and key in env',
     adapter: 'openai_image_compat',
     api_base: 'https://api.vveai.com/v1',
     capabilities: ['image'],
@@ -74,6 +94,14 @@ export const BUILTIN_IMAGE_CHANNELS: ImageChannelOption[] = [
   },
 ];
 
+let runtimeBuiltinImageChannels: ImageChannelOption[] = [...BUILTIN_IMAGE_CHANNELS];
+
+export const setRuntimeBuiltinImageChannels = (channels?: ImageChannelOption[]) => {
+  runtimeBuiltinImageChannels = Array.isArray(channels) && channels.length > 0
+    ? channels
+    : [...BUILTIN_IMAGE_CHANNELS];
+};
+
 export const toImageChannelOption = (profile: ProviderProfileSummary): ImageChannelOption => ({
   id: String(profile.channel || profile.id),
   provider: String(profile.provider || ''),
@@ -86,13 +114,17 @@ export const toImageChannelOption = (profile: ProviderProfileSummary): ImageChan
   models: profile.models || [],
   model_defaults: profile.model_defaults || {},
   adapter_options: profile.adapter_options || {},
+  enabled: profile.enabled,
+  configured: profile.configured,
+  config_status: profile.config_status,
+  config_note: profile.config_note,
   is_profile: true,
 });
 
 export const getImageChannelOptions = (
   providerProfiles: ProviderProfileSummary[],
 ): ImageChannelOption[] => [
-  ...BUILTIN_IMAGE_CHANNELS,
+  ...runtimeBuiltinImageChannels,
   ...providerProfiles
     .filter((profile) => (profile.capabilities || []).includes('image'))
     .map(toImageChannelOption),
@@ -101,7 +133,18 @@ export const getImageChannelOptions = (
 export const getImageChannelsForProvider = (
   provider: string,
   providerProfiles: ProviderProfileSummary[],
-): ImageChannelOption[] => getImageChannelOptions(providerProfiles).filter((channel) => channel.provider === provider);
+): ImageChannelOption[] => {
+  const channels = getImageChannelOptions(providerProfiles).filter((channel) => channel.provider === provider);
+  const enabled = channels.filter((channel) => channel.enabled !== false);
+  if (enabled.length > 0) {
+    return enabled.sort((a, b) => {
+      const configuredDelta = Number(Boolean(b.configured)) - Number(Boolean(a.configured));
+      if (configuredDelta !== 0) return configuredDelta;
+      return a.label.localeCompare(b.label);
+    });
+  }
+  return channels.sort((a, b) => a.label.localeCompare(b.label));
+};
 
 export const resolveImageProviderFromSource = (source?: string): string => {
   const normalizedSource = String(source || '').trim().toLowerCase();
