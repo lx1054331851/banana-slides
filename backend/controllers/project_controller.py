@@ -57,6 +57,19 @@ project_bp = Blueprint('projects', __name__, url_prefix='/api/projects')
 SUPPORTED_PROJECT_SCENARIOS = {'ppt', 'data_report'}
 
 
+def _validate_image_generation_override(generation_override):
+    """Reject image generation requests that try to route by UI selection without a concrete channel/source."""
+    if not isinstance(generation_override, dict):
+        return None
+    image_override = generation_override.get('image') or {}
+    if not isinstance(image_override, dict):
+        return None
+    has_any_image_route_hint = any(image_override.get(key) for key in ('provider', 'channel', 'source', 'model'))
+    if has_any_image_route_hint and (not image_override.get('channel') or not image_override.get('source')):
+        return bad_request("image generation override must include both channel and source")
+    return None
+
+
 def _merge_description_requirements(base_requirements: str | None, override_requirements: str | None) -> str | None:
     """
     Merge project-level description requirements with request-level override requirements.
@@ -699,6 +712,9 @@ def generate_outline(project_id):
         generation_override = data.get('generation_override') or {}
         if generation_override and not isinstance(generation_override, dict):
             return bad_request("generation_override must be an object")
+        invalid_override = _validate_image_generation_override(generation_override)
+        if invalid_override:
+            return invalid_override
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
 
         # Resolve provider routing (request override > project defaults > settings/env)

@@ -54,6 +54,20 @@ export const getImageChannelOptions = (
     .map(toImageChannelOption),
 ];
 
+export const getPreferredImageChannel = (
+  providerProfiles: ProviderProfileSummary[],
+  preferredProvider?: string,
+): ImageChannelOption | undefined => {
+  const availableChannels = getImageChannelOptions(providerProfiles);
+  const configuredChannels = availableChannels.filter((channel) => channel.enabled !== false && channel.configured !== false);
+  const preferredPool = configuredChannels.length > 0 ? configuredChannels : availableChannels.filter((channel) => channel.enabled !== false);
+  if (preferredProvider) {
+    const matched = preferredPool.find((channel) => channel.provider === preferredProvider);
+    if (matched) return matched;
+  }
+  return preferredPool[0] || availableChannels[0];
+};
+
 export const getImageChannelOptionById = (
   channelId: string | undefined,
   providerProfiles: ProviderProfileSummary[],
@@ -98,12 +112,13 @@ export const deriveImageChannelSelection = (
     normalizedModel,
   );
   const availableChannels = getImageChannelOptions(providerProfiles);
+  const preferredChannel = getPreferredImageChannel(providerProfiles, String(route?.provider || ''));
   const directChannel = String(route?.channel || '').trim();
   if (directChannel) {
     const matched = availableChannels.find((channel) => channel.id === directChannel);
     return {
-      provider: matched?.provider || String(route?.provider || 'gemini'),
-      channel: directChannel,
+      provider: matched?.provider || preferredChannel?.provider || String(route?.provider || 'gemini'),
+      channel: matched?.id || preferredChannel?.id || directChannel,
       model: normalizedModel,
       resolution: normalizedResolution,
     };
@@ -114,19 +129,19 @@ export const deriveImageChannelSelection = (
     const profileId = source.slice('profile:'.length);
     const matched = availableChannels.find((channel) => channel.id === profileId);
     return {
-      provider: matched?.provider || String(route?.provider || 'gemini'),
-      channel: profileId,
+      provider: matched?.provider || preferredChannel?.provider || String(route?.provider || 'gemini'),
+      channel: matched?.id || preferredChannel?.id || profileId,
       model: normalizedModel,
       resolution: normalizedResolution,
     };
   }
 
-  const provider = String(route?.provider || resolveImageProviderFromSource(source) || 'gemini');
+  const provider = String(route?.provider || preferredChannel?.provider || resolveImageProviderFromSource(source) || 'gemini');
   const matched = availableChannels.find((channel) => channel.source === source && channel.provider === provider);
   const providerChannels = availableChannels.filter((channel) => channel.provider === provider);
   return {
     provider,
-    channel: matched?.id || providerChannels[0]?.id || '',
+    channel: matched?.id || providerChannels[0]?.id || preferredChannel?.id || '',
     model: normalizedModel || PROJECT_DEFAULT_IMAGE_MODEL,
     resolution: normalizedResolution,
   };
@@ -154,7 +169,7 @@ export const getSourceForImageChannel = (
   providerProfiles: ProviderProfileSummary[],
 ): string => {
   const matched = getImageChannelOptionById(channelId, providerProfiles);
-  return matched?.source || 'gemini';
+  return matched?.source || '';
 };
 
 export const getSelectableImageModelsForChannel = (

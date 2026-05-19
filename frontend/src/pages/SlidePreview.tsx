@@ -136,6 +136,7 @@ import {
   getImageModelDisplayLabel,
   getSelectableImageModelsForChannel,
   getSourceForImageChannel,
+  getPreferredImageChannel,
   setRuntimeBuiltinImageChannels,
 } from '@/config/projectAiChannels';
 
@@ -1106,10 +1107,11 @@ export const SlidePreview: React.FC = () => {
         const imageDefaults = currentProject.generation_defaults?.image || {};
         const normalizedModel = normalizeProjectDefaultImageModel(imageDefaults.model);
         const channelSelection = deriveImageChannelSelection(imageDefaults, providerProfiles);
+        const preferredChannel = getPreferredImageChannel(providerProfiles, channelSelection.provider);
         setProjectDefaultImageProvider(channelSelection.provider);
-        setProjectDefaultImageChannel(channelSelection.channel);
+        setProjectDefaultImageChannel(channelSelection.channel || preferredChannel?.id || '');
         setProjectDefaultImageModel(normalizedModel);
-        setEditRunImageModel(buildRuntimeImageModelValue(channelSelection.channel, normalizedModel));
+        setEditRunImageModel(buildRuntimeImageModelValue(channelSelection.channel || preferredChannel?.id || '', normalizedModel));
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
         setDescriptionRequirementsDraft(currentProject.description_requirements || '');
         lastProjectId.current = currentProject.id || null;
@@ -1135,10 +1137,11 @@ export const SlidePreview: React.FC = () => {
         const imageDefaults = currentProject.generation_defaults?.image || {};
         const normalizedModel = normalizeProjectDefaultImageModel(imageDefaults.model);
         const channelSelection = deriveImageChannelSelection(imageDefaults, providerProfiles);
+        const preferredChannel = getPreferredImageChannel(providerProfiles, channelSelection.provider);
         setProjectDefaultImageProvider(channelSelection.provider);
-        setProjectDefaultImageChannel(channelSelection.channel);
+        setProjectDefaultImageChannel(channelSelection.channel || preferredChannel?.id || '');
         setProjectDefaultImageModel(normalizedModel);
-        setEditRunImageModel(buildRuntimeImageModelValue(channelSelection.channel, normalizedModel));
+        setEditRunImageModel(buildRuntimeImageModelValue(channelSelection.channel || preferredChannel?.id || '', normalizedModel));
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
         setDescriptionRequirementsDraft(currentProject.description_requirements || '');
       }
@@ -1148,6 +1151,10 @@ export const SlidePreview: React.FC = () => {
 
   const handleBatchGenerate = useCallback(async (pageIds?: string[]) => {
     try {
+      if (!runtimeImageGenerationOverride.image?.channel || !runtimeImageGenerationOverride.image?.source) {
+        show({ message: '请先选择一个可用的图片渠道，再开始生成', type: 'error' });
+        return;
+      }
       await generateImages(pageIds, runtimeImageGenerationOverride);
     } catch (error: any) {
       console.error('批量生成错误:', error);
@@ -1597,6 +1604,10 @@ export const SlidePreview: React.FC = () => {
         || projectDefaultImageProvider;
       const normalizedEditSource = getSourceForImageChannel(selectedEditChannel, providerProfiles)
         || getImageSourceForModel(normalizedEditModel, normalizedProjectImageSource);
+      if (!selectedEditChannel || !normalizedEditSource) {
+        show({ message: '请先选择一个可用的图片渠道，再进行单页生成', type: 'error' });
+        return;
+      }
       const editGenerationOverride: GenerationOverride | undefined = normalizedEditModel
         ? {
           image: {

@@ -13,6 +13,7 @@ import {
 } from '@/config/projectAiDefaults';
 import {
   getSourceForImageChannel,
+  getPreferredImageChannel,
   normalizeImageChannel,
   normalizeImageProvider,
 } from '@/config/projectAiChannels';
@@ -137,13 +138,17 @@ export const useSlidePreviewProjectSettings = ({
     setIsSavingGenerationDefaults(true);
     try {
       const normalizedModel = normalizeProjectDefaultImageModel(projectDefaultImageModel);
-      const normalizedProvider = normalizeImageProvider(projectDefaultImageProvider);
+      const preferredChannel = getPreferredImageChannel(providerProfiles, projectDefaultImageProvider);
+      const normalizedProvider = normalizeImageProvider(projectDefaultImageProvider || preferredChannel?.provider);
       const normalizedChannel = normalizeImageChannel(
-        projectDefaultImageChannel,
+        projectDefaultImageChannel || preferredChannel?.id,
         normalizedProvider,
         providerProfiles,
       );
       const normalizedSource = getSourceForImageChannel(normalizedChannel, providerProfiles);
+      if (!normalizedChannel || !normalizedSource) {
+        throw new Error('请先在项目设置中选择一个可用的图片渠道');
+      }
       const normalizedResolution = normalizeProjectDefaultImageResolution(
         projectDefaultImageResolution,
         normalizedModel

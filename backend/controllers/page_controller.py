@@ -39,6 +39,19 @@ logger = logging.getLogger(__name__)
 page_bp = Blueprint('pages', __name__, url_prefix='/api/projects')
 
 
+def _validate_image_generation_override(generation_override):
+    """Reject image generation requests that try to use UI routing without a concrete channel/source."""
+    if not isinstance(generation_override, dict):
+        return None
+    image_override = generation_override.get('image') or {}
+    if not isinstance(image_override, dict):
+        return None
+    has_any_image_route_hint = any(image_override.get(key) for key in ('provider', 'channel', 'source', 'model'))
+    if has_any_image_route_hint and (not image_override.get('channel') or not image_override.get('source')):
+        return bad_request("image generation override must include both channel and source")
+    return None
+
+
 @page_bp.route('/<project_id>/pages', methods=['POST'])
 def create_page(project_id):
     """
@@ -537,6 +550,9 @@ def generate_page_image(project_id, page_id):
         generation_override = data.get('generation_override') or {}
         if generation_override and not isinstance(generation_override, dict):
             return bad_request("generation_override must be an object")
+        invalid_override = _validate_image_generation_override(generation_override)
+        if invalid_override:
+            return invalid_override
         
         # Check if already generated
         if page.generated_image_path and not force_regenerate:
@@ -797,6 +813,9 @@ def edit_page_image(project_id, page_id):
         generation_override = data.get('generation_override') or {}
         if generation_override and not isinstance(generation_override, dict):
             return bad_request("generation_override must be an object")
+        invalid_override = _validate_image_generation_override(generation_override)
+        if invalid_override:
+            return invalid_override
 
         # Initialize services
         try:
