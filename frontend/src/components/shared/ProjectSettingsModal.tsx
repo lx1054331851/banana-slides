@@ -13,11 +13,10 @@ import {
   type ProjectSupportedImageModel,
 } from '@/config/projectAiDefaults';
 import {
-  getImageChannelsForProvider,
+  getImageChannelOptionById,
+  getImageChannelOptions,
   getSelectableImageModelsForChannel,
-  IMAGE_PROVIDER_OPTIONS,
   normalizeImageChannel,
-  normalizeImageProvider,
 } from '@/config/projectAiChannels';
 import {
   DndContext,
@@ -339,17 +338,17 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
       : PROJECT_DEFAULT_IMAGE_MODEL),
     [generationDefaultImageModel]
   );
-  const selectedImageProvider = useMemo(
-    () => normalizeImageProvider(generationDefaultImageProvider),
-    [generationDefaultImageProvider]
-  );
   const availableImageChannels = useMemo(
-    () => getImageChannelsForProvider(selectedImageProvider, providerProfiles),
-    [providerProfiles, selectedImageProvider]
+    () => getImageChannelOptions(providerProfiles),
+    [providerProfiles]
   );
   const selectedImageChannel = useMemo(
-    () => normalizeImageChannel(generationDefaultImageChannel, selectedImageProvider, providerProfiles),
-    [generationDefaultImageChannel, providerProfiles, selectedImageProvider]
+    () => {
+      const current = getImageChannelOptionById(generationDefaultImageChannel, providerProfiles);
+      const currentProvider = current?.provider || generationDefaultImageProvider || 'gemini';
+      return normalizeImageChannel(generationDefaultImageChannel, currentProvider, providerProfiles);
+    },
+    [generationDefaultImageChannel, generationDefaultImageProvider, providerProfiles]
   );
   const selectableImageModels = useMemo(() => {
     return getSelectableImageModelsForChannel(selectedImageChannel, providerProfiles);
@@ -584,29 +583,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                       配置当前项目默认的图片生成来源/模型/清晰度（可在预览页临时覆盖）。
                     </p>
                   </div>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(320px,1.35fr)_minmax(0,1fr)]">
-                    <div className="w-full">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-                        Provider
-                      </label>
-                      <Select
-                        value={selectedImageProvider}
-                        onChange={(value) => {
-                          const nextProvider = normalizeImageProvider(value);
-                          const nextChannel = normalizeImageChannel('', nextProvider, providerProfiles);
-                          onGenerationDefaultImageProviderChange?.(nextProvider);
-                          onGenerationDefaultImageChannelChange?.(nextChannel);
-                          const nextModels = getSelectableImageModelsForChannel(nextChannel, providerProfiles);
-                          if (nextModels.length > 0) {
-                            onGenerationDefaultImageModelChange?.(nextModels[0].model);
-                          }
-                        }}
-                        options={IMAGE_PROVIDER_OPTIONS.map((provider) => ({
-                          value: provider.value,
-                          label: provider.label,
-                        }))}
-                      />
-                    </div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(320px,1.35fr)_minmax(0,1fr)]">
                     <div className="w-full">
                       <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
                         Channel
@@ -615,6 +592,10 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                         value={selectedImageChannel}
                         onChange={(value) => {
                           const nextChannel = value;
+                          const nextChannelOption = getImageChannelOptionById(nextChannel, providerProfiles);
+                          if (nextChannelOption?.provider) {
+                            onGenerationDefaultImageProviderChange?.(nextChannelOption.provider);
+                          }
                           onGenerationDefaultImageChannelChange?.(nextChannel);
                           const nextModels = getSelectableImageModelsForChannel(nextChannel, providerProfiles);
                           if (nextModels.length > 0) {

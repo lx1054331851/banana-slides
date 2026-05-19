@@ -54,6 +54,13 @@ export const getImageChannelOptions = (
     .map(toImageChannelOption),
 ];
 
+export const getImageChannelOptionById = (
+  channelId: string | undefined,
+  providerProfiles: ProviderProfileSummary[],
+): ImageChannelOption | undefined => (
+  getImageChannelOptions(providerProfiles).find((channel) => channel.id === channelId)
+);
+
 export const getImageChannelsForProvider = (
   provider: string,
   providerProfiles: ProviderProfileSummary[],
@@ -146,7 +153,7 @@ export const getSourceForImageChannel = (
   channelId: string,
   providerProfiles: ProviderProfileSummary[],
 ): string => {
-  const matched = getImageChannelOptions(providerProfiles).find((channel) => channel.id === channelId);
+  const matched = getImageChannelOptionById(channelId, providerProfiles);
   return matched?.source || 'gemini';
 };
 
@@ -154,7 +161,7 @@ export const getSelectableImageModelsForChannel = (
   channelId: string,
   providerProfiles: ProviderProfileSummary[],
 ) => {
-  const channel = getImageChannelOptions(providerProfiles).find((item) => item.id === channelId);
+  const channel = getImageChannelOptionById(channelId, providerProfiles);
   if (!channel) return PROJECT_IMAGE_MODEL_CATALOG;
   if (!channel.models?.length) {
     return PROJECT_IMAGE_MODEL_CATALOG.filter((item) => item.source === channel.provider);
