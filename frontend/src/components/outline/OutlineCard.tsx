@@ -172,7 +172,7 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
     <Card
       className={`p-4 relative ${
         isSelected ? 'border-2 border-banana-500 shadow-yellow' : ''
-      } ${showSelectionCheckbox && isSelectionChecked ? 'ring-2 ring-banana-400 border-banana-300' : ''} ${isExpanded ? 'h-full' : (isGridView && !isEditing ? 'h-72' : '')}`}
+      } ${showSelectionCheckbox && isSelectionChecked ? 'ring-2 ring-banana-400 border-banana-300' : ''} ${isExpanded ? 'h-full' : (isGridView && !isEditing ? 'h-72' : '')} ${isPageTypeMenuOpen ? 'z-40 overflow-visible' : 'overflow-visible'} ${isEditing ? 'z-20' : ''}`}
       onClick={!isEditing ? (showSelectionCheckbox ? onSelectionToggle : onClick) : undefined}
     >
       <ShimmerOverlay show={isAiRefining} />
