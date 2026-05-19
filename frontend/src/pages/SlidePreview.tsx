@@ -1525,11 +1525,6 @@ export const SlidePreview: React.FC = () => {
     }, 900);
   }, [handleSaveOutlineAndDescription]);
 
-  const syncDescriptionPageTypeForCurrentMode = useCallback((pageType: string, descriptionText: string) => {
-    if (!useRenovationPreviewForm) return descriptionText;
-    return syncRenovationJsonPageType(descriptionText, pageType, 4);
-  }, [useRenovationPreviewForm]);
-
   // 立即保存页面文本，并可携带 blur 时从编辑器读取到的最新值。
   const persistTextEditsNow = useCallback((options?: { silent?: boolean; overrides?: TextSaveOverrides }) => {
     if (textAutoSaveTimerRef.current) {
@@ -1997,6 +1992,10 @@ export const SlidePreview: React.FC = () => {
   const isPptRenovationProject = currentProject?.creation_type === 'ppt_renovation';
   const isTextGenerationPreviewProject = currentProject?.creation_type !== 'ppt_renovation';
   const useRenovationPreviewForm = isPptRenovationProject || isTextGenerationPreviewProject;
+  const syncDescriptionPageTypeForCurrentMode = useCallback((pageType: string, descriptionText: string) => {
+    if (!useRenovationPreviewForm) return descriptionText;
+    return syncRenovationJsonPageType(descriptionText, pageType, 4);
+  }, [useRenovationPreviewForm]);
   const pageTypeOptions = currentProject?.scenario === 'data_report' ? DATA_REPORT_PAGE_TYPE_OPTIONS : PPT_PAGE_TYPE_OPTIONS;
   const activeStyleGuideBindingKey = buildStyleGuideBindingKey(currentImageVersionId);
   const effectivePreviewPageType = editPageType || selectedPage?.outline_content?.page_type || '';
