@@ -37,6 +37,7 @@ export const toImageChannelOption = (profile: ProviderProfileSummary): ImageChan
   capabilities: profile.capabilities || [],
   models: profile.models || [],
   model_defaults: profile.model_defaults || {},
+  supported_resolutions: profile.supported_resolutions || {},
   adapter_options: profile.adapter_options || {},
   enabled: profile.enabled,
   configured: profile.configured,
@@ -194,6 +195,21 @@ export const getSelectableImageModelsForChannel = (
       resolutions: ['1K'],
     };
   });
+};
+
+// Return channel-aware resolution options for the selected model.
+export const getSupportedResolutionsForChannelModel = (
+  channelId: string,
+  model: string,
+  providerProfiles: ProviderProfileSummary[],
+  fallbackResolutions: string[],
+): string[] => {
+  const channel = getImageChannelOptionById(channelId, providerProfiles);
+  const supported = channel?.supported_resolutions?.[String(model || '').trim()];
+  if (Array.isArray(supported) && supported.length > 0) {
+    return [...supported];
+  }
+  return [...fallbackResolutions];
 };
 
 export const getImageModelDisplayLabel = (

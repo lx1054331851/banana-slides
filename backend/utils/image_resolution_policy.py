@@ -1,17 +1,25 @@
-"""
-Image resolution support policy by provider/model.
-"""
+"""Image resolution support policy by provider/model/channel."""
 
 from __future__ import annotations
 
 import json
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 BASE_RESOLUTIONS: List[str] = ["1K", "2K", "4K"]
 GEMINI_31_FLASH_RESOLUTIONS: List[str] = ["0.5K", "1K", "2K", "4K"]
 GEMINI_3_PRO_STABLE_RESOLUTIONS: List[str] = ["1K"]
 OPENAI_RESOLUTIONS: List[str] = ["1K"]
 OPENAI_GPT_IMAGE_2_RESOLUTIONS: List[str] = ["1K", "2K", "4K"]
+
+CHANNEL_MODEL_RESOLUTION_OVERRIDES: Dict[str, Dict[str, List[str]]] = {
+    # 147AI's OpenAI-compatible relay currently rejects non-1K resolutions for
+    # these image models, even though the generic model families may support
+    # higher presets elsewhere.
+    "147ai": {
+        "gpt-image-2-high": ["1K"],
+        "gemini-3.1-flash-image-preview": ["1K"],
+    }
+}
 
 _RESOLUTION_NORMALIZE_MAP = {
     "0.5k": "0.5K",
@@ -37,6 +45,10 @@ def _normalize_provider_name(provider: Optional[str]) -> str:
     return (provider or "").strip().lower()
 
 
+def _normalize_channel_name(channel: Optional[str]) -> str:
+    return (channel or "").strip().lower()
+
+
 def _is_gpt_image_2_model(model_name: str) -> bool:
     return _normalize_model_name(model_name) == "gpt-image-2"
 
@@ -57,9 +69,19 @@ def normalize_image_resolution(value: str) -> str:
     return normalized
 
 
-def get_supported_image_resolutions(provider: Optional[str], model_name: str) -> List[str]:
-    provider_name = _normalize_provider_name(provider)
+def get_supported_image_resolutions(
+    provider: Optional[str],
+    model_name: str,
+    *,
+    channel: Optional[str] = None,
+) -> List[str]:
+    normalized_channel = _normalize_channel_name(channel)
     model = _normalize_model_name(model_name)
+    channel_override = CHANNEL_MODEL_RESOLUTION_OVERRIDES.get(normalized_channel, {}).get(model)
+    if channel_override:
+        return channel_override
+
+    provider_name = _normalize_provider_name(provider)
 
     if provider_name == "openai":
         if _is_gpt_image_2_model(model):
@@ -72,8 +94,13 @@ def get_supported_image_resolutions(provider: Optional[str], model_name: str) ->
     return BASE_RESOLUTIONS
 
 
-def _model_default_resolution(provider: Optional[str], model_name: str) -> str:
-    supported = get_supported_image_resolutions(provider, model_name)
+def _model_default_resolution(
+    provider: Optional[str],
+    model_name: str,
+    *,
+    channel: Optional[str] = None,
+) -> str:
+    supported = get_supported_image_resolutions(provider, model_name, channel=channel)
     if "4K" in supported:
         return "4K"
     return supported[-1]
@@ -83,19 +110,21 @@ def resolve_effective_image_resolution(
     provider: Optional[str],
     model_name: str,
     *,
+    channel: Optional[str] = None,
     request_resolution: Optional[str],
     project_resolution: Optional[str],
     global_resolution: str,
 ) -> str:
-    supported = set(get_supported_image_resolutions(provider, model_name))
-    default_for_model = _model_default_resolution(provider, model_name)
+    supported_list = get_supported_image_resolutions(provider, model_name, channel=channel)
+    supported = set(supported_list)
+    default_for_model = _model_default_resolution(provider, model_name, channel=channel)
 
     if request_resolution and str(request_resolution).strip():
         normalized_request = normalize_image_resolution(str(request_resolution))
         if normalized_request not in supported:
             raise ValueError(
                 f"Resolution '{normalized_request}' is not supported by image model '{model_name}'. "
-                f"Allowed values: {', '.join(get_supported_image_resolutions(provider, model_name))}"
+                f"Allowed values: {', '.join(supported_list)}"
             )
         return normalized_request
 

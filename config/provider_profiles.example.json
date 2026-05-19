@@ -13,6 +13,10 @@
       "gemini-3.1-flash-image-preview",
       "gemini-3-pro-image-preview"
     ],
+    "supported_resolutions": {
+      "gemini-3.1-flash-image-preview": ["0.5K", "1K", "2K", "4K"],
+      "gemini-3-pro-image-preview": ["1K", "2K", "4K"]
+    },
     "model_defaults": {
       "image": "gemini-3.1-flash-image-preview"
     }
@@ -28,6 +32,9 @@
     "adapter": "openai_image_compat",
     "capabilities": ["image"],
     "models": ["gpt-image-2"],
+    "supported_resolutions": {
+      "gpt-image-2": ["1K", "2K", "4K"]
+    },
     "model_defaults": {
       "image": "gpt-image-2"
     }
@@ -53,6 +60,17 @@
       "gemini-3.1-flash-image-preview",
       "grok-4-image"
     ],
+    "supported_resolutions": {
+      "gpt-image-2-low": ["1K"],
+      "gpt-image-2-medium": ["1K"],
+      "gpt-image-2-high": ["1K"],
+      "gemini-2.5-flash-image": ["1K"],
+      "gemini-2.5-flash-image-preview": ["1K"],
+      "gemini-3-pro-image-preview": ["1K"],
+      "gemini-3-pro-image-preview-stable": ["1K"],
+      "gemini-3.1-flash-image-preview": ["1K"],
+      "grok-4-image": ["1K"]
+    },
     "model_defaults": {
       "image": "gpt-image-2-low"
     }

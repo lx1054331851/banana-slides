@@ -1544,6 +1544,7 @@ def generate_images(project_id):
             effective_resolution = resolve_effective_image_resolution(
                 routing_bundle.image.provider,
                 routing_bundle.image.model,
+                channel=routing_bundle.image.channel,
                 request_resolution=request_resolution,
                 project_resolution=project_resolution,
                 global_resolution=current_app.config.get('DEFAULT_RESOLUTION', '2K'),

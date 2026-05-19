@@ -15,6 +15,7 @@ import {
 import {
   getImageChannelOptionById,
   getImageChannelOptions,
+  getSupportedResolutionsForChannelModel,
   getSelectableImageModelsForChannel,
   normalizeImageChannel,
 } from '@/config/projectAiChannels';
@@ -368,8 +369,13 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
     return ASPECT_RATIO_OPTIONS.filter((opt) => GEMINI_PRO_SUPPORTED_ASPECT_RATIOS.has(opt.value));
   }, [selectedImageModel]);
   const visibleResolutionOptions = useMemo(
-    () => getSupportedResolutionsForModel(selectedImageModel),
-    [selectedImageModel]
+    () => getSupportedResolutionsForChannelModel(
+      selectedImageChannel,
+      selectedImageModel,
+      providerProfiles,
+      getSupportedResolutionsForModel(selectedImageModel),
+    ),
+    [providerProfiles, selectedImageChannel, selectedImageModel]
   );
   const selectedImageResolution = useMemo(
     () => (visibleResolutionOptions.includes(generationDefaultImageResolution)
