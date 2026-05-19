@@ -33,6 +33,7 @@ type SlidePreviewSidebarContentProps = {
   previewSortablePageIds: string[];
   sidebarGridColumns: number;
   aspectRatio: string;
+  aspectRatioStyle: React.CSSProperties['aspectRatio'];
   toggleMultiSelectMode: () => void;
   selectAllPages: () => void;
   deselectAllPages: () => void;
@@ -62,6 +63,7 @@ export const SlidePreviewSidebarContent: React.FC<SlidePreviewSidebarContentProp
   previewSortablePageIds,
   sidebarGridColumns,
   aspectRatio,
+  aspectRatioStyle,
   toggleMultiSelectMode,
   selectAllPages,
   deselectAllPages,
@@ -244,7 +246,10 @@ export const SlidePreviewSidebarContent: React.FC<SlidePreviewSidebarContentProp
                         <div className="text-xs font-medium px-2 py-1 text-left text-gray-600 dark:text-foreground-tertiary bg-white/90 dark:bg-background-secondary/90">
                           {t('preview.page', { num: index + 1 })}
                         </div>
-                        <div className="aspect-video bg-gray-100 dark:bg-background-primary ring-1 ring-gray-200/90">
+                        <div
+                          className="bg-gray-100 dark:bg-background-primary ring-1 ring-gray-200/90"
+                          style={{ aspectRatio: aspectRatioStyle }}
+                        >
                           {(page.preview_image_path || page.generated_image_path) ? (
                             <img
                               src={getPageImageUrl(page, { preferPreview: true })}
@@ -332,7 +337,10 @@ export const SlidePreviewSidebarContent: React.FC<SlidePreviewSidebarContentProp
                     <div className="text-xs font-medium px-2 py-1 text-left text-gray-600 dark:text-foreground-tertiary bg-white/90 dark:bg-background-secondary/90">
                       {t('preview.page', { num: index + 1 })}
                     </div>
-                    <div className="aspect-video bg-gray-100 dark:bg-background-primary ring-1 ring-gray-200/90">
+                    <div
+                      className="bg-gray-100 dark:bg-background-primary ring-1 ring-gray-200/90"
+                      style={{ aspectRatio: aspectRatioStyle }}
+                    >
                       {(page.preview_image_path || page.generated_image_path) ? (
                         <img
                           src={getPageImageUrl(page, { preferPreview: true })}

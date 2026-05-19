@@ -2580,6 +2580,7 @@ export const SlidePreview: React.FC = () => {
             previewSortablePageIds={previewSortablePageIds}
             sidebarGridColumns={sidebarGridColumns}
             aspectRatio={aspectRatio}
+            aspectRatioStyle={aspectRatioStyle}
             toggleMultiSelectMode={toggleMultiSelectMode}
             selectAllPages={selectAllPages}
             deselectAllPages={deselectAllPages}
