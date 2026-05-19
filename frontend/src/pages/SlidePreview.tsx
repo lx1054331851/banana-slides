@@ -72,6 +72,7 @@ import {
   ChevronRight,
   X,
   Check,
+  ChevronDown,
   History,
   Send,
   Sparkles,
@@ -341,10 +342,12 @@ export const SlidePreview: React.FC = () => {
   const [editDescription, setEditDescription] = useState('');
   const [editStyleGuideBindings, setEditStyleGuideBindings] = useState<StyleGuideBindings>({});
   const [renovationJsonViewMode, setRenovationJsonViewMode] = useState<RenovationJsonViewMode>('text');
+  const [isPreviewPageTypeMenuOpen, setIsPreviewPageTypeMenuOpen] = useState(false);
   const pendingOutlineFocusIndexRef = useRef<number | null>(null);
   const descriptionTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const styleGuideTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const editorJsonContainerRef = useRef<HTMLDivElement | null>(null);
+  const previewPageTypeMenuRef = useRef<HTMLDivElement | null>(null);
   const outlineQuickPointsTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const activeDescriptionSetContent = useRef<(updater: (prev: string) => string) => void>(setEditDescription);
   const activeDescriptionInsertAtCursor = useRef<((markdown: string) => void) | undefined>(undefined);
@@ -452,6 +455,18 @@ export const SlidePreview: React.FC = () => {
     if (pendingOutlineFocusIndexRef.current !== selectedIndex) return;
     pendingOutlineFocusIndexRef.current = null;
   }, [selectedIndex, canQuickEditOutlineInPreview]);
+  useEffect(() => {
+    if (!isPreviewPageTypeMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!previewPageTypeMenuRef.current?.contains(event.target as Node)) {
+        setIsPreviewPageTypeMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isPreviewPageTypeMenuOpen]);
   const isEditingTemplateStyle = useRef(false); // 跟踪用户是否正在编辑风格描述
   const lastProjectId = useRef<string | null>(null); // 跟踪上一次的项目ID
   const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
@@ -2113,28 +2128,46 @@ export const SlidePreview: React.FC = () => {
                   )}
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  <div className="inline-flex items-center rounded-lg border border-[#e8d9b4] bg-[#fff9ec] px-2 py-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
-                    <span className="mr-2 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9f8f67] dark:text-[#98a2bd]">
-                      {t('preview.pageType')}
-                    </span>
-                    <select
-                      value={editPageType}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        setEditPageType(value);
-                        persistCurrentPageDraft({ pageType: value });
-                        scheduleTextAutoSave({ pageType: value });
-                      }}
+                  <div className="relative" ref={previewPageTypeMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsPreviewPageTypeMenuOpen((prev) => !prev)}
                       data-testid="preview-page-type-select"
-                      className="min-h-[32px] min-w-[140px] rounded-md border border-[#eadfbf] bg-[#fffdf8] px-2.5 text-xs text-slate-800 outline-none focus:border-banana-400 dark:border-[#36415b] dark:bg-[#101521] dark:text-[#f5f7ff]"
+                      className="inline-flex min-h-[38px] min-w-[140px] items-center justify-between gap-2 rounded-lg border border-[#e8d9b4] bg-[#fff9ec] px-3 py-2 text-sm text-slate-800 transition-colors hover:border-banana-300 focus:outline-none focus:ring-2 focus:ring-banana-400/60 dark:border-[#3c4762] dark:bg-[#1a2335] dark:text-[#f5f7ff] dark:hover:border-banana-500/50"
                     >
-                      <option value="">{t('preview.pageTypePlaceholder')}</option>
-                      {pageTypeOptions.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
+                      <span className="truncate">{editPageType || t('preview.pageTypePlaceholder')}</span>
+                      <ChevronDown
+                        size={16}
+                        className={`flex-shrink-0 text-slate-400 transition-transform dark:text-[#9eaccf] ${isPreviewPageTypeMenuOpen ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    {isPreviewPageTypeMenuOpen && (
+                      <div className="absolute right-0 top-[calc(100%+8px)] z-30 max-h-72 min-w-[220px] overflow-y-auto rounded-xl border border-[#eadfbf] bg-white p-2 shadow-[0_16px_40px_rgba(15,23,42,0.14)] dark:border-[#36415b] dark:bg-[#101521]">
+                        {pageTypeOptions.map((option) => {
+                          const isActive = (editPageType || '标准图文页') === option;
+                          return (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => {
+                                setEditPageType(option);
+                                persistCurrentPageDraft({ pageType: option });
+                                scheduleTextAutoSave({ pageType: option });
+                                setIsPreviewPageTypeMenuOpen(false);
+                              }}
+                              className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                                isActive
+                                  ? 'bg-banana-50 text-banana-700 dark:bg-banana-500/15 dark:text-banana-300'
+                                  : 'text-slate-700 hover:bg-[#f7edd2] dark:text-[#e2e8f0] dark:hover:bg-[#232f47]'
+                              }`}
+                            >
+                              <span className="truncate">{option}</span>
+                              {isActive ? <Check size={16} className="flex-shrink-0 text-banana-500" /> : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                   <div className="inline-flex items-center rounded-lg border border-[#e8d9b4] bg-[#fff9ec] p-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
                     <button
