@@ -1,5 +1,6 @@
 import type { Task } from '@/types';
 import type { StylePreset, StylePresetPreviewImages, StyleTemplate } from '@/api/endpoints';
+import type { ProjectScenario } from '@/types';
 
 export type PreviewKey = keyof StylePresetPreviewImages;
 
@@ -25,21 +26,48 @@ export interface StylePresetTaskRecord extends Task {
     template_json?: string;
     preset_name_input?: string;
     style_json?: string;
-    sample_pages?: Record<'cover' | 'toc' | 'detail' | 'ending', string>;
+    sample_pages?: Record<string, string>;
   };
 }
 
 export interface JsonPresetWorkspaceProps {
   templates: StyleTemplate[];
+  scenario: ProjectScenario;
   refreshKey?: number;
 }
 
-export const PREVIEW_ORDER: Array<[PreviewKey, string]> = [
-  ['cover_url', '首页'],
-  ['toc_url', '目录'],
-  ['detail_url', '详情'],
-  ['ending_url', '结尾'],
-];
+const PREVIEW_LABEL_MAP: Record<string, string> = {
+  cover_url: '首页',
+  catalog_url: '目录',
+  section_header_url: '章节过渡',
+  agenda_timeline_url: '议程时间线',
+  detail_text_split_url: '标准图文',
+  bullet_keypoints_url: '要点列表',
+  comparison_url: '对比',
+  process_flow_url: '流程',
+  framework_matrix_url: '框架矩阵',
+  detail_chart_url: '图表',
+  case_showcase_url: '案例展示',
+  closing_url: '结尾',
+};
+
+export function humanizePreviewKey(previewKey: string): string {
+  if (PREVIEW_LABEL_MAP[previewKey]) return PREVIEW_LABEL_MAP[previewKey];
+  const base = String(previewKey || '').replace(/_url$/i, '');
+  return base
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+export function getPreviewOrder(previewImages?: Partial<StylePresetPreviewImages>, samplePages?: Record<string, string>): Array<[PreviewKey, string]> {
+  const keys = new Set<string>([
+    ...Object.keys(previewImages || {}),
+    ...Object.keys(samplePages || {}).map((key) => `${key}_url`),
+  ]);
+  return Array.from(keys).map((key) => [key as PreviewKey, humanizePreviewKey(key)]);
+}
 
 export const RUNNING_TASK_STATUSES = new Set(['PENDING', 'PROCESSING', 'RUNNING']);
 
@@ -65,5 +93,17 @@ export function getTaskPresetId(task: StylePresetTaskRecord): string {
 
 export function getTaskPreviewKey(task: StylePresetTaskRecord): PreviewKey | null {
   const key = task.progress?.preview_key;
-  return key === 'cover_url' || key === 'toc_url' || key === 'detail_url' || key === 'ending_url' ? key : null;
+  return key ? key as PreviewKey : null;
+}
+
+export function inferStylePresetScenario(preset: StylePreset): ProjectScenario {
+  if (preset.scenario === 'data_report') return 'data_report';
+  if (preset.scenario === 'ppt') return 'ppt';
+  try {
+    const parsed = JSON.parse(preset.style_json || '{}');
+    const scenario = parsed?.design_system_spec?.meta?.scenario;
+    return scenario === 'data_report' ? 'data_report' : 'ppt';
+  } catch {
+    return 'ppt';
+  }
 }

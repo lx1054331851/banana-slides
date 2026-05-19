@@ -149,6 +149,7 @@ class ProjectContext:
             self.outline_text = project_or_dict.outline_text
             self.description_text = project_or_dict.description_text
             self.creation_type = project_or_dict.creation_type or 'idea'
+            self.scenario = getattr(project_or_dict, 'scenario', None) or 'ppt'
             self.outline_requirements = project_or_dict.outline_requirements
             self.description_requirements = project_or_dict.description_requirements
             self.template_style_json = getattr(project_or_dict, 'template_style_json', None)
@@ -158,6 +159,7 @@ class ProjectContext:
             self.outline_text = project_or_dict.get('outline_text')
             self.description_text = project_or_dict.get('description_text')
             self.creation_type = project_or_dict.get('creation_type', 'idea')
+            self.scenario = project_or_dict.get('scenario') or 'ppt'
             self.outline_requirements = project_or_dict.get('outline_requirements')
             self.description_requirements = project_or_dict.get('description_requirements')
             self.template_style_json = project_or_dict.get('template_style_json')
@@ -171,6 +173,7 @@ class ProjectContext:
             'outline_text': self.outline_text,
             'description_text': self.description_text,
             'creation_type': self.creation_type,
+            'scenario': self.scenario,
             'outline_requirements': self.outline_requirements,
             'description_requirements': self.description_requirements,
             'template_style_json': self.template_style_json,
@@ -430,6 +433,77 @@ class AIService:
         except json.JSONDecodeError as e:
             logger.warning(f"JSON解析失败，将重新生成。原始文本: {cleaned_text[:200]}... 错误: {str(e)}")
             raise
+
+    def _clean_json_response_text(self, response_text: str) -> str:
+        if not response_text:
+            return ""
+        raw = response_text.strip()
+        fenced_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw, re.IGNORECASE)
+        if fenced_match:
+            return fenced_match.group(1).strip()
+        if raw.startswith("```json"):
+            raw = raw[len("```json"):].strip()
+        elif raw.startswith("```"):
+            raw = raw[len("```"):].strip()
+        if raw.endswith("```"):
+            raw = raw[:-3].strip()
+        return raw
+
+    def _extract_json_candidate(self, response_text: str) -> str:
+        cleaned = self._clean_json_response_text(response_text)
+        if not cleaned:
+            return cleaned
+
+        candidates = [cleaned]
+
+        first_obj = cleaned.find('{')
+        last_obj = cleaned.rfind('}')
+        if first_obj != -1 and last_obj != -1 and last_obj > first_obj:
+            candidates.append(cleaned[first_obj:last_obj + 1])
+
+        first_arr = cleaned.find('[')
+        last_arr = cleaned.rfind(']')
+        if first_arr != -1 and last_arr != -1 and last_arr > first_arr:
+            candidates.append(cleaned[first_arr:last_arr + 1])
+
+        for candidate in candidates:
+            try:
+                json.loads(candidate)
+                return candidate
+            except json.JSONDecodeError:
+                continue
+        return cleaned
+
+    @retry(
+        stop=stop_after_attempt(3),
+        retry=retry_if_exception_type((json.JSONDecodeError, ValueError)),
+        reraise=True
+    )
+    def generate_json_stream(self, prompt: str, thinking_budget: int = 1000) -> Union[Dict, List]:
+        """
+        通过流式文本累计生成 JSON，结束后统一解析。
+        对于大响应可尽早收到分块，减少长时间无输出的网关风险。
+        """
+        actual_budget = self._get_text_thinking_budget()
+        if actual_budget > 0:
+            try:
+                actual_budget = min(actual_budget, int(thinking_budget))
+            except (TypeError, ValueError):
+                pass
+
+        chunks: List[str] = []
+        for chunk in self.text_provider.generate_text_stream(prompt, thinking_budget=actual_budget):
+            if chunk:
+                chunks.append(chunk)
+
+        response_text = "".join(chunks)
+        cleaned_text = self._extract_json_candidate(response_text)
+
+        try:
+            return json.loads(cleaned_text)
+        except json.JSONDecodeError as e:
+            logger.warning(f"流式JSON解析失败，将重新生成。原始文本: {cleaned_text[:200]}... 错误: {str(e)}")
+            raise
     
     @retry(
         stop=stop_after_attempt(3),
@@ -622,6 +696,7 @@ class AIService:
         def _new_page(title: str) -> Dict:
             page = {
                 'title': title,
+                'page_type': '',
                 'points': [],
                 'description_lines': [],
                 'extra_fields': {},
@@ -637,6 +712,8 @@ class AIService:
                 'title': page.get('title', ''),
                 'points': page.get('points', []),
             }
+            if page.get('page_type'):
+                result['page_type'] = page['page_type']
             if page.get('part'):
                 result['part'] = page['part']
             description_text = "\n".join(page.get('description_lines', [])).strip()
@@ -682,6 +759,10 @@ class AIService:
                 return finished
 
             if current_page is None:
+                return None
+
+            if stripped.lower().startswith('page type:'):
+                current_page['page_type'] = stripped.split(':', 1)[1].strip()
                 return None
 
             marker = stripped.strip('*_').strip().lower().replace('：', ':')
@@ -777,8 +858,8 @@ class AIService:
             if isinstance(raw_page, dict):
                 return raw_page
             if isinstance(raw_page, str):
-                return {"title": raw_page}
-            return {"title": str(raw_page)}
+                return {"title": raw_page, "page_type": "标准图文页"}
+            return {"title": str(raw_page), "page_type": "标准图文页"}
 
         pages = []
         if not outline:

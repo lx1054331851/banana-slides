@@ -4,7 +4,7 @@ import { Button } from '@/components/shared';
 import { getImageUrl } from '@/api/client';
 import type { StylePreset, StylePresetPreviewImages } from '@/api/endpoints';
 import type { PreviewKey } from './types';
-import { PREVIEW_ORDER, getPresetDisplayName } from './types';
+import { getPreviewOrder, getPresetDisplayName, inferStylePresetScenario } from './types';
 
 interface JsonPresetRowProps {
   preset: StylePreset;
@@ -26,6 +26,7 @@ export const JsonPresetRow: React.FC<JsonPresetRowProps> = ({
   onGeneratePreview,
 }) => {
   const preview: Partial<StylePresetPreviewImages> = preset.preview_images || {};
+  const previewOrder = getPreviewOrder(preview);
 
   return (
     <div
@@ -38,7 +39,12 @@ export const JsonPresetRow: React.FC<JsonPresetRowProps> = ({
           <div className="text-sm font-semibold text-gray-900 dark:text-white truncate" title={getPresetDisplayName(preset)}>
             {getPresetDisplayName(preset)}
           </div>
-          <div className="text-xs text-gray-500 dark:text-foreground-tertiary mt-1">可直接应用的 style_json 与 4 张预览图</div>
+          <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-foreground-tertiary">
+            <span>可直接应用的 style_json 与多张页型预览图</span>
+            <span className="inline-flex items-center rounded-full border border-gray-200 dark:border-border-primary px-2 py-0.5">
+              {inferStylePresetScenario(preset) === 'data_report' ? '数据报告' : 'PPT'}
+            </span>
+          </div>
         </button>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="ghost" size="sm" icon={<Eye size={14} />} onClick={() => onPreview(preset)}>
@@ -53,8 +59,8 @@ export const JsonPresetRow: React.FC<JsonPresetRowProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {PREVIEW_ORDER.map(([key, label]) => {
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+        {previewOrder.map(([key, label]) => {
           const src = preview[key] ? getImageUrl(preview[key]) : '';
           const isGenerating = generatingPreviewKey === key;
           return (

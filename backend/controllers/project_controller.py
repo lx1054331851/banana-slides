@@ -54,6 +54,8 @@ logger = logging.getLogger(__name__)
 
 project_bp = Blueprint('projects', __name__, url_prefix='/api/projects')
 
+SUPPORTED_PROJECT_SCENARIOS = {'ppt', 'data_report'}
+
 
 def _merge_description_requirements(base_requirements: str | None, override_requirements: str | None) -> str | None:
     """
@@ -327,6 +329,7 @@ def _smart_merge_pages(project_id, pages_data):
         page.part = page_data.get('part')
         page.set_outline_content({
             'title': page_data.get('title'),
+            'page_type': page_data.get('page_type') or '标准图文页',
             'points': page_data.get('points', [])
         })
         description_text = page_data.get('description_text')
@@ -414,9 +417,12 @@ def create_project():
             return bad_request("creation_type is required")
         
         creation_type = data.get('creation_type')
-        
+        scenario = data.get('scenario') or 'ppt'
+
         if creation_type not in ['idea', 'outline', 'descriptions']:
             return bad_request("Invalid creation_type")
+        if scenario not in SUPPORTED_PROJECT_SCENARIOS:
+            return bad_request("Invalid scenario")
         
         # Validate and set aspect ratio if provided
         image_aspect_ratio = '16:9'
@@ -435,6 +441,7 @@ def create_project():
             description_text=data.get('description_text'),
             template_style=data.get('template_style'),
             template_style_json=data.get('template_style_json'),
+            scenario=scenario,
             image_aspect_ratio=image_aspect_ratio,
             status='DRAFT'
         )
@@ -537,6 +544,12 @@ def update_project(project_id):
         # Update template_style_json if provided
         if 'template_style_json' in data:
             project.template_style_json = data['template_style_json']
+
+        if 'scenario' in data:
+            scenario = data.get('scenario') or 'ppt'
+            if scenario not in SUPPORTED_PROJECT_SCENARIOS:
+                return bad_request("Invalid scenario")
+            project.scenario = scenario
 
         # Update presentation_meta if provided
         if 'presentation_meta' in data:
@@ -783,7 +796,18 @@ def generate_outline_stream(project_id):
         return not_found('Project')
 
     data = request.get_json() or {}
+    generation_override = data.get('generation_override') or {}
+    if generation_override and not isinstance(generation_override, dict):
+        return bad_request("generation_override must be an object")
     language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+
+    try:
+        routing_bundle = resolve_routing_bundle(
+            project=project,
+            generation_override=generation_override,
+        )
+    except Exception as e:
+        return bad_request(str(e))
 
     # Capture app reference for use inside the generator (which runs outside request context)
     app = current_app._get_current_object()
@@ -793,7 +817,7 @@ def generate_outline_stream(project_id):
             try:
                 # Re-fetch project inside app context to attach to this session
                 proj = db.session.get(Project, project_id)
-                ai_service = get_ai_service()
+                ai_service = get_ai_service(routing_bundle=routing_bundle)
                 reference_files_content = _get_project_reference_files_content(project_id)
 
                 # Validate input based on creation type
@@ -827,6 +851,7 @@ def generate_outline_stream(project_id):
                     yield _sse_event('page', {
                         'index': i,
                         'title': page_data.get('title', ''),
+                        'page_type': page_data.get('page_type'),
                         'points': page_data.get('points', []),
                         'part': page_data.get('part'),
                         'description_text': page_data.get('description_text'),

@@ -30,7 +30,9 @@ import {
   getDescriptionExtraFields,
   serializeExtraFields,
   areStringRecordsEqual,
+  buildPreviewStyleJsonForPageType,
   formatJsonForEditor,
+  syncRenovationJsonPageType,
   toCanonicalRenovationJsonText,
   toLocalizedRenovationJsonText,
 } from './SlidePreview.utils';
@@ -72,6 +74,7 @@ import {
   ChevronRight,
   X,
   Check,
+  ChevronDown,
   History,
   Send,
   Sparkles,
@@ -95,6 +98,7 @@ import { useImagePaste } from '@/hooks/useImagePaste';
 import {
   setCurrentImageVersion,
   getSettings,
+  getProviderProfiles,
   refineDescriptions,
   addPage,
   getTaskStatus,
@@ -110,6 +114,7 @@ import type {
   PageAiMessage,
   PageAiReference,
   PageAiRegionBounds,
+  ProviderProfileSummary,
 } from '@/types';
 import { normalizeErrorMessage } from '@/utils';
 import {
@@ -119,17 +124,24 @@ import {
 } from '@/utils/projectUtils';
 import {
   PROJECT_DEFAULT_IMAGE_MODEL,
-  PROJECT_DEFAULT_IMAGE_SOURCE,
   PROJECT_DEFAULT_IMAGE_RESOLUTION,
   getImageSourceForModel,
-  normalizeProjectDefaultImageSource,
   PROJECT_SUPPORTED_IMAGE_MODELS,
   normalizeProjectDefaultImageModel,
   normalizeProjectDefaultImageResolution,
 } from '@/config/projectAiDefaults';
+import {
+  deriveImageChannelSelection,
+  getImageChannelOptions,
+  getImageModelDisplayLabel,
+  getSelectableImageModelsForChannel,
+  getSourceForImageChannel,
+  setRuntimeBuiltinImageChannels,
+} from '@/config/projectAiChannels';
 
 type TextSaveOverrides = {
   title?: string;
+  pageType?: string;
   points?: string;
   description?: string;
   extraFields?: Record<string, string>;
@@ -155,6 +167,62 @@ const VIDEO_VOICE_OPTIONS = [
   ]},
 ];
 
+const PPT_PAGE_TYPE_OPTIONS = [
+  '封面页',
+  '目录页',
+  '章节过渡页',
+  '议程时间线页',
+  '标准图文页',
+  '要点列表页',
+  '对比页',
+  '流程页',
+  '框架矩阵页',
+  '图表页',
+  '案例展示页',
+  '结尾页',
+];
+
+const buildRuntimeImageModelValue = (channelId: string, model: string) => `${channelId}::${model}`;
+
+const parseRuntimeImageModelValue = (value?: string): { channelId: string; model: string } => {
+  const raw = String(value || '').trim();
+  const separatorIndex = raw.indexOf('::');
+  if (separatorIndex < 0) {
+    return { channelId: '', model: raw };
+  }
+  return {
+    channelId: raw.slice(0, separatorIndex),
+    model: raw.slice(separatorIndex + 2),
+  };
+};
+
+const DATA_REPORT_PAGE_TYPE_OPTIONS = [
+  '报告封面',
+  '执行摘要',
+  '目录',
+  '研究方法',
+  '章节页',
+  '品牌概览页',
+  '品牌历程页',
+  '品牌画像页',
+  '品牌定位页',
+  '核心指标总览页',
+  '市场概览页',
+  '品牌对标页',
+  '品类结构页',
+  '价格带分布页',
+  '渠道平台表现页',
+  '商品SKU诊断页',
+  '数据明细页',
+  '洞察图文页',
+  '洞察图表页',
+  '矩阵图谱页',
+  '时间轴生命周期页',
+  '人群画像页',
+  '策略建议页',
+  '封底页',
+];
+
 export const SlidePreview: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -171,6 +239,7 @@ export const SlidePreview: React.FC = () => {
     generateImages,
     generateDescriptions,
     editPageImage,
+    uploadPageImage,
     saveAllPages,
     deletePageById,
     reorderPages,
@@ -209,6 +278,7 @@ export const SlidePreview: React.FC = () => {
   const isExporting = activeExportTasks.length > 0;
 
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isUploadingPageImage, setIsUploadingPageImage] = useState(false);
   const selectedPageIdRef = useRef<string | null>(null);
   const {
     isMobileView,
@@ -289,15 +359,17 @@ export const SlidePreview: React.FC = () => {
   const [editPrompt, setEditPrompt] = useState('');
   // 大纲和描述编辑状态
   const [editOutlineTitle, setEditOutlineTitle] = useState('');
+  const [editPageType, setEditPageType] = useState('');
   const [editOutlinePoints, setEditOutlinePoints] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editStyleGuideBindings, setEditStyleGuideBindings] = useState<StyleGuideBindings>({});
   const [renovationJsonViewMode, setRenovationJsonViewMode] = useState<RenovationJsonViewMode>('text');
-  const outlineTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const [isPreviewPageTypeMenuOpen, setIsPreviewPageTypeMenuOpen] = useState(false);
   const pendingOutlineFocusIndexRef = useRef<number | null>(null);
   const descriptionTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const styleGuideTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const editorJsonContainerRef = useRef<HTMLDivElement | null>(null);
+  const previewPageTypeMenuRef = useRef<HTMLDivElement | null>(null);
   const outlineQuickPointsTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const activeDescriptionSetContent = useRef<(updater: (prev: string) => string) => void>(setEditDescription);
   const activeDescriptionInsertAtCursor = useRef<((markdown: string) => void) | undefined>(undefined);
@@ -377,6 +449,7 @@ export const SlidePreview: React.FC = () => {
     selectedIndex,
     formatDescriptionForEditor,
     setEditOutlineTitle,
+    setEditPageType,
     setEditOutlinePoints,
     setEditDescription,
     setEditExtraFields,
@@ -403,16 +476,19 @@ export const SlidePreview: React.FC = () => {
   useEffect(() => {
     if (pendingOutlineFocusIndexRef.current !== selectedIndex) return;
     pendingOutlineFocusIndexRef.current = null;
-    if (!canQuickEditOutlineInPreview) return;
-
-    requestAnimationFrame(() => {
-      const input = outlineTitleInputRef.current;
-      if (!input) return;
-      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      input.focus();
-      input.select();
-    });
   }, [selectedIndex, canQuickEditOutlineInPreview]);
+  useEffect(() => {
+    if (!isPreviewPageTypeMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!previewPageTypeMenuRef.current?.contains(event.target as Node)) {
+        setIsPreviewPageTypeMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isPreviewPageTypeMenuOpen]);
   const isEditingTemplateStyle = useRef(false); // 跟踪用户是否正在编辑风格描述
   const lastProjectId = useRef<string | null>(null); // 跟踪上一次的项目ID
   const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
@@ -454,25 +530,50 @@ export const SlidePreview: React.FC = () => {
   const [aspectRatio, setAspectRatio] = useState<string>(
     currentProject?.image_aspect_ratio || '16:9'
   );
-  const [projectDefaultImageSource, setProjectDefaultImageSource] = useState<string>(PROJECT_DEFAULT_IMAGE_SOURCE);
+  const [projectDefaultImageProvider, setProjectDefaultImageProvider] = useState<string>('gemini');
+  const [projectDefaultImageChannel, setProjectDefaultImageChannel] = useState<string>('');
   const [projectDefaultImageModel, setProjectDefaultImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   const [projectDefaultImageResolution, setProjectDefaultImageResolution] = useState<string>(PROJECT_DEFAULT_IMAGE_RESOLUTION);
+  const [providerProfiles, setProviderProfiles] = useState<ProviderProfileSummary[]>([]);
   const [editRunImageModel, setEditRunImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   const normalizedProjectImageModel = useMemo(
     () => normalizeProjectDefaultImageModel(projectDefaultImageModel),
     [projectDefaultImageModel]
   );
   const normalizedProjectImageSource = useMemo(
-    () => normalizeProjectDefaultImageSource(projectDefaultImageSource, normalizedProjectImageModel),
-    [projectDefaultImageSource, normalizedProjectImageModel]
+    () => getSourceForImageChannel(projectDefaultImageChannel, providerProfiles),
+    [projectDefaultImageChannel, providerProfiles]
+  );
+  const editRunImageModelOptions = useMemo(
+    () => getImageChannelOptions(providerProfiles).flatMap((channel) => (
+      getSelectableImageModelsForChannel(channel.id, providerProfiles).map((item) => ({
+        value: buildRuntimeImageModelValue(channel.id, item.model),
+        label: getImageModelDisplayLabel(channel.id, item.model, providerProfiles),
+      }))
+    )),
+    [providerProfiles]
+  );
+  const parsedEditRunImageSelection = useMemo(
+    () => parseRuntimeImageModelValue(editRunImageModel),
+    [editRunImageModel]
   );
   const normalizedRunImageModel = useMemo(
-    () => normalizeProjectDefaultImageModel(editRunImageModel || projectDefaultImageModel),
-    [editRunImageModel, projectDefaultImageModel]
+    () => normalizeProjectDefaultImageModel(parsedEditRunImageSelection.model || projectDefaultImageModel),
+    [parsedEditRunImageSelection.model, projectDefaultImageModel]
+  );
+  const runtimeSelectedImageChannel = useMemo(
+    () => parsedEditRunImageSelection.channelId || projectDefaultImageChannel,
+    [parsedEditRunImageSelection.channelId, projectDefaultImageChannel]
+  );
+  const runtimeSelectedImageProvider = useMemo(
+    () => getImageChannelOptions(providerProfiles).find((channel) => channel.id === runtimeSelectedImageChannel)?.provider
+      || projectDefaultImageProvider,
+    [projectDefaultImageProvider, providerProfiles, runtimeSelectedImageChannel]
   );
   const normalizedRunImageSource = useMemo(
-    () => getImageSourceForModel(normalizedRunImageModel, normalizedProjectImageSource),
-    [normalizedRunImageModel, normalizedProjectImageSource]
+    () => getSourceForImageChannel(runtimeSelectedImageChannel, providerProfiles)
+      || getImageSourceForModel(normalizedRunImageModel, normalizedProjectImageSource),
+    [normalizedProjectImageSource, normalizedRunImageModel, providerProfiles, runtimeSelectedImageChannel]
   );
   const normalizedRunImageResolution = useMemo(
     () => normalizeProjectDefaultImageResolution(projectDefaultImageResolution, normalizedRunImageModel),
@@ -480,11 +581,19 @@ export const SlidePreview: React.FC = () => {
   );
   const runtimeImageGenerationOverride = useMemo<GenerationOverride>(() => ({
     image: {
+      provider: runtimeSelectedImageProvider,
+      channel: runtimeSelectedImageChannel,
       source: normalizedRunImageSource,
       model: normalizedRunImageModel,
       resolution: normalizedRunImageResolution,
     },
-  }), [normalizedRunImageModel, normalizedRunImageResolution, normalizedRunImageSource]);
+  }), [
+    normalizedRunImageModel,
+    normalizedRunImageResolution,
+    normalizedRunImageSource,
+    runtimeSelectedImageChannel,
+    runtimeSelectedImageProvider,
+  ]);
   // 根据画面比例计算 CSS aspect-ratio
   const aspectRatioStyle = useMemo(() => {
     const parts = aspectRatio.split(':');
@@ -799,9 +908,11 @@ export const SlidePreview: React.FC = () => {
     extraRequirements,
     templateStyle,
     descriptionRequirementsDraft,
-    projectDefaultImageSource,
+    projectDefaultImageProvider,
+    projectDefaultImageChannel,
     projectDefaultImageModel,
     projectDefaultImageResolution,
+    providerProfiles,
     exportExtractorMethod,
     exportInpaintMethod,
     exportAllowPartial,
@@ -941,6 +1052,18 @@ export const SlidePreview: React.FC = () => {
         console.error('Failed to load user templates:', error);
       }
     };
+    const loadProviderProfiles = async () => {
+      try {
+        const response = await getProviderProfiles();
+        setProviderProfiles(response.data?.profiles || []);
+        setRuntimeBuiltinImageChannels(response.data?.builtin_channels || []);
+      } catch (error) {
+        console.warn('Failed to load provider profiles:', error);
+        setProviderProfiles([]);
+        setRuntimeBuiltinImageChannels([]);
+      }
+    };
+    void loadProviderProfiles();
     loadTemplates();
   }, [projectId, currentProject, syncProject]);
 
@@ -980,10 +1103,11 @@ export const SlidePreview: React.FC = () => {
         setAspectRatio(currentProject.image_aspect_ratio || '16:9');
         const imageDefaults = currentProject.generation_defaults?.image || {};
         const normalizedModel = normalizeProjectDefaultImageModel(imageDefaults.model);
-        const normalizedSource = normalizeProjectDefaultImageSource(imageDefaults.source, normalizedModel);
-        setProjectDefaultImageSource(normalizedSource);
+        const channelSelection = deriveImageChannelSelection(imageDefaults, providerProfiles);
+        setProjectDefaultImageProvider(channelSelection.provider);
+        setProjectDefaultImageChannel(channelSelection.channel);
         setProjectDefaultImageModel(normalizedModel);
-        setEditRunImageModel(normalizedModel);
+        setEditRunImageModel(buildRuntimeImageModelValue(channelSelection.channel, normalizedModel));
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
         setDescriptionRequirementsDraft(currentProject.description_requirements || '');
         lastProjectId.current = currentProject.id || null;
@@ -1008,16 +1132,17 @@ export const SlidePreview: React.FC = () => {
         setExportCompressPngQuantizeEnabled(currentProject.export_compress_png_quantize_enabled || false);
         const imageDefaults = currentProject.generation_defaults?.image || {};
         const normalizedModel = normalizeProjectDefaultImageModel(imageDefaults.model);
-        const normalizedSource = normalizeProjectDefaultImageSource(imageDefaults.source, normalizedModel);
-        setProjectDefaultImageSource(normalizedSource);
+        const channelSelection = deriveImageChannelSelection(imageDefaults, providerProfiles);
+        setProjectDefaultImageProvider(channelSelection.provider);
+        setProjectDefaultImageChannel(channelSelection.channel);
         setProjectDefaultImageModel(normalizedModel);
-        setEditRunImageModel(normalizedModel);
+        setEditRunImageModel(buildRuntimeImageModelValue(channelSelection.channel, normalizedModel));
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
         setDescriptionRequirementsDraft(currentProject.description_requirements || '');
       }
       // 如果用户正在编辑，则不更新本地状态
     }
-  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.description_requirements, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality, currentProject?.export_compress_png_quantize_enabled, currentProject?.generation_defaults]);
+  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.description_requirements, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality, currentProject?.export_compress_png_quantize_enabled, currentProject?.generation_defaults, providerProfiles]);
 
   const handleBatchGenerate = useCallback(async (pageIds?: string[]) => {
     try {
@@ -1236,6 +1361,7 @@ export const SlidePreview: React.FC = () => {
     setOutlineQuickEditPageId(targetPageId);
     setSelectedIndex(nextIndex);
     setEditOutlineTitle(targetPage.outline_content?.title || '');
+    setEditPageType(targetPage.outline_content?.page_type || '');
     setEditOutlinePoints(targetPage.outline_content?.points?.join('\n') || '');
     setOutlineQuickEditMode('edit');
     setIsOutlineQuickEditOpen(true);
@@ -1273,11 +1399,13 @@ export const SlidePreview: React.FC = () => {
     if (!targetPage?.id) return null;
 
     const originalTitle = targetPage.outline_content?.title || '';
+    const originalPageType = targetPage.outline_content?.page_type || '';
     const originalPoints = targetPage.outline_content?.points?.join('\n') || '';
-    if (editOutlineTitle !== originalTitle || editOutlinePoints !== originalPoints) {
+    if (editOutlineTitle !== originalTitle || editPageType !== originalPageType || editOutlinePoints !== originalPoints) {
       updatePageLocal(targetPage.id, {
         outline_content: {
           title: editOutlineTitle,
+          page_type: editPageType || '标准图文页',
           points: editOutlinePoints.split('\n').filter((p) => p.trim()),
         },
       });
@@ -1292,6 +1420,7 @@ export const SlidePreview: React.FC = () => {
     selectedIndex,
     outlineQuickEditPageId,
     editOutlineTitle,
+    editPageType,
     editOutlinePoints,
     updatePageLocal,
     show,
@@ -1304,6 +1433,7 @@ export const SlidePreview: React.FC = () => {
     const page = currentProject.pages[selectedIndex];
     if (!page?.id) return false;
     const nextOutlineTitle = options?.overrides?.title ?? editOutlineTitle;
+    const nextPageType = options?.overrides?.pageType ?? editPageType;
     const nextOutlinePoints = options?.overrides?.points ?? editOutlinePoints;
     const nextDescriptionDraft = options?.overrides?.description ?? editDescription;
     const nextExtraFields = options?.overrides?.extraFields ?? editExtraFields;
@@ -1319,10 +1449,12 @@ export const SlidePreview: React.FC = () => {
 
     // 检查大纲是否有变化
     const originalTitle = page.outline_content?.title || '';
+    const originalPageType = page.outline_content?.page_type || '';
     const originalPoints = page.outline_content?.points?.join('\n') || '';
-    if (nextOutlineTitle !== originalTitle || nextOutlinePoints !== originalPoints) {
+    if (nextOutlineTitle !== originalTitle || nextPageType !== originalPageType || nextOutlinePoints !== originalPoints) {
       updates.outline_content = {
         title: nextOutlineTitle,
+        page_type: nextPageType || '标准图文页',
         points: nextOutlinePoints.split('\n').filter((p) => p.trim()),
       };
     }
@@ -1360,6 +1492,7 @@ export const SlidePreview: React.FC = () => {
       updatePageLocal(page.id, updates);
       persistCurrentPageDraft({
         title: nextOutlineTitle,
+        pageType: nextPageType,
         points: nextOutlinePoints,
         description: nextEditorDescriptionText,
         extraFields: nextExtraFields,
@@ -1374,7 +1507,7 @@ export const SlidePreview: React.FC = () => {
       return true;
     }
     return false;
-  }, [currentProject, selectedIndex, editOutlineTitle, editOutlinePoints, editDescription, editExtraFields, editStyleGuideBindings, updatePageLocal, persistCurrentPageDraft, show, t]);
+  }, [currentProject, selectedIndex, editOutlineTitle, editPageType, editOutlinePoints, editDescription, editExtraFields, editStyleGuideBindings, updatePageLocal, persistCurrentPageDraft, show, t]);
 
   // 调度页面文本的自动保存，连续输入时只在停顿后触发一次。
   const scheduleTextAutoSave = useCallback((overrides?: TextSaveOverrides) => {
@@ -1391,6 +1524,11 @@ export const SlidePreview: React.FC = () => {
       }
     }, 900);
   }, [handleSaveOutlineAndDescription]);
+
+  const syncDescriptionPageTypeForCurrentMode = useCallback((pageType: string, descriptionText: string) => {
+    if (!useRenovationPreviewForm) return descriptionText;
+    return syncRenovationJsonPageType(descriptionText, pageType, 4);
+  }, [useRenovationPreviewForm]);
 
   // 立即保存页面文本，并可携带 blur 时从编辑器读取到的最新值。
   const persistTextEditsNow = useCallback((options?: { silent?: boolean; overrides?: TextSaveOverrides }) => {
@@ -1444,19 +1582,22 @@ export const SlidePreview: React.FC = () => {
       await saveAllPages();
       const nextPrompt = options?.prompt ?? editPrompt;
       const nextContextImages = options?.contextImages ?? selectedContextImages;
-      const nextModel = options?.model ?? editRunImageModel;
-      const normalizedEditModel = normalizeProjectDefaultImageModel(nextModel || projectDefaultImageModel);
+      const nextSelection = parseRuntimeImageModelValue(options?.model ?? editRunImageModel);
+      const normalizedEditModel = normalizeProjectDefaultImageModel(nextSelection.model || projectDefaultImageModel);
       const normalizedEditResolution = normalizeProjectDefaultImageResolution(
         projectDefaultImageResolution,
         normalizedEditModel
       );
-      const normalizedEditSource = getImageSourceForModel(
-        normalizedEditModel,
-        normalizedProjectImageSource,
-      );
+      const selectedEditChannel = nextSelection.channelId || projectDefaultImageChannel;
+      const selectedEditProvider = getImageChannelOptions(providerProfiles).find((channel) => channel.id === selectedEditChannel)?.provider
+        || projectDefaultImageProvider;
+      const normalizedEditSource = getSourceForImageChannel(selectedEditChannel, providerProfiles)
+        || getImageSourceForModel(normalizedEditModel, normalizedProjectImageSource);
       const editGenerationOverride: GenerationOverride | undefined = normalizedEditModel
         ? {
           image: {
+            provider: selectedEditProvider,
+            channel: selectedEditChannel,
             source: normalizedEditSource,
             model: normalizedEditModel,
             resolution: normalizedEditResolution,
@@ -1484,7 +1625,7 @@ export const SlidePreview: React.FC = () => {
       show({ message: errorMessage, type: 'error' });
       throw error;
     }
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, projectDefaultImageResolution, normalizedProjectImageSource, handleSaveOutlineAndDescription, saveAllPages, show, t]);
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageChannel, projectDefaultImageModel, projectDefaultImageProvider, projectDefaultImageResolution, providerProfiles, normalizedProjectImageSource, handleSaveOutlineAndDescription, saveAllPages, show, t]);
 
   const handleGenerateCurrentPage = useCallback(async () => {
     const preferredPageId = selectedPageIdRef.current;
@@ -1602,9 +1743,9 @@ export const SlidePreview: React.FC = () => {
         (max, page) => Math.max(max, (page.order_index ?? 0) + 1),
         0
       );
-      await Promise.all(parsed.map(({ title, points, text: desc, part, extra_fields }, index) =>
+      await Promise.all(parsed.map(({ title, page_type, points, text: desc, part, extra_fields }, index) =>
         addPage(projectId, {
-          outline_content: { title, points },
+          outline_content: { title, page_type: page_type || '标准图文页', points },
           description_content: desc ? { text: desc, ...(extra_fields ? { extra_fields } : {}) } : undefined,
           part,
           order_index: startIndex + index,
@@ -1856,10 +1997,12 @@ export const SlidePreview: React.FC = () => {
   const isPptRenovationProject = currentProject?.creation_type === 'ppt_renovation';
   const isTextGenerationPreviewProject = currentProject?.creation_type !== 'ppt_renovation';
   const useRenovationPreviewForm = isPptRenovationProject || isTextGenerationPreviewProject;
+  const pageTypeOptions = currentProject?.scenario === 'data_report' ? DATA_REPORT_PAGE_TYPE_OPTIONS : PPT_PAGE_TYPE_OPTIONS;
   const activeStyleGuideBindingKey = buildStyleGuideBindingKey(currentImageVersionId);
+  const effectivePreviewPageType = editPageType || selectedPage?.outline_content?.page_type || '';
   const projectStyleGuideJson = (() => {
     if (!useRenovationPreviewForm) return '';
-    return formatJsonForEditor(currentProject?.template_style_json || '');
+    return buildPreviewStyleJsonForPageType(currentProject?.template_style_json || '', effectivePreviewPageType);
   })();
   const currentImageBoundStyleGuide = editStyleGuideBindings[activeStyleGuideBindingKey] || '';
   const pageDefaultStyleGuide = editStyleGuideBindings[PAGE_STYLE_GUIDE_DEFAULT_BINDING] || '';
@@ -1940,26 +2083,6 @@ export const SlidePreview: React.FC = () => {
       data-testid="preview-editor-canvas"
     >
       <div className={editorGridClasses}>
-        {!useRenovationPreviewForm && (
-          <div className="rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 dark:border-[#2d3447] dark:bg-[#151a26]">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">标题</div>
-            <input
-              ref={outlineTitleInputRef}
-              type="text"
-              value={editOutlineTitle}
-              onChange={(event) => {
-                const value = event.target.value;
-                setEditOutlineTitle(value);
-                persistCurrentPageDraft({ title: value });
-                scheduleTextAutoSave({ title: value });
-              }}
-              placeholder={t('preview.enterTitle')}
-              data-testid="preview-text-title-input"
-              className="min-h-[48px] w-full appearance-none bg-transparent text-xl font-semibold text-slate-900 outline-none placeholder:text-[#b2a78d] dark:text-[#f5f7ff] dark:placeholder:text-[#5f6883] sm:text-2xl"
-            />
-          </div>
-        )}
-
         {!useRenovationPreviewForm && (
           <div className="min-h-0 overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 flex flex-col dark:border-[#2d3447] dark:bg-[#151a26]">
             <div className="mb-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">{t('preview.pointsPerLine')}</div>
@@ -2047,14 +2170,14 @@ export const SlidePreview: React.FC = () => {
                   {showRunModelMenu && (
                     <div className="absolute right-0 top-full z-40 mt-2 w-[300px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated dark:shadow-[0_18px_40px_rgba(0,0,0,0.36)]">
                       <div className="max-h-[320px] overflow-y-auto">
-                        {PROJECT_SUPPORTED_IMAGE_MODELS.map((model) => {
-                          const selected = model === editRunImageModel;
+                        {editRunImageModelOptions.map((option) => {
+                          const selected = option.value === editRunImageModel;
                           return (
                             <button
-                              key={model}
+                              key={option.value}
                               type="button"
                               onClick={() => {
-                                setEditRunImageModel(model);
+                                setEditRunImageModel(option.value);
                                 setShowRunModelMenu(false);
                               }}
                               className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
@@ -2062,9 +2185,9 @@ export const SlidePreview: React.FC = () => {
                                   ? 'bg-[#fff7d9] text-slate-900 dark:bg-banana-500/10 dark:text-banana'
                                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-foreground-secondary dark:hover:bg-background-hover dark:hover:text-foreground-primary'
                               }`}
-                              title={model}
+                              title={option.label}
                             >
-                              <span className="min-w-0 truncate">{model}</span>
+                              <span className="min-w-0 truncate">{option.label}</span>
                               {selected && <Check size={16} className="flex-shrink-0 text-banana-600" />}
                             </button>
                           );
@@ -2073,29 +2196,82 @@ export const SlidePreview: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <div className="inline-flex items-center rounded-lg border border-[#e8d9b4] bg-[#fff9ec] p-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
-                  <button
-                    type="button"
-                    onClick={() => setRenovationJsonViewMode('text')}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                      renovationJsonViewMode === 'text'
-                        ? 'bg-banana-500 text-black shadow-sm'
-                        : 'text-[#8a7750] hover:bg-[#f7edd2] dark:text-[#9eaccf] dark:hover:bg-[#232f47]'
-                    }`}
-                  >
-                    {t('preview.jsonTextTab')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRenovationJsonViewMode('styleGuide')}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                      renovationJsonViewMode === 'styleGuide'
-                        ? 'bg-banana-500 text-black shadow-sm'
-                        : 'text-[#8a7750] hover:bg-[#f7edd2] dark:text-[#9eaccf] dark:hover:bg-[#232f47]'
-                    }`}
-                  >
-                    {t('preview.jsonStyleGuideTab')}
-                  </button>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <div className="relative" ref={previewPageTypeMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsPreviewPageTypeMenuOpen((prev) => !prev)}
+                      data-testid="preview-page-type-select"
+                      className="inline-flex h-9 min-w-[136px] items-center justify-between gap-2 rounded-lg border border-[#e8d9b4] bg-[#fff9ec] px-3 py-1.5 text-sm text-slate-800 transition-colors hover:border-banana-300 focus:outline-none focus:ring-2 focus:ring-banana-400/60 dark:border-[#3c4762] dark:bg-[#1a2335] dark:text-[#f5f7ff] dark:hover:border-banana-500/50"
+                    >
+                      <span className="truncate">{editPageType || t('preview.pageTypePlaceholder')}</span>
+                      <ChevronDown
+                        size={16}
+                        className={`flex-shrink-0 text-slate-400 transition-transform dark:text-[#9eaccf] ${isPreviewPageTypeMenuOpen ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    {isPreviewPageTypeMenuOpen && (
+                      <div className="absolute right-0 top-[calc(100%+8px)] z-30 max-h-72 min-w-full overflow-y-auto rounded-xl border border-[#eadfbf] bg-white p-2 shadow-[0_16px_40px_rgba(15,23,42,0.14)] dark:border-[#36415b] dark:bg-[#101521]">
+                        {pageTypeOptions.map((option) => {
+                          const isActive = (editPageType || '标准图文页') === option;
+                          return (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => {
+                                const nextDescription = syncDescriptionPageTypeForCurrentMode(option, editDescription);
+                                setEditPageType(option);
+                                if (nextDescription !== editDescription) {
+                                  setEditDescription(nextDescription);
+                                }
+                                persistCurrentPageDraft({ pageType: option });
+                                if (nextDescription !== editDescription) {
+                                  persistCurrentPageDraft({ description: nextDescription });
+                                }
+                                scheduleTextAutoSave({
+                                  pageType: option,
+                                  ...(nextDescription !== editDescription ? { description: nextDescription } : {}),
+                                });
+                                setIsPreviewPageTypeMenuOpen(false);
+                              }}
+                              className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                                isActive
+                                  ? 'bg-banana-50 text-banana-700 dark:bg-banana-500/15 dark:text-banana-300'
+                                  : 'text-slate-700 hover:bg-[#f7edd2] dark:text-[#e2e8f0] dark:hover:bg-[#232f47]'
+                              }`}
+                            >
+                              <span className="truncate">{option}</span>
+                              {isActive ? <Check size={16} className="flex-shrink-0 text-banana-500" /> : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div className="inline-flex items-center rounded-lg border border-[#e8d9b4] bg-[#fff9ec] p-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
+                    <button
+                      type="button"
+                      onClick={() => setRenovationJsonViewMode('text')}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                        renovationJsonViewMode === 'text'
+                          ? 'bg-banana-500 text-black shadow-sm'
+                          : 'text-[#8a7750] hover:bg-[#f7edd2] dark:text-[#9eaccf] dark:hover:bg-[#232f47]'
+                      }`}
+                    >
+                      {t('preview.jsonTextTab')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRenovationJsonViewMode('styleGuide')}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                        renovationJsonViewMode === 'styleGuide'
+                          ? 'bg-banana-500 text-black shadow-sm'
+                          : 'text-[#8a7750] hover:bg-[#f7edd2] dark:text-[#9eaccf] dark:hover:bg-[#232f47]'
+                      }`}
+                    >
+                      {t('preview.jsonStyleGuideTab')}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -2287,6 +2463,24 @@ export const SlidePreview: React.FC = () => {
     imageRef.current.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
   };
 
+  const handleUploadPageImage = useCallback(async (file: File) => {
+    const targetPage = currentProject?.pages[selectedIndex];
+    if (!targetPage?.id) return;
+
+    setIsUploadingPageImage(true);
+    try {
+      await uploadPageImage(targetPage.id, file);
+      show({ message: t('preview.uploadPageImageSuccess'), type: 'success' });
+    } catch (error: any) {
+      show({
+        message: error?.response?.data?.error?.message || error?.message || t('preview.uploadPageImageFailed'),
+        type: 'error',
+      });
+    } finally {
+      setIsUploadingPageImage(false);
+    }
+  }, [currentProject?.pages, selectedIndex, show, t, uploadPageImage]);
+
   const currentPageDescriptionText = getDescriptionText(selectedPage?.description_content);
   const currentPageExtraFields = getDescriptionExtraFields(selectedPage?.description_content);
   const currentPageStyleGuideBindings = getDescriptionStyleGuideBindings(selectedPage?.description_content);
@@ -2465,6 +2659,7 @@ export const SlidePreview: React.FC = () => {
             previewSortablePageIds={previewSortablePageIds}
             sidebarGridColumns={sidebarGridColumns}
             aspectRatio={aspectRatio}
+            aspectRatioStyle={aspectRatioStyle}
             toggleMultiSelectMode={toggleMultiSelectMode}
             selectAllPages={selectAllPages}
             deselectAllPages={deselectAllPages}
@@ -2566,12 +2761,14 @@ export const SlidePreview: React.FC = () => {
                       activePreviewReferenceId={activePreviewReferenceId}
                       selectionRect={selectionRect}
                       imageVersions={imageVersions}
+                      isUploadingPageImage={isUploadingPageImage}
                       onSelectionMouseDown={handleSelectionMouseDown}
                       onSelectionMouseMove={handleSelectionMouseMove}
                       onSelectionMouseUp={handleSelectionMouseUp}
                       onFloatingFullscreenButtonMouseDown={handleFloatingFullscreenButtonMouseDown}
                       onFloatingFullscreenButtonClick={handleFloatingFullscreenButtonClick}
                       onSwitchVersion={(versionId) => void handleSwitchVersion(versionId)}
+                      onUploadPageImage={handleUploadPageImage}
                     />
 
                     {!isMobileView && !isEditorPaneHidden && (
@@ -2602,6 +2799,7 @@ export const SlidePreview: React.FC = () => {
                       pageAiTextareaRef={pageAiTextareaRef}
                       pageAiSlashActions={pageAiSlashActions}
                       editRunImageModel={editRunImageModel}
+                      editRunImageModelOptions={editRunImageModelOptions}
                       isPageAiSubmitting={isPageAiSubmitting}
                       isRegionSelectionMode={isRegionSelectionMode}
                       historyVersionsCount={historyVersionsDescending.length}
@@ -2692,6 +2890,7 @@ export const SlidePreview: React.FC = () => {
       <SlidePreviewDialogs
         t={t}
         projectId={projectId}
+        projectScenario={currentProject?.scenario || 'ppt'}
         isTemplateModalOpen={isTemplateModalOpen}
         closeTemplateModal={closeTemplateModal}
         activeTemplateTab={activeTemplateTab}
@@ -2757,10 +2956,13 @@ export const SlidePreview: React.FC = () => {
         handleSaveAspectRatio={handleSaveAspectRatio}
         isSavingAspectRatio={isSavingAspectRatio}
         hasImages={hasImages}
-        projectDefaultImageSource={projectDefaultImageSource}
+        projectDefaultImageProvider={projectDefaultImageProvider}
+        projectDefaultImageChannel={projectDefaultImageChannel}
         projectDefaultImageModel={projectDefaultImageModel}
         projectDefaultImageResolution={projectDefaultImageResolution}
-        setProjectDefaultImageSource={setProjectDefaultImageSource}
+        providerProfiles={providerProfiles}
+        setProjectDefaultImageProvider={setProjectDefaultImageProvider}
+        setProjectDefaultImageChannel={setProjectDefaultImageChannel}
         setProjectDefaultImageModel={setProjectDefaultImageModel}
         setProjectDefaultImageResolution={setProjectDefaultImageResolution}
         handleSaveGenerationDefaults={handleSaveGenerationDefaults}

@@ -21,7 +21,11 @@ from services.prompts import get_image_edit_prompt
 from services.upstream_retry import call_with_transient_retry
 from utils import get_filtered_pages
 from utils.image_utils import check_image_resolution
-from utils.style_guidance import build_combined_style_requirements
+from utils.style_guidance import (
+    build_combined_style_requirements,
+    build_preview_style_json_for_page_type,
+    resolve_effective_page_type,
+)
 from utils.text_normalization import normalize_user_text
 
 
@@ -1008,9 +1012,14 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                             or project_template_style is not None
                         ):
                             effective_style_json = page_style_json or project_template_style_json
+                            effective_page_type = resolve_effective_page_type(page_data)
+                            scoped_style_json = build_preview_style_json_for_page_type(
+                                effective_style_json,
+                                page_type_key=effective_page_type,
+                            ) if effective_style_json else effective_style_json
                             page_extra_requirements = build_combined_style_requirements(
                                 extra_requirements=base_extra_requirements,
-                                style_json=effective_style_json,
+                                style_json=scoped_style_json,
                                 style_text=project_template_style,
                             )
                         else:

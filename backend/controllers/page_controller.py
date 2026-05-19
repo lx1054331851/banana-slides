@@ -11,6 +11,8 @@ from utils.image_resolution_policy import (
 )
 from utils.style_guidance import (
     build_combined_style_requirements,
+    build_preview_style_json_for_page_type,
+    resolve_effective_page_type,
     resolve_page_style_guide_json,
 )
 from utils.text_normalization import normalize_user_text, normalize_user_text_list
@@ -22,6 +24,7 @@ from services.task_manager import (
     generate_single_page_image_task,
     edit_page_image_task,
     get_renovation_page_sources,
+    save_image_with_version,
 )
 from datetime import datetime
 from pathlib import Path
@@ -29,6 +32,7 @@ from werkzeug.utils import secure_filename
 import shutil
 import tempfile
 import json
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -642,6 +646,7 @@ def generate_page_image(project_id, page_id):
         page_data = page.get_outline_content() or {}
         if page.part:
             page_data['part'] = page.part
+        effective_page_type = resolve_effective_page_type(page_data)
         
         # 获取描述文本（可能是 text 字段或 text_content 数组）
         desc_text = desc_content.get('text', '')
@@ -666,9 +671,13 @@ def generate_page_image(project_id, page_id):
                 has_material_images = True
         
         # 合并额外要求 + 风格JSON + 风格描述（页级风格覆盖优先于全局）
+        scoped_style_json = build_preview_style_json_for_page_type(
+            effective_style_json,
+            page_type_key=effective_page_type,
+        ) if effective_style_json else effective_style_json
         combined_requirements = build_combined_style_requirements(
             extra_requirements=project.extra_requirements,
-            style_json=effective_style_json,
+            style_json=scoped_style_json,
             style_text=project.template_style,
         )
         
@@ -933,11 +942,17 @@ def edit_page_image(project_id, page_id):
             image_version_id=current_version.id if current_version else None,
         )
         effective_style_json = page_style_json or project.template_style_json
+        current_outline_content = page.get_outline_content() or {}
+        effective_page_type = resolve_effective_page_type(current_outline_content)
 
         # Keep style-related requirements so edit endpoint can fallback to text-to-image mode
+        scoped_style_json = build_preview_style_json_for_page_type(
+            effective_style_json,
+            page_type_key=effective_page_type,
+        ) if effective_style_json else effective_style_json
         combined_requirements = build_combined_style_requirements(
             extra_requirements=project.extra_requirements,
-            style_json=effective_style_json,
+            style_json=scoped_style_json,
             style_text=project.template_style,
         )
         
@@ -990,6 +1005,52 @@ def edit_page_image(project_id, page_id):
         db.session.rollback()
         return error_response('AI_SERVICE_ERROR', str(e), 503)
 
+
+
+@page_bp.route('/<project_id>/pages/<page_id>/upload/image', methods=['POST'])
+def upload_page_image(project_id, page_id):
+    """
+    POST /api/projects/{project_id}/pages/{page_id}/upload/image - Upload a local image as the current page image
+    """
+    try:
+        page = Page.query.get(page_id)
+        if not page or page.project_id != project_id:
+            return not_found('Page')
+
+        project = Project.query.get(project_id)
+        if not project:
+            return not_found('Project')
+
+        image_file = request.files.get('image')
+        if not image_file or not image_file.filename:
+            return bad_request("image file is required")
+
+        try:
+            with Image.open(image_file.stream) as uploaded_image:
+                normalized_image = uploaded_image.copy()
+        except Exception:
+            return bad_request("Invalid image file")
+
+        file_service = FileService(current_app.config['UPLOAD_FOLDER'])
+        project.updated_at = datetime.utcnow()
+
+        save_image_with_version(
+            normalized_image,
+            project_id,
+            page_id,
+            file_service,
+            page_obj=page,
+            image_format='PNG',
+            prompt_text=f"upload:{secure_filename(image_file.filename)}",
+            operation_type='upload',
+        )
+
+        db.session.refresh(page)
+        return success_response(page.to_dict(include_versions=True))
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"upload_page_image failed: {e}", exc_info=True)
+        return error_response('SERVER_ERROR', str(e), 500)
 
 
 @page_bp.route('/<project_id>/pages/<page_id>/image-versions', methods=['GET'])

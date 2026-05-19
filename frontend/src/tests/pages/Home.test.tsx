@@ -93,6 +93,7 @@ vi.mock('@/components/shared', async () => {
     </button>
   );
   const Card = ({ children, className }: any) => <div className={className}>{children}</div>;
+  const MaterialSelector = () => null;
   const ReferenceFileList = () => null;
   const ReferenceFileSelector = () => null;
   const FilePreviewModal = () => null;
@@ -102,6 +103,7 @@ vi.mock('@/components/shared', async () => {
   return {
     Button,
     Card,
+    MaterialSelector,
     ReferenceFileList,
     ReferenceFileSelector,
     FilePreviewModal,
@@ -113,20 +115,27 @@ vi.mock('@/components/shared', async () => {
 vi.mock('@/components/shared/MarkdownTextarea', async () => {
   const ReactModule = await vi.importActual<typeof import('react')>('react');
 
-  const MarkdownTextarea = ReactModule.forwardRef<any, any>(({ value, onChange, onPaste, placeholder, className, rows }, ref) => {
+  const MarkdownTextarea = ReactModule.forwardRef<any, any>(({ value, onChange, onPaste, placeholder, className, rows, toolbarLeft, toolbarCenter, toolbarRight }, ref) => {
     ReactModule.useImperativeHandle(ref, () => ({
       insertAtCursor: vi.fn(),
     }));
 
     return (
-      <textarea
-        value={value}
-        placeholder={placeholder}
-        className={className}
-        rows={rows}
-        onPaste={onPaste}
-        onChange={(event) => onChange?.(event.target.value)}
-      />
+      <div>
+        <textarea
+          value={value}
+          placeholder={placeholder}
+          className={className}
+          rows={rows}
+          onPaste={onPaste}
+          onChange={(event) => onChange?.(event.target.value)}
+        />
+        <div>
+          <div>{toolbarLeft}</div>
+          <div>{toolbarCenter}</div>
+          <div>{toolbarRight}</div>
+        </div>
+      </div>
     );
   });
 
@@ -162,5 +171,14 @@ describe('Home', () => {
 
     expect(screen.queryByText(/选择风格模板|Select Style Template/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/使用文字描述风格|Use text description for style/i)).not.toBeInTheDocument();
+  });
+
+  it('allows changing project scenario from the toolbar select', () => {
+    render(<Home />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'PPT' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: '数据报告' }));
+
+    expect(screen.getByRole('button', { name: '数据报告' })).toBeInTheDocument();
   });
 });

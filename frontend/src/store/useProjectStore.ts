@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Project, GenerationOverride } from '@/types';
+import type { Project, GenerationOverride, ProjectScenario } from '@/types';
 import * as api from '@/api/endpoints';
 import { normalizeProject, normalizeErrorMessage } from '@/utils';
 import { devLog } from '@/utils/logger';
@@ -37,6 +37,7 @@ const storeI18n = {
       regenerateFailed: '重新生成失败',
       batchGenerateFailed: '批量生成失败',
       editImageFailed: '编辑图片失败',
+      uploadImageFailed: '上传页面图片失败',
       exportLinkFailed: '导出链接获取失败',
       exportFailed: '导出失败',
       exportEditableFailed: '导出可编辑PPTX失败',
@@ -73,6 +74,7 @@ const storeI18n = {
       regenerateFailed: 'Failed to regenerate',
       batchGenerateFailed: 'Batch generation failed',
       editImageFailed: 'Failed to edit image',
+      uploadImageFailed: 'Failed to upload page image',
       exportLinkFailed: 'Failed to get export link',
       exportFailed: 'Export failed',
       exportEditableFailed: 'Failed to export editable PPTX',
@@ -103,7 +105,7 @@ interface ProjectState {
   setError: (error: string | null) => void;
   
   // 项目操作
-  initializeProject: (type: 'idea' | 'outline' | 'description', content: string, templateImage?: File, templateStyle?: string, referenceFileIds?: string[], aspectRatio?: string) => Promise<void>;
+  initializeProject: (type: 'idea' | 'outline' | 'description', content: string, templateImage?: File, templateStyle?: string, referenceFileIds?: string[], aspectRatio?: string, scenario?: ProjectScenario) => Promise<void>;
   syncProject: (projectId?: string) => Promise<void>;
   
   // 页面操作
@@ -137,6 +139,7 @@ interface ProjectState {
     },
     generationOverride?: GenerationOverride
   ) => Promise<void>;
+  uploadPageImage: (pageId: string, image: File) => Promise<void>;
   
   // 导出
   exportPPTX: (pageIds?: string[]) => Promise<void>;
@@ -278,7 +281,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
   setError: (error) => set({ error }),
 
   // 初始化项目
-  initializeProject: async (type, content, templateImage, templateStyle, referenceFileIds, aspectRatio) => {
+  initializeProject: async (type, content, templateImage, templateStyle, referenceFileIds, aspectRatio, scenario) => {
     set({ isGlobalLoading: true, error: null });
     try {
       const request: any = {};
@@ -300,6 +303,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       if (aspectRatio) {
         request.image_aspect_ratio = aspectRatio;
       }
+      request.scenario = scenario || 'ppt';
 
       // 1. 创建项目
       const response = await api.createProject(request);
@@ -710,7 +714,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
             const tempPage: any = {
               id: `streaming-${page.index}`,
               order_index: page.index,
-              outline_content: { title: page.title, points: page.points },
+              outline_content: { title: page.title, page_type: page.page_type || '标准图文页', points: page.points },
               description_content: page.description_text
                 ? { text: page.description_text, ...(page.extra_fields ? { extra_fields: page.extra_fields } : {}) }
                 : undefined,
@@ -1404,6 +1408,36 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       set({
         pageGeneratingTasks: newTasks,
         error: normalizeErrorMessage(backendMessage || error.message || t('store.editImageFailed')),
+      });
+      throw error;
+    }
+  },
+
+  uploadPageImage: async (pageId, image) => {
+    const { currentProject } = get();
+    if (!currentProject) return;
+
+    set({ error: null });
+    try {
+      const response = await api.uploadPageImage(currentProject.id!, pageId, image);
+      if (response.data) {
+        const updatedPageData = response.data;
+        const { currentProject: latestProject } = get();
+        if (latestProject) {
+          const newPages = latestProject.pages.map((page) =>
+            page.id === pageId ? { ...page, ...updatedPageData } : page
+          );
+          set({ currentProject: { ...latestProject, pages: newPages } });
+        }
+      } else {
+        await get().syncProject();
+      }
+    } catch (error: any) {
+      const backendMessage =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message;
+      set({
+        error: normalizeErrorMessage(backendMessage || error.message || t('store.uploadImageFailed')),
       });
       throw error;
     }

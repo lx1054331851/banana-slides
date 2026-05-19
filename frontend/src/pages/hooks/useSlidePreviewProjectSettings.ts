@@ -4,14 +4,18 @@ import type {
   ExportExtractorMethod,
   ExportInpaintMethod,
   GenerationOverride,
+  ProviderProfileSummary,
   Project,
 } from '@/types';
 import {
-  getImageSourceForModel,
-  normalizeProjectDefaultImageSource,
   normalizeProjectDefaultImageModel,
   normalizeProjectDefaultImageResolution,
 } from '@/config/projectAiDefaults';
+import {
+  getSourceForImageChannel,
+  normalizeImageChannel,
+  normalizeImageProvider,
+} from '@/config/projectAiChannels';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -21,9 +25,11 @@ type UseSlidePreviewProjectSettingsParams = {
   extraRequirements: string;
   templateStyle: string;
   descriptionRequirementsDraft: string;
-  projectDefaultImageSource: string;
+  projectDefaultImageProvider: string;
+  projectDefaultImageChannel: string;
   projectDefaultImageModel: string;
   projectDefaultImageResolution: string;
+  providerProfiles: ProviderProfileSummary[];
   exportExtractorMethod: ExportExtractorMethod;
   exportInpaintMethod: ExportInpaintMethod;
   exportAllowPartial: boolean;
@@ -45,9 +51,11 @@ export const useSlidePreviewProjectSettings = ({
   extraRequirements,
   templateStyle,
   descriptionRequirementsDraft,
-  projectDefaultImageSource,
+  projectDefaultImageProvider,
+  projectDefaultImageChannel,
   projectDefaultImageModel,
   projectDefaultImageResolution,
+  providerProfiles,
   exportExtractorMethod,
   exportInpaintMethod,
   exportAllowPartial,
@@ -129,16 +137,21 @@ export const useSlidePreviewProjectSettings = ({
     setIsSavingGenerationDefaults(true);
     try {
       const normalizedModel = normalizeProjectDefaultImageModel(projectDefaultImageModel);
-      const normalizedSource = normalizeProjectDefaultImageSource(
-        projectDefaultImageSource,
-        normalizedModel,
+      const normalizedProvider = normalizeImageProvider(projectDefaultImageProvider);
+      const normalizedChannel = normalizeImageChannel(
+        projectDefaultImageChannel,
+        normalizedProvider,
+        providerProfiles,
       );
+      const normalizedSource = getSourceForImageChannel(normalizedChannel, providerProfiles);
       const normalizedResolution = normalizeProjectDefaultImageResolution(
         projectDefaultImageResolution,
         normalizedModel
       );
       const imageDefaults: Record<string, string> = {
-        source: getImageSourceForModel(normalizedModel, normalizedSource),
+        provider: normalizedProvider,
+        channel: normalizedChannel,
+        source: normalizedSource,
         model: normalizedModel,
         resolution: normalizedResolution,
       };
@@ -156,9 +169,11 @@ export const useSlidePreviewProjectSettings = ({
     }
   }, [
     currentProject,
-    projectDefaultImageSource,
+    projectDefaultImageProvider,
+    projectDefaultImageChannel,
     projectDefaultImageModel,
     projectDefaultImageResolution,
+    providerProfiles,
     projectId,
     show,
     syncProject,

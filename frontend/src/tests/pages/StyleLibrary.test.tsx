@@ -19,8 +19,8 @@ const {
   mockListStyleTemplates: vi.fn(async () => ({
     data: {
       templates: [
-        { id: 't1', name: 'Template 1', template_json: '{"template":1}' },
-        { id: 't2', name: 'Template 2', template_json: '{"template":2}' },
+        { id: 't1', name: 'Template 1', scenario: 'ppt', template_json: '{"template":1}' },
+        { id: 't2', name: 'Template 2', scenario: 'data_report', template_json: '{"template":2}' },
       ],
     },
   })),
@@ -33,9 +33,9 @@ const {
           style_json: '{"preset":1}',
           preview_images: {
             cover_url: '/files/style-presets/s1/cover.webp',
-            toc_url: '/files/style-presets/s1/toc.webp',
-            detail_url: '/files/style-presets/s1/detail.webp',
-            ending_url: '/files/style-presets/s1/ending.webp',
+            catalog_url: '/files/style-presets/s1/catalog.webp',
+            detail_text_split_url: '/files/style-presets/s1/detail.webp',
+            closing_url: '/files/style-presets/s1/ending.webp',
           },
         },
       ],
@@ -67,6 +67,7 @@ vi.mock('@/api/endpoints', () => ({
   uploadPresetTemplate: vi.fn(async () => ({ data: null })),
   deleteStyleTemplate: mockDeleteStyleTemplate,
   deleteStylePreset: mockDeleteStylePreset,
+  deleteStylePresetTask: vi.fn(async () => ({ data: {} })),
   deletePresetTemplate: vi.fn(async () => ({ data: {} })),
   listStylePresetTasks: mockListStylePresetTasks,
   startStylePresetGeneration: mockStartStylePresetGeneration,
@@ -109,6 +110,34 @@ describe('StyleLibrary page', () => {
 
     fireEvent.click(screen.getByTestId('style-library-tab-presets'));
     expect(screen.getByTestId('style-library-presets-panel')).toBeInTheDocument();
+  });
+
+  it('filters template skeletons by selected scenario', async () => {
+    render(<StyleLibrary />);
+
+    fireEvent.click(screen.getByTestId('style-library-tab-templates'));
+    await screen.findByTestId('template-row-t1');
+    expect(screen.queryByTestId('template-row-t2')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('style-library-scenario-data-report'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('template-row-t2')).toBeInTheDocument();
+      expect(screen.queryByTestId('template-row-t1')).not.toBeInTheDocument();
+    });
+  });
+
+  it('passes scenario filter into JSON preset workspace', async () => {
+    render(<StyleLibrary />);
+
+    await screen.findByTestId('preset-row-s1');
+    expect(screen.queryByText('当前展示数据报告场景的 style_json 与按页型动态生成的多张预览图')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('style-library-scenario-data-report'));
+
+    await waitFor(() => {
+      expect(screen.getByText('当前展示数据报告场景的 style_json 与按页型动态生成的多张预览图')).toBeInTheDocument();
+    });
   });
 
   it('reads tab from query string on first render', async () => {
@@ -162,6 +191,7 @@ describe('StyleLibrary page', () => {
     render(<StyleLibrary />);
 
     fireEvent.click(screen.getByTestId('style-library-tab-templates'));
+    fireEvent.click(screen.getByTestId('style-library-scenario-data-report'));
     const row = await screen.findByTestId('template-row-t2');
     fireEvent.click(within(row).getByRole('button', { name: /Template 2/i }));
 
@@ -198,6 +228,9 @@ describe('StyleLibrary page', () => {
     fireEvent.change(screen.getByTestId('style-library-create-template-name'), {
       target: { value: 'New Template' },
     });
+    fireEvent.change(screen.getByTestId('style-library-create-template-scenario'), {
+      target: { value: 'data_report' },
+    });
     fireEvent.change(screen.getByTestId('style-library-create-template-json'), {
       target: { value: '{"hero":{"title":"Demo"}}' },
     });
@@ -208,6 +241,7 @@ describe('StyleLibrary page', () => {
     });
     expect(mockCreateStyleTemplate).toHaveBeenCalledWith({
       name: 'New Template',
+      scenario: 'data_report',
       template_json: '{\n  "hero": {\n    "title": "Demo"\n  }\n}',
     });
 
@@ -325,9 +359,9 @@ describe('StyleLibrary page', () => {
 
     const row = await screen.findByTestId('preset-row-s1');
     expect(within(row).getByTestId('preset-s1-preview-cover_url')).toBeInTheDocument();
-    expect(within(row).getByTestId('preset-s1-preview-toc_url')).toBeInTheDocument();
-    expect(within(row).getByTestId('preset-s1-preview-detail_url')).toBeInTheDocument();
-    expect(within(row).getByTestId('preset-s1-preview-ending_url')).toBeInTheDocument();
+    expect(within(row).getByTestId('preset-s1-preview-catalog_url')).toBeInTheDocument();
+    expect(within(row).getByTestId('preset-s1-preview-detail_text_split_url')).toBeInTheDocument();
+    expect(within(row).getByTestId('preset-s1-preview-closing_url')).toBeInTheDocument();
   });
 
   it('formats preset JSON viewer into multi-line pretty JSON', async () => {
@@ -342,7 +376,7 @@ describe('StyleLibrary page', () => {
     });
   });
 
-  it('allows dismissing failed preset task cards', async () => {
+  it('allows clearing failed preset task cards', async () => {
     mockListStylePresetTasks.mockResolvedValueOnce(({
       data: {
         tasks: [
@@ -357,9 +391,9 @@ describe('StyleLibrary page', () => {
               template_json: '{"template":1}',
               preview_images: {
                 cover_url: '',
-                toc_url: '',
-                detail_url: '',
-                ending_url: '',
+                catalog_url: '',
+                detail_text_split_url: '',
+                closing_url: '',
               },
             },
           },
@@ -377,10 +411,102 @@ describe('StyleLibrary page', () => {
     });
   });
 
+  it('keeps dismissed failed preset task cards hidden after reopening', async () => {
+    mockListStylePresetTasks.mockResolvedValue(({
+      data: {
+        tasks: [
+          {
+            task_id: 'failed-task-1',
+            task_type: 'STYLE_PRESET_GENERATE',
+            status: 'FAILED',
+            error_message: '1 preview image(s) failed to generate',
+            progress: {
+              stage: 'failed',
+              preset_name: 'Preset 1',
+              template_json: '{"template":1}',
+            },
+          },
+        ],
+      },
+    }) as any);
+
+    const firstRender = render(<StyleLibrary />);
+
+    const dismiss = await screen.findByTestId('style-preset-task-failed-task-1-dismiss');
+    fireEvent.click(dismiss);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('style-preset-task-failed-task-1')).not.toBeInTheDocument();
+    });
+
+    firstRender.unmount();
+
+    render(<StyleLibrary />);
+
+    await waitFor(() => {
+      expect(mockListStylePresetTasks.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+    expect(screen.queryByTestId('style-preset-task-failed-task-1')).not.toBeInTheDocument();
+  });
+
+  it('hides failed preset generation task after missing preview slots are filled', async () => {
+    mockListStylePresets.mockResolvedValueOnce(({
+      data: {
+        presets: [
+          {
+            id: 's1',
+            name: 'Preset 1',
+            style_json: '{"preset":1}',
+            preview_images: {
+              cover_url: '/files/style-presets/s1/cover.webp',
+              catalog_url: '/files/style-presets/s1/catalog.webp',
+              section_header_url: '',
+              agenda_timeline_url: '',
+              detail_text_split_url: '/files/style-presets/s1/detail.webp',
+              bullet_keypoints_url: '',
+              comparison_url: '',
+              process_flow_url: '',
+              framework_matrix_url: '',
+              detail_chart_url: '',
+              case_showcase_url: '',
+              closing_url: '/files/style-presets/s1/ending.webp',
+            },
+          },
+        ],
+      },
+    }) as any);
+    mockListStylePresetTasks.mockResolvedValueOnce(({
+      data: {
+        tasks: [
+          {
+            task_id: 'failed-task-2',
+            task_type: 'STYLE_PRESET_GENERATE',
+            status: 'FAILED',
+            error_message: '1 preview image(s) failed to generate',
+            progress: {
+              stage: 'failed',
+              preset_id: 's1',
+              preset_name: 'Preset 1',
+              preview_errors: {
+                catalog_url: 'Connection error.',
+              },
+            },
+          },
+        ],
+      },
+    }) as any);
+
+    render(<StyleLibrary />);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('style-preset-task-failed-task-2')).not.toBeInTheDocument();
+    });
+  });
+
   it('opens lightbox with correct initial index when preview clicked', async () => {
     render(<StyleLibrary />);
 
-    const detailPreview = await screen.findByTestId('preset-s1-preview-detail_url');
+    const detailPreview = await screen.findByTestId('preset-s1-preview-detail_text_split_url');
     fireEvent.click(detailPreview);
 
     await waitFor(() => {

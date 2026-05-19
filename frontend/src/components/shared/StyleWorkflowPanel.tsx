@@ -16,11 +16,37 @@ type StyleRecommendation = {
   name: string;
   rationale?: string;
   style_json: any;
-  sample_pages: Record<'cover' | 'toc' | 'detail' | 'ending', string>;
-  preview_images: Record<'cover_url' | 'toc_url' | 'detail_url' | 'ending_url', string>;
+  sample_pages: Record<string, string>;
+  preview_images: Record<string, string>;
 };
 
-type PreviewImages = Record<'cover_url' | 'toc_url' | 'detail_url' | 'ending_url', string>;
+type PreviewImages = Record<string, string>;
+
+const PREVIEW_SLOTS = [
+  ['封面', 'cover_url'],
+  ['目录', 'catalog_url'],
+  ['章节过渡', 'section_header_url'],
+  ['议程时间线', 'agenda_timeline_url'],
+  ['标准图文', 'detail_text_split_url'],
+  ['要点列表', 'bullet_keypoints_url'],
+  ['对比', 'comparison_url'],
+  ['流程', 'process_flow_url'],
+  ['框架矩阵', 'framework_matrix_url'],
+  ['图表', 'detail_chart_url'],
+  ['案例展示', 'case_showcase_url'],
+  ['结尾', 'closing_url'],
+] as const;
+
+const CORE_PREVIEW_KEYS = new Set([
+  'cover_url',
+  'catalog_url',
+  'detail_text_split_url',
+  'comparison_url',
+  'process_flow_url',
+  'framework_matrix_url',
+  'detail_chart_url',
+  'closing_url',
+]);
 
 function getTaskRecommendations(task: Task | null): StyleRecommendation[] {
   const progress: any = task?.progress;
@@ -247,16 +273,13 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
     return override?.preview_images || rec.preview_images || {};
   };
 
-  const normalizePreviewImages = (preview: any): PreviewImages => ({
-    cover_url: String(preview?.cover_url || ''),
-    toc_url: String(preview?.toc_url || ''),
-    detail_url: String(preview?.detail_url || ''),
-    ending_url: String(preview?.ending_url || ''),
-  });
+  const normalizePreviewImages = (preview: any): PreviewImages => Object.fromEntries(
+    PREVIEW_SLOTS.map(([, key]) => [key, String(preview?.[key] || '')])
+  );
 
   const hasAnyPreviewImages = (rec: StyleRecommendation) => {
     const preview = getPreviewImages(rec) || {};
-    return Boolean(preview.cover_url || preview.toc_url || preview.detail_url || preview.ending_url);
+    return PREVIEW_SLOTS.some(([, key]) => Boolean(preview[key]));
   };
 
   const handleSaveTemplate = async () => {
@@ -340,7 +363,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
   const handleRegenerate = async (rec: StyleRecommendation) => {
     const hadPreview = hasAnyPreviewImages(rec);
     setRegenLoadingByRecId((prev) => ({ ...prev, [rec.id]: true }));
-    setRegenProgressByRecId((prev) => ({ ...prev, [rec.id]: { completed: 0, total: 4, failed: 0 } }));
+    setRegenProgressByRecId((prev) => ({ ...prev, [rec.id]: { completed: 0, total: CORE_PREVIEW_KEYS.size, failed: 0 } }));
     show({ message: hadPreview ? '已开始重跑本组预览…' : '已开始生成本组预览…', type: 'info', duration: 2000 });
 
     // Yield one frame so the loading UI can paint before heavy JSON.parse/network work.
@@ -387,11 +410,11 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
     }
 
     let previewImages = normalizePreviewImages(getPreviewImages(rec));
-    const generatedCount = Object.values(previewImages).filter(Boolean).length;
-    if (generatedCount < 4) {
-      show({ message: '保存前将自动补齐 4 张预览图…', type: 'info', duration: 2000 });
+    const generatedCoreCount = Array.from(CORE_PREVIEW_KEYS).filter((key) => Boolean(previewImages[key])).length;
+    if (generatedCoreCount < CORE_PREVIEW_KEYS.size) {
+      show({ message: `保存前将自动补齐 ${CORE_PREVIEW_KEYS.size} 张核心预览图…`, type: 'info', duration: 2000 });
       setRegenLoadingByRecId((prev) => ({ ...prev, [rec.id]: true }));
-      setRegenProgressByRecId((prev) => ({ ...prev, [rec.id]: { completed: generatedCount, total: 4, failed: 0 } }));
+      setRegenProgressByRecId((prev) => ({ ...prev, [rec.id]: { completed: generatedCoreCount, total: CORE_PREVIEW_KEYS.size, failed: 0 } }));
       try {
         const regenResp = await api.regenerateStyleRecommendationPreviews(projectId, rec.id, {
           style_json: jsonObj,
@@ -410,9 +433,9 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
       }
     }
 
-    const finalCount = Object.values(previewImages).filter(Boolean).length;
-    if (finalCount < 4) {
-      show({ message: `预览图不足 4 张（当前 ${finalCount}/4），无法保存`, type: 'error' });
+    const finalCoreCount = Array.from(CORE_PREVIEW_KEYS).filter((key) => Boolean(previewImages[key])).length;
+    if (finalCoreCount < CORE_PREVIEW_KEYS.size) {
+      show({ message: `核心预览图不足 ${CORE_PREVIEW_KEYS.size} 张（当前 ${finalCoreCount}/${CORE_PREVIEW_KEYS.size}），无法保存`, type: 'error' });
       return;
     }
 
@@ -634,7 +657,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
 
       {mode === 'recommendations_only' && taskStatus === 'COMPLETED' ? (
         <Card className="p-4 text-xs text-gray-700 dark:text-foreground-secondary border border-gray-200 dark:border-border-primary bg-white dark:bg-background-tertiary">
-          已完成：仅推荐 `style_json`（未生成预览图）。你可以先编辑/保存 JSON，然后对某一组点击「生成本组预览」生成 4 张示例图确认效果。
+          已完成：仅推荐 `style_json`（未生成预览图）。你可以先编辑/保存 JSON，然后对某一组点击「生成本组预览」生成核心预览图确认效果。
         </Card>
       ) : null}
 
@@ -680,14 +703,15 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
       <div className="grid grid-cols-1 gap-4">
         {recommendations.map((rec) => {
           const preview = getPreviewImages(rec);
-          const hasPreview = Boolean(preview?.cover_url || preview?.toc_url || preview?.detail_url || preview?.ending_url);
+          const hasPreview = PREVIEW_SLOTS.some(([, key]) => Boolean(preview?.[key]));
           const isGeneratingThisRec = Boolean(regenLoadingByRecId[rec.id]);
-          const generatedCount = Number(Boolean(preview?.cover_url)) + Number(Boolean(preview?.toc_url)) + Number(Boolean(preview?.detail_url)) + Number(Boolean(preview?.ending_url));
+          const generatedCount = PREVIEW_SLOTS.reduce((count, [, key]) => count + Number(Boolean(preview?.[key])), 0);
+          const generatedCoreCount = Array.from(CORE_PREVIEW_KEYS).reduce((count, key) => count + Number(Boolean(preview?.[key])), 0);
           const regenProg = regenProgressByRecId[rec.id];
           const recProgressText = isGeneratingThisRec
-            ? `本组预览生成中：${typeof regenProg?.completed === 'number' ? regenProg.completed : generatedCount}/4${regenProg?.failed ? `，失败 ${regenProg.failed}` : ''}`
+            ? `本组核心预览生成中：${typeof regenProg?.completed === 'number' ? regenProg.completed : generatedCoreCount}/${CORE_PREVIEW_KEYS.size}${regenProg?.failed ? `，失败 ${regenProg.failed}` : ''}`
             : hasPreview
-              ? `已生成预览：${generatedCount}/4`
+              ? `已生成预览：${generatedCount}/${PREVIEW_SLOTS.length}`
               : '';
           return (
             <Card key={rec.id} className="p-4 space-y-3">
@@ -721,13 +745,8 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
               ) : null}
 
               {hasPreview || isGeneratingThisRec ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {([
-                    ['封面', 'cover_url'],
-                    ['目录', 'toc_url'],
-                    ['详情', 'detail_url'],
-                    ['结尾', 'ending_url'],
-                  ] as const).map(([label, key]) => (
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2">
+                  {(PREVIEW_SLOTS).map(([label, key]) => (
                     <div key={key} className="space-y-1">
                       <div className="text-xs text-gray-500 dark:text-foreground-tertiary">{label}</div>
                       <div className="w-full aspect-video bg-gray-100 dark:bg-background-tertiary rounded-lg overflow-hidden border border-gray-200 dark:border-border-primary">
@@ -736,12 +755,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
                             type="button"
                             className="w-full h-full block"
                             onClick={() => {
-                              const order = [
-                                ['封面', 'cover_url'],
-                                ['目录', 'toc_url'],
-                                ['详情', 'detail_url'],
-                                ['结尾', 'ending_url'],
-                              ] as const;
+                              const order = PREVIEW_SLOTS;
                               const items = order
                                 .map(([lbl, k]) => {
                                   const url = (preview as any)?.[k];
@@ -777,7 +791,7 @@ export const StyleWorkflowPanel: React.FC<StyleWorkflowPanelProps> = ({
                 </div>
               ) : (
                 <div className="text-xs text-gray-600 dark:text-foreground-tertiary">
-                  尚未生成预览图。可点击「生成本组预览」生成 4 张示例图（封面/目录/详情/结尾）。
+                  尚未生成预览图。可点击「生成本组预览」生成 {CORE_PREVIEW_KEYS.size} 张核心示例图。
                 </div>
               )}
 

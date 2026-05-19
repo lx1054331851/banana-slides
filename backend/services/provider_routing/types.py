@@ -25,6 +25,7 @@ class ResolvedProviderRoute:
     provider: str
     source: str
     model: str
+    channel: str = ""
     api_key: Optional[str] = None
     api_base: Optional[str] = None
     azure_endpoint: Optional[str] = None
@@ -39,6 +40,7 @@ class ResolvedProviderRoute:
         parts = [
             f"role:{self.role}",
             f"provider:{self.provider}",
+            f"channel:{self.channel}",
             f"source:{self.source}",
             f"model:{self.model}",
             f"api_base:{self.api_base or ''}",

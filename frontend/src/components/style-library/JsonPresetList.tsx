@@ -1,11 +1,13 @@
 import React from 'react';
 import { Button, Card } from '@/components/shared';
 import type { StylePreset } from '@/api/endpoints';
+import type { ProjectScenario } from '@/types';
 import type { PreviewKey } from './types';
 import { JsonPresetRow } from './JsonPresetRow';
 
 interface JsonPresetListProps {
   presets: StylePreset[];
+  scenario: ProjectScenario;
   deletingPresetId: string | null;
   generatingPreviewState: { presetId: string; previewKey: PreviewKey } | null;
   onViewJson: (presetId: string) => void;
@@ -17,6 +19,7 @@ interface JsonPresetListProps {
 
 export const JsonPresetList: React.FC<JsonPresetListProps> = ({
   presets,
+  scenario,
   deletingPresetId,
   generatingPreviewState,
   onViewJson,
@@ -30,7 +33,9 @@ export const JsonPresetList: React.FC<JsonPresetListProps> = ({
       <div className="flex items-start justify-between gap-4 flex-col md:flex-row md:items-center">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">JSON文本模版</h2>
-          <p className="text-xs text-gray-600 dark:text-foreground-tertiary">每个模版包含 style_json 与首页 / 目录 / 详情 / 结尾 4 张预览图</p>
+          <p className="text-xs text-gray-600 dark:text-foreground-tertiary">
+            当前展示{scenario === 'data_report' ? '数据报告' : 'PPT'}场景的 style_json 与按页型动态生成的多张预览图
+          </p>
         </div>
         <Button size="sm" onClick={onOpenCreateDrawer}>新建模板</Button>
       </div>

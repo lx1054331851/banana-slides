@@ -14,16 +14,19 @@ class StylePreset(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = db.Column(db.String(200), nullable=True)
     style_json = db.Column(db.Text, nullable=False)  # JSON text
-    preview_images_json = db.Column(db.Text, nullable=True)  # JSON: cover/toc/detail/ending URLs
+    preview_images_json = db.Column(db.Text, nullable=True)  # JSON: preview slot URLs
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     @staticmethod
     def _normalize_preview_images(data):
-        keys = ('cover_url', 'toc_url', 'detail_url', 'ending_url')
         if not isinstance(data, dict):
-            return {k: '' for k in keys}
-        return {k: str(data.get(k) or '') for k in keys}
+            return {}
+        return {
+            str(k): str(v or '')
+            for k, v in data.items()
+            if isinstance(k, str) and k.strip()
+        }
 
     def get_preview_images(self):
         if not self.preview_images_json:

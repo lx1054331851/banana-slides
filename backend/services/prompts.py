@@ -86,25 +86,69 @@ DETAIL_LEVEL_SPECS = {
 
 _OUTLINE_JSON_FORMAT = """\
 1. 简单格式（适用于没有主要章节的短 PPT）：
-[{"title": "标题1", "points": ["要点1", "要点2"]}, {"title": "标题2", "points": ["要点1", "要点2"]}]
+[{"title": "标题1", "page_type": "封面页", "points": ["要点1", "要点2"]}, {"title": "标题2", "page_type": "标准图文页", "points": ["要点1", "要点2"]}]
 
 2. 章节格式（适用于有主要章节的长 PPT）：
 [
     {
     "part": "第一部分：引言",
     "pages": [
-        {"title": "欢迎", "points": ["要点1", "要点2"]},
-        {"title": "概览", "points": ["要点1", "要点2"]}
+        {"title": "欢迎", "page_type": "封面页", "points": ["要点1", "要点2"]},
+        {"title": "概览", "page_type": "目录页", "points": ["要点1", "要点2"]}
     ]
     },
     {
     "part": "第二部分：主体内容",
     "pages": [
-        {"title": "主题1", "points": ["要点1", "要点2"]},
-        {"title": "主题2", "points": ["要点1", "要点2"]}
+        {"title": "主题1", "page_type": "标准图文页", "points": ["要点1", "要点2"]},
+        {"title": "主题2", "page_type": "图表页", "points": ["要点1", "要点2"]}
     ]
     }
 ]"""
+
+_PPT_STANDARD_PAGE_TYPES = """\
+标准页面类型清单（page_type 必须从中选择一个）：
+- 封面页
+- 目录页
+- 章节过渡页
+- 议程时间线页
+- 标准图文页
+- 要点列表页
+- 对比页
+- 流程页
+- 框架矩阵页
+- 图表页
+- 案例展示页
+- 结尾页
+"""
+
+_DATA_REPORT_STANDARD_PAGE_TYPES = """\
+标准页面类型清单（page_type 必须从中选择一个）：
+- 报告封面
+- 执行摘要
+- 目录
+- 研究方法
+- 章节页
+- 品牌概览页
+- 品牌历程页
+- 品牌画像页
+- 品牌定位页
+- 核心指标总览页
+- 市场概览页
+- 品牌对标页
+- 品类结构页
+- 价格带分布页
+- 渠道平台表现页
+- 商品SKU诊断页
+- 数据明细页
+- 洞察图文页
+- 洞察图表页
+- 矩阵图谱页
+- 时间轴生命周期页
+- 人群画像页
+- 策略建议页
+- 封底页
+"""
 
 _PAGE_DETAIL_JSON_OUTPUT_FORMAT = """\
 ```json
@@ -155,6 +199,31 @@ def _get_original_input(project_context: 'ProjectContext') -> str:
     if project_context.creation_type == 'descriptions' and project_context.description_text:
         return f"用户提供的描述：\n{project_context.description_text}"
     return project_context.idea_prompt or ""
+
+
+def _get_project_scenario(project_context: 'ProjectContext') -> str:
+    scenario = getattr(project_context, 'scenario', None)
+    if scenario == 'data_report':
+        return 'data_report'
+    return 'ppt'
+
+
+def _get_standard_page_types_text(project_context: 'ProjectContext') -> str:
+    return _DATA_REPORT_STANDARD_PAGE_TYPES if _get_project_scenario(project_context) == 'data_report' else _PPT_STANDARD_PAGE_TYPES
+
+
+def _get_scenario_prompt_hint(project_context: 'ProjectContext') -> str:
+    scenario = _get_project_scenario(project_context)
+    if scenario == 'data_report':
+        return dedent("""\
+        当前项目场景是：数据报告（data_report）。
+        你生成的大纲必须按“服装品牌线上数据分析报告”的逻辑组织内容，优先体现品牌认知、市场经营分析、专题洞察与策略输出。
+        不要按演讲型 PPT 的节奏去写，不要把所有分析页都泛化成普通图文页。
+        """)
+    return dedent("""\
+    当前项目场景是：PPT（ppt）。
+    你生成的大纲必须按演讲/汇报型 PPT 的逻辑组织内容，强调叙事节奏、表达效率和页面角色分工。
+    """)
 
 
 def _get_original_input_labeled(project_context: 'ProjectContext') -> str:
@@ -323,6 +392,9 @@ def get_outline_generation_prompt(project_context: 'ProjectContext', language: s
     """生成 PPT 大纲的 prompt（JSON 输出）"""
     idea_prompt = project_context.idea_prompt or ""
 
+    standard_page_types = _get_standard_page_types_text(project_context)
+    scenario_hint = _get_scenario_prompt_hint(project_context)
+
     prompt = (f"""\
 你是一位擅长规划 PPT 结构的助手，请根据用户需求生成 PPT 大纲。
 
@@ -332,6 +404,20 @@ def get_outline_generation_prompt(project_context: 'ProjectContext', language: s
 
 请选择最适合内容的格式。当 PPT 有清晰的主要章节时，使用章节格式。
 除非用户另有说明，第一页应保持最简，只包含标题、副标题和汇报人信息。
+{standard_page_types}
+{scenario_hint}
+
+每个页面对象都必须包含：
+- title
+- page_type
+- points
+
+page_type 的硬约束：
+- 每一页都必须填写 `page_type`
+- `page_type` 必须从上方标准页面类型清单中选择
+- 所选 `page_type` 必须与该页的实际角色匹配
+- 第一页通常应为 `封面页`
+- 最后一页通常应为 `结尾页`，或其他有明确收束理由的结束页类型
 
 用户需求：{idea_prompt}。
 {_format_requirements(project_context.outline_requirements)}现在生成大纲，不要包含任何额外文字。
@@ -344,6 +430,9 @@ def get_outline_generation_prompt(project_context: 'ProjectContext', language: s
 def get_outline_generation_prompt_markdown(project_context: 'ProjectContext', language: str = None) -> str:
     """生成 PPT 大纲的 prompt（Markdown 输出，用于流式生成）"""
     idea_prompt = project_context.idea_prompt or ""
+
+    standard_page_types = _get_standard_page_types_text(project_context)
+    scenario_hint = _get_scenario_prompt_hint(project_context)
 
     prompt = (f"""\
 你是一位擅长规划 PPT 结构的助手，请生成 Markdown 格式的 PPT 大纲。
@@ -382,6 +471,11 @@ def get_outline_generation_prompt_markdown(project_context: 'ProjectContext', la
 - 除非用户另有说明，第一页应保持最简，只包含标题、副标题和汇报人信息。
 - 内容保持在大纲层级：聚焦意图、主题和逻辑，不要写成最终精修文案。
 - 每个大纲页最终都会转换为实际幻灯片。因此，如果某页不应出现在最终文稿中，一开始就不要输出该页。
+- 每页都需要在 `## 页面标题` 之后紧跟一行 `Page Type: xxx`。
+- `xxx` 必须从以下标准页面类型清单中选择：
+{standard_page_types}
+- 所选页面类型必须与该页的真实功能匹配。
+{scenario_hint}
 
 用户需求：{idea_prompt}。
 {_format_requirements(project_context.outline_requirements)}现在生成大纲，严格遵循上述格式，不要包含任何额外文字。完成后最后一行输出 `<!-- END -->`。
@@ -394,6 +488,9 @@ def get_outline_generation_prompt_markdown(project_context: 'ProjectContext', la
 def get_outline_parsing_prompt(project_context: 'ProjectContext', language: str = None) -> str:
     """解析用户提供的大纲文本的 prompt（JSON 输出）"""
     outline_text = project_context.outline_text or ""
+
+    standard_page_types = _get_standard_page_types_text(project_context)
+    scenario_hint = _get_scenario_prompt_hint(project_context)
 
     prompt = (f"""\
 你是一位擅长解析 PPT 大纲的助手，请把用户提供的大纲文本转换为结构化格式。
@@ -417,6 +514,11 @@ def get_outline_parsing_prompt(project_context: 'ProjectContext', language: str 
 - 保留所有标题、项目符号和文字的原始写法。
 - 如果文本有清晰章节，使用章节格式。
 - 从原文提取标题和要点，并保持原文表述。
+{standard_page_types}
+{scenario_hint}
+
+- 每个页面对象都必须增加必填的 `page_type` 字段。
+- `page_type` 需要根据页面角色推断，并从上方标准页面类型清单中选择。
 
 现在将上述大纲文本解析为结构化格式。只返回 JSON，不要包含任何额外文字。
 {get_language_instruction(language)}
@@ -455,6 +557,8 @@ def get_outline_parsing_prompt_markdown(project_context: 'ProjectContext', langu
 def get_description_to_outline_prompt(project_context: 'ProjectContext', language: str = None) -> str:
     """从描述文本解析出大纲的 prompt（JSON 输出）"""
     description_text = project_context.description_text or ""
+    standard_page_types = _get_standard_page_types_text(project_context)
+    scenario_hint = _get_scenario_prompt_hint(project_context)
 
     prompt = (f"""\
 你是一位擅长分析 PPT 描述文本的助手，请从用户提供的页面描述中提取大纲结构。
@@ -479,6 +583,11 @@ def get_description_to_outline_prompt(project_context: 'ProjectContext', languag
 - 如果文本有清晰章节，使用章节格式。
 - 保留原文的逻辑结构与组织方式。
 - 要点应是每页主要内容的简洁摘要。
+{standard_page_types}
+{scenario_hint}
+
+- 每个页面对象都必须增加必填的 `page_type` 字段。
+- `page_type` 需要根据页面角色推断，并从上方标准页面类型清单中选择。
 
 现在从上述描述文本中提取大纲结构。只返回 JSON，不要包含任何额外文字。
 {get_language_instruction(language)}

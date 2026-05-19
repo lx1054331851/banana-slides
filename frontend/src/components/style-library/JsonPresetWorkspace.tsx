@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ImageLightbox, useConfirm, useToast } from '@/components/shared';
 import {
   createStylePreset,
+  deleteStylePresetTask,
   deleteStylePreset,
   getStoredOutputLanguage,
   listStylePresetTasks,
@@ -17,25 +18,44 @@ import { JsonPresetList } from './JsonPresetList';
 import { JsonPresetCreateDrawer } from './JsonPresetCreateDrawer';
 import { JsonPresetJsonViewer } from './JsonPresetJsonViewer';
 import type { JsonPresetWorkspaceProps, PreviewKey, StylePresetTaskRecord } from './types';
-import { PREVIEW_ORDER, getPresetDisplayName, getTaskPreviewKey, isTaskRunning } from './types';
+import { getPreviewOrder, getPresetDisplayName, getTaskPreviewKey, inferStylePresetScenario, isTaskRunning } from './types';
 
 const MAX_RUNNING_TASKS = 4;
+const DISMISSED_FAILED_TASKS_STORAGE_KEY = 'banana-slides:dismissed-style-preset-failed-tasks';
 
-export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templates, refreshKey = 0 }) => {
+function readDismissedFailedTaskIds(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const rawValue = window.localStorage.getItem(DISMISSED_FAILED_TASKS_STORAGE_KEY);
+    if (!rawValue) return [];
+    const parsed = JSON.parse(rawValue);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDismissedFailedTaskIds(taskIds: Iterable<string>) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(DISMISSED_FAILED_TASKS_STORAGE_KEY, JSON.stringify(Array.from(new Set(taskIds))));
+}
+
+export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templates, scenario, refreshKey = 0 }) => {
   const { show, ToastContainer } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
   const [presets, setPresets] = useState<StylePreset[]>([]);
   const [tasks, setTasks] = useState<StylePresetTaskRecord[]>([]);
+  const [dismissedFailedTaskIds, setDismissedFailedTaskIds] = useState<Set<string>>(() => new Set(readDismissedFailedTaskIds()));
   const [isLoadingPresets, setIsLoadingPresets] = useState(false);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [isManualCreating, setIsManualCreating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [deletingPresetId, setDeletingPresetId] = useState<string | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [pendingPreviewGeneration, setPendingPreviewGeneration] = useState<{ presetId: string; previewKey: PreviewKey } | null>(null);
   const [viewerPresetId, setViewerPresetId] = useState<string>('');
   const [previewModal, setPreviewModal] = useState<{ title: string; items: { src: string; title?: string }[]; initialIndex: number } | null>(null);
-  const [dismissedTaskIds, setDismissedTaskIds] = useState<string[]>([]);
   const runningTaskIdsRef = useRef<string>('');
 
   const selectedPreset = useMemo(
@@ -44,6 +64,16 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
   );
 
   const runningTasks = useMemo(() => tasks.filter(isTaskRunning), [tasks]);
+
+  const scenarioTemplates = useMemo(
+    () => templates.filter((item) => (item.scenario || 'ppt') === scenario),
+    [scenario, templates],
+  );
+
+  const scenarioPresets = useMemo(
+    () => presets.filter((preset) => inferStylePresetScenario(preset) === scenario),
+    [presets, scenario],
+  );
 
 
   const hasResolvedTaskFailure = useCallback((task: StylePresetTaskRecord) => {
@@ -59,13 +89,19 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
       return Boolean(previewKey && previewImages[previewKey]);
     }
 
-    return PREVIEW_ORDER.every(([key]) => Boolean(previewImages[key]));
+    const failedPreviewKeys = Object.keys(task.progress?.preview_errors || {})
+      .filter((key): key is PreviewKey => Boolean(key));
+
+    if (failedPreviewKeys.length > 0) {
+      return failedPreviewKeys.every((key) => Boolean(previewImages[key]));
+    }
+
+    return false;
   }, [presets]);
 
   const visibleTasks = useMemo(() => {
-    const dismissed = new Set(dismissedTaskIds);
-    return tasks.filter((task) => !dismissed.has(task.task_id) && !hasResolvedTaskFailure(task));
-  }, [dismissedTaskIds, hasResolvedTaskFailure, tasks]);
+    return tasks.filter((task) => !hasResolvedTaskFailure(task) && !(task.status === 'FAILED' && dismissedFailedTaskIds.has(task.task_id)));
+  }, [dismissedFailedTaskIds, hasResolvedTaskFailure, tasks]);
 
 
   const loadPresets = useCallback(async () => {
@@ -87,11 +123,22 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
     try {
       const response = await listStylePresetTasks();
       const nextTasks = (response.data?.tasks || []) as StylePresetTaskRecord[];
-      setDismissedTaskIds((prev) => prev.filter((taskId) => nextTasks.some((task) => task.task_id === taskId)));
       const previousRunningIds = runningTaskIdsRef.current;
       const nextRunningIds = nextTasks.filter(isTaskRunning).map((task) => task.task_id).join(',');
       runningTaskIdsRef.current = nextRunningIds;
       setTasks(nextTasks);
+      setDismissedFailedTaskIds((prev) => {
+        const currentFailedTaskIds = new Set(
+          nextTasks
+            .filter((task) => task.status === 'FAILED')
+            .map((task) => task.task_id),
+        );
+        const nextDismissedTaskIds = new Set(
+          Array.from(prev).filter((taskId) => currentFailedTaskIds.has(taskId)),
+        );
+        writeDismissedFailedTaskIds(nextDismissedTaskIds);
+        return nextDismissedTaskIds;
+      });
       if (previousRunningIds && !nextRunningIds) {
         await loadPresets();
       }
@@ -116,7 +163,8 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
 
   const openPresetPreview = useCallback((preset: StylePreset, previewKey?: PreviewKey) => {
     const previewImages: Partial<StylePresetPreviewImages> = preset.preview_images || {};
-    const items = PREVIEW_ORDER
+    const previewOrder = getPreviewOrder(previewImages)
+    const items = previewOrder
       .map(([key, label]) => {
         const url = previewImages[key];
         return url ? { src: getImageUrl(url), title: `${getPresetDisplayName(preset)}-${label}` } : null;
@@ -181,7 +229,7 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
   }, [confirm, loadPresets, loadTasks, viewerPresetId, show]);
 
   const handleGenerateTask = useCallback(async ({ templateId, name, requirements }: { templateId: string; name: string; requirements: string }) => {
-    const template = templates.find((item) => item.id === templateId);
+    const template = scenarioTemplates.find((item) => item.id === templateId);
     if (!template?.template_json) {
       show({ message: '请先选择一个 JSON 文本模版骨架', type: 'error' });
       return;
@@ -207,7 +255,7 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
     } finally {
       setIsGenerating(false);
     }
-  }, [loadTasks, runningTasks.length, show, templates]);
+  }, [loadTasks, runningTasks.length, scenarioTemplates, show]);
 
   const handleManualCreate = useCallback(async ({ name, styleJson }: { name: string; styleJson: string }) => {
     setIsManualCreating(true);
@@ -235,6 +283,25 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
       setPendingPreviewGeneration(null);
     }
   }, [loadTasks, show]);
+
+  const handleDeleteTask = useCallback(async (taskId: string) => {
+    setDismissedFailedTaskIds((prev) => {
+      const next = new Set(prev);
+      next.add(taskId);
+      writeDismissedFailedTaskIds(next);
+      return next;
+    });
+    setTasks((prev) => prev.filter((task) => task.task_id !== taskId));
+    setDeletingTaskId(taskId);
+    try {
+      await deleteStylePresetTask(taskId);
+      show({ message: '失败任务已清理', type: 'success' });
+    } catch (error: any) {
+      show({ message: `任务卡已关闭，后台清理失败：${error?.message || '未知错误'}`, type: 'warning' });
+    } finally {
+      setDeletingTaskId(null);
+    }
+  }, [show]);
 
   const handleRetryTask = useCallback(async (task: StylePresetTaskRecord) => {
     const previewKey = getTaskPreviewKey(task);
@@ -283,10 +350,11 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
         <JsonPresetTaskBoard
           tasks={visibleTasks}
           onRetryTask={(task) => void handleRetryTask(task)}
-          onDismissTask={(taskId) => setDismissedTaskIds((prev) => (prev.includes(taskId) ? prev : [...prev, taskId]))}
+          onDismissTask={(taskId) => void handleDeleteTask(taskId)}
         />
         <JsonPresetList
-          presets={presets}
+          presets={scenarioPresets}
+          scenario={scenario}
           deletingPresetId={deletingPresetId}
           generatingPreviewState={pendingPreviewGeneration}
           onViewJson={openPresetJson}
@@ -295,14 +363,17 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
           onGeneratePreview={(preset, previewKey) => void handleGeneratePreview(preset, previewKey)}
           onOpenCreateDrawer={() => setIsCreateDrawerOpen(true)}
         />
-        {(isLoadingPresets || isLoadingTasks) && !presets.length && !tasks.length ? (
+        {(isLoadingPresets || isLoadingTasks) && !scenarioPresets.length && !tasks.length ? (
           <div className="text-xs text-gray-500 dark:text-foreground-tertiary">加载中...</div>
+        ) : null}
+        {deletingTaskId ? (
+          <div className="text-xs text-gray-500 dark:text-foreground-tertiary">正在清理失败任务...</div>
         ) : null}
       </div>
 
       <JsonPresetCreateDrawer
         isOpen={isCreateDrawerOpen}
-        templates={templates}
+        templates={scenarioTemplates}
         runningTaskCount={runningTasks.length}
         maxRunningTasks={MAX_RUNNING_TASKS}
         loadingGenerate={isGenerating}

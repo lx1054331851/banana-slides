@@ -3,10 +3,12 @@ export type PageStatus = 'DRAFT' | 'GENERATING_DESCRIPTION' | 'DESCRIPTION_GENER
 
 // 项目状态
 export type ProjectStatus = 'DRAFT' | 'OUTLINE_GENERATED' | 'DESCRIPTIONS_GENERATED' | 'COMPLETED';
+export type ProjectScenario = 'ppt' | 'data_report';
 
 // 大纲内容
 export interface OutlineContent {
   title: string;
+  page_type?: string;
   points: string[];
 }
 
@@ -44,6 +46,8 @@ export interface PresentationMeta {
 }
 
 export interface OverrideRoute {
+  provider?: string;
+  channel?: string;
   source?: string;
   model?: string;
   resolution?: string;
@@ -57,6 +61,45 @@ export interface GenerationOverride {
   text?: OverrideRoute;
   image?: OverrideRoute;
   image_caption?: OverrideRoute;
+}
+
+export interface ProviderProfileSummary {
+  id: string;
+  provider: 'openai' | 'gemini' | string;
+  channel?: string;
+  label?: string;
+  kind?: string;
+  enabled?: boolean;
+  configured?: boolean;
+  config_status?: 'configured' | 'partial' | 'missing' | string;
+  config_note?: string;
+  api_base?: string | null;
+  api_key_env?: string | null;
+  api_key_present?: boolean;
+  adapter?: string;
+  adapter_options?: Record<string, any>;
+  capabilities?: string[];
+  models?: string[];
+  model_defaults?: Record<string, any>;
+}
+
+export interface ImageChannelOption {
+  id: string;
+  provider: 'openai' | 'gemini' | string;
+  label: string;
+  kind: 'official' | 'cloud' | 'proxy' | 'relay' | string;
+  source: string;
+  enabled?: boolean;
+  configured?: boolean;
+  config_status?: 'configured' | 'partial' | 'missing' | string;
+  config_note?: string;
+  adapter?: string;
+  api_base?: string | null;
+  capabilities?: string[];
+  models?: string[];
+  model_defaults?: Record<string, any>;
+  adapter_options?: Record<string, any>;
+  is_profile?: boolean;
 }
 
 export type PageAiReferenceSourceType = 'region' | 'upload' | 'material' | 'template' | 'description';
@@ -151,6 +194,7 @@ export type ExportInpaintMethod = 'generative' | 'baidu' | 'hybrid';
 export interface Project {
   project_id: string;  // 后端返回 project_id
   id?: string;         // 前端使用的别名
+  scenario?: ProjectScenario;
   idea_prompt: string;
   outline_text?: string;  // 用户输入的大纲文本（用于outline类型）
   description_text?: string;  // 用户输入的描述文本（用于description类型）
@@ -211,6 +255,7 @@ export interface CreateProjectRequest {
   template_image?: File;
   template_style?: string;
   image_aspect_ratio?: string;
+  scenario?: ProjectScenario;
 }
 
 // API响应

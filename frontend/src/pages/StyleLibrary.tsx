@@ -17,6 +17,7 @@ import {
 } from '@/api/endpoints';
 import { JsonPresetWorkspace } from '@/components/style-library/JsonPresetWorkspace';
 import { JsonTemplateCreateDrawer } from '@/components/style-library/JsonTemplateCreateDrawer';
+import type { ProjectScenario } from '@/types';
 
 type StyleTab = 'templates' | 'presets' | 'presetTemplates';
 
@@ -32,6 +33,9 @@ const styleLibraryI18n = {
       title: 'JSON文本模版骨架',
       subtitle: '用于约束 AI 生成 JSON 文本模版的字段结构',
       name: '模版名称（可选）',
+      scenario: '适用场景',
+      scenarioPpt: 'PPT',
+      scenarioDataReport: '数据报告',
       json: 'JSON文本模版骨架',
       jsonHint: '必须是合法 JSON',
       save: '保存模版',
@@ -80,6 +84,9 @@ const styleLibraryI18n = {
       title: 'JSON Template Skeletons',
       subtitle: 'Used to constrain AI generated JSON template fields',
       name: 'Template name (optional)',
+      scenario: 'Scenario',
+      scenarioPpt: 'PPT',
+      scenarioDataReport: 'Data Report',
       json: 'JSON template skeleton',
       jsonHint: 'Must be valid JSON',
       save: 'Save',
@@ -145,10 +152,12 @@ export const StyleLibrary: React.FC = () => {
   const [activeTab, setActiveTab] = useState<StyleTab>(resolveInitialTab);
   const [templates, setTemplates] = useState<StyleTemplate[]>([]);
   const [presetTemplates, setPresetTemplates] = useState<PresetTemplate[]>([]);
+  const [libraryScenario, setLibraryScenario] = useState<ProjectScenario>('ppt');
   const [isLoading, setIsLoading] = useState(false);
   const [workspaceRefreshKey, setWorkspaceRefreshKey] = useState(0);
 
   const [templateName, setTemplateName] = useState('');
+  const [templateScenario, setTemplateScenario] = useState<'ppt' | 'data_report'>('ppt');
   const [templateJsonText, setTemplateJsonText] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
@@ -165,6 +174,11 @@ export const StyleLibrary: React.FC = () => {
   const selectedTemplate = useMemo(
     () => templates.find((item) => item.id === selectedTemplateId) || null,
     [templates, selectedTemplateId],
+  );
+
+  const visibleTemplates = useMemo(
+    () => templates.filter((item) => (item.scenario || 'ppt') === libraryScenario),
+    [libraryScenario, templates],
   );
 
   const loadPageData = useCallback(async () => {
@@ -215,9 +229,14 @@ export const StyleLibrary: React.FC = () => {
 
   const handleOpenTemplateCreateDrawer = useCallback(() => {
     setTemplateName('');
+    setTemplateScenario('ppt');
     setTemplateJsonText('');
     setIsTemplateCreateDrawerOpen(true);
   }, []);
+
+  useEffect(() => {
+    setSelectedTemplateId((prev) => (prev && visibleTemplates.some((item) => item.id === prev) ? prev : (visibleTemplates[0]?.id || '')));
+  }, [visibleTemplates]);
 
   const handleSaveTemplate = useCallback(async () => {
     const rawJsonText = templateJsonText.trim();
@@ -239,8 +258,13 @@ export const StyleLibrary: React.FC = () => {
 
     setIsSavingTemplate(true);
     try {
-      await createStyleTemplate({ name: templateName.trim() || undefined, template_json: normalizedJsonText });
+      await createStyleTemplate({
+        name: templateName.trim() || undefined,
+        scenario: templateScenario,
+        template_json: normalizedJsonText,
+      });
       setTemplateName('');
+      setTemplateScenario('ppt');
       setTemplateJsonText('');
       setIsTemplateCreateDrawerOpen(false);
       show({ message: t('templates.saved'), type: 'success' });
@@ -250,7 +274,7 @@ export const StyleLibrary: React.FC = () => {
     } finally {
       setIsSavingTemplate(false);
     }
-  }, [loadPageData, show, t, templateJsonText, templateName]);
+  }, [loadPageData, show, t, templateJsonText, templateName, templateScenario]);
 
   const handleDeleteTemplate = useCallback((template: StyleTemplate) => {
     confirm(
@@ -340,8 +364,9 @@ export const StyleLibrary: React.FC = () => {
             icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />}
             onClick={() => void loadPageData()}
             disabled={isLoading}
+            className="min-w-[96px]"
           >
-            {isLoading ? t('nav.loading') : t('nav.refresh')}
+            {t('nav.refresh')}
           </Button>
         )}
         backTestId="style-library-nav-back"
@@ -350,7 +375,8 @@ export const StyleLibrary: React.FC = () => {
 
       <main className={`${PAGE_CONTAINER_CLASS} py-6 md:py-8 space-y-4`}>
         <Card className="p-2">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap justify-between">
+            <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={() => setActiveTab('presetTemplates')}
@@ -375,6 +401,27 @@ export const StyleLibrary: React.FC = () => {
             >
               {t('tabs.templates')}
             </button>
+            </div>
+            {activeTab !== 'presetTemplates' ? (
+              <div className="inline-flex items-center rounded-xl border border-gray-200 dark:border-border-primary p-1 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setLibraryScenario('ppt')}
+                  data-testid="style-library-scenario-ppt"
+                  className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${libraryScenario === 'ppt' ? 'bg-banana-500 text-black' : 'text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'}`}
+                >
+                  {t('templates.scenarioPpt')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLibraryScenario('data_report')}
+                  data-testid="style-library-scenario-data-report"
+                  className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${libraryScenario === 'data_report' ? 'bg-banana-500 text-black' : 'text-gray-700 dark:text-foreground-secondary hover:bg-gray-100 dark:hover:bg-background-hover'}`}
+                >
+                  {t('templates.scenarioDataReport')}
+                </button>
+              </div>
+            ) : null}
           </div>
         </Card>
 
@@ -391,16 +438,16 @@ export const StyleLibrary: React.FC = () => {
             </div>
 
             <div className="text-xs text-gray-500 dark:text-foreground-tertiary">
-              {templates.length > 0 ? t('templates.count', { count: templates.length }) : t('templates.empty')}
+              {visibleTemplates.length > 0 ? t('templates.count', { count: visibleTemplates.length }) : t('templates.empty')}
             </div>
 
-            {templates.length === 0 ? (
+            {visibleTemplates.length === 0 ? (
               <div className="rounded-xl border border-dashed border-gray-200 dark:border-border-primary p-5 text-sm text-gray-500 dark:text-foreground-tertiary">
                 {t('templates.empty')}
               </div>
             ) : (
               <div className="space-y-3">
-                {templates.map((tpl) => (
+                {visibleTemplates.map((tpl) => (
                   <div
                     key={tpl.id}
                     data-testid={`template-row-${tpl.id}`}
@@ -414,7 +461,12 @@ export const StyleLibrary: React.FC = () => {
                         title={tpl.name || tpl.id}
                       >
                         <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{tpl.name || tpl.id}</div>
-                        <div className="mt-1 text-xs text-gray-500 dark:text-foreground-tertiary truncate">{tpl.id}</div>
+                        <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-foreground-tertiary truncate">
+                          <span>{tpl.id}</span>
+                          <span className="inline-flex items-center rounded-full border border-gray-200 dark:border-border-primary px-2 py-0.5">
+                            {tpl.scenario === 'data_report' ? t('templates.scenarioDataReport') : t('templates.scenarioPpt')}
+                          </span>
+                        </div>
                       </button>
                       <div className="flex items-center gap-1 shrink-0">
                         <Button variant="ghost" size="sm" onClick={() => openTemplateJsonDrawer(tpl.id)} data-testid={`template-${tpl.id}-view-json`}>
@@ -504,26 +556,31 @@ export const StyleLibrary: React.FC = () => {
           </Card>
         ) : null}
 
-        {activeTab === 'presets' ? <JsonPresetWorkspace templates={templates} refreshKey={workspaceRefreshKey} /> : null}
+        {activeTab === 'presets' ? <JsonPresetWorkspace templates={templates} scenario={libraryScenario} refreshKey={workspaceRefreshKey} /> : null}
       </main>
 
-      <JsonTemplateCreateDrawer
-        isOpen={isTemplateCreateDrawerOpen}
-        name={templateName}
-        jsonText={templateJsonText}
-        loading={isSavingTemplate}
-        title={t('templates.createTitle')}
-        subtitle={t('templates.createSubtitle')}
-        namePlaceholder={t('templates.name')}
-        jsonPlaceholder={t('templates.json')}
-        jsonHint={t('templates.jsonHint')}
-        submitText={t('templates.save')}
-        cancelText={t('templates.cancel')}
-        onClose={() => setIsTemplateCreateDrawerOpen(false)}
-        onNameChange={setTemplateName}
-        onJsonChange={setTemplateJsonText}
-        onSubmit={() => void handleSaveTemplate()}
-      />
+        <JsonTemplateCreateDrawer
+          isOpen={isTemplateCreateDrawerOpen}
+          name={templateName}
+          scenario={templateScenario}
+          jsonText={templateJsonText}
+          loading={isSavingTemplate}
+          title={t('templates.createTitle')}
+          subtitle={t('templates.createSubtitle')}
+          namePlaceholder={t('templates.name')}
+          scenarioLabel={t('templates.scenario')}
+          scenarioPptLabel={t('templates.scenarioPpt')}
+          scenarioDataReportLabel={t('templates.scenarioDataReport')}
+          jsonPlaceholder={t('templates.json')}
+          jsonHint={t('templates.jsonHint')}
+          submitText={t('templates.save')}
+          cancelText={t('templates.cancel')}
+          onClose={() => setIsTemplateCreateDrawerOpen(false)}
+          onNameChange={setTemplateName}
+          onScenarioChange={setTemplateScenario}
+          onJsonChange={setTemplateJsonText}
+          onSubmit={() => void handleSaveTemplate()}
+        />
 
       <TemplateJsonDrawer
         isOpen={isTemplateViewerOpen}

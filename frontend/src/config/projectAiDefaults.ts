@@ -1,4 +1,5 @@
 export const PROJECT_DEFAULT_IMAGE_SOURCE = 'gemini';
+export const PROJECT_OPENAI_IMAGE_SOURCE = 'openai';
 
 export const PROJECT_IMAGE_MODEL_CATALOG = [
   {
@@ -16,7 +17,61 @@ export const PROJECT_IMAGE_MODEL_CATALOG = [
   {
     source: 'openai',
     model: 'gpt-image-2',
-    label: 'Azure OpenAI · gpt-image-2',
+    label: 'OpenAI Compatible · gpt-image-2',
+    resolutions: ['1K', '2K', '4K'],
+  },
+  {
+    source: 'openai',
+    model: 'gpt-image-2-low',
+    label: 'OpenAI Compatible · gpt-image-2-low',
+    resolutions: ['1K', '2K', '4K'],
+  },
+  {
+    source: 'openai',
+    model: 'gpt-image-2-medium',
+    label: 'OpenAI Compatible · gpt-image-2-medium',
+    resolutions: ['1K', '2K', '4K'],
+  },
+  {
+    source: 'openai',
+    model: 'gpt-image-2-high',
+    label: 'OpenAI Compatible · gpt-image-2-high',
+    resolutions: ['1K', '2K', '4K'],
+  },
+  {
+    source: 'openai',
+    model: 'gemini-2.5-flash-image',
+    label: 'OpenAI Compatible · gemini-2.5-flash-image',
+    resolutions: ['1K'],
+  },
+  {
+    source: 'openai',
+    model: 'gemini-2.5-flash-image-preview',
+    label: 'OpenAI Compatible · gemini-2.5-flash-image-preview',
+    resolutions: ['1K'],
+  },
+  {
+    source: 'openai',
+    model: 'gemini-3-pro-image-preview',
+    label: 'OpenAI Compatible · gemini-3-pro-image-preview',
+    resolutions: ['1K', '2K', '4K'],
+  },
+  {
+    source: 'openai',
+    model: 'gemini-3-pro-image-preview-stable',
+    label: 'OpenAI Compatible · gemini-3-pro-image-preview-stable',
+    resolutions: ['1K', '2K', '4K'],
+  },
+  {
+    source: 'openai',
+    model: 'gemini-3.1-flash-image-preview',
+    label: 'OpenAI Compatible · gemini-3.1-flash-image-preview',
+    resolutions: ['0.5K', '1K', '2K', '4K'],
+  },
+  {
+    source: 'openai',
+    model: 'grok-4-image',
+    label: 'OpenAI Compatible · grok-4-image',
     resolutions: ['1K', '2K', '4K'],
   },
 ] as const;
@@ -26,6 +81,7 @@ export type ProjectSupportedImageModel = (typeof PROJECT_IMAGE_MODEL_CATALOG)[nu
 
 export const PROJECT_SUPPORTED_IMAGE_MODELS = PROJECT_IMAGE_MODEL_CATALOG.map((item) => item.model);
 export const PROJECT_SUPPORTED_IMAGE_SOURCES = Array.from(new Set(PROJECT_IMAGE_MODEL_CATALOG.map((item) => item.source)));
+export const PROJECT_BUILTIN_IMAGE_SOURCES = [...PROJECT_SUPPORTED_IMAGE_SOURCES];
 
 export const PROJECT_DEFAULT_IMAGE_MODEL: ProjectSupportedImageModel = PROJECT_SUPPORTED_IMAGE_MODELS[0];
 export const PROJECT_DEFAULT_IMAGE_RESOLUTION = '4K';
@@ -55,6 +111,9 @@ export const normalizeProjectDefaultImageModel = (value?: string): ProjectSuppor
 // Normalize provider source to supported values, fallback from model mapping.
 export const normalizeProjectDefaultImageSource = (source?: string, model?: string): ProjectImageModelSource => {
   const normalizedSource = String(source || '').trim();
+  if (normalizedSource.startsWith('profile:')) {
+    return normalizedSource as ProjectImageModelSource;
+  }
   if (PROJECT_SUPPORTED_IMAGE_SOURCES.includes(normalizedSource as ProjectImageModelSource)) {
     return normalizedSource as ProjectImageModelSource;
   }

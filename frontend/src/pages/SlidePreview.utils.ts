@@ -328,3 +328,111 @@ export const toLocalizedRenovationJsonText = (text: string, indent = 4): string 
     return text || '';
   }
 };
+
+const tryParseStyleJson = (styleJson?: string | null): Record<string, unknown> | null => {
+  if (!styleJson || typeof styleJson !== 'string' || !styleJson.trim()) return null;
+  try {
+    const parsed = JSON.parse(styleJson);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const slugifyStylePageKey = (text: string): string => {
+  const normalizedText = String(text || '').trim().toLowerCase();
+  if (!normalizedText) return 'page';
+  const hasAscii = /[a-z0-9]/.test(normalizedText);
+  if (!hasAscii) {
+    return normalizedText.replace(/\s+/g, '');
+  }
+  const value = normalizedText.replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+  return value || 'page';
+};
+
+export const buildPreviewStyleJsonForPageType = (
+  styleJson?: string | null,
+  pageTypeKey?: string | null,
+): string => {
+  const parsed = tryParseStyleJson(styleJson);
+  if (!parsed) return styleJson || '';
+
+  const designSystem = parsed.design_system_spec;
+  if (!designSystem || typeof designSystem !== 'object' || Array.isArray(designSystem)) {
+    return styleJson || '';
+  }
+
+  const slideTemplates = (designSystem as Record<string, unknown>).slide_templates;
+  if (!slideTemplates || typeof slideTemplates !== 'object' || Array.isArray(slideTemplates)) {
+    return styleJson || '';
+  }
+
+  const requestedKey = slugifyStylePageKey(pageTypeKey || '');
+  if (!requestedKey) return styleJson || '';
+
+  let matchedTemplateKey: string | null = null;
+  let matchedTemplateValue: unknown = null;
+
+  Object.entries(slideTemplates as Record<string, unknown>).some(([templateKey, templateValue]) => {
+    if (!templateValue || typeof templateValue !== 'object' || Array.isArray(templateValue)) return false;
+    const pageType = String((templateValue as Record<string, unknown>).page_type || '').trim();
+    if (
+      pageType === String(pageTypeKey || '').trim()
+      || String(templateKey).trim() === String(pageTypeKey || '').trim()
+      || slugifyStylePageKey(pageType) === requestedKey
+      || slugifyStylePageKey(templateKey) === requestedKey
+    ) {
+      matchedTemplateKey = templateKey;
+      matchedTemplateValue = templateValue;
+      return true;
+    }
+    return false;
+  });
+
+  if (!matchedTemplateKey || !matchedTemplateValue) {
+    return styleJson || '';
+  }
+
+  const reducedDesignSystem: Record<string, unknown> = {};
+  Object.entries(designSystem as Record<string, unknown>).forEach(([key, value]) => {
+    if (key === 'slide_templates') {
+      reducedDesignSystem[key] = { [matchedTemplateKey!]: matchedTemplateValue };
+    } else {
+      reducedDesignSystem[key] = value;
+    }
+  });
+
+  return JSON.stringify({ design_system_spec: reducedDesignSystem }, null, 4);
+};
+
+export const syncRenovationJsonPageType = (
+  jsonText: string,
+  pageType: string,
+  indent = 4,
+): string => {
+  const normalizedPageType = String(pageType || '').trim();
+  if (!normalizedPageType) return jsonText;
+
+  const raw = String(jsonText || '').trim();
+  if (!raw) return jsonText;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return jsonText;
+    }
+
+    return JSON.stringify(
+      {
+        ...(parsed as Record<string, unknown>),
+        page_type: normalizedPageType,
+      },
+      null,
+      indent,
+    );
+  } catch {
+    return jsonText;
+  }
+};

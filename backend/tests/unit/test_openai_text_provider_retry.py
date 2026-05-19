@@ -21,6 +21,7 @@ class _FakeCompletions:
 class _FakeClient:
     def __init__(self, behaviors):
         self.chat = SimpleNamespace(completions=_FakeCompletions(behaviors))
+        self.responses = SimpleNamespace(create=_FakeCompletions(behaviors).create)
 
 
 def _make_text_response(text: str):
@@ -48,6 +49,27 @@ def _build_provider(monkeypatch, behaviors):
         model="test-model",
     )
     return provider, fake_client
+
+
+def test_generate_text_uses_responses_mode(monkeypatch):
+    monkeypatch.setattr("services.ai_providers.text.openai_provider.time.sleep", lambda _s: None)
+    monkeypatch.setattr(
+        "services.ai_providers.text.openai_provider.make_openai_client",
+        lambda **_kwargs: _FakeClient([SimpleNamespace(output_text='ok-from-responses')]),
+    )
+    monkeypatch.setattr("services.ai_providers.text.openai_provider.get_config", lambda: SimpleNamespace(
+        OPENAI_TIMEOUT=30,
+        OPENAI_MAX_RETRIES=0,
+        OPENAI_TEXT_API_MODE="responses",
+    ))
+
+    provider = OpenAITextProvider(
+        api_key="test-key",
+        api_base="https://relay.example.com/v1",
+        model="test-model",
+    )
+
+    assert provider.generate_text("hello") == "ok-from-responses"
 
 
 def test_generate_text_retries_then_succeeds(monkeypatch):

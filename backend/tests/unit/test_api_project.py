@@ -154,6 +154,9 @@ class TestProjectGet:
             def flatten_outline(self, outline):
                 return outline
 
+            def normalize_renovation_description_text(self, description_text, extra_fields=None, page_outline=None):
+                return description_text
+
             def generate_descriptions_stream(self, project_context, outline, flat_pages, language='zh', detail_level='default', page_numbers=None):
                 self.page_numbers = page_numbers
                 yield {
@@ -376,7 +379,7 @@ class TestProjectOutlineStream:
                 }
                 yield {'__stream_complete__': True}
 
-        monkeypatch.setattr('controllers.project_controller.get_ai_service', lambda: FakeAIService())
+        monkeypatch.setattr('controllers.project_controller.get_ai_service', lambda **kwargs: FakeAIService())
 
         stream_response = client.post(
             f'/api/projects/{project_id}/generate/outline/stream',
@@ -397,10 +400,46 @@ class TestProjectOutlineStream:
 
             assert project.status == 'DESCRIPTIONS_GENERATED'
             assert len(pages) == 2
-            assert pages[0].get_outline_content() == {'title': '介绍主题', 'points': ['背景', '目标']}
+            assert pages[0].get_outline_content()['title'] == '介绍主题'
+            assert pages[0].get_outline_content()['points'] == ['背景', '目标']
             assert pages[0].get_description_content()['text'].startswith('--- 页面文字 ---')
             assert pages[0].get_description_content()['extra_fields'] == {'视觉元素': '背景图'}
             assert pages[1].get_outline_content()['title'] == '展开方案'
+
+    def test_outline_stream_uses_resolved_routing_bundle(self, client, monkeypatch):
+        """流式大纲生成应和普通接口一致，按当前解析出的 routing bundle 获取 AIService。"""
+        response = client.post('/api/projects', json={
+            'creation_type': 'idea',
+            'idea_prompt': '测试一个两页大纲',
+        })
+        data = assert_success_response(response, 201)
+        project_id = data['data']['project_id']
+
+        expected_bundle = object()
+        captured = {}
+
+        class FakeAIService:
+            def generate_outline_stream(self, project_context, language=None):
+                yield {'title': '第一页', 'points': ['要点1']}
+                yield {'__stream_complete__': True}
+
+        def fake_get_ai_service(*, routing_bundle=None, force_new=False):
+            captured['routing_bundle'] = routing_bundle
+            captured['force_new'] = force_new
+            return FakeAIService()
+
+        monkeypatch.setattr('controllers.project_controller.resolve_routing_bundle', lambda **kwargs: expected_bundle)
+        monkeypatch.setattr('controllers.project_controller.get_ai_service', fake_get_ai_service)
+
+        stream_response = client.post(
+            f'/api/projects/{project_id}/generate/outline/stream',
+            json={'language': 'zh'},
+            buffered=True,
+        )
+
+        assert stream_response.status_code == 200
+        assert captured['routing_bundle'] is expected_bundle
+        assert captured['force_new'] is False
 
 
 class TestProjectUpdate:

@@ -7,6 +7,8 @@ import type {
   Page,
   ImageVersion,
   GenerationOverride,
+  ImageChannelOption,
+  ProviderProfileSummary,
 } from '@/types';
 import type { Settings } from '../types/index';
 import type { PromptTemplate } from '../types/index';
@@ -50,6 +52,7 @@ export const createProject = async (data: CreateProjectRequest): Promise<ApiResp
     description_text: data.description_text,
     template_style: data.template_style,
     image_aspect_ratio: data.image_aspect_ratio,
+    scenario: data.scenario || 'ppt',
   });
   return response.data;
 };
@@ -628,6 +631,22 @@ export const editPageImage = async (
     );
     return response.data;
   }
+};
+
+export const uploadPageImage = async (
+  projectId: string,
+  pageId: string,
+  image: File
+): Promise<ApiResponse<Page>> => {
+  const formData = new FormData();
+  formData.append('image', image);
+
+  const response = await apiClient.post<ApiResponse<Page>>(
+    `/api/projects/${projectId}/pages/${pageId}/upload/image`,
+    formData,
+    { timeout: IMAGE_OPERATION_TIMEOUT_MS }
+  );
+  return response.data;
 };
 
 /**
@@ -1716,20 +1735,8 @@ export interface TestSettingsOverride {
   image_thinking_budget?: number;
 }
 
-export interface ProviderProfileSummary {
-  id: string;
-  provider: 'openai' | 'gemini' | string;
-  api_base?: string | null;
-  api_key_env?: string | null;
-  api_key_present?: boolean;
-  adapter?: string;
-  adapter_options?: Record<string, any>;
-  capabilities?: string[];
-  model_defaults?: Record<string, any>;
-}
-
-export const getProviderProfiles = async (): Promise<ApiResponse<{ profiles: ProviderProfileSummary[] }>> => {
-  const response = await apiClient.get<ApiResponse<{ profiles: ProviderProfileSummary[] }>>(
+export const getProviderProfiles = async (): Promise<ApiResponse<{ profiles: ProviderProfileSummary[]; builtin_channels?: ImageChannelOption[] }>> => {
+  const response = await apiClient.get<ApiResponse<{ profiles: ProviderProfileSummary[]; builtin_channels?: ImageChannelOption[] }>>(
     '/api/settings/provider-profiles'
   );
   return response.data;
@@ -1883,21 +1890,18 @@ export const extractStyleFromImage = async (
 export interface StyleTemplate {
   id: string;
   name?: string | null;
+  scenario?: 'ppt' | 'data_report';
   template_json: string;
   created_at?: string;
   updated_at?: string;
 }
 
-export interface StylePresetPreviewImages {
-  cover_url: string;
-  toc_url: string;
-  detail_url: string;
-  ending_url: string;
-}
+export type StylePresetPreviewImages = Record<string, string>;
 
 export interface StylePreset {
   id: string;
   name?: string | null;
+  scenario?: 'ppt' | 'data_report';
   style_json: string;
   preview_images?: StylePresetPreviewImages;
   created_at?: string;
@@ -1909,7 +1913,7 @@ export const listStyleTemplates = async (): Promise<ApiResponse<{ templates: Sty
   return response.data;
 };
 
-export const createStyleTemplate = async (data: { name?: string; template_json: string }): Promise<ApiResponse<StyleTemplate>> => {
+export const createStyleTemplate = async (data: { name?: string; scenario?: 'ppt' | 'data_report'; template_json: string }): Promise<ApiResponse<StyleTemplate>> => {
   const response = await apiClient.post<ApiResponse<StyleTemplate>>('/api/style-templates', data);
   return response.data;
 };
@@ -1940,6 +1944,11 @@ export const deleteStylePreset = async (presetId: string): Promise<ApiResponse> 
 
 export const listStylePresetTasks = async (): Promise<ApiResponse<{ tasks: Task[] }>> => {
   const response = await apiClient.get<ApiResponse<{ tasks: Task[] }>>('/api/style-presets/tasks');
+  return response.data;
+};
+
+export const deleteStylePresetTask = async (taskId: string): Promise<ApiResponse> => {
+  const response = await apiClient.delete<ApiResponse>(`/api/style-presets/tasks/${taskId}`);
   return response.data;
 };
 

@@ -1,20 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, FileText, Download, Sparkles, AlertTriangle, HelpCircle, Image as ImageIcon, Plus } from 'lucide-react';
-import { Button, Textarea, Input } from '@/components/shared';
+import { Button, Textarea, Input, Select } from '@/components/shared';
 import { useT } from '@/hooks/useT';
+import type { ProviderProfileSummary } from '@/types';
 import type { ExportExtractorMethod, ExportInpaintMethod } from '@/types';
 import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
 import {
   PROJECT_DEFAULT_IMAGE_MODEL,
   PROJECT_DEFAULT_IMAGE_RESOLUTION,
-  PROJECT_IMAGE_MODEL_CATALOG,
-  PROJECT_SUPPORTED_IMAGE_SOURCES,
   PROJECT_SUPPORTED_IMAGE_MODELS,
-  getImageSourceForModel,
   getSupportedResolutionsForModel,
-  normalizeProjectDefaultImageSource,
   type ProjectSupportedImageModel,
 } from '@/config/projectAiDefaults';
+import {
+  getImageChannelOptionById,
+  getImageChannelOptions,
+  getSelectableImageModelsForChannel,
+  normalizeImageChannel,
+} from '@/config/projectAiChannels';
 import {
   DndContext,
   closestCenter,
@@ -159,10 +162,13 @@ interface ProjectSettingsModalProps {
   onSaveAspectRatio?: () => void;
   isSavingAspectRatio?: boolean;
   hasImages?: boolean;
-  generationDefaultImageSource?: string;
+  generationDefaultImageProvider?: string;
+  generationDefaultImageChannel?: string;
   generationDefaultImageModel?: string;
   generationDefaultImageResolution?: string;
-  onGenerationDefaultImageSourceChange?: (value: string) => void;
+  providerProfiles?: ProviderProfileSummary[];
+  onGenerationDefaultImageProviderChange?: (value: string) => void;
+  onGenerationDefaultImageChannelChange?: (value: string) => void;
   onGenerationDefaultImageModelChange?: (value: string) => void;
   onGenerationDefaultImageResolutionChange?: (value: string) => void;
   onSaveGenerationDefaults?: () => void;
@@ -297,10 +303,13 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   onSaveAspectRatio,
   isSavingAspectRatio = false,
   hasImages = false,
-  generationDefaultImageSource = '',
+  generationDefaultImageProvider = 'gemini',
+  generationDefaultImageChannel = '',
   generationDefaultImageModel = '',
   generationDefaultImageResolution = PROJECT_DEFAULT_IMAGE_RESOLUTION,
-  onGenerationDefaultImageSourceChange,
+  providerProfiles = [],
+  onGenerationDefaultImageProviderChange,
+  onGenerationDefaultImageChannelChange,
   onGenerationDefaultImageModelChange,
   onGenerationDefaultImageResolutionChange,
   onSaveGenerationDefaults,
@@ -329,9 +338,24 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
       : PROJECT_DEFAULT_IMAGE_MODEL),
     [generationDefaultImageModel]
   );
-  const selectedImageSource = useMemo(
-    () => normalizeProjectDefaultImageSource(generationDefaultImageSource, selectedImageModel),
-    [generationDefaultImageSource, selectedImageModel]
+  const availableImageChannels = useMemo(
+    () => getImageChannelOptions(providerProfiles),
+    [providerProfiles]
+  );
+  const selectedImageChannel = useMemo(
+    () => {
+      const current = getImageChannelOptionById(generationDefaultImageChannel, providerProfiles);
+      const currentProvider = current?.provider || generationDefaultImageProvider || 'gemini';
+      return normalizeImageChannel(generationDefaultImageChannel, currentProvider, providerProfiles);
+    },
+    [generationDefaultImageChannel, generationDefaultImageProvider, providerProfiles]
+  );
+  const selectableImageModels = useMemo(() => {
+    return getSelectableImageModelsForChannel(selectedImageChannel, providerProfiles);
+  }, [providerProfiles, selectedImageChannel]);
+  const selectedImageProvider = useMemo(
+    () => getImageChannelOptionById(selectedImageChannel, providerProfiles)?.provider || generationDefaultImageProvider || 'gemini',
+    [generationDefaultImageProvider, providerProfiles, selectedImageChannel]
   );
   const presetDescriptionFieldSet = useMemo(
     () => new Set(presetDescriptionFields.length > 0 ? presetDescriptionFields : FALLBACK_DESCRIPTION_FIELDS),
@@ -361,10 +385,16 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   }, [generationDefaultImageModel, onGenerationDefaultImageModelChange, selectedImageModel]);
 
   useEffect(() => {
-    if (generationDefaultImageSource !== selectedImageSource) {
-      onGenerationDefaultImageSourceChange?.(selectedImageSource);
+    if (generationDefaultImageProvider !== selectedImageProvider) {
+      onGenerationDefaultImageProviderChange?.(selectedImageProvider);
     }
-  }, [generationDefaultImageSource, onGenerationDefaultImageSourceChange, selectedImageSource]);
+  }, [generationDefaultImageProvider, onGenerationDefaultImageProviderChange, selectedImageProvider]);
+
+  useEffect(() => {
+    if (generationDefaultImageChannel !== selectedImageChannel) {
+      onGenerationDefaultImageChannelChange?.(selectedImageChannel);
+    }
+  }, [generationDefaultImageChannel, onGenerationDefaultImageChannelChange, selectedImageChannel]);
 
   useEffect(() => {
     if (generationDefaultImageResolution !== selectedImageResolution) {
@@ -557,70 +587,72 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                       配置当前项目默认的图片生成来源/模型/清晰度（可在预览页临时覆盖）。
                     </p>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(320px,1.35fr)_minmax(0,1fr)]">
                     <div className="w-full">
                       <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-                        服务商
+                        Channel
                       </label>
-                      <select
-                        value={selectedImageSource}
-                        onChange={(e) => {
-                          const nextSource = e.target.value;
-                          onGenerationDefaultImageSourceChange?.(nextSource);
-                          const sourceModels = PROJECT_IMAGE_MODEL_CATALOG.filter((item) => item.source === nextSource);
-                          if (sourceModels.length > 0) {
-                            onGenerationDefaultImageModelChange?.(sourceModels[0].model);
+                      <Select
+                        value={selectedImageChannel}
+                        onChange={(value) => {
+                          const nextChannel = value;
+                          const nextChannelOption = getImageChannelOptionById(nextChannel, providerProfiles);
+                          if (nextChannelOption?.provider) {
+                            onGenerationDefaultImageProviderChange?.(nextChannelOption.provider);
+                          }
+                          onGenerationDefaultImageChannelChange?.(nextChannel);
+                          const nextModels = getSelectableImageModelsForChannel(nextChannel, providerProfiles);
+                          if (nextModels.length > 0) {
+                            onGenerationDefaultImageModelChange?.(nextModels[0].model);
                           }
                         }}
-                        className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
-                      >
-                        {PROJECT_SUPPORTED_IMAGE_SOURCES.map((source) => (
-                          <option key={source} value={source}>
-                            {source === 'openai' ? 'azure-openai' : source}
-                          </option>
-                        ))}
-                      </select>
+                        options={availableImageChannels.map((channel) => ({
+                          value: channel.id,
+                          label: channel.label,
+                        }))}
+                      />
                     </div>
                     <div className="w-full">
                       <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
                         图片模型
                       </label>
-                      <select
+                      <Select
                         value={selectedImageModel}
-                        onChange={(e) => {
-                          const nextModel = e.target.value;
+                        className="min-w-0"
+                        menuClassName="max-w-[min(80vw,40rem)]"
+                        onChange={(value) => {
+                          const nextModel = value;
                           onGenerationDefaultImageModelChange?.(nextModel);
-                          onGenerationDefaultImageSourceChange?.(getImageSourceForModel(nextModel, selectedImageSource));
                         }}
-                        className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
-                      >
-                        {PROJECT_IMAGE_MODEL_CATALOG.map((item) => (
-                          <option key={item.model} value={item.model}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
+                        options={selectableImageModels.map((item) => ({
+                          value: item.model,
+                          label: item.model,
+                        }))}
+                      />
                     </div>
                     <div className="w-full">
                       <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
                         图像清晰度
                       </label>
-                      <select
+                      <Select
                         value={selectedImageResolution}
-                        onChange={(e) => onGenerationDefaultImageResolutionChange?.(e.target.value)}
-                        className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
-                      >
-                        {visibleResolutionOptions.map((resolution) => (
-                          <option key={resolution} value={resolution}>
-                            {resolution}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(value) => onGenerationDefaultImageResolutionChange?.(value)}
+                        options={visibleResolutionOptions.map((resolution) => ({
+                          value: resolution,
+                          label: resolution,
+                        }))}
+                      />
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
-                    更高的清晰度会生成更详细的图像，但需要更长时间。Azure OpenAI `gpt-image-2` 支持 1K/2K/4K（后端会自动换算为兼容的 size）。
+                    当前支持的生图渠道为 `viviai`、`gs88`、`147ai`。更高的清晰度会生成更详细的图像，但需要更长时间。
                   </p>
+                  {availableImageChannels.find((channel) => channel.id === selectedImageChannel)?.config_note && (
+                    <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
+                      当前渠道状态：
+                      {availableImageChannels.find((channel) => channel.id === selectedImageChannel)?.config_note}
+                    </p>
+                  )}
                   {onSaveGenerationDefaults && (
                     <Button
                       variant="secondary"

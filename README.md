@@ -234,28 +234,17 @@ IMAGE_OPENAI_CHAT_FALLBACK=true
 IMAGE_OPENAI_STRICT_PARAMS=true
 ```
 
-`vveai` 示例（文生图/图生图优先走 image 端点）：
-
-```env
-IMAGE_MODEL_SOURCE=openai
-IMAGE_API_BASE=https://api.vveai.com/v1
-IMAGE_OPENAI_ENDPOINT_MODE=images
-IMAGE_OPENAI_PATH_STYLE=singular
-IMAGE_OPENAI_RESPONSE_FORMAT=b64_json
-IMAGE_OPENAI_CHAT_FALLBACK=false
-IMAGE_OPENAI_STRICT_PARAMS=true
-```
-
-`viviai` 示例（Gemini 原生更稳定，建议图片走 gemini provider）：
+`viviai` 示例（已建议并入 profile 渠道统一管理）：
 
 ```env
 IMAGE_MODEL_SOURCE=gemini
-IMAGE_API_BASE=https://api.viviai.cc
 IMAGE_MODEL=gemini-3.1-flash-image-preview
+IMAGE_API_KEY=your-viviai-image-key
+PROVIDER_PROFILES_FILE=./config/provider_profiles.example.json
 ```
 
 手动切换步骤：
-1. 修改 `.env` 中 `IMAGE_MODEL_SOURCE` 与 `IMAGE_API_BASE`（以及上面的 `IMAGE_OPENAI_*`）。
+1. 修改 `.env` 中 `IMAGE_MODEL_SOURCE` / `IMAGE_MODEL`，或调整 `PROVIDER_PROFILES_FILE` 指向的图片渠道配置文件。
 2. 重启后端服务，使新环境变量生效。
 3. 在设置页“服务测试 -> 图像生成模型”执行一次测试，确认当前中转配置可用。
 
@@ -268,32 +257,8 @@ IMAGE_MODEL=gemini-3.1-flash-image-preview
 新增环境变量：
 
 ```env
-# JSON 数组：声明可用 profile（支持 source=profile:<id>）
-PROVIDER_PROFILES_JSON=[
-  {
-    "id":"gemini_native_cn",
-    "provider":"gemini",
-    "api_base":"https://your-gemini-proxy.example.com",
-    "api_key_env":"IMAGE_API_KEY",
-    "adapter":"native",
-    "capabilities":["image"]
-  },
-  {
-    "id":"openai_vveai_image",
-    "provider":"openai",
-    "api_base":"https://api.vveai.com/v1",
-    "api_key_env":"IMAGE_API_KEY",
-    "adapter":"openai_image_compat",
-    "adapter_options":{
-      "endpoint_mode":"images",
-      "path_style":"singular",
-      "response_format":"b64_json",
-      "chat_fallback":false,
-      "strict_params":true
-    },
-    "capabilities":["image"]
-  }
-]
+# 推荐方式：把渠道定义写进独立 JSON 文件，再在 .env 里只保留文件路径
+PROVIDER_PROFILES_FILE=./config/provider_profiles.example.json
 
 # 严格模式：profile / adapter 无效时直接报错（默认 true）
 PROVIDER_ROUTING_STRICT=true
@@ -302,14 +267,26 @@ PROVIDER_ROUTING_STRICT=true
 PROVIDER_ADAPTER_DEFAULT=native
 ```
 
+当前保留的图片渠道建议为：
+
+- `viviai`：Gemini 原生代理，建议通过 `PROVIDER_PROFILES_FILE`
+- `gs88`：OpenAI 兼容图片渠道，建议通过 `PROVIDER_PROFILES_FILE`
+- `147ai`：OpenAI 兼容图片渠道，建议通过 `PROVIDER_PROFILES_FILE`
+
+对应官网地址，便于后续查阅：
+
+- `viviai`：[https://api.viviai.cc/](https://api.viviai.cc/)
+- `147ai`：[https://banana.147ai.com/](https://banana.147ai.com/)
+- `gs88`：[https://ai.gs88.shop](https://ai.gs88.shop)
+
 请求级临时覆盖（不落库）：
 
 ```json
 {
   "generation_override": {
     "image": {
-      "source": "profile:openai_vveai_image",
-      "model": "gemini-3.1-flash-image-preview"
+      "source": "profile:gs88",
+      "model": "gpt-image-2"
     }
   }
 }
@@ -321,7 +298,7 @@ PROVIDER_ADAPTER_DEFAULT=native
 {
   "generation_defaults": {
     "image": {
-      "source": "profile:gemini_native_cn",
+      "source": "profile:gs88",
       "model": "gemini-3.1-flash-image-preview"
     }
   }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, ArrowRight, Plus, FileText, Sparkle, Download, Upload, PanelLeftClose, PanelLeftOpen, LayoutGrid, List, ArrowUp } from 'lucide-react';
+import { ArrowLeft, Save, ArrowRight, Plus, FileText, Sparkle, Download, Upload, PanelLeftClose, PanelLeftOpen, LayoutGrid, List, ArrowUp, Trash2, X } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 import mammoth from 'mammoth/mammoth.browser';
 
@@ -16,8 +16,11 @@ const outlineI18n = {
       deletePage: "删除页面", confirmDeletePage: "确定要删除这一页吗？",
       preview: "预览", clickToPreview: "点击左侧卡片查看详情",
       noPages: "还没有页面", noPagesHint: "点击「添加页面」手动创建，或「自动生成大纲」让 AI 帮你完成",
+      noPagesGenerating: "正在连接模型并生成大纲...",
+      noPagesGeneratingHint: "已开始流式生成，第一页返回前会短暂等待，请勿重复点击生成按钮。",
       parseOutline: "解析大纲", autoGenerate: "自动生成大纲",
       reParseOutline: "重新解析大纲", reGenerate: "重新生成大纲", export: "导出大纲", import: "导入",
+      multiSelectDelete: "多选删除", cancelMultiSelect: "取消选择", deleteSelected: "删除已选", selectedCount: "已选 {{count}} 项",
       aiPlaceholder: "例如：增加一页关于XXX的内容、删除第3页、合并前两页... · Ctrl+Enter提交",
       aiPlaceholderShort: "例如：增加/删除页面... · Ctrl+Enter",
       viewMode: { list: "列表", grid: "网格" },
@@ -46,6 +49,9 @@ const outlineI18n = {
         unsupportedFile: "仅支持 .docx / .txt / .md 文件",
         saveFailed: "保存失败",
         deleteFailed: "删除页面失败",
+        confirmDeleteSelected: "确定删除选中的 {{count}} 页吗？此操作不可撤销。",
+        confirmDeleteSelectedTitle: "确认批量删除",
+        deleteSelectedSuccess: "已删除 {{count}} 页",
       }
     }
   },
@@ -59,8 +65,11 @@ const outlineI18n = {
       deletePage: "Delete Page", confirmDeletePage: "Are you sure you want to delete this page?",
       preview: "Preview", clickToPreview: "Click a card on the left to view details",
       noPages: "No pages yet", noPagesHint: "Click \"Add Page\" to create manually, or \"Auto Generate\" to let AI help you",
+      noPagesGenerating: "Connecting to the model and generating the outline...",
+      noPagesGeneratingHint: "Streaming has started. There may be a short wait before the first page appears. Please avoid clicking generate again.",
       parseOutline: "Parse Outline", autoGenerate: "Auto Generate Outline",
       reParseOutline: "Re-parse Outline", reGenerate: "Regenerate Outline", export: "Export Outline", import: "Import",
+      multiSelectDelete: "Multi-delete", cancelMultiSelect: "Cancel", deleteSelected: "Delete Selected", selectedCount: "{{count}} selected",
       aiPlaceholder: "e.g., Add a page about XXX, delete page 3, merge first two pages... · Ctrl+Enter to submit",
       aiPlaceholderShort: "e.g., Add/delete pages... · Ctrl+Enter",
       viewMode: { list: "List", grid: "Grid" },
@@ -89,6 +98,9 @@ const outlineI18n = {
         unsupportedFile: "Only .docx, .txt, or .md files are supported",
         saveFailed: "Save failed",
         deleteFailed: "Failed to delete page",
+        confirmDeleteSelected: "Delete the selected {{count}} page(s)? This cannot be undone.",
+        confirmDeleteSelectedTitle: "Confirm Bulk Delete",
+        deleteSelectedSuccess: "{{count}} page(s) deleted",
       }
     }
   }
@@ -184,9 +196,12 @@ export const OutlineEditor: React.FC = () => {
     generateOutline,
     generateOutlineStream,
     isGlobalLoading,
+    isOutlineStreaming,
   } = useProjectStore();
 
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [selectedPageIds, setSelectedPageIds] = useState<string[]>([]);
   const [isAiRefining, setIsAiRefining] = useState(false);
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(true);
@@ -217,6 +232,54 @@ export const OutlineEditor: React.FC = () => {
     }
   }, [deletePageById, show, t]);
 
+  const toggleMultiSelectMode = useCallback(() => {
+    setIsMultiSelectMode((prev) => !prev);
+    setSelectedPageIds([]);
+    setExpandedCardId(null);
+  }, []);
+
+  const handleTogglePageSelection = useCallback((pageId: string) => {
+    setSelectedPageIds((prev) => (
+      prev.includes(pageId)
+        ? prev.filter((id) => id !== pageId)
+        : [...prev, pageId]
+    ));
+  }, []);
+
+  const handleDeleteSelectedPages = useCallback(() => {
+    if (selectedPageIds.length === 0) return;
+
+    confirm(
+      t('outline.messages.confirmDeleteSelected', { count: String(selectedPageIds.length) }),
+      async () => {
+        let deletedCount = 0;
+        for (const pageId of selectedPageIds) {
+          const ok = await deletePageById(pageId);
+          if (ok) {
+            deletedCount += 1;
+          }
+        }
+
+        if (deletedCount === selectedPageIds.length) {
+          show({
+            message: t('outline.messages.deleteSelectedSuccess', { count: String(deletedCount) }),
+            type: 'success',
+          });
+        } else {
+          show({ message: t('outline.messages.deleteFailed'), type: 'error' });
+        }
+
+        setSelectedPageIds([]);
+        setIsMultiSelectMode(false);
+        setSelectedPageId(null);
+      },
+      {
+        title: t('outline.messages.confirmDeleteSelectedTitle'),
+        variant: 'danger',
+      }
+    );
+  }, [confirm, deletePageById, selectedPageIds, show, t]);
+
   // 左侧可编辑文本区域 — desktop and mobile use separate refs to avoid
   // the shared-ref bug where insertAtCursor targets the wrong (hidden) instance.
   const desktopTextareaRef = useRef<MarkdownTextareaRef>(null);
@@ -246,6 +309,12 @@ export const OutlineEditor: React.FC = () => {
       setSourceFile(null);
     }
   }, [currentProject?.id]);
+
+  useEffect(() => {
+    if (!currentProject) return;
+    const validIds = new Set(currentProject.pages.map((page) => page.id || page.page_id).filter(Boolean));
+    setSelectedPageIds((prev) => prev.filter((pageId) => validIds.has(pageId)));
+  }, [currentProject]);
 
   const saveInputText = useCallback(async (text: string, creationType: string | undefined) => {
     if (!projectId || !creationType) return;
@@ -454,9 +523,9 @@ export const OutlineEditor: React.FC = () => {
         return;
       }
       const startIndex = currentProject.pages.reduce((max, p) => Math.max(max, (p.order_index ?? 0) + 1), 0);
-      await Promise.all(parsed.map(({ title, points, text: desc, part, extra_fields }, i) =>
+      await Promise.all(parsed.map(({ title, page_type, points, text: desc, part, extra_fields }, i) =>
         addPage(projectId, {
-          outline_content: { title, points },
+          outline_content: { title, page_type: page_type || '标准图文页', points },
           description_content: desc ? { text: desc, ...(extra_fields ? { extra_fields } : {}) } : undefined,
           part,
           order_index: startIndex + i,
@@ -701,17 +770,23 @@ export const OutlineEditor: React.FC = () => {
               <Button
                 variant="secondary"
                 onClick={handleGenerateOutline}
+                disabled={isOutlineStreaming}
                 className="flex-1 sm:flex-initial text-sm md:text-base"
               >
-                {currentProject.creation_type === 'outline' ? t('outline.parseOutline') : t('outline.autoGenerate')}
+                {isOutlineStreaming
+                  ? t('outline.generating')
+                  : (currentProject.creation_type === 'outline' ? t('outline.parseOutline') : t('outline.autoGenerate'))}
               </Button>
             ) : (
               <Button
                 variant="secondary"
                 onClick={handleGenerateOutline}
+                disabled={isOutlineStreaming}
                 className="flex-1 sm:flex-initial text-sm md:text-base"
               >
-                {currentProject.creation_type === 'outline' ? t('outline.reParseOutline') : t('outline.reGenerate')}
+                {isOutlineStreaming
+                  ? t('outline.generating')
+                  : (currentProject.creation_type === 'outline' ? t('outline.reParseOutline') : t('outline.reGenerate'))}
               </Button>
             )}
             <Button
@@ -731,6 +806,37 @@ export const OutlineEditor: React.FC = () => {
             >
               {t('outline.import')}
             </Button>
+            {isMultiSelectMode ? (
+              <>
+                <Button
+                  variant="secondary"
+                  icon={<X size={16} className="md:w-[18px] md:h-[18px]" />}
+                  onClick={toggleMultiSelectMode}
+                  className="flex-1 sm:flex-initial text-sm md:text-base"
+                >
+                  {t('outline.cancelMultiSelect')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon={<Trash2 size={16} className="md:w-[18px] md:h-[18px]" />}
+                  onClick={handleDeleteSelectedPages}
+                  disabled={selectedPageIds.length === 0}
+                  className="flex-1 sm:flex-initial text-sm md:text-base text-red-600 border-red-200 hover:bg-red-50 disabled:text-gray-400"
+                >
+                  {t('outline.deleteSelected')}
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="secondary"
+                icon={<Trash2 size={16} className="md:w-[18px] md:h-[18px]" />}
+                onClick={toggleMultiSelectMode}
+                disabled={currentProject.pages.length === 0}
+                className="flex-1 sm:flex-initial text-sm md:text-base"
+              >
+                {t('outline.multiSelectDelete')}
+              </Button>
+            )}
             <input ref={importFileRef} type="file" accept=".md,.txt" className="hidden" onChange={handleImportOutline} />
             {/* 手机端：保存按钮 */}
             <Button
@@ -744,6 +850,11 @@ export const OutlineEditor: React.FC = () => {
             <span className="text-xs md:text-sm text-gray-500 dark:text-foreground-tertiary whitespace-nowrap">
               {t('outline.pageCount', { count: String(currentProject.pages.length) })}
             </span>
+            {isMultiSelectMode && (
+              <span className="text-xs md:text-sm text-banana-700 dark:text-banana-400 whitespace-nowrap">
+                {t('outline.selectedCount', { count: String(selectedPageIds.length) })}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
             <button
@@ -978,15 +1089,26 @@ export const OutlineEditor: React.FC = () => {
           <div className={isGlobalLoading ? 'opacity-60 pointer-events-none' : ''}>
             {currentProject.pages.length === 0 ? (
               <div className="text-center py-12 md:py-20">
-                <div className="flex justify-center mb-4">
-                  <FileText size={48} className="text-gray-300" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-foreground-primary mb-2">
-                  {t('outline.noPages')}
-                </h3>
-                <p className="text-gray-500 dark:text-foreground-tertiary mb-6">
-                  {t('outline.noPagesHint')}
-                </p>
+                {isOutlineStreaming ? (
+                  <div className="mx-auto max-w-md rounded-2xl border border-banana-100 bg-white/90 px-6 py-8 shadow-sm dark:border-border-primary dark:bg-background-secondary/90">
+                    <Loading message={t('outline.noPagesGenerating')} />
+                    <p className="mt-4 text-sm text-gray-500 dark:text-foreground-tertiary">
+                      {t('outline.noPagesGeneratingHint')}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-center mb-4">
+                      <FileText size={48} className="text-gray-300" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-foreground-primary mb-2">
+                      {t('outline.noPages')}
+                    </h3>
+                    <p className="text-gray-500 dark:text-foreground-tertiary mb-6">
+                      {t('outline.noPagesHint')}
+                    </p>
+                  </>
+                )}
               </div>
             ) : (
               <DndContext
@@ -1007,16 +1129,30 @@ export const OutlineEditor: React.FC = () => {
                         key={page.id || `page-${index}`}
                         page={page}
                         index={index}
+                        scenario={currentProject.scenario || 'ppt'}
                         projectId={projectId}
                         showToast={show}
                         onUpdate={(data) => page.id && updatePageLocal(page.id, data)}
                         onDelete={() => handleDeletePage(page)}
-                        onClick={() => setSelectedPageId(page.id || null)}
+                        onClick={() => {
+                          if (isMultiSelectMode) {
+                            const pageId = page.id || page.page_id;
+                            if (pageId) handleTogglePageSelection(pageId);
+                            return;
+                          }
+                          setSelectedPageId(page.id || null);
+                        }}
                         isSelected={selectedPageId === page.id}
                         isAiRefining={isAiRefining}
                         viewMode={viewMode}
                         isExpanded={expandedCardId === page.id}
                         onToggleExpand={(next) => setExpandedCardId(next ? (page.id || null) : null)}
+                        showSelectionCheckbox={isMultiSelectMode}
+                        isSelectionChecked={selectedPageIds.includes(page.id || page.page_id)}
+                        onSelectionToggle={() => {
+                          const pageId = page.id || page.page_id;
+                          if (pageId) handleTogglePageSelection(pageId);
+                        }}
                       />
                     ))}
                   </div>

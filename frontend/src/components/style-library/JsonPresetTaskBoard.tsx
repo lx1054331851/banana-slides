@@ -2,7 +2,7 @@ import React from 'react';
 import { AlertCircle, Loader2, RefreshCw, X } from 'lucide-react';
 import { Button, Card } from '@/components/shared';
 import type { StylePresetTaskRecord } from './types';
-import { getTaskDisplayName, getTaskPreviewKey, getTaskStage, isTaskRunning } from './types';
+import { getTaskDisplayName, getTaskPreviewKey, getTaskStage, humanizePreviewKey, isTaskRunning } from './types';
 
 interface JsonPresetTaskBoardProps {
   tasks: StylePresetTaskRecord[];
@@ -18,10 +18,10 @@ function getTaskSummary(task: StylePresetTaskRecord): string {
   const failed = typeof progress.failed === 'number' ? progress.failed : 0;
 
   if (stage === 'json_generating') return '阶段 1/2：正在填充 JSON';
-  if (stage === 'preview_generating') return `阶段 2/2：正在生成预览图 ${Math.max(0, completed - 1)}/4${failed ? `，失败 ${failed}` : ''}`;
+  if (stage === 'preview_generating') return `阶段 2/2：正在生成预览图 ${Math.max(0, completed - 1)}/${Math.max(0, total - 1)}${failed ? `，失败 ${failed}` : ''}`;
   if (stage === 'single_preview_generating') {
     const previewKey = getTaskPreviewKey(task);
-    const label = previewKey === 'cover_url' ? '首页' : previewKey === 'toc_url' ? '目录' : previewKey === 'detail_url' ? '详情' : '结尾';
+    const label = previewKey ? humanizePreviewKey(previewKey) : '预览图';
     return `正在补生成 ${label} 预览图 ${completed}/${Math.max(1, total)}`;
   }
   if (task.status === 'FAILED') return task.error_message || '生成失败';

@@ -30,6 +30,10 @@ settings_bp = Blueprint(
 )
 
 
+def _build_builtin_image_channels():
+    return []
+
+
 @contextmanager
 def temporary_settings_override(settings_override: dict):
     """
@@ -519,7 +523,8 @@ def list_provider_profiles():
     """GET /api/settings/provider-profiles - list routing profiles (redacted)."""
     try:
         profiles = list_provider_profiles_redacted()
-        return success_response({"profiles": profiles})
+        builtins = _build_builtin_image_channels()
+        return success_response({"profiles": profiles, "builtin_channels": builtins})
     except Exception as e:
         logger.error(f"Error listing provider profiles: {e}")
         return error_response("GET_PROVIDER_PROFILES_ERROR", str(e), 500)

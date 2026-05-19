@@ -24,7 +24,7 @@ import requests
 from PIL import Image
 
 from config import get_config
-from ..openai_client import make_openai_client
+from ..openai_client import _normalize_openai_base_url, make_openai_client
 from .base import ImageProvider
 
 logger = logging.getLogger(__name__)
@@ -132,7 +132,7 @@ class OpenAIImageProvider(ImageProvider):
             max_retries=cfg.OPENAI_MAX_RETRIES,
         )
         self.api_key = api_key
-        self.api_base = (api_base or "").rstrip("/")
+        self.api_base = (_normalize_openai_base_url(api_base) or "").rstrip("/")
         self.azure_endpoint = azure_endpoint.rstrip("/") if azure_endpoint else ""
         self.azure_api_version = azure_api_version or ""
         self.model = model

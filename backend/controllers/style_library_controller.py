@@ -17,13 +17,14 @@ from services.provider_routing import resolve_routing_bundle
 from services.task_manager import task_manager
 from services.style_preview_service import generate_style_preset_task, regenerate_style_preset_image_task
 from utils import success_response, error_response, not_found, bad_request, allowed_file
+from utils.style_guidance import extract_style_template_page_slots
 
 logger = logging.getLogger(__name__)
 
 style_library_bp = Blueprint('style_library', __name__, url_prefix='/api')
-_PREVIEW_IMAGE_KEYS = ('cover_url', 'toc_url', 'detail_url', 'ending_url')
 _STYLE_PRESET_TASK_TYPES = ('STYLE_PRESET_GENERATE', 'STYLE_PRESET_IMAGE_REGENERATE')
 _RUNNING_TASK_STATUSES = ('PENDING', 'PROCESSING', 'RUNNING')
+_SUPPORTED_STYLE_SCENARIOS = {'ppt', 'data_report'}
 
 
 def _validate_json_text(text: str):
@@ -35,13 +36,43 @@ def _validate_json_text(text: str):
     return json.loads(s)
 
 
-def _normalize_preview_images_payload(payload):
+def _infer_scenario_from_template_json(parsed_json) -> str:
+    try:
+        if isinstance(parsed_json, dict):
+            design_system_spec = parsed_json.get('design_system_spec')
+            if isinstance(design_system_spec, dict):
+                meta = design_system_spec.get('meta')
+                if isinstance(meta, dict):
+                    scenario = str(meta.get('scenario') or '').strip()
+                    if scenario in _SUPPORTED_STYLE_SCENARIOS:
+                        return scenario
+    except Exception:
+        pass
+    return 'ppt'
+
+
+def _resolve_style_template_scenario(raw_scenario: str | None, parsed_json) -> str:
+    scenario = str(raw_scenario or '').strip()
+    if scenario:
+        if scenario not in _SUPPORTED_STYLE_SCENARIOS:
+            raise ValueError('scenario must be one of: ppt, data_report')
+        return scenario
+    return _infer_scenario_from_template_json(parsed_json)
+
+
+def _get_preview_image_keys_from_style_json(style_json_text: str):
+    slots = extract_style_template_page_slots(style_json_text)
+    return [slot['preview_key'] for slot in slots]
+
+
+def _normalize_preview_images_payload(payload, allowed_keys=None):
     if payload is None:
         payload = {}
     if not isinstance(payload, dict):
         raise ValueError("preview_images must be an object")
+    normalized_keys = [str(key) for key in (allowed_keys or payload.keys()) if isinstance(key, str) and str(key).strip()]
     normalized = {}
-    for key in _PREVIEW_IMAGE_KEYS:
+    for key in normalized_keys:
         normalized[key] = str(payload.get(key) or '').strip()
     return normalized
 
@@ -77,18 +108,22 @@ def list_style_templates():
 def create_style_template():
     """
     POST /api/style-templates
-    Body: { name?: string, template_json: string }
+    Body: { name?: string, scenario?: string, template_json: string }
     """
     try:
         data = request.get_json() or {}
         name = (data.get('name') or '').strip() or None
         template_json_text = (data.get('template_json') or '').strip()
         try:
-            _validate_json_text(template_json_text)
+            parsed_json = _validate_json_text(template_json_text)
         except Exception as e:
             return bad_request(f"template_json must be valid JSON: {str(e)}")
+        try:
+            scenario = _resolve_style_template_scenario(data.get('scenario'), parsed_json)
+        except Exception as e:
+            return bad_request(str(e))
 
-        obj = StyleTemplate(name=name, template_json=template_json_text)
+        obj = StyleTemplate(name=name, scenario=scenario, template_json=template_json_text)
         db.session.add(obj)
         db.session.commit()
         return success_response(obj.to_dict(), status_code=201)
@@ -118,8 +153,6 @@ def delete_style_template(template_id: str):
 
 def _validate_preview_key(preview_key: str) -> str:
     normalized = secure_filename(str(preview_key or '').strip().lower())
-    if normalized not in _PREVIEW_IMAGE_KEYS:
-        raise ValueError('preview_key must be one of cover_url/toc_url/detail_url/ending_url')
     return normalized
 
 
@@ -131,7 +164,7 @@ def _recover_stale_style_task(task: Task) -> None:
     if not task_manager.is_task_active(task.id):
         fail_reason = 'Task is not active. The server may have restarted or the worker crashed.'
     else:
-        stale_timeout = int(current_app.config.get('TASK_STALE_TIMEOUT_SECONDS', 1800) or 0)
+        stale_timeout = int(current_app.config.get('STYLE_PRESET_TASK_STALE_TIMEOUT_SECONDS', 1800) or 0)
         if stale_timeout > 0 and task.created_at:
             running_seconds = int((datetime.utcnow() - task.created_at).total_seconds())
             if running_seconds > stale_timeout:
@@ -185,6 +218,31 @@ def list_style_preset_tasks():
         return success_response({'tasks': active_tasks + failed_tasks})
     except Exception as e:
         logger.error(f"list_style_preset_tasks failed: {str(e)}", exc_info=True)
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
+@style_library_bp.route('/style-presets/tasks/<task_id>', methods=['DELETE'])
+def delete_style_preset_task(task_id: str):
+    """
+    DELETE /api/style-presets/tasks/{task_id} - delete a failed style preset task record
+    """
+    try:
+        task = Task.query.filter(
+            Task.id == task_id,
+            Task.project_id == 'global',
+            Task.task_type.in_(_STYLE_PRESET_TASK_TYPES),
+        ).first()
+        if not task:
+            return not_found('Task')
+        if task.status in _RUNNING_TASK_STATUSES:
+            return bad_request('Running task cannot be deleted')
+
+        db.session.delete(task)
+        db.session.commit()
+        return success_response(message="Style preset task deleted successfully")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"delete_style_preset_task failed: {str(e)}", exc_info=True)
         return error_response('SERVER_ERROR', str(e), 500)
 
 
@@ -256,7 +314,10 @@ def regenerate_style_preset_preview_image(preset_id: str, preview_key: str):
         if not preset:
             return not_found('StylePreset')
 
+        allowed_preview_keys = set(_get_preview_image_keys_from_style_json(preset.style_json))
         normalized_preview_key = _validate_preview_key(preview_key)
+        if normalized_preview_key not in allowed_preview_keys:
+            return bad_request(f"preview_key must be one of {', '.join(sorted(allowed_preview_keys))}")
         data = request.get_json(silent=True) or {}
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
         generation_override = data.get('generation_override') or {}
@@ -320,8 +381,9 @@ def create_style_preset():
             _validate_json_text(style_json_text)
         except Exception as e:
             return bad_request(f"style_json must be valid JSON: {str(e)}")
+        allowed_preview_keys = _get_preview_image_keys_from_style_json(style_json_text)
         try:
-            normalized_preview_images = _normalize_preview_images_payload(preview_images_payload)
+            normalized_preview_images = _normalize_preview_images_payload(preview_images_payload, allowed_preview_keys)
         except Exception as e:
             return bad_request(str(e))
 
@@ -332,7 +394,7 @@ def create_style_preset():
 
         # Copy preview images into /uploads/style-presets/{preset_id}/
         file_service = FileService(current_app.config['UPLOAD_FOLDER'])
-        stored_preview_images = {k: '' for k in _PREVIEW_IMAGE_KEYS}
+        stored_preview_images = {k: '' for k in allowed_preview_keys}
         for key, source_url in normalized_preview_images.items():
             if not source_url:
                 continue

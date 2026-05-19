@@ -28,12 +28,22 @@ const {
         {
           id: 'style-1',
           name: 'JSON 模版 1',
+          scenario: 'ppt',
           style_json: '{"theme":"alpha"}',
           preview_images: {
             cover_url: '/files/style-presets/style-1/cover.png',
-            toc_url: '/files/style-presets/style-1/toc.png',
-            detail_url: '/files/style-presets/style-1/detail.png',
-            ending_url: '/files/style-presets/style-1/ending.png',
+            catalog_url: '/files/style-presets/style-1/toc.png',
+            detail_text_split_url: '/files/style-presets/style-1/detail.png',
+            closing_url: '/files/style-presets/style-1/ending.png',
+          },
+        },
+        {
+          id: 'style-2',
+          name: '数据报告模版',
+          scenario: 'data_report',
+          style_json: '{"design_system_spec":{"meta":{"scenario":"data_report"}}}',
+          preview_images: {
+            cover_url: '/files/style-presets/style-2/cover.png',
           },
         },
       ],
@@ -129,8 +139,8 @@ describe('TemplateSelector', () => {
     const { onDraftSelectionChange } = renderSelector();
 
     const imageTab = screen.getByTestId('template-selector-tab-image');
-    expect(imageTab).toHaveClass('from-banana-500');
-    expect(imageTab).toHaveClass('to-banana-600');
+    expect(imageTab).toHaveClass('bg-banana-500');
+    expect(imageTab).toHaveClass('text-black');
 
     const presetCard = await screen.findByTestId('template-card-preset-preset-1');
     const previewImage = screen.getByAltText('图片模版 1');
@@ -155,7 +165,7 @@ describe('TemplateSelector', () => {
       expect(screen.getByTestId('template-card-preset-preset-1')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('template-selector-layout')).toHaveClass('h-[72vh]');
+    expect(screen.getByTestId('template-selector-layout')).toHaveClass('h-[78vh]');
 
     const sidebar = screen.getByTestId('template-selector-sidebar');
     expect(sidebar).toHaveClass('overflow-y-auto');
@@ -176,10 +186,10 @@ describe('TemplateSelector', () => {
     const heroPreview = within(sidebar).getByAltText('JSON 模版 1') as HTMLImageElement;
     expect(heroPreview.getAttribute('src')).toBe('/files/style-presets/style-1/cover.png');
 
-    fireEvent.click(screen.getByTestId('template-style-preview-detail_url'));
+    fireEvent.click(screen.getByTestId('template-style-preview-detail_text_split_url'));
     expect(heroPreview.getAttribute('src')).toBe('/files/style-presets/style-1/detail.png');
 
-    fireEvent.click(screen.getByTestId('template-style-preview-ending_url'));
+    fireEvent.click(screen.getByTestId('template-style-preview-closing_url'));
     expect(heroPreview.getAttribute('src')).toBe('/files/style-presets/style-1/ending.png');
   });
 
@@ -201,5 +211,18 @@ describe('TemplateSelector', () => {
     );
 
     expect(screen.queryByTestId('mock-material-panel')).not.toBeInTheDocument();
+  });
+
+  it('filters JSON presets by project scenario', async () => {
+    renderSelector({
+      activeTab: 'json',
+      projectScenario: 'data_report',
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('template-card-style-style-2')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('template-card-style-style-1')).not.toBeInTheDocument();
   });
 });

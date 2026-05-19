@@ -1,9 +1,9 @@
 import React from 'react';
 import { History } from 'lucide-react';
 import { Button, PageAiWorkbench } from '@/components/shared';
-import { PROJECT_SUPPORTED_IMAGE_MODELS } from '@/config/projectAiDefaults';
 import {
   PREVIEW_SPLIT_DIVIDER_PX,
+  PREVIEW_SPLIT_HIT_AREA_PX,
   PREVIEW_EDITOR_VERTICAL_SPLIT_DIVIDER_PX,
   PREVIEW_EDITOR_CANVAS_MIN_HEIGHT,
   PREVIEW_EDITOR_WORKBENCH_MIN_HEIGHT,
@@ -28,6 +28,7 @@ type SlidePreviewEditorPaneProps = {
   pageAiTextareaRef: React.RefObject<any>;
   pageAiSlashActions: any[];
   editRunImageModel: string;
+  editRunImageModelOptions: readonly (string | { value: string; label: string })[];
   isPageAiSubmitting: boolean;
   isRegionSelectionMode: boolean;
   historyVersionsCount: number;
@@ -64,6 +65,7 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
   pageAiTextareaRef,
   pageAiSlashActions,
   editRunImageModel,
+  editRunImageModelOptions,
   isPageAiSubmitting,
   isRegionSelectionMode,
   historyVersionsCount,
@@ -103,16 +105,14 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
           <div
             role="separator"
             aria-orientation="horizontal"
-            className={`group relative flex select-none items-center justify-center cursor-row-resize ${isResizingEditorVerticalSplit ? 'bg-transparent' : 'bg-transparent'}`}
-            onMouseDown={onEditorVerticalSplitResizeStart}
+            className="group relative select-none"
           >
-            <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
-            <button
-              type="button"
-              aria-label="调整上下分区"
-              className="relative z-10 h-3 w-28 cursor-row-resize rounded-full bg-transparent hover:bg-banana-200/40"
+            <div
+              className={`absolute inset-x-0 top-1/2 z-10 -translate-y-1/2 cursor-row-resize ${isResizingEditorVerticalSplit ? 'bg-banana-300/70 dark:bg-banana-500/40' : 'bg-transparent'}`}
+              style={{ height: `${PREVIEW_SPLIT_HIT_AREA_PX}px` }}
               onMouseDown={onEditorVerticalSplitResizeStart}
             />
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-gray-200 transition-colors group-hover:bg-banana-300 dark:bg-border-primary dark:group-hover:bg-banana-500/70" />
             <div
               role="separator"
               aria-label="联动调整左右与上下分区"
@@ -159,7 +159,7 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
               slashActions={pageAiSlashActions}
               sendLabel={t('preview.generateImage')}
               modelValue={editRunImageModel}
-              modelOptions={PROJECT_SUPPORTED_IMAGE_MODELS}
+              modelOptions={editRunImageModelOptions}
               showModelPickerControl={false}
               isSubmitting={isPageAiSubmitting}
               isRegionSelectionActive={isRegionSelectionMode}

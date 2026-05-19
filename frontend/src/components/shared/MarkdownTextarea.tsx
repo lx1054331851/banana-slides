@@ -442,6 +442,37 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     return true;
   }, []);
 
+  const measureCollapsedRangeRect = useCallback((range: Range): DOMRect | null => {
+    const directRect = range.getBoundingClientRect();
+    if (directRect.width > 0 || directRect.height > 0 || (directRect.left !== 0 && directRect.top !== 0)) {
+      return directRect;
+    }
+
+    const marker = document.createElement('span');
+    marker.setAttribute('data-slash-caret-marker', 'true');
+    marker.setAttribute('aria-hidden', 'true');
+    marker.textContent = '\u200b';
+    marker.style.position = 'relative';
+    marker.style.display = 'inline-block';
+    marker.style.width = '1px';
+    marker.style.height = '1em';
+    marker.style.pointerEvents = 'none';
+    marker.style.opacity = '0';
+
+    const markerRange = range.cloneRange();
+    markerRange.insertNode(marker);
+    const markerRect = marker.getBoundingClientRect();
+    marker.remove();
+
+    const selection = window.getSelection();
+    if (selection) {
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    return markerRect.width > 0 || markerRect.height > 0 ? markerRect : null;
+  }, []);
+
   const openSlashMenu = useCallback(() => {
     if (!editorRef.current || !slashActions?.length) return;
     const sel = window.getSelection();
@@ -450,14 +481,15 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     if (!range.collapsed || !editorRef.current.contains(range.startContainer)) return;
     savedSelectionRangeRef.current = range.cloneRange();
 
-    const caretRect = range.getBoundingClientRect();
+    const caretRect = measureCollapsedRangeRect(range);
+    const editorRect = editorRef.current.getBoundingClientRect();
     const menuWidth = 176;
     const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
     const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
-    const fallbackLeft = 16;
-    const fallbackTop = 16;
-    const rawLeft = caretRect.left;
-    const rawTop = caretRect.bottom + 8;
+    const fallbackLeft = editorRect.left + 16;
+    const fallbackTop = editorRect.top + 36;
+    const rawLeft = caretRect?.left ?? fallbackLeft;
+    const rawTop = (caretRect?.bottom ?? (editorRect.top + 28)) + 8;
     const left = Number.isFinite(rawLeft)
       ? Math.min(Math.max(rawLeft, 12), Math.max(12, viewportWidth - menuWidth - 12))
       : fallbackLeft;
@@ -466,7 +498,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
       : fallbackTop;
     setActiveSlashIndex(0);
     setSlashMenuPosition({ left, top });
-  }, [slashActions]);
+  }, [measureCollapsedRangeRect, slashActions]);
 
   const runSlashAction = useCallback((index: number) => {
     const action = slashActions?.[index];
@@ -831,8 +863,10 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
 
   // Click on toolbar empty area → focus editor
   const handleToolbarMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // Only handle clicks on the toolbar itself, not on buttons inside
-    if (e.target === e.currentTarget || !(e.target as HTMLElement).closest('button, a, input, [role="button"]')) {
+    // Only steal focus for non-interactive toolbar chrome.
+    // Native controls like select must receive the original mouse event,
+    // otherwise their popup/menu cannot open.
+    if (e.target === e.currentTarget || !(e.target as HTMLElement).closest('button, a, input, select, textarea, label, summary, [role="button"], [role="menuitem"], [role="option"], [data-allow-toolbar-interaction]')) {
       e.preventDefault(); // prevent editor blur
       editorRef.current?.focus();
       restoreSavedSelectionRange();

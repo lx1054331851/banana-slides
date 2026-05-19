@@ -9,10 +9,12 @@ import { TemplateSelector } from '@/components/shared/TemplateSelector';
 import { HistoryVersionModal } from './HistoryVersionModal';
 import { ResolutionWarningModal } from './ResolutionWarningModal';
 import { BatchGenerateDialogs } from './BatchGenerateDialogs';
+import type { ProjectScenario, ProviderProfileSummary } from '@/types';
 
 type SlidePreviewDialogsProps = {
   t: (key: string, options?: Record<string, unknown>) => string;
   projectId?: string;
+  projectScenario?: ProjectScenario;
   isTemplateModalOpen: boolean;
   closeTemplateModal: () => void;
   activeTemplateTab: any;
@@ -72,10 +74,13 @@ type SlidePreviewDialogsProps = {
   handleSaveAspectRatio: (...args: any[]) => void;
   isSavingAspectRatio: boolean;
   hasImages: boolean;
-  projectDefaultImageSource: any;
+  projectDefaultImageProvider: string;
+  projectDefaultImageChannel: string;
   projectDefaultImageModel: string;
   projectDefaultImageResolution: string;
-  setProjectDefaultImageSource: (value: any) => void;
+  providerProfiles: ProviderProfileSummary[];
+  setProjectDefaultImageProvider: (value: string) => void;
+  setProjectDefaultImageChannel: (value: string) => void;
   setProjectDefaultImageModel: (value: string) => void;
   setProjectDefaultImageResolution: (value: string) => void;
   handleSaveGenerationDefaults: (...args: any[]) => void;
@@ -103,10 +108,10 @@ type SlidePreviewDialogsProps = {
   handleRegenerateAllImagesFromDialog: () => Promise<void> | void;
   showBatchDescriptionGenerateDialog: boolean;
   batchDescriptionGenerateContext: any;
-  descriptionRangeStart: number;
-  descriptionRangeEnd: number;
-  setDescriptionRangeStart: (value: number) => void;
-  setDescriptionRangeEnd: (value: number) => void;
+  descriptionRangeStart: string;
+  descriptionRangeEnd: string;
+  setDescriptionRangeStart: (value: string) => void;
+  setDescriptionRangeEnd: (value: string) => void;
   handleGenerateMissingDescriptionsFromDialog: () => Promise<void> | void;
   handleRegenerateAllDescriptionsFromDialog: () => Promise<void> | void;
   handleGenerateDescriptionsByRange: () => Promise<void> | void;
@@ -116,6 +121,7 @@ type SlidePreviewDialogsProps = {
 export const SlidePreviewDialogs: React.FC<SlidePreviewDialogsProps> = ({
   t,
   projectId,
+  projectScenario,
   isTemplateModalOpen,
   closeTemplateModal,
   activeTemplateTab,
@@ -175,10 +181,13 @@ export const SlidePreviewDialogs: React.FC<SlidePreviewDialogsProps> = ({
   handleSaveAspectRatio,
   isSavingAspectRatio,
   hasImages,
-  projectDefaultImageSource,
+  projectDefaultImageProvider,
+  projectDefaultImageChannel,
   projectDefaultImageModel,
   projectDefaultImageResolution,
-  setProjectDefaultImageSource,
+  providerProfiles,
+  setProjectDefaultImageProvider,
+  setProjectDefaultImageChannel,
   setProjectDefaultImageModel,
   setProjectDefaultImageResolution,
   handleSaveGenerationDefaults,
@@ -225,6 +234,7 @@ export const SlidePreviewDialogs: React.FC<SlidePreviewDialogsProps> = ({
       >
         <TemplateSelector
           projectId={projectId || null}
+          projectScenario={projectScenario}
           activeTab={activeTemplateTab}
           onActiveTabChange={setActiveTemplateTab}
           draftSelection={draftTemplateSelection}
@@ -294,10 +304,13 @@ export const SlidePreviewDialogs: React.FC<SlidePreviewDialogsProps> = ({
             onSaveAspectRatio={handleSaveAspectRatio}
             isSavingAspectRatio={isSavingAspectRatio}
             hasImages={hasImages}
-            generationDefaultImageSource={projectDefaultImageSource}
+            generationDefaultImageProvider={projectDefaultImageProvider}
+            generationDefaultImageChannel={projectDefaultImageChannel}
             generationDefaultImageModel={projectDefaultImageModel}
             generationDefaultImageResolution={projectDefaultImageResolution}
-            onGenerationDefaultImageSourceChange={setProjectDefaultImageSource}
+            providerProfiles={providerProfiles}
+            onGenerationDefaultImageProviderChange={setProjectDefaultImageProvider}
+            onGenerationDefaultImageChannelChange={setProjectDefaultImageChannel}
             onGenerationDefaultImageModelChange={setProjectDefaultImageModel}
             onGenerationDefaultImageResolutionChange={setProjectDefaultImageResolution}
             onSaveGenerationDefaults={handleSaveGenerationDefaults}
