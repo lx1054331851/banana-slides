@@ -342,7 +342,13 @@ const tryParseStyleJson = (styleJson?: string | null): Record<string, unknown> |
 };
 
 const slugifyStylePageKey = (text: string): string => {
-  const value = String(text || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+  const normalizedText = String(text || '').trim().toLowerCase();
+  if (!normalizedText) return 'page';
+  const hasAscii = /[a-z0-9]/.test(normalizedText);
+  if (!hasAscii) {
+    return normalizedText.replace(/\s+/g, '');
+  }
+  const value = normalizedText.replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
   return value || 'page';
 };
 
@@ -372,7 +378,12 @@ export const buildPreviewStyleJsonForPageType = (
   Object.entries(slideTemplates as Record<string, unknown>).some(([templateKey, templateValue]) => {
     if (!templateValue || typeof templateValue !== 'object' || Array.isArray(templateValue)) return false;
     const pageType = String((templateValue as Record<string, unknown>).page_type || '').trim();
-    if (slugifyStylePageKey(pageType) === requestedKey || slugifyStylePageKey(templateKey) === requestedKey) {
+    if (
+      pageType === String(pageTypeKey || '').trim()
+      || String(templateKey).trim() === String(pageTypeKey || '').trim()
+      || slugifyStylePageKey(pageType) === requestedKey
+      || slugifyStylePageKey(templateKey) === requestedKey
+    ) {
       matchedTemplateKey = templateKey;
       matchedTemplateValue = templateValue;
       return true;
