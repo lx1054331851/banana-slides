@@ -34,6 +34,21 @@ const outlineCardI18n = {
   }
 };
 
+const PAGE_TYPE_OPTIONS = [
+  '封面页',
+  '目录页',
+  '章节过渡页',
+  '议程时间线页',
+  '标准图文页',
+  '要点列表页',
+  '对比页',
+  '流程页',
+  '框架矩阵页',
+  '图表页',
+  '案例展示页',
+  '结尾页',
+];
+
 interface OutlineCardProps {
   page: Page;
   index: number;
@@ -76,6 +91,7 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
   const outline = page.outline_content ?? { title: '', points: [] as string[] };
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(outline.title);
+  const [editPageType, setEditPageType] = useState(outline.page_type || '标准图文页');
   const [editPoints, setEditPoints] = useState(outline.points.join('\n'));
   const [editPart, setEditPart] = useState(page.part || '');
   const [isMaterialSelectorOpen, setIsMaterialSelectorOpen] = useState(false);
@@ -105,15 +121,17 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
   useEffect(() => {
     if (!isEditing) {
       setEditTitle(outline.title);
+      setEditPageType(outline.page_type || '标准图文页');
       setEditPoints(outline.points.join('\n'));
       setEditPart(page.part || '');
     }
-  }, [outline.title, outline.points, page.part, isEditing]);
+  }, [outline.title, outline.page_type, outline.points, page.part, isEditing]);
 
   const handleSave = () => {
     onUpdate({
       outline_content: {
         title: editTitle,
+        page_type: editPageType || '标准图文页',
         points: editPoints.split('\n').filter((p) => p.trim()),
       },
       part: editPart.trim() || undefined,
@@ -123,6 +141,7 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
 
   const handleCancel = () => {
     setEditTitle(outline.title);
+    setEditPageType(outline.page_type || '标准图文页');
     setEditPoints(outline.points.join('\n'));
     setEditPart(page.part || '');
     setIsEditing(false);
@@ -223,6 +242,17 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
                 className="w-full px-3 py-2 border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-900 dark:text-foreground-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-banana-500"
                 placeholder={t('outlineCard.titleLabel')}
               />
+              <select
+                value={editPageType}
+                onChange={(e) => setEditPageType(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-border-primary bg-white dark:bg-background-secondary text-gray-900 dark:text-foreground-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-banana-500"
+              >
+                {PAGE_TYPE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
               <div>
                 <MarkdownTextarea
                   ref={textareaRef}
