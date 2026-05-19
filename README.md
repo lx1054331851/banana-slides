@@ -309,14 +309,20 @@ PROVIDER_ADAPTER_DEFAULT=native
 - `gs88`：OpenAI 兼容图片渠道，建议通过 `PROVIDER_PROFILES_JSON`
 - `147ai`：OpenAI 兼容图片渠道，建议通过 `PROVIDER_PROFILES_JSON`
 
+对应官网地址，便于后续查阅：
+
+- `viviai`：[https://api.viviai.cc/](https://api.viviai.cc/)
+- `147ai`：[https://banana.147ai.com/](https://banana.147ai.com/)
+- `gs88`：[https://ai.gs88.shop](https://ai.gs88.shop)
+
 请求级临时覆盖（不落库）：
 
 ```json
 {
   "generation_override": {
     "image": {
-      "source": "profile:openai_vveai_image",
-      "model": "gemini-3.1-flash-image-preview"
+      "source": "profile:gs88",
+      "model": "gpt-image-2"
     }
   }
 }
