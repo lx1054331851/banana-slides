@@ -851,6 +851,7 @@ def generate_outline_stream(project_id):
                     yield _sse_event('page', {
                         'index': i,
                         'title': page_data.get('title', ''),
+                        'page_type': page_data.get('page_type'),
                         'points': page_data.get('points', []),
                         'part': page_data.get('part'),
                         'description_text': page_data.get('description_text'),

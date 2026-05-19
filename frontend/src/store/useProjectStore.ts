@@ -714,7 +714,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
             const tempPage: any = {
               id: `streaming-${page.index}`,
               order_index: page.index,
-              outline_content: { title: page.title, points: page.points },
+              outline_content: { title: page.title, page_type: page.page_type || '标准图文页', points: page.points },
               description_content: page.description_text
                 ? { text: page.description_text, ...(page.extra_fields ? { extra_fields: page.extra_fields } : {}) }
                 : undefined,

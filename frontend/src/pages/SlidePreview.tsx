@@ -1670,9 +1670,9 @@ export const SlidePreview: React.FC = () => {
         (max, page) => Math.max(max, (page.order_index ?? 0) + 1),
         0
       );
-      await Promise.all(parsed.map(({ title, points, text: desc, part, extra_fields }, index) =>
+      await Promise.all(parsed.map(({ title, page_type, points, text: desc, part, extra_fields }, index) =>
         addPage(projectId, {
-          outline_content: { title, page_type: '标准图文页', points },
+          outline_content: { title, page_type: page_type || '标准图文页', points },
           description_content: desc ? { text: desc, ...(extra_fields ? { extra_fields } : {}) } : undefined,
           part,
           order_index: startIndex + index,

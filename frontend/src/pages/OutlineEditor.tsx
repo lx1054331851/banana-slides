@@ -523,9 +523,9 @@ export const OutlineEditor: React.FC = () => {
         return;
       }
       const startIndex = currentProject.pages.reduce((max, p) => Math.max(max, (p.order_index ?? 0) + 1), 0);
-      await Promise.all(parsed.map(({ title, points, text: desc, part, extra_fields }, i) =>
+      await Promise.all(parsed.map(({ title, page_type, points, text: desc, part, extra_fields }, i) =>
         addPage(projectId, {
-          outline_content: { title, points },
+          outline_content: { title, page_type: page_type || '标准图文页', points },
           description_content: desc ? { text: desc, ...(extra_fields ? { extra_fields } : {}) } : undefined,
           part,
           order_index: startIndex + i,

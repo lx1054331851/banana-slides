@@ -696,6 +696,7 @@ class AIService:
         def _new_page(title: str) -> Dict:
             page = {
                 'title': title,
+                'page_type': '',
                 'points': [],
                 'description_lines': [],
                 'extra_fields': {},
@@ -711,6 +712,8 @@ class AIService:
                 'title': page.get('title', ''),
                 'points': page.get('points', []),
             }
+            if page.get('page_type'):
+                result['page_type'] = page['page_type']
             if page.get('part'):
                 result['part'] = page['part']
             description_text = "\n".join(page.get('description_lines', [])).strip()
@@ -756,6 +759,10 @@ class AIService:
                 return finished
 
             if current_page is None:
+                return None
+
+            if stripped.lower().startswith('page type:'):
+                current_page['page_type'] = stripped.split(':', 1)[1].strip()
                 return None
 
             marker = stripped.strip('*_').strip().lower().replace('：', ':')

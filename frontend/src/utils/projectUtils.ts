@@ -249,6 +249,7 @@ export const exportProjectToMarkdown = (project: Project, opts?: ExportOptions):
 
 export interface ParsedPage {
   title: string;
+  page_type?: string;
   points: string[];
   text: string;
   part?: string;
@@ -310,6 +311,10 @@ export const parseMarkdownPages = (markdown: string): ParsedPage[] => {
   return splitMarkdownPages(markdown).map(section => {
     const lines = section.split('\n');
     const title = sanitize(lines[0].trim());
+    const pageTypeLine = lines.find(line => /^Page Type\s*:\s*/i.test(line.trim()));
+    const page_type = pageTypeLine
+      ? sanitize(pageTypeLine.replace(/^Page Type\s*:\s*/i, '').trim())
+      : undefined;
 
     // Extract metadata (support both Chinese and English)
     const partLine = lines.find(l => l.startsWith('> 章节: ') || l.startsWith('> Chapter: '));
@@ -344,14 +349,14 @@ export const parseMarkdownPages = (markdown: string): ParsedPage[] => {
 
     if (outlineIdx < 0 && descIdx < 0) {
       // Legacy format: no markers
-      const contentLines = lines.slice(1);
+      const contentLines = lines.slice(1).filter(line => !/^Page Type\s*:\s*/i.test(line.trim()));
       while (contentLines.length && (contentLines[0].startsWith('> ') || contentLines[0].trim() === '')) contentLines.shift();
       stripTrailing(contentLines);
       points = contentLines.map(stripBullet).filter((point): point is string => Boolean(point)).map(point => sanitize(point));
       text = sanitize(contentLines.filter(l => !stripBullet(l)).join('\n').trim());
     }
 
-    return { title, points, text, part, extra_fields };
+    return { title, page_type, points, text, part, extra_fields };
   });
 };
 
