@@ -39,6 +39,14 @@ MODEL_DEFAULTS = {
     "image_caption": "gemini-3-flash-preview",
 }
 
+BUILTIN_CHANNEL_BY_SOURCE = {
+    "gemini": "official-gemini",
+    "openai": "official-openai",
+    "azure-openai": "azure-openai",
+    "azure": "azure-openai",
+    "vertex": "vertex-ai",
+}
+
 
 def _get_config(key: str) -> Optional[Any]:
     try:
@@ -97,10 +105,26 @@ def _extract_project_generation_defaults(project: Any) -> Dict[str, Any]:
 
 
 def _pick_source(role: str, override: Dict[str, Any], project_defaults: Dict[str, Any], traces: list[str]) -> str:
+    override_channel = str((override or {}).get("channel") or "").strip()
+    if override_channel:
+        traces.append(f"request:{role}.channel")
+        profile = get_profile(override_channel)
+        if profile:
+            return f"profile:{profile.get('id')}"
+        return override_channel
+
     override_source = _normalize_model_source((override or {}).get("source"))
     if override_source:
         traces.append(f"request:{role}.source")
         return override_source
+
+    project_channel = str((project_defaults.get(role) or {}).get("channel") or "").strip()
+    if project_channel:
+        traces.append(f"project:{role}.channel")
+        profile = get_profile(project_channel)
+        if profile:
+            return f"profile:{profile.get('id')}"
+        return project_channel
 
     project_source = _normalize_model_source((project_defaults.get(role) or {}).get("source"))
     if project_source:
@@ -232,7 +256,14 @@ def _resolve_route_from_profile(
         if strict:
             raise ValueError(f"Unknown provider profile: {profile_id}")
         provider = "gemini"
-        route = ResolvedProviderRoute(role=role, provider=provider, source=source, model=model, source_trace=traces)
+        route = ResolvedProviderRoute(
+            role=role,
+            provider=provider,
+            channel=BUILTIN_CHANNEL_BY_SOURCE.get(source, source),
+            source=source,
+            model=model,
+            source_trace=traces,
+        )
         route.finalize_fingerprint()
         return route
 
@@ -252,6 +283,7 @@ def _resolve_route_from_profile(
     route = ResolvedProviderRoute(
         role=role,
         provider=provider,
+        channel=str(profile.get("channel") or profile_id),
         source=source,
         model=model,
         api_key=api_key,
@@ -305,6 +337,7 @@ def resolve_provider_route(
         route = ResolvedProviderRoute(
             role=role,
             provider="gemini",
+            channel="vertex-ai",
             source=source,
             model=model,
             adapter=(override or {}).get("adapter") or get_default_adapter_name(),
@@ -330,6 +363,7 @@ def resolve_provider_route(
             route = ResolvedProviderRoute(
                 role=role,
                 provider="openai",
+                channel=BUILTIN_CHANNEL_BY_SOURCE.get(source, "official-openai"),
                 source=source,
                 model=model,
                 api_key=creds["api_key"],
@@ -345,6 +379,7 @@ def resolve_provider_route(
             route = ResolvedProviderRoute(
                 role=role,
                 provider="gemini",
+                channel=BUILTIN_CHANNEL_BY_SOURCE.get(source, "official-gemini"),
                 source=source,
                 model=model,
                 api_key=creds["api_key"],
@@ -360,6 +395,7 @@ def resolve_provider_route(
         route = ResolvedProviderRoute(
             role=role,
             provider="lazyllm",
+            channel=vendor,
             source=source,
             model=model,
             adapter="native",
@@ -375,6 +411,7 @@ def resolve_provider_route(
     fallback = ResolvedProviderRoute(
         role=role,
         provider="gemini",
+        channel="official-gemini",
         source=source,
         model=model,
         api_key=_resolve_setting("GOOGLE_API_KEY"),

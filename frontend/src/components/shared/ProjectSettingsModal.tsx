@@ -8,14 +8,17 @@ import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
 import {
   PROJECT_DEFAULT_IMAGE_MODEL,
   PROJECT_DEFAULT_IMAGE_RESOLUTION,
-  PROJECT_IMAGE_MODEL_CATALOG,
-  PROJECT_BUILTIN_IMAGE_SOURCES,
   PROJECT_SUPPORTED_IMAGE_MODELS,
-  getImageSourceForModel,
   getSupportedResolutionsForModel,
-  normalizeProjectDefaultImageSource,
   type ProjectSupportedImageModel,
 } from '@/config/projectAiDefaults';
+import {
+  getImageChannelsForProvider,
+  getSelectableImageModelsForChannel,
+  IMAGE_PROVIDER_OPTIONS,
+  normalizeImageChannel,
+  normalizeImageProvider,
+} from '@/config/projectAiChannels';
 import {
   DndContext,
   closestCenter,
@@ -160,11 +163,13 @@ interface ProjectSettingsModalProps {
   onSaveAspectRatio?: () => void;
   isSavingAspectRatio?: boolean;
   hasImages?: boolean;
-  generationDefaultImageSource?: string;
+  generationDefaultImageProvider?: string;
+  generationDefaultImageChannel?: string;
   generationDefaultImageModel?: string;
   generationDefaultImageResolution?: string;
   providerProfiles?: ProviderProfileSummary[];
-  onGenerationDefaultImageSourceChange?: (value: string) => void;
+  onGenerationDefaultImageProviderChange?: (value: string) => void;
+  onGenerationDefaultImageChannelChange?: (value: string) => void;
   onGenerationDefaultImageModelChange?: (value: string) => void;
   onGenerationDefaultImageResolutionChange?: (value: string) => void;
   onSaveGenerationDefaults?: () => void;
@@ -299,11 +304,13 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   onSaveAspectRatio,
   isSavingAspectRatio = false,
   hasImages = false,
-  generationDefaultImageSource = '',
+  generationDefaultImageProvider = 'gemini',
+  generationDefaultImageChannel = 'official-gemini',
   generationDefaultImageModel = '',
   generationDefaultImageResolution = PROJECT_DEFAULT_IMAGE_RESOLUTION,
   providerProfiles = [],
-  onGenerationDefaultImageSourceChange,
+  onGenerationDefaultImageProviderChange,
+  onGenerationDefaultImageChannelChange,
   onGenerationDefaultImageModelChange,
   onGenerationDefaultImageResolutionChange,
   onSaveGenerationDefaults,
@@ -332,47 +339,21 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
       : PROJECT_DEFAULT_IMAGE_MODEL),
     [generationDefaultImageModel]
   );
-  const selectedImageSource = useMemo(
-    () => normalizeProjectDefaultImageSource(generationDefaultImageSource, selectedImageModel),
-    [generationDefaultImageSource, selectedImageModel]
+  const selectedImageProvider = useMemo(
+    () => normalizeImageProvider(generationDefaultImageProvider),
+    [generationDefaultImageProvider]
   );
-  const availableImageProfiles = useMemo(
-    () => providerProfiles.filter((profile) => (profile.capabilities || []).includes('image')),
-    [providerProfiles]
+  const availableImageChannels = useMemo(
+    () => getImageChannelsForProvider(selectedImageProvider, providerProfiles),
+    [providerProfiles, selectedImageProvider]
   );
-  const imageSourceOptions = useMemo(() => {
-    const builtins = PROJECT_BUILTIN_IMAGE_SOURCES.map((source) => ({
-      value: source,
-      label: source === 'openai' ? 'OpenAI Compatible' : 'Gemini',
-    }));
-    const profiles = availableImageProfiles.map((profile) => ({
-      value: `profile:${profile.id}`,
-      label: `Profile · ${profile.id} (${String(profile.provider || '').toUpperCase()})`,
-    }));
-    return [...builtins, ...profiles];
-  }, [availableImageProfiles]);
+  const selectedImageChannel = useMemo(
+    () => normalizeImageChannel(generationDefaultImageChannel, selectedImageProvider, providerProfiles),
+    [generationDefaultImageChannel, providerProfiles, selectedImageProvider]
+  );
   const selectableImageModels = useMemo(() => {
-    if (!selectedImageSource.startsWith('profile:')) {
-      return PROJECT_IMAGE_MODEL_CATALOG;
-    }
-    const profileId = selectedImageSource.slice('profile:'.length);
-    const selectedProfile = availableImageProfiles.find((profile) => profile.id === profileId);
-    const profileModels = selectedProfile?.models || [];
-    if (!profileModels.length) {
-      return PROJECT_IMAGE_MODEL_CATALOG.filter((item) => item.source === 'openai');
-    }
-    const knownModelMap = new Map(PROJECT_IMAGE_MODEL_CATALOG.map((item) => [item.model, item]));
-    return profileModels.map((model) => {
-      const known = knownModelMap.get(model);
-      if (known) return known;
-      return {
-        source: 'openai',
-        model,
-        label: `Profile Model · ${model}`,
-        resolutions: ['1K', '2K', '4K'],
-      };
-    });
-  }, [availableImageProfiles, selectedImageSource]);
+    return getSelectableImageModelsForChannel(selectedImageChannel, providerProfiles);
+  }, [providerProfiles, selectedImageChannel]);
   const presetDescriptionFieldSet = useMemo(
     () => new Set(presetDescriptionFields.length > 0 ? presetDescriptionFields : FALLBACK_DESCRIPTION_FIELDS),
     [presetDescriptionFields]
@@ -401,10 +382,16 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   }, [generationDefaultImageModel, onGenerationDefaultImageModelChange, selectedImageModel]);
 
   useEffect(() => {
-    if (generationDefaultImageSource !== selectedImageSource) {
-      onGenerationDefaultImageSourceChange?.(selectedImageSource);
+    if (generationDefaultImageProvider !== selectedImageProvider) {
+      onGenerationDefaultImageProviderChange?.(selectedImageProvider);
     }
-  }, [generationDefaultImageSource, onGenerationDefaultImageSourceChange, selectedImageSource]);
+  }, [generationDefaultImageProvider, onGenerationDefaultImageProviderChange, selectedImageProvider]);
+
+  useEffect(() => {
+    if (generationDefaultImageChannel !== selectedImageChannel) {
+      onGenerationDefaultImageChannelChange?.(selectedImageChannel);
+    }
+  }, [generationDefaultImageChannel, onGenerationDefaultImageChannelChange, selectedImageChannel]);
 
   useEffect(() => {
     if (generationDefaultImageResolution !== selectedImageResolution) {
@@ -597,30 +584,51 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                       配置当前项目默认的图片生成来源/模型/清晰度（可在预览页临时覆盖）。
                     </p>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                     <div className="w-full">
                       <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-                        服务商
+                        Provider
                       </label>
                       <select
-                        value={selectedImageSource}
+                        value={selectedImageProvider}
                         onChange={(e) => {
-                          const nextSource = e.target.value;
-                          onGenerationDefaultImageSourceChange?.(nextSource);
-                          const sourceModels = selectableImageModels.filter((item) =>
-                            nextSource.startsWith('profile:')
-                              ? item.source === 'openai'
-                              : item.source === nextSource
-                          );
-                          if (sourceModels.length > 0) {
-                            onGenerationDefaultImageModelChange?.(sourceModels[0].model);
+                          const nextProvider = normalizeImageProvider(e.target.value);
+                          const nextChannel = normalizeImageChannel('', nextProvider, providerProfiles);
+                          onGenerationDefaultImageProviderChange?.(nextProvider);
+                          onGenerationDefaultImageChannelChange?.(nextChannel);
+                          const nextModels = getSelectableImageModelsForChannel(nextChannel, providerProfiles);
+                          if (nextModels.length > 0) {
+                            onGenerationDefaultImageModelChange?.(nextModels[0].model);
                           }
                         }}
                         className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
                       >
-                        {imageSourceOptions.map((source) => (
-                          <option key={source.value} value={source.value}>
-                            {source.label}
+                        {IMAGE_PROVIDER_OPTIONS.map((provider) => (
+                          <option key={provider.value} value={provider.value}>
+                            {provider.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="w-full">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+                        Channel
+                      </label>
+                      <select
+                        value={selectedImageChannel}
+                        onChange={(e) => {
+                          const nextChannel = e.target.value;
+                          onGenerationDefaultImageChannelChange?.(nextChannel);
+                          const nextModels = getSelectableImageModelsForChannel(nextChannel, providerProfiles);
+                          if (nextModels.length > 0) {
+                            onGenerationDefaultImageModelChange?.(nextModels[0].model);
+                          }
+                        }}
+                        className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
+                      >
+                        {availableImageChannels.map((channel) => (
+                          <option key={channel.id} value={channel.id}>
+                            {channel.label}
                           </option>
                         ))}
                       </select>
@@ -634,11 +642,6 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                         onChange={(e) => {
                           const nextModel = e.target.value;
                           onGenerationDefaultImageModelChange?.(nextModel);
-                          if (selectedImageSource.startsWith('profile:')) {
-                            onGenerationDefaultImageSourceChange?.(selectedImageSource);
-                          } else {
-                            onGenerationDefaultImageSourceChange?.(getImageSourceForModel(nextModel, selectedImageSource));
-                          }
                         }}
                         className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent text-gray-900 dark:text-foreground-primary"
                       >

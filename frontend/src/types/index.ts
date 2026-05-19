@@ -46,6 +46,8 @@ export interface PresentationMeta {
 }
 
 export interface OverrideRoute {
+  provider?: string;
+  channel?: string;
   source?: string;
   model?: string;
   resolution?: string;
@@ -64,6 +66,9 @@ export interface GenerationOverride {
 export interface ProviderProfileSummary {
   id: string;
   provider: 'openai' | 'gemini' | string;
+  channel?: string;
+  label?: string;
+  kind?: string;
   api_base?: string | null;
   api_key_env?: string | null;
   api_key_present?: boolean;
@@ -72,6 +77,21 @@ export interface ProviderProfileSummary {
   capabilities?: string[];
   models?: string[];
   model_defaults?: Record<string, any>;
+}
+
+export interface ImageChannelOption {
+  id: string;
+  provider: 'openai' | 'gemini' | string;
+  label: string;
+  kind: 'official' | 'cloud' | 'proxy' | 'relay' | string;
+  source: string;
+  adapter?: string;
+  api_base?: string | null;
+  capabilities?: string[];
+  models?: string[];
+  model_defaults?: Record<string, any>;
+  adapter_options?: Record<string, any>;
+  is_profile?: boolean;
 }
 
 export type PageAiReferenceSourceType = 'region' | 'upload' | 'material' | 'template' | 'description';

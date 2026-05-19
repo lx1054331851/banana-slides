@@ -31,6 +31,9 @@ def get_default_adapter_name() -> str:
 def _normalize_profile(raw: Dict[str, Any]) -> Dict[str, Any]:
     profile = dict(raw or {})
     profile_id = str(profile.get("id") or "").strip()
+    channel = str(profile.get("channel") or profile_id).strip() or profile_id
+    label = str(profile.get("label") or profile_id).strip() or profile_id
+    kind = str(profile.get("kind") or "relay").strip() or "relay"
     provider = str(profile.get("provider") or "").strip().lower()
     if not profile_id:
         raise ValueError("Profile missing required field: id")
@@ -48,6 +51,9 @@ def _normalize_profile(raw: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "id": profile_id,
+        "channel": channel,
+        "label": label,
+        "kind": kind,
         "provider": provider,
         "api_base": str(profile.get("api_base") or "").strip() or None,
         "api_key_env": str(profile.get("api_key_env") or "").strip() or None,
@@ -101,6 +107,9 @@ def list_provider_profiles_redacted() -> List[Dict[str, Any]]:
         output.append(
             {
                 "id": item.get("id"),
+                "channel": item.get("channel"),
+                "label": item.get("label"),
+                "kind": item.get("kind"),
                 "provider": item.get("provider"),
                 "api_base": item.get("api_base"),
                 "api_key_env": api_key_env,

@@ -74,11 +74,13 @@ type SlidePreviewDialogsProps = {
   handleSaveAspectRatio: (...args: any[]) => void;
   isSavingAspectRatio: boolean;
   hasImages: boolean;
-  projectDefaultImageSource: any;
+  projectDefaultImageProvider: string;
+  projectDefaultImageChannel: string;
   projectDefaultImageModel: string;
   projectDefaultImageResolution: string;
   providerProfiles: ProviderProfileSummary[];
-  setProjectDefaultImageSource: (value: any) => void;
+  setProjectDefaultImageProvider: (value: string) => void;
+  setProjectDefaultImageChannel: (value: string) => void;
   setProjectDefaultImageModel: (value: string) => void;
   setProjectDefaultImageResolution: (value: string) => void;
   handleSaveGenerationDefaults: (...args: any[]) => void;
@@ -106,10 +108,10 @@ type SlidePreviewDialogsProps = {
   handleRegenerateAllImagesFromDialog: () => Promise<void> | void;
   showBatchDescriptionGenerateDialog: boolean;
   batchDescriptionGenerateContext: any;
-  descriptionRangeStart: number;
-  descriptionRangeEnd: number;
-  setDescriptionRangeStart: (value: number) => void;
-  setDescriptionRangeEnd: (value: number) => void;
+  descriptionRangeStart: string;
+  descriptionRangeEnd: string;
+  setDescriptionRangeStart: (value: string) => void;
+  setDescriptionRangeEnd: (value: string) => void;
   handleGenerateMissingDescriptionsFromDialog: () => Promise<void> | void;
   handleRegenerateAllDescriptionsFromDialog: () => Promise<void> | void;
   handleGenerateDescriptionsByRange: () => Promise<void> | void;
@@ -179,11 +181,13 @@ export const SlidePreviewDialogs: React.FC<SlidePreviewDialogsProps> = ({
   handleSaveAspectRatio,
   isSavingAspectRatio,
   hasImages,
-  projectDefaultImageSource,
+  projectDefaultImageProvider,
+  projectDefaultImageChannel,
   projectDefaultImageModel,
   projectDefaultImageResolution,
   providerProfiles,
-  setProjectDefaultImageSource,
+  setProjectDefaultImageProvider,
+  setProjectDefaultImageChannel,
   setProjectDefaultImageModel,
   setProjectDefaultImageResolution,
   handleSaveGenerationDefaults,
@@ -300,11 +304,13 @@ export const SlidePreviewDialogs: React.FC<SlidePreviewDialogsProps> = ({
             onSaveAspectRatio={handleSaveAspectRatio}
             isSavingAspectRatio={isSavingAspectRatio}
             hasImages={hasImages}
-            generationDefaultImageSource={projectDefaultImageSource}
+            generationDefaultImageProvider={projectDefaultImageProvider}
+            generationDefaultImageChannel={projectDefaultImageChannel}
             generationDefaultImageModel={projectDefaultImageModel}
             generationDefaultImageResolution={projectDefaultImageResolution}
             providerProfiles={providerProfiles}
-            onGenerationDefaultImageSourceChange={setProjectDefaultImageSource}
+            onGenerationDefaultImageProviderChange={setProjectDefaultImageProvider}
+            onGenerationDefaultImageChannelChange={setProjectDefaultImageChannel}
             onGenerationDefaultImageModelChange={setProjectDefaultImageModel}
             onGenerationDefaultImageResolutionChange={setProjectDefaultImageResolution}
             onSaveGenerationDefaults={handleSaveGenerationDefaults}

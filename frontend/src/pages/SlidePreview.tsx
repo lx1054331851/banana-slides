@@ -123,14 +123,16 @@ import {
 } from '@/utils/projectUtils';
 import {
   PROJECT_DEFAULT_IMAGE_MODEL,
-  PROJECT_DEFAULT_IMAGE_SOURCE,
   PROJECT_DEFAULT_IMAGE_RESOLUTION,
   getImageSourceForModel,
-  normalizeProjectDefaultImageSource,
   PROJECT_SUPPORTED_IMAGE_MODELS,
   normalizeProjectDefaultImageModel,
   normalizeProjectDefaultImageResolution,
 } from '@/config/projectAiDefaults';
+import {
+  deriveImageChannelSelection,
+  getSourceForImageChannel,
+} from '@/config/projectAiChannels';
 
 type TextSaveOverrides = {
   title?: string;
@@ -509,7 +511,8 @@ export const SlidePreview: React.FC = () => {
   const [aspectRatio, setAspectRatio] = useState<string>(
     currentProject?.image_aspect_ratio || '16:9'
   );
-  const [projectDefaultImageSource, setProjectDefaultImageSource] = useState<string>(PROJECT_DEFAULT_IMAGE_SOURCE);
+  const [projectDefaultImageProvider, setProjectDefaultImageProvider] = useState<string>('gemini');
+  const [projectDefaultImageChannel, setProjectDefaultImageChannel] = useState<string>('official-gemini');
   const [projectDefaultImageModel, setProjectDefaultImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   const [projectDefaultImageResolution, setProjectDefaultImageResolution] = useState<string>(PROJECT_DEFAULT_IMAGE_RESOLUTION);
   const [providerProfiles, setProviderProfiles] = useState<ProviderProfileSummary[]>([]);
@@ -519,8 +522,8 @@ export const SlidePreview: React.FC = () => {
     [projectDefaultImageModel]
   );
   const normalizedProjectImageSource = useMemo(
-    () => normalizeProjectDefaultImageSource(projectDefaultImageSource, normalizedProjectImageModel),
-    [projectDefaultImageSource, normalizedProjectImageModel]
+    () => getSourceForImageChannel(projectDefaultImageChannel, providerProfiles),
+    [projectDefaultImageChannel, providerProfiles]
   );
   const normalizedRunImageModel = useMemo(
     () => normalizeProjectDefaultImageModel(editRunImageModel || projectDefaultImageModel),
@@ -536,11 +539,19 @@ export const SlidePreview: React.FC = () => {
   );
   const runtimeImageGenerationOverride = useMemo<GenerationOverride>(() => ({
     image: {
+      provider: projectDefaultImageProvider,
+      channel: projectDefaultImageChannel,
       source: normalizedRunImageSource,
       model: normalizedRunImageModel,
       resolution: normalizedRunImageResolution,
     },
-  }), [normalizedRunImageModel, normalizedRunImageResolution, normalizedRunImageSource]);
+  }), [
+    normalizedRunImageModel,
+    normalizedRunImageResolution,
+    normalizedRunImageSource,
+    projectDefaultImageChannel,
+    projectDefaultImageProvider,
+  ]);
   // 根据画面比例计算 CSS aspect-ratio
   const aspectRatioStyle = useMemo(() => {
     const parts = aspectRatio.split(':');
@@ -855,9 +866,11 @@ export const SlidePreview: React.FC = () => {
     extraRequirements,
     templateStyle,
     descriptionRequirementsDraft,
-    projectDefaultImageSource,
+    projectDefaultImageProvider,
+    projectDefaultImageChannel,
     projectDefaultImageModel,
     projectDefaultImageResolution,
+    providerProfiles,
     exportExtractorMethod,
     exportInpaintMethod,
     exportAllowPartial,
@@ -1046,8 +1059,9 @@ export const SlidePreview: React.FC = () => {
         setAspectRatio(currentProject.image_aspect_ratio || '16:9');
         const imageDefaults = currentProject.generation_defaults?.image || {};
         const normalizedModel = normalizeProjectDefaultImageModel(imageDefaults.model);
-        const normalizedSource = normalizeProjectDefaultImageSource(imageDefaults.source, normalizedModel);
-        setProjectDefaultImageSource(normalizedSource);
+        const channelSelection = deriveImageChannelSelection(imageDefaults, providerProfiles);
+        setProjectDefaultImageProvider(channelSelection.provider);
+        setProjectDefaultImageChannel(channelSelection.channel);
         setProjectDefaultImageModel(normalizedModel);
         setEditRunImageModel(normalizedModel);
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
@@ -1074,8 +1088,9 @@ export const SlidePreview: React.FC = () => {
         setExportCompressPngQuantizeEnabled(currentProject.export_compress_png_quantize_enabled || false);
         const imageDefaults = currentProject.generation_defaults?.image || {};
         const normalizedModel = normalizeProjectDefaultImageModel(imageDefaults.model);
-        const normalizedSource = normalizeProjectDefaultImageSource(imageDefaults.source, normalizedModel);
-        setProjectDefaultImageSource(normalizedSource);
+        const channelSelection = deriveImageChannelSelection(imageDefaults, providerProfiles);
+        setProjectDefaultImageProvider(channelSelection.provider);
+        setProjectDefaultImageChannel(channelSelection.channel);
         setProjectDefaultImageModel(normalizedModel);
         setEditRunImageModel(normalizedModel);
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
@@ -1083,7 +1098,7 @@ export const SlidePreview: React.FC = () => {
       }
       // 如果用户正在编辑，则不更新本地状态
     }
-  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.description_requirements, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality, currentProject?.export_compress_png_quantize_enabled, currentProject?.generation_defaults]);
+  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.description_requirements, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality, currentProject?.export_compress_png_quantize_enabled, currentProject?.generation_defaults, providerProfiles]);
 
   const handleBatchGenerate = useCallback(async (pageIds?: string[]) => {
     try {
@@ -2878,11 +2893,13 @@ export const SlidePreview: React.FC = () => {
         handleSaveAspectRatio={handleSaveAspectRatio}
         isSavingAspectRatio={isSavingAspectRatio}
         hasImages={hasImages}
-        projectDefaultImageSource={projectDefaultImageSource}
+        projectDefaultImageProvider={projectDefaultImageProvider}
+        projectDefaultImageChannel={projectDefaultImageChannel}
         projectDefaultImageModel={projectDefaultImageModel}
         projectDefaultImageResolution={projectDefaultImageResolution}
         providerProfiles={providerProfiles}
-        setProjectDefaultImageSource={setProjectDefaultImageSource}
+        setProjectDefaultImageProvider={setProjectDefaultImageProvider}
+        setProjectDefaultImageChannel={setProjectDefaultImageChannel}
         setProjectDefaultImageModel={setProjectDefaultImageModel}
         setProjectDefaultImageResolution={setProjectDefaultImageResolution}
         handleSaveGenerationDefaults={handleSaveGenerationDefaults}
