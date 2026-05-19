@@ -26,10 +26,22 @@ export const Select: React.FC<SelectProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [menuMinWidth, setMenuMinWidth] = useState<number | null>(null);
   const selected = useMemo(
     () => options.find((option) => option.value === value),
     [options, value],
   );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const syncWidth = () => {
+      setMenuMinWidth(triggerRef.current?.offsetWidth || null);
+    };
+    syncWidth();
+    window.addEventListener('resize', syncWidth);
+    return () => window.removeEventListener('resize', syncWidth);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -45,6 +57,7 @@ export const Select: React.FC<SelectProps> = ({
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setIsOpen((open) => !open)}
         className="flex h-10 w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-4 text-left text-gray-900 focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
@@ -57,7 +70,8 @@ export const Select: React.FC<SelectProps> = ({
       </button>
       {isOpen && (
         <div
-          className={`absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-border-primary dark:bg-background-secondary ${menuClassName}`}
+          style={menuMinWidth ? { minWidth: `${menuMinWidth}px` } : undefined}
+          className={`absolute left-0 top-[calc(100%+6px)] z-50 max-h-64 w-max min-w-full overflow-x-auto overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-border-primary dark:bg-background-secondary ${menuClassName}`}
         >
           {options.map((option) => {
             const active = option.value === value;
@@ -77,7 +91,7 @@ export const Select: React.FC<SelectProps> = ({
                     : 'text-gray-700 hover:bg-gray-100 dark:text-foreground-secondary dark:hover:bg-background-hover'
                 } ${option.disabled ? 'cursor-not-allowed opacity-50' : ''}`}
               >
-                <span className="truncate">{option.label}</span>
+                <span className="whitespace-nowrap">{option.label}</span>
               </button>
             );
           })}

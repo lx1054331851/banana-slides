@@ -584,7 +584,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                       配置当前项目默认的图片生成来源/模型/清晰度（可在预览页临时覆盖）。
                     </p>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(320px,1.35fr)_minmax(0,1fr)]">
                     <div className="w-full">
                       <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
                         Provider
@@ -633,6 +633,8 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                       </label>
                       <Select
                         value={selectedImageModel}
+                        className="min-w-0"
+                        menuClassName="max-w-[min(80vw,40rem)]"
                         onChange={(value) => {
                           const nextModel = value;
                           onGenerationDefaultImageModelChange?.(nextModel);
