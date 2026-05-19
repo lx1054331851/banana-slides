@@ -131,6 +131,7 @@ import {
 } from '@/config/projectAiDefaults';
 import {
   deriveImageChannelSelection,
+  getImageChannelOptions,
   getImageModelDisplayLabel,
   getSelectableImageModelsForChannel,
   getSourceForImageChannel,
@@ -179,6 +180,20 @@ const PPT_PAGE_TYPE_OPTIONS = [
   '案例展示页',
   '结尾页',
 ];
+
+const buildRuntimeImageModelValue = (channelId: string, model: string) => `${channelId}::${model}`;
+
+const parseRuntimeImageModelValue = (value?: string): { channelId: string; model: string } => {
+  const raw = String(value || '').trim();
+  const separatorIndex = raw.indexOf('::');
+  if (separatorIndex < 0) {
+    return { channelId: '', model: raw };
+  }
+  return {
+    channelId: raw.slice(0, separatorIndex),
+    model: raw.slice(separatorIndex + 2),
+  };
+};
 
 const DATA_REPORT_PAGE_TYPE_OPTIONS = [
   '报告封面',
@@ -529,19 +544,35 @@ export const SlidePreview: React.FC = () => {
     [projectDefaultImageChannel, providerProfiles]
   );
   const editRunImageModelOptions = useMemo(
-    () => getSelectableImageModelsForChannel(projectDefaultImageChannel, providerProfiles).map((item) => ({
-      value: item.model,
-      label: getImageModelDisplayLabel(projectDefaultImageChannel, item.model, providerProfiles),
-    })),
-    [projectDefaultImageChannel, providerProfiles]
+    () => getImageChannelOptions(providerProfiles).flatMap((channel) => (
+      getSelectableImageModelsForChannel(channel.id, providerProfiles).map((item) => ({
+        value: buildRuntimeImageModelValue(channel.id, item.model),
+        label: getImageModelDisplayLabel(channel.id, item.model, providerProfiles),
+      }))
+    )),
+    [providerProfiles]
+  );
+  const parsedEditRunImageSelection = useMemo(
+    () => parseRuntimeImageModelValue(editRunImageModel),
+    [editRunImageModel]
   );
   const normalizedRunImageModel = useMemo(
-    () => normalizeProjectDefaultImageModel(editRunImageModel || projectDefaultImageModel),
-    [editRunImageModel, projectDefaultImageModel]
+    () => normalizeProjectDefaultImageModel(parsedEditRunImageSelection.model || projectDefaultImageModel),
+    [parsedEditRunImageSelection.model, projectDefaultImageModel]
+  );
+  const runtimeSelectedImageChannel = useMemo(
+    () => parsedEditRunImageSelection.channelId || projectDefaultImageChannel,
+    [parsedEditRunImageSelection.channelId, projectDefaultImageChannel]
+  );
+  const runtimeSelectedImageProvider = useMemo(
+    () => getImageChannelOptions(providerProfiles).find((channel) => channel.id === runtimeSelectedImageChannel)?.provider
+      || projectDefaultImageProvider,
+    [projectDefaultImageProvider, providerProfiles, runtimeSelectedImageChannel]
   );
   const normalizedRunImageSource = useMemo(
-    () => getImageSourceForModel(normalizedRunImageModel, normalizedProjectImageSource),
-    [normalizedRunImageModel, normalizedProjectImageSource]
+    () => getSourceForImageChannel(runtimeSelectedImageChannel, providerProfiles)
+      || getImageSourceForModel(normalizedRunImageModel, normalizedProjectImageSource),
+    [normalizedProjectImageSource, normalizedRunImageModel, providerProfiles, runtimeSelectedImageChannel]
   );
   const normalizedRunImageResolution = useMemo(
     () => normalizeProjectDefaultImageResolution(projectDefaultImageResolution, normalizedRunImageModel),
@@ -549,8 +580,8 @@ export const SlidePreview: React.FC = () => {
   );
   const runtimeImageGenerationOverride = useMemo<GenerationOverride>(() => ({
     image: {
-      provider: projectDefaultImageProvider,
-      channel: projectDefaultImageChannel,
+      provider: runtimeSelectedImageProvider,
+      channel: runtimeSelectedImageChannel,
       source: normalizedRunImageSource,
       model: normalizedRunImageModel,
       resolution: normalizedRunImageResolution,
@@ -559,8 +590,8 @@ export const SlidePreview: React.FC = () => {
     normalizedRunImageModel,
     normalizedRunImageResolution,
     normalizedRunImageSource,
-    projectDefaultImageChannel,
-    projectDefaultImageProvider,
+    runtimeSelectedImageChannel,
+    runtimeSelectedImageProvider,
   ]);
   // 根据画面比例计算 CSS aspect-ratio
   const aspectRatioStyle = useMemo(() => {
@@ -1075,7 +1106,7 @@ export const SlidePreview: React.FC = () => {
         setProjectDefaultImageProvider(channelSelection.provider);
         setProjectDefaultImageChannel(channelSelection.channel);
         setProjectDefaultImageModel(normalizedModel);
-        setEditRunImageModel(normalizedModel);
+        setEditRunImageModel(buildRuntimeImageModelValue(channelSelection.channel, normalizedModel));
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
         setDescriptionRequirementsDraft(currentProject.description_requirements || '');
         lastProjectId.current = currentProject.id || null;
@@ -1104,7 +1135,7 @@ export const SlidePreview: React.FC = () => {
         setProjectDefaultImageProvider(channelSelection.provider);
         setProjectDefaultImageChannel(channelSelection.channel);
         setProjectDefaultImageModel(normalizedModel);
-        setEditRunImageModel(normalizedModel);
+        setEditRunImageModel(buildRuntimeImageModelValue(channelSelection.channel, normalizedModel));
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
         setDescriptionRequirementsDraft(currentProject.description_requirements || '');
       }
@@ -1545,19 +1576,22 @@ export const SlidePreview: React.FC = () => {
       await saveAllPages();
       const nextPrompt = options?.prompt ?? editPrompt;
       const nextContextImages = options?.contextImages ?? selectedContextImages;
-      const nextModel = options?.model ?? editRunImageModel;
-      const normalizedEditModel = normalizeProjectDefaultImageModel(nextModel || projectDefaultImageModel);
+      const nextSelection = parseRuntimeImageModelValue(options?.model ?? editRunImageModel);
+      const normalizedEditModel = normalizeProjectDefaultImageModel(nextSelection.model || projectDefaultImageModel);
       const normalizedEditResolution = normalizeProjectDefaultImageResolution(
         projectDefaultImageResolution,
         normalizedEditModel
       );
-      const normalizedEditSource = getImageSourceForModel(
-        normalizedEditModel,
-        normalizedProjectImageSource,
-      );
+      const selectedEditChannel = nextSelection.channelId || projectDefaultImageChannel;
+      const selectedEditProvider = getImageChannelOptions(providerProfiles).find((channel) => channel.id === selectedEditChannel)?.provider
+        || projectDefaultImageProvider;
+      const normalizedEditSource = getSourceForImageChannel(selectedEditChannel, providerProfiles)
+        || getImageSourceForModel(normalizedEditModel, normalizedProjectImageSource);
       const editGenerationOverride: GenerationOverride | undefined = normalizedEditModel
         ? {
           image: {
+            provider: selectedEditProvider,
+            channel: selectedEditChannel,
             source: normalizedEditSource,
             model: normalizedEditModel,
             resolution: normalizedEditResolution,
@@ -1585,7 +1619,7 @@ export const SlidePreview: React.FC = () => {
       show({ message: errorMessage, type: 'error' });
       throw error;
     }
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageModel, projectDefaultImageResolution, normalizedProjectImageSource, handleSaveOutlineAndDescription, saveAllPages, show, t]);
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultImageChannel, projectDefaultImageModel, projectDefaultImageProvider, projectDefaultImageResolution, providerProfiles, normalizedProjectImageSource, handleSaveOutlineAndDescription, saveAllPages, show, t]);
 
   const handleGenerateCurrentPage = useCallback(async () => {
     const preferredPageId = selectedPageIdRef.current;
