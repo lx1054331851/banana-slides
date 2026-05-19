@@ -19,6 +19,7 @@ export type DescriptionContent =
       text: string;
       extra_fields?: Record<string, string>;
       style_guide_bindings?: Record<string, string>;
+      style_guide_manually_edited?: boolean;
       layout_suggestion?: string; // 向后兼容
     }
   | {
@@ -27,6 +28,7 @@ export type DescriptionContent =
       text_content: string[];
       extra_fields?: Record<string, string>;
       style_guide_bindings?: Record<string, string>;
+      style_guide_manually_edited?: boolean;
       layout_suggestion?: string; // 向后兼容
     };
 

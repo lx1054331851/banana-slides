@@ -15,6 +15,7 @@ export type PageDraft = {
   description: string;
   extraFields: Record<string, string>;
   styleGuideBindings: StyleGuideBindings;
+  styleGuideManuallyEdited: boolean;
 };
 
 type UseSlidePreviewDraftsParams = {
@@ -27,6 +28,7 @@ type UseSlidePreviewDraftsParams = {
   setEditDescription: (value: string) => void;
   setEditExtraFields: (value: Record<string, string>) => void;
   setEditStyleGuideBindings: (value: StyleGuideBindings) => void;
+  setStyleGuideManuallyEdited: (value: boolean) => void;
 };
 
 export const useSlidePreviewDrafts = ({
@@ -39,6 +41,7 @@ export const useSlidePreviewDrafts = ({
   setEditDescription,
   setEditExtraFields,
   setEditStyleGuideBindings,
+  setStyleGuideManuallyEdited,
 }: UseSlidePreviewDraftsParams) => {
   const [pageDrafts, setPageDrafts] = useState<Record<string, PageDraft>>({});
 
@@ -52,6 +55,7 @@ export const useSlidePreviewDrafts = ({
       setEditDescription('');
       setEditExtraFields({});
       setEditStyleGuideBindings({});
+      setStyleGuideManuallyEdited(false);
       return;
     }
 
@@ -66,6 +70,7 @@ export const useSlidePreviewDrafts = ({
       setEditDescription(pageDraft.description);
       setEditExtraFields(pageDraft.extraFields);
       setEditStyleGuideBindings(pageDraft.styleGuideBindings || {});
+      setStyleGuideManuallyEdited(Boolean(pageDraft.styleGuideManuallyEdited));
       return;
     }
 
@@ -75,6 +80,11 @@ export const useSlidePreviewDrafts = ({
     setEditDescription(formatDescriptionForEditor(getDescriptionText(page.description_content), currentProject));
     setEditExtraFields(getDescriptionExtraFields(page.description_content));
     setEditStyleGuideBindings(getDescriptionStyleGuideBindings(page.description_content));
+    setStyleGuideManuallyEdited(Boolean(
+      page.description_content
+      && typeof page.description_content === 'object'
+      && (page.description_content as Record<string, unknown>).style_guide_manually_edited
+    ));
   }, [
     currentProject,
     formatDescriptionForEditor,
@@ -102,6 +112,11 @@ export const useSlidePreviewDrafts = ({
         description: formatDescriptionForEditor(getDescriptionText(page?.description_content), currentProject),
         extraFields: getDescriptionExtraFields(page?.description_content),
         styleGuideBindings: getDescriptionStyleGuideBindings(page?.description_content),
+        styleGuideManuallyEdited: Boolean(
+          page?.description_content
+          && typeof page.description_content === 'object'
+          && (page.description_content as Record<string, unknown>).style_guide_manually_edited
+        ),
       };
       return {
         ...prev,
@@ -139,6 +154,7 @@ export const useSlidePreviewDrafts = ({
       setEditDescription('');
       setEditExtraFields({});
       setEditStyleGuideBindings({});
+      setStyleGuideManuallyEdited(false);
       return;
     }
 
@@ -148,6 +164,11 @@ export const useSlidePreviewDrafts = ({
     setEditDescription(formatDescriptionForEditor(getDescriptionText(page.description_content), project));
     setEditExtraFields(getDescriptionExtraFields(page.description_content));
     setEditStyleGuideBindings(getDescriptionStyleGuideBindings(page.description_content));
+    setStyleGuideManuallyEdited(Boolean(
+      page.description_content
+      && typeof page.description_content === 'object'
+      && (page.description_content as Record<string, unknown>).style_guide_manually_edited
+    ));
   }, [
     formatDescriptionForEditor,
     selectedIndex,

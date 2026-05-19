@@ -363,6 +363,7 @@ export const SlidePreview: React.FC = () => {
   const [editOutlinePoints, setEditOutlinePoints] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editStyleGuideBindings, setEditStyleGuideBindings] = useState<StyleGuideBindings>({});
+  const [styleGuideManuallyEdited, setStyleGuideManuallyEdited] = useState(false);
   const [renovationJsonViewMode, setRenovationJsonViewMode] = useState<RenovationJsonViewMode>('text');
   const [isPreviewPageTypeMenuOpen, setIsPreviewPageTypeMenuOpen] = useState(false);
   const pendingOutlineFocusIndexRef = useRef<number | null>(null);
@@ -454,6 +455,7 @@ export const SlidePreview: React.FC = () => {
     setEditDescription,
     setEditExtraFields,
     setEditStyleGuideBindings,
+    setStyleGuideManuallyEdited,
   });
   const {
     isTemplateModalOpen,
@@ -1462,18 +1464,25 @@ export const SlidePreview: React.FC = () => {
     const originalDesc = getDescriptionText(page.description_content);
     const originalExtraFields = getDescriptionExtraFields(page.description_content);
     const originalStyleGuideBindings = getDescriptionStyleGuideBindings(page.description_content);
+    const originalStyleGuideManuallyEdited = Boolean(
+      page.description_content
+      && typeof page.description_content === 'object'
+      && (page.description_content as Record<string, unknown>).style_guide_manually_edited
+    );
     const serializedExtraFields = serializeExtraFields(nextExtraFields);
     const serializedStyleGuideBindings = serializeStyleGuideBindings(nextStyleGuideBindings);
     if (
       nextDescriptionText !== originalDesc
       || !areStringRecordsEqual(nextExtraFields, originalExtraFields)
       || !areStyleGuideBindingsEqual(nextStyleGuideBindings, originalStyleGuideBindings)
+      || styleGuideManuallyEdited !== originalStyleGuideManuallyEdited
     ) {
       const nextDescriptionContent: Record<string, any> = {
         ...(page.description_content && typeof page.description_content === 'object'
           ? page.description_content as Record<string, any>
           : {}),
         text: nextDescriptionText,
+        style_guide_manually_edited: styleGuideManuallyEdited,
       };
       if (serializedExtraFields) {
         nextDescriptionContent.extra_fields = serializedExtraFields;
@@ -1507,7 +1516,7 @@ export const SlidePreview: React.FC = () => {
       return true;
     }
     return false;
-  }, [currentProject, selectedIndex, editOutlineTitle, editPageType, editOutlinePoints, editDescription, editExtraFields, editStyleGuideBindings, updatePageLocal, persistCurrentPageDraft, show, t]);
+  }, [currentProject, selectedIndex, editOutlineTitle, editPageType, editOutlinePoints, editDescription, editExtraFields, editStyleGuideBindings, styleGuideManuallyEdited, updatePageLocal, persistCurrentPageDraft, show, t]);
 
   // 调度页面文本的自动保存，连续输入时只在停顿后触发一次。
   const scheduleTextAutoSave = useCallback((overrides?: TextSaveOverrides) => {
@@ -2026,11 +2035,8 @@ export const SlidePreview: React.FC = () => {
     baseBindings: StyleGuideBindings,
   ): StyleGuideBindings => {
     if (!useRenovationPreviewForm) return baseBindings;
+    if (styleGuideManuallyEdited) return baseBindings;
 
-    const previousTemplateStyleGuide = buildPreviewStyleJsonForPageType(
-      currentProject?.template_style_json || '',
-      effectivePreviewPageType,
-    );
     const nextTemplateStyleGuide = buildPreviewStyleJsonForPageType(
       currentProject?.template_style_json || '',
       nextPageType,
@@ -2039,20 +2045,8 @@ export const SlidePreview: React.FC = () => {
     if (!nextTemplateStyleGuide.trim()) return baseBindings;
 
     const nextBindings = { ...baseBindings };
-    const currentBoundValue = (baseBindings[activeStyleGuideBindingKey] || '').trim();
-    const defaultBoundValue = (baseBindings[PAGE_STYLE_GUIDE_DEFAULT_BINDING] || '').trim();
-    const previousTemplateValue = previousTemplateStyleGuide.trim();
-    const shouldReplaceCurrentBound = !currentBoundValue || currentBoundValue === previousTemplateValue;
-    const shouldReplaceDefaultBound = !defaultBoundValue || defaultBoundValue === previousTemplateValue;
-
-    if (!shouldReplaceCurrentBound && !shouldReplaceDefaultBound) {
-      return baseBindings;
-    }
-
-    if (shouldReplaceDefaultBound) {
-      nextBindings[PAGE_STYLE_GUIDE_DEFAULT_BINDING] = nextTemplateStyleGuide;
-    }
-    if (activeStyleGuideBindingKey !== PAGE_STYLE_GUIDE_DEFAULT_BINDING && shouldReplaceCurrentBound) {
+    nextBindings[PAGE_STYLE_GUIDE_DEFAULT_BINDING] = nextTemplateStyleGuide;
+    if (activeStyleGuideBindingKey !== PAGE_STYLE_GUIDE_DEFAULT_BINDING) {
       nextBindings[activeStyleGuideBindingKey] = nextTemplateStyleGuide;
     }
 
@@ -2060,15 +2054,16 @@ export const SlidePreview: React.FC = () => {
   }, [
     activeStyleGuideBindingKey,
     currentProject?.template_style_json,
-    effectivePreviewPageType,
+    styleGuideManuallyEdited,
     useRenovationPreviewForm,
   ]);
 
   // 记录风格指导输入并携带最新值触发自动保存。
   const handleStyleGuideTextChange = (value: string) => {
+    setStyleGuideManuallyEdited(true);
     setEditStyleGuideBindings((prev) => {
       const next = buildStyleGuideBindingsFromText(value, prev);
-      persistCurrentPageDraft({ styleGuideBindings: next });
+      persistCurrentPageDraft({ styleGuideBindings: next, styleGuideManuallyEdited: true });
       scheduleTextAutoSave({ styleGuideBindings: next });
       return next;
     });
@@ -2275,7 +2270,7 @@ export const SlidePreview: React.FC = () => {
                                   persistCurrentPageDraft({ description: nextDescription });
                                 }
                                 if (nextStyleGuideBindings !== editStyleGuideBindings) {
-                                  persistCurrentPageDraft({ styleGuideBindings: nextStyleGuideBindings });
+                                  persistCurrentPageDraft({ styleGuideBindings: nextStyleGuideBindings, styleGuideManuallyEdited });
                                 }
                                 scheduleTextAutoSave({
                                   pageType: option,
@@ -2333,7 +2328,8 @@ export const SlidePreview: React.FC = () => {
               onChange={(value: string) => handleStyleGuideTextChange(value)}
               onBlur={(value) => {
                 const next = buildStyleGuideBindingsFromText(value, editStyleGuideBindings);
-                persistCurrentPageDraft({ styleGuideBindings: next });
+                setStyleGuideManuallyEdited(true);
+                persistCurrentPageDraft({ styleGuideBindings: next, styleGuideManuallyEdited: true });
                 persistTextEditsNow({ silent: true, overrides: { styleGuideBindings: next } });
               }}
               placeholder={t('preview.jsonStyleGuidePlaceholder')}
