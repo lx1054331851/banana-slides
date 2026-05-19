@@ -85,23 +85,23 @@ DETAIL_LEVEL_SPECS = {
 }
 
 _OUTLINE_JSON_FORMAT = """\
-1. Simple format (for short PPTs without major sections):
-[{"title": "title1", "page_type": "封面页", "points": ["point1", "point2"]}, {"title": "title2", "page_type": "标准图文页", "points": ["point1", "point2"]}]
+1. 简单格式（适用于没有主要章节的短 PPT）：
+[{"title": "标题1", "page_type": "封面页", "points": ["要点1", "要点2"]}, {"title": "标题2", "page_type": "标准图文页", "points": ["要点1", "要点2"]}]
 
-2. Part-based format (for longer PPTs with major sections):
+2. 章节格式（适用于有主要章节的长 PPT）：
 [
     {
-    "part": "Part 1: Introduction",
+    "part": "第一部分：引言",
     "pages": [
-        {"title": "Welcome", "page_type": "封面页", "points": ["point1", "point2"]},
-        {"title": "Overview", "page_type": "目录页", "points": ["point1", "point2"]}
+        {"title": "欢迎", "page_type": "封面页", "points": ["要点1", "要点2"]},
+        {"title": "概览", "page_type": "目录页", "points": ["要点1", "要点2"]}
     ]
     },
     {
-    "part": "Part 2: Main Content",
+    "part": "第二部分：主体内容",
     "pages": [
-        {"title": "Topic 1", "page_type": "标准图文页", "points": ["point1", "point2"]},
-        {"title": "Topic 2", "page_type": "图表页", "points": ["point1", "point2"]}
+        {"title": "主题1", "page_type": "标准图文页", "points": ["要点1", "要点2"]},
+        {"title": "主题2", "page_type": "图表页", "points": ["要点1", "要点2"]}
     ]
     }
 ]"""
@@ -396,31 +396,31 @@ def get_outline_generation_prompt(project_context: 'ProjectContext', language: s
     scenario_hint = _get_scenario_prompt_hint(project_context)
 
     prompt = (f"""\
-You are a helpful assistant that generates an outline for a ppt.
+你是一位擅长规划 PPT 结构的助手，请根据用户需求生成 PPT 大纲。
 
-You can organize the content in two ways:
+你可以用以下两种方式组织内容：
 
 {_OUTLINE_JSON_FORMAT}
 
+请选择最适合内容的格式。当 PPT 有清晰的主要章节时，使用章节格式。
+除非用户另有说明，第一页应保持最简，只包含标题、副标题和汇报人信息。
 {standard_page_types}
 {scenario_hint}
 
-Choose the format that best fits the content. Use parts when the PPT has clear major sections.
-Unless otherwise specified, the first page should be kept simplest, containing only the title, subtitle, and presenter information.
-Every page object must include:
+每个页面对象都必须包含：
 - title
 - page_type
 - points
 
-Hard constraints for page_type:
-- page_type is required for every page
-- page_type must be selected from the standard page types above
-- the chosen page_type must match the actual role of that page
-- first page should usually be `封面页`
-- last page should usually be `结尾页` or another clearly justified closing type
+page_type 的硬约束：
+- 每一页都必须填写 `page_type`
+- `page_type` 必须从上方标准页面类型清单中选择
+- 所选 `page_type` 必须与该页的实际角色匹配
+- 第一页通常应为 `封面页`
+- 最后一页通常应为 `结尾页`，或其他有明确收束理由的结束页类型
 
-The user's request: {idea_prompt}.
-{_format_requirements(project_context.outline_requirements)}Now generate the outline, don't include any other text.
+用户需求：{idea_prompt}。
+{_format_requirements(project_context.outline_requirements)}现在生成大纲，不要包含任何额外文字。
 {get_language_instruction(language)}
 """)
 
@@ -435,50 +435,50 @@ def get_outline_generation_prompt_markdown(project_context: 'ProjectContext', la
     scenario_hint = _get_scenario_prompt_hint(project_context)
 
     prompt = (f"""\
-You are a helpful assistant that generates a PPT outline.
+你是一位擅长规划 PPT 结构的助手，请生成 Markdown 格式的 PPT 大纲。
 
-Your task is to define the structure, narrative flow, and intended content of each slide.
-Do not write final slide copy. Describe what each slide should cover at the outline level.
+你的任务是定义每页的结构、叙事流和内容意图。
+不要撰写最终上屏文案，只在大纲层面描述每页应覆盖什么。
 
-Output formats:
+输出格式：
 
-1. Simple format, for short PPTs without major sections:
+1. 简单格式，适用于没有主要章节的短 PPT：
 
-## Slide title
-One concise sentence describing what this slide should cover. The sentence may include the slide’s role, main idea, key supporting points, examples, data, or transition logic when relevant.
+## 页面标题
+用一句简洁的话说明本页要覆盖的内容。可按需包含页面角色、核心观点、关键支撑点、示例、数据或转场逻辑。
 
-## Slide title
-One concise sentence describing what this slide should cover.
+## 页面标题
+用一句简洁的话说明本页要覆盖的内容。
 
-2. Part-based format, for longer PPTs with clear major sections:
+2. 章节格式，适用于有清晰主要章节的长 PPT：
 
-# Part 1: Section name
+# 第一部分：章节名称
 
-## Slide title
-One concise sentence describing what this slide should cover.
+## 页面标题
+用一句简洁的话说明本页要覆盖的内容。
 
-## Slide title
-One concise sentence describing what this slide should cover.
+## 页面标题
+用一句简洁的话说明本页要覆盖的内容。
 
-# Part 2: Section name
+# 第二部分：章节名称
 
-## Slide title
-One concise sentence describing what this slide should cover.
+## 页面标题
+用一句简洁的话说明本页要覆盖的内容。
 
-Constraints:
-- Title should not contain page number.
-- Choose the format that best fits the content. Use parts when the PPT has clear major sections.
-- Unless otherwise specified, the first page should be kept simplest, containing only the title, subtitle, and presenter information.
-- Keep content at the outline level: focus on intent, topic, and logic, not polished final wording.
-- Each outline page will eventually be converted into an actual slide. Therefore, if a slide should not appear in the final deck, do not output that page from the beginning.
-- For each page, explicitly add a line `Page Type: xxx` immediately after the `## Page Title` line.
-- `xxx` must be chosen from this standard page type list:
+约束：
+- 标题不要包含页码。
+- 请选择最适合内容的格式。当 PPT 有清晰的主要章节时，使用章节格式。
+- 除非用户另有说明，第一页应保持最简，只包含标题、副标题和汇报人信息。
+- 内容保持在大纲层级：聚焦意图、主题和逻辑，不要写成最终精修文案。
+- 每个大纲页最终都会转换为实际幻灯片。因此，如果某页不应出现在最终文稿中，一开始就不要输出该页。
+- 每页都需要在 `## 页面标题` 之后紧跟一行 `Page Type: xxx`。
+- `xxx` 必须从以下标准页面类型清单中选择：
 {standard_page_types}
-- The selected page type must match the real function of the page.
+- 所选页面类型必须与该页的真实功能匹配。
 {scenario_hint}
 
-The user's request: {idea_prompt}.
-{_format_requirements(project_context.outline_requirements)}Now generate the outline, strictly follow the format provided above, don't include any other text. Output `<!-- END -->` on the last line when finished.
+用户需求：{idea_prompt}。
+{_format_requirements(project_context.outline_requirements)}现在生成大纲，严格遵循上述格式，不要包含任何额外文字。完成后最后一行输出 `<!-- END -->`。
 {get_language_instruction(language)}
 """)
 
@@ -493,34 +493,34 @@ def get_outline_parsing_prompt(project_context: 'ProjectContext', language: str 
     scenario_hint = _get_scenario_prompt_hint(project_context)
 
     prompt = (f"""\
-You are a helpful assistant that parses a user-provided PPT outline text into a structured format.
+你是一位擅长解析 PPT 大纲的助手，请把用户提供的大纲文本转换为结构化格式。
 
-The user has provided the following outline text:
+用户提供的大纲文本如下：
 
 {outline_text}
 
-Your task is to analyze this text and convert it into a structured JSON format WITHOUT modifying any of the original text content.
-You should only reorganize and structure the existing content, preserving all titles, points, and text exactly as provided.
+你的任务是分析该文本并转换为结构化 JSON 格式，不能修改任何原始文本内容。
+你只能重新组织和结构化已有内容，保留所有标题、要点和文字的原貌。
 
-You can organize the content in two ways:
+你可以用以下两种方式组织内容：
 
 {_OUTLINE_JSON_FORMAT}
 
+重要规则：
+- 不要修改、改写或改变原大纲中的任何文字。
+- 不要添加原文中不存在的新内容。
+- 不要删除原文中的任何内容。
+- 只把已有内容重新组织为结构化格式。
+- 保留所有标题、项目符号和文字的原始写法。
+- 如果文本有清晰章节，使用章节格式。
+- 从原文提取标题和要点，并保持原文表述。
 {standard_page_types}
 {scenario_hint}
 
-Important rules:
-- DO NOT modify, rewrite, or change any text from the original outline
-- DO NOT add new content that wasn't in the original text
-- DO NOT remove any content from the original text
-- Only reorganize the existing content into the structured format
-- Preserve all titles, bullet points, and text exactly as they appear
-- If the text has clear sections/parts, use the part-based format
-- Extract titles and points from the original text, keeping them exactly as written
-- For every page object, add a required `page_type` field
-- `page_type` must be inferred from the page role and selected from the standard page type list above
+- 每个页面对象都必须增加必填的 `page_type` 字段。
+- `page_type` 需要根据页面角色推断，并从上方标准页面类型清单中选择。
 
-Now parse the outline text above into the structured format. Return only the JSON, don't include any other text.
+现在将上述大纲文本解析为结构化格式。只返回 JSON，不要包含任何额外文字。
 {get_language_instruction(language)}
 """)
 
@@ -532,22 +532,22 @@ def get_outline_parsing_prompt_markdown(project_context: 'ProjectContext', langu
     outline_text = project_context.outline_text or ""
 
     prompt = (f"""\
-You are a helpful assistant that parses a user-provided PPT outline text into a structured Markdown format.
+你是一位擅长解析 PPT 大纲的助手，请把用户提供的大纲文本转换为结构化 Markdown 格式。
 
-The user has provided the following outline text:
+用户提供的大纲文本如下：
 
 {outline_text}
 
-Your task is to analyze this text and convert it into a structured Markdown outline WITHOUT modifying any of the original text content.
+你的任务是分析该文本并转换为结构化 Markdown 大纲，不能修改任何原始文本内容。
 
-Output rules:
-- Use `# Part Name` for major sections (only if the text has clear parts/chapters)
-- Use `## Page Title` for each page
-- Use `- ` bullet points for key points under each page
-- Preserve all titles, points, and text exactly as provided
-- Do NOT wrap in code blocks or add any extra text
+输出规则：
+- 对主要章节使用 `# 章节名称`（仅当文本中有清晰章节时使用）。
+- 对每一页使用 `## 页面标题`。
+- 每页下方使用 `- ` 项目符号列出关键要点。
+- 保留所有标题、要点和文字的原始写法。
+- 不要包裹代码块，不要添加任何额外文字。
 
-Now parse the outline text above into the Markdown format. Output `<!-- END -->` on the last line when finished.
+现在将上述大纲文本解析为 Markdown 格式。完成后最后一行输出 `<!-- END -->`。
 {get_language_instruction(language)}
 """)
 
@@ -561,35 +561,35 @@ def get_description_to_outline_prompt(project_context: 'ProjectContext', languag
     scenario_hint = _get_scenario_prompt_hint(project_context)
 
     prompt = (f"""\
-You are a helpful assistant that analyzes a user-provided PPT description text and extracts the outline structure from it.
+你是一位擅长分析 PPT 描述文本的助手，请从用户提供的页面描述中提取大纲结构。
 
-The user has provided the following description text:
+用户提供的描述文本如下：
 
 {description_text}
 
-Your task is to analyze this text and extract the outline structure (titles and key points) for each page.
-You should identify:
-1. How many pages are described
-2. The title for each page
-3. The key points or content structure for each page
+你的任务是分析该文本，并提取每一页的大纲结构（标题和关键要点）。
+你需要识别：
+1. 文本描述了多少页。
+2. 每页标题是什么。
+3. 每页的关键要点或内容结构是什么。
 
-You can organize the content in two ways:
+你可以用以下两种方式组织内容：
 
 {_OUTLINE_JSON_FORMAT}
 
+重要规则：
+- 从描述文本中提取大纲结构。
+- 识别页面标题和关键要点。
+- 如果文本有清晰章节，使用章节格式。
+- 保留原文的逻辑结构与组织方式。
+- 要点应是每页主要内容的简洁摘要。
 {standard_page_types}
 {scenario_hint}
 
-Important rules:
-- Extract the outline structure from the description text
-- Identify page titles and key points
-- If the text has clear sections/parts, use the part-based format
-- Preserve the logical structure and organization from the original text
-- The points should be concise summaries of the main content for each page
-- For every page object, add a required `page_type` field
-- `page_type` must be inferred from the page role and selected from the standard page type list above
+- 每个页面对象都必须增加必填的 `page_type` 字段。
+- `page_type` 需要根据页面角色推断，并从上方标准页面类型清单中选择。
 
-Now extract the outline structure from the description text above. Return only the JSON, don't include any other text.
+现在从上述描述文本中提取大纲结构。只返回 JSON，不要包含任何额外文字。
 {get_language_instruction(language)}
 """)
 
@@ -614,33 +614,33 @@ def get_description_to_outline_prompt_markdown(project_context: 'ProjectContext'
 """
 
     prompt = (f"""\
-You are a helpful assistant that analyzes a user-provided PPT description text and converts it into page-by-page slide structure.
+你是一位擅长分析 PPT 描述文本的助手，请把用户提供的描述文本转换为逐页幻灯片结构。
 
-The user has provided the following description text:
+用户提供的描述文本如下：
 
 {description_text}
 
-Your task is to first split the description into pages, then produce the outline and the page description for each page from that same split.
-Each output page must contain both an outline-level narrative structure and the page description. The page count is defined by your page split; do not run a separate outline-only split.
-The parser depends on the HTML comment markers below. Do not translate or modify them.
+你的任务是先将描述拆分为页面，再基于同一次拆分产出每页的大纲和页面描述。
+每个输出页面都必须同时包含大纲层级的叙事结构和页面描述。页数由你的拆分结果决定，不要再单独做一次只含大纲的拆分。
+解析器依赖下面的 HTML 注释标记。不要翻译或修改这些标记。
 
-Output rules:
-- Use `# Part Name` for major sections (only if the text has clear parts/chapters)
-- Use `## Page Title` for each page
-- Under each page, output `<!-- OUTLINE_POINTS -->` followed by one or two `- ` bullet points that describe what the slide should cover at the outline level
-- Then output `<!-- PAGE_DESCRIPTION -->` followed by the corresponding page description text using this format:
+输出规则：
+- 对主要章节使用 `# 章节名称`（仅当文本中有清晰章节时使用）。
+- 对每一页使用 `## 页面标题`。
+- 每页下方先输出 `<!-- OUTLINE_POINTS -->`，随后用一到两个 `- ` 要点说明该页在大纲层面应覆盖什么。
+- 然后输出 `<!-- PAGE_DESCRIPTION -->`，并按以下格式给出对应页面描述：
 {description_format}
-- Preserve layout, style, material, and content details in the page description
-- Keep the outline points at the same level as normal idea-generated outlines: focus on slide intent, narrative role, topic, logic, transition, or design purpose
-- Do not put final slide copy, exact page text, long evidence lists, or detailed visual/layout instructions in the outline points
-- Put concrete page text, data, examples, layout, style, and material details only in the page description section
-- Use `<!-- PAGE_END -->` after each page
-- Do NOT wrap in code blocks or add any extra text
+- 在页面描述中保留版式、风格、素材和内容细节。
+- 大纲要点保持在常规“构想生成大纲”的层级：聚焦页面意图、叙事角色、主题、逻辑、转场或设计目的。
+- 不要把最终上屏文案、精确页面文字、长证据列表或详细视觉/版式说明放进大纲要点。
+- 具体页面文字、数据、案例、版式、风格和素材细节只放在页面描述部分。
+- 每页结束后使用 `<!-- PAGE_END -->`。
+- 不要包裹代码块，不要添加任何额外文字。
 
-Example:
+示例：
 ## 市场机会概览
 <!-- OUTLINE_POINTS -->
-- Establish why this opportunity matters and how it connects the audience from macro trend to business relevance.
+- 建立市场机会的重要性，并把宏观趋势自然连接到业务价值。
 <!-- PAGE_DESCRIPTION -->
 --- 页面文字 ---
 - 过去三年目标市场保持高速增长
@@ -652,7 +652,7 @@ Example:
 使用趋势图展示增长曲线，整体保持专业克制的商务风格
 <!-- PAGE_END -->
 
-Now split the description text above and output the page-by-page structure. Output `<!-- END -->` on the last line when finished.
+现在拆分上述描述文本，并输出逐页结构。完成后最后一行输出 `<!-- END -->`。
 {get_language_instruction(language)}
 """)
 
@@ -670,7 +670,7 @@ def get_outline_refinement_prompt(current_outline: List[Dict], user_requirement:
         outline_text = json.dumps(current_outline, ensure_ascii=False, indent=2)
 
     prompt = (f"""\
-You are a helpful assistant that modifies PPT outlines based on user requirements.
+你是一位擅长根据用户要求修改 PPT 大纲的助手。
 {_get_original_input_labeled(project_context)}
 当前的 PPT 大纲结构如下：
 
@@ -795,7 +795,7 @@ def get_page_description_json_prompt(project_context: 'ProjectContext', outline:
     )
 
     prompt = f"""\
-# Role
+# 角色
 你是一位麦肯锡/BCG风格的高级商业分析师兼PPT架构师。你的任务是基于大纲与上下文，生成可直接渲染的单页结构化 JSON。
 
 # 输入上下文
@@ -910,21 +910,21 @@ def get_description_split_prompt(project_context: 'ProjectContext',
     description_text = project_context.description_text or ""
 
     prompt = (f"""\
-You are a helpful assistant that splits a complete PPT description text into individual page descriptions.
+你是一位擅长拆分 PPT 描述文本的助手，请把完整描述拆分为逐页描述。
 
-The user has provided a complete description text:
+用户提供的完整描述文本如下：
 
 {description_text}
 
-We have already extracted the outline structure:
+我们已经提取出大纲结构：
 
 {outline_json}
 
-Your task is to split the description text into individual page descriptions based on the outline structure.
-For each page in the outline, extract the corresponding description from the original text.
+你的任务是根据大纲结构，把描述文本拆分成每一页对应的页面描述。
+请为大纲中的每一页，从原文中提取对应描述。
 
-Return a JSON array where each element corresponds to a page in the outline (in the same order).
-Each element should be a string containing the page description in the following format:
+请返回一个 JSON 数组，数组中每个元素对应大纲中的一页（顺序保持一致）。
+每个元素应是一个字符串，字符串中包含以下格式的页面描述：
 
 页面标题：[页面标题]
 
@@ -935,22 +935,22 @@ Each element should be a string containing the page description in the following
 
 其他页面素材（如果有排版、风格、素材等细节）
 
-Example output format:
+示例输出格式：
 [
     "页面标题：人工智能的诞生\\n页面文字：\\n- 1950 年，图灵提出"图灵测试"\\n- 奠定了AI的理论基础\\n\\n其他页面素材：\\n排版：标题居中，大字号\\n风格：科技感蓝色背景",
     "页面标题：AI 的发展历程\\n页面文字：\\n- 1950年代：符号主义...",
     ...
 ]
 
-Important rules:
-- Split the description text according to the outline structure
-- Each page description should match the corresponding page in the outline
-- Preserve all important content from the original text, including layout details (排版细节), style requirements (风格要求), material specifications (素材说明), and any other design requirements
-- If the user described layout, style, or materials for a page, include them in the "其他页面素材" section
-- Keep the format consistent with the example above
-- If a page in the outline doesn't have a clear description in the text, create a reasonable description based on the outline
+重要规则：
+- 根据大纲结构拆分描述文本。
+- 每页描述应匹配大纲中的对应页面。
+- 保留原文所有重要内容，包括排版细节、风格要求、素材说明以及其他设计要求。
+- 如果用户为某页描述了版式、风格或素材，请放入“其他页面素材”部分。
+- 保持与上方示例一致的格式。
+- 如果大纲中的某页在原文中没有清晰描述，请基于大纲创建合理描述。
 
-Now split the description text into individual page descriptions. Return only the JSON array, don't include any other text.
+现在将描述文本拆分为逐页描述。只返回 JSON 数组，不要包含任何额外文字。
 {get_language_instruction(language)}
 """)
 
@@ -1073,7 +1073,7 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
         return _build_prompt(prompt, project_context.reference_files_content, tag='get_descriptions_refinement_prompt')
 
     prompt = (f"""\
-You are a helpful assistant that modifies PPT page descriptions based on user requirements.
+你是一位擅长根据用户要求修改 PPT 页面描述的助手。
 {_get_original_input_labeled(project_context)}{outline_text}
 {all_descriptions_text}
 {_get_previous_requirements_text(previous_requirements)}

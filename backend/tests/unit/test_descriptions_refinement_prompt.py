@@ -80,7 +80,7 @@ def test_refinement_prompt_keeps_legacy_mode_for_non_renovation():
         language='zh',
     )
 
-    assert "You are a helpful assistant that modifies PPT page descriptions based on user requirements." in prompt
+    assert "你是一位擅长根据用户要求修改 PPT 页面描述的助手。" in prompt
     assert "你是“PPT 页面 JSON 优化器”" not in prompt
 
 
