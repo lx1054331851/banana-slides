@@ -639,7 +639,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                         }}
                         options={selectableImageModels.map((item) => ({
                           value: item.model,
-                          label: item.label,
+                          label: item.model,
                         }))}
                       />
                     </div>
