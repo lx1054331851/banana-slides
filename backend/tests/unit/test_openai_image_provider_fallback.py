@@ -1,6 +1,8 @@
 import json
+from types import SimpleNamespace
 
 import pytest
+from openai import InternalServerError
 
 from services.ai_providers.image.openai_provider import ImageApiRequestError, OpenAIImageProvider
 from services.ai_providers.openai_client import _normalize_openai_base_url
@@ -135,3 +137,35 @@ def test_image_endpoint_candidates_do_not_duplicate_v1(monkeypatch):
         "https://relay.example.com/v1/image/generations",
         "https://relay.example.com/v1/images/generations",
     ]
+
+
+def test_chat_mode_retries_retryable_502_then_succeeds(monkeypatch):
+    provider = _build_provider(monkeypatch, endpoint_mode="chat")
+    sleep_calls = []
+    sentinel = object()
+
+    class _FakeCompletions:
+        def __init__(self):
+            self.calls = 0
+
+        def create(self, **_kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                response = SimpleNamespace(
+                    headers={},
+                    json=lambda: {"retry_after": 60},
+                    request="req",
+                    status_code=502,
+                )
+                raise InternalServerError("origin bad gateway", response=response, body={"retry_after": 60})
+            return sentinel
+
+    fake_completions = _FakeCompletions()
+    provider.client = SimpleNamespace(chat=SimpleNamespace(completions=fake_completions))
+    monkeypatch.setattr("services.ai_providers.image.openai_provider.time.sleep", lambda seconds: sleep_calls.append(seconds))
+    monkeypatch.setattr(provider, "_extract_message_from_chat_response", lambda response: response)
+    monkeypatch.setattr(provider, "_extract_image_from_chat_message", lambda message: message)
+
+    assert provider.generate_image(prompt="p", aspect_ratio="16:9", resolution="4K") is sentinel
+    assert fake_completions.calls == 2
+    assert sleep_calls == [60.0]

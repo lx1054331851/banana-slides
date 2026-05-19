@@ -17,11 +17,13 @@ import json
 import logging
 import math
 import re
+import time
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import requests
 from PIL import Image
+from openai import APIConnectionError, APITimeoutError, APIStatusError, RateLimitError
 
 from config import get_config
 from ..openai_client import _normalize_openai_base_url, make_openai_client
@@ -37,10 +39,11 @@ _GPT_IMAGE_SIZE_LONG_EDGE = {
 }
 _GPT_IMAGE_SIZE_MAX_EDGE = 3840
 _GPT_IMAGE_SIZE_MULTIPLE = 16
+_RETRYABLE_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
 
 
 def _compute_gpt_image_size(aspect_ratio: str, resolution: str = "2K") -> str:
-    """Compute a WxH size string for Codex image_generation tool requests."""
+    """Compute a WxH size string for image requests from aspect ratio and target resolution."""
     parts = str(aspect_ratio or "").split(":")
     if len(parts) != 2:
         return "auto"
@@ -64,6 +67,58 @@ def _compute_gpt_image_size(aspect_ratio: str, resolution: str = "2K") -> str:
     width = max(_GPT_IMAGE_SIZE_MULTIPLE, round(width / _GPT_IMAGE_SIZE_MULTIPLE) * _GPT_IMAGE_SIZE_MULTIPLE)
     height = max(_GPT_IMAGE_SIZE_MULTIPLE, round(height / _GPT_IMAGE_SIZE_MULTIPLE) * _GPT_IMAGE_SIZE_MULTIPLE)
     return f"{width}x{height}"
+
+
+def _is_retryable_openai_error(exc: Exception) -> bool:
+    """Decide whether an OpenAI-compatible image error is safe to retry."""
+    if isinstance(exc, (APIConnectionError, APITimeoutError, RateLimitError)):
+        return True
+    if isinstance(exc, APIStatusError):
+        status_code = getattr(exc, "status_code", None)
+        if isinstance(status_code, int):
+            return status_code in _RETRYABLE_STATUS_CODES or status_code >= 500
+    return False
+
+
+def _extract_retry_after_seconds(exc: Exception) -> Optional[float]:
+    """Extract a server-provided retry delay from OpenAI-compatible error payloads when present."""
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    if headers:
+        for key in ("retry-after", "Retry-After"):
+            raw_value = headers.get(key)
+            if raw_value is None:
+                continue
+            try:
+                return max(float(raw_value), 0.0)
+            except (TypeError, ValueError):
+                pass
+
+    body = getattr(response, "json_data", None)
+    if body is None:
+        try:
+            json_method = getattr(response, "json", None)
+            if callable(json_method):
+                body = json_method()
+        except Exception:
+            body = None
+
+    if isinstance(body, dict):
+        raw_value = body.get("retry_after")
+        if raw_value is not None:
+            try:
+                return max(float(raw_value), 0.0)
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _compute_backoff_seconds(attempt_number: int, exc: Exception) -> float:
+    """Choose retry sleep time using upstream retry hints first, then capped exponential backoff."""
+    retry_after = _extract_retry_after_seconds(exc)
+    if retry_after is not None:
+        return min(retry_after, 60.0)
+    return min(8.0, 0.5 * (2 ** max(attempt_number - 1, 0)))
 
 
 class ImageEndpointUnavailableError(Exception):
@@ -158,6 +213,7 @@ class OpenAIImageProvider(ImageProvider):
         )
         self.chat_fallback = self._to_bool(chat_fallback, bool(cfg.IMAGE_OPENAI_CHAT_FALLBACK))
         self.strict_params = self._to_bool(strict_params, bool(cfg.IMAGE_OPENAI_STRICT_PARAMS))
+        self.max_attempts = max(int(getattr(cfg, "OPENAI_MAX_RETRIES", 0)) + 1, 1)
 
     @staticmethod
     def _normalize_enum(raw_value: Any, valid_values: set, default: str, key: str) -> str:
@@ -754,6 +810,7 @@ class OpenAIImageProvider(ImageProvider):
         aspect_ratio: str,
         resolution: str,
     ) -> Image.Image:
+        """Call the chat-completions image route with retry for transient upstream failures."""
         content: List[Dict[str, Any]] = []
         if ref_images:
             for ref_img in ref_images:
@@ -769,15 +826,34 @@ class OpenAIImageProvider(ImageProvider):
         content.append({"type": "text", "text": prompt})
 
         extra_body = self._build_extra_body(aspect_ratio, resolution)
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": f"aspect_ratio={aspect_ratio}, resolution={resolution}"},
-                {"role": "user", "content": content},
-            ],
-            modalities=["text", "image"],
-            extra_body=extra_body,
-        )
+        for attempt in range(1, self.max_attempts + 1):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": f"aspect_ratio={aspect_ratio}, resolution={resolution}"},
+                        {"role": "user", "content": content},
+                    ],
+                    modalities=["text", "image"],
+                    extra_body=extra_body,
+                )
+                break
+            except Exception as exc:
+                if _is_retryable_openai_error(exc) and attempt < self.max_attempts:
+                    delay = _compute_backoff_seconds(attempt, exc)
+                    logger.warning(
+                        "OpenAI 图片 chat 请求失败，准备重试 (%s/%s)，等待 %.1fs，model=%s，aspect_ratio=%s，resolution=%s，error=%s",
+                        attempt,
+                        self.max_attempts,
+                        delay,
+                        self.model,
+                        aspect_ratio,
+                        resolution,
+                        exc,
+                    )
+                    time.sleep(delay)
+                    continue
+                raise
 
         message = self._extract_message_from_chat_response(response)
         image = self._extract_image_from_chat_message(message)
