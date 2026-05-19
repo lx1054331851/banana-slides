@@ -341,7 +341,6 @@ export const SlidePreview: React.FC = () => {
   const [editDescription, setEditDescription] = useState('');
   const [editStyleGuideBindings, setEditStyleGuideBindings] = useState<StyleGuideBindings>({});
   const [renovationJsonViewMode, setRenovationJsonViewMode] = useState<RenovationJsonViewMode>('text');
-  const outlineTitleInputRef = useRef<HTMLInputElement | null>(null);
   const pendingOutlineFocusIndexRef = useRef<number | null>(null);
   const descriptionTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const styleGuideTextareaRef = useRef<MarkdownTextareaRef | null>(null);
@@ -452,15 +451,6 @@ export const SlidePreview: React.FC = () => {
   useEffect(() => {
     if (pendingOutlineFocusIndexRef.current !== selectedIndex) return;
     pendingOutlineFocusIndexRef.current = null;
-    if (!canQuickEditOutlineInPreview) return;
-
-    requestAnimationFrame(() => {
-      const input = outlineTitleInputRef.current;
-      if (!input) return;
-      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      input.focus();
-      input.select();
-    });
   }, [selectedIndex, canQuickEditOutlineInPreview]);
   const isEditingTemplateStyle = useRef(false); // 跟踪用户是否正在编辑风格描述
   const lastProjectId = useRef<string | null>(null); // 跟踪上一次的项目ID
@@ -2009,94 +1999,6 @@ export const SlidePreview: React.FC = () => {
       data-testid="preview-editor-canvas"
     >
       <div className={editorGridClasses}>
-        {useRenovationPreviewForm && (
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
-            <div className="rounded-2xl border border-[#eadfbf] bg-white px-4 py-3 shadow-sm dark:border-border-primary dark:bg-background-secondary">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">标题</div>
-              <input
-                ref={outlineTitleInputRef}
-                type="text"
-                value={editOutlineTitle}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setEditOutlineTitle(value);
-                  persistCurrentPageDraft({ title: value });
-                  scheduleTextAutoSave({ title: value });
-                }}
-                placeholder={t('preview.enterTitle')}
-                data-testid="preview-text-title-input"
-                className="min-h-[44px] w-full appearance-none bg-transparent text-base font-semibold text-slate-900 outline-none placeholder:text-[#b2a78d] dark:text-[#f5f7ff] dark:placeholder:text-[#5f6883]"
-              />
-            </div>
-            <div className="rounded-2xl border border-[#eadfbf] bg-white px-4 py-3 shadow-sm dark:border-border-primary dark:bg-background-secondary">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
-                {t('preview.pageType')}
-              </div>
-              <select
-                value={editPageType}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setEditPageType(value);
-                  persistCurrentPageDraft({ pageType: value });
-                  scheduleTextAutoSave({ pageType: value });
-                }}
-                data-testid="preview-page-type-select"
-                className="min-h-[44px] w-full rounded-xl border border-[#eadfbf] bg-[#fffdf8] px-3 text-sm text-slate-800 outline-none focus:border-banana-400 dark:border-[#36415b] dark:bg-[#101521] dark:text-[#f5f7ff]"
-              >
-                <option value="">{t('preview.pageTypePlaceholder')}</option>
-                {pageTypeOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-
-        {!useRenovationPreviewForm && (
-          <div className="rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 dark:border-[#2d3447] dark:bg-[#151a26]">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">标题</div>
-            <input
-              ref={outlineTitleInputRef}
-              type="text"
-              value={editOutlineTitle}
-              onChange={(event) => {
-                const value = event.target.value;
-                setEditOutlineTitle(value);
-                persistCurrentPageDraft({ title: value });
-                scheduleTextAutoSave({ title: value });
-              }}
-              placeholder={t('preview.enterTitle')}
-              data-testid="preview-text-title-input"
-              className="min-h-[48px] w-full appearance-none bg-transparent text-xl font-semibold text-slate-900 outline-none placeholder:text-[#b2a78d] dark:text-[#f5f7ff] dark:placeholder:text-[#5f6883] sm:text-2xl"
-            />
-            <div className="mt-4">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">
-                {t('preview.pageType')}
-              </div>
-              <select
-                value={editPageType}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setEditPageType(value);
-                  persistCurrentPageDraft({ pageType: value });
-                  scheduleTextAutoSave({ pageType: value });
-                }}
-                data-testid="preview-page-type-select"
-                className="min-h-[44px] w-full rounded-xl border border-[#eadfbf] bg-[#fffdf8] px-3 text-sm text-slate-800 outline-none focus:border-banana-400 dark:border-[#36415b] dark:bg-[#101521] dark:text-[#f5f7ff]"
-              >
-                <option value="">{t('preview.pageTypePlaceholder')}</option>
-                {pageTypeOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-
         {!useRenovationPreviewForm && (
           <div className="min-h-0 overflow-hidden rounded-2xl border border-[#f4efe4] bg-white px-5 py-3 flex flex-col dark:border-[#2d3447] dark:bg-[#151a26]">
             <div className="mb-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9f8f67] dark:text-[#98a2bd]">{t('preview.pointsPerLine')}</div>
@@ -2210,29 +2112,54 @@ export const SlidePreview: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <div className="inline-flex items-center rounded-lg border border-[#e8d9b4] bg-[#fff9ec] p-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
-                  <button
-                    type="button"
-                    onClick={() => setRenovationJsonViewMode('text')}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                      renovationJsonViewMode === 'text'
-                        ? 'bg-banana-500 text-black shadow-sm'
-                        : 'text-[#8a7750] hover:bg-[#f7edd2] dark:text-[#9eaccf] dark:hover:bg-[#232f47]'
-                    }`}
-                  >
-                    {t('preview.jsonTextTab')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRenovationJsonViewMode('styleGuide')}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                      renovationJsonViewMode === 'styleGuide'
-                        ? 'bg-banana-500 text-black shadow-sm'
-                        : 'text-[#8a7750] hover:bg-[#f7edd2] dark:text-[#9eaccf] dark:hover:bg-[#232f47]'
-                    }`}
-                  >
-                    {t('preview.jsonStyleGuideTab')}
-                  </button>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <div className="inline-flex items-center rounded-lg border border-[#e8d9b4] bg-[#fff9ec] px-2 py-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
+                    <span className="mr-2 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9f8f67] dark:text-[#98a2bd]">
+                      {t('preview.pageType')}
+                    </span>
+                    <select
+                      value={editPageType}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setEditPageType(value);
+                        persistCurrentPageDraft({ pageType: value });
+                        scheduleTextAutoSave({ pageType: value });
+                      }}
+                      data-testid="preview-page-type-select"
+                      className="min-h-[32px] min-w-[140px] rounded-md border border-[#eadfbf] bg-[#fffdf8] px-2.5 text-xs text-slate-800 outline-none focus:border-banana-400 dark:border-[#36415b] dark:bg-[#101521] dark:text-[#f5f7ff]"
+                    >
+                      <option value="">{t('preview.pageTypePlaceholder')}</option>
+                      {pageTypeOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="inline-flex items-center rounded-lg border border-[#e8d9b4] bg-[#fff9ec] p-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
+                    <button
+                      type="button"
+                      onClick={() => setRenovationJsonViewMode('text')}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                        renovationJsonViewMode === 'text'
+                          ? 'bg-banana-500 text-black shadow-sm'
+                          : 'text-[#8a7750] hover:bg-[#f7edd2] dark:text-[#9eaccf] dark:hover:bg-[#232f47]'
+                      }`}
+                    >
+                      {t('preview.jsonTextTab')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRenovationJsonViewMode('styleGuide')}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                        renovationJsonViewMode === 'styleGuide'
+                          ? 'bg-banana-500 text-black shadow-sm'
+                          : 'text-[#8a7750] hover:bg-[#f7edd2] dark:text-[#9eaccf] dark:hover:bg-[#232f47]'
+                      }`}
+                    >
+                      {t('preview.jsonStyleGuideTab')}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
