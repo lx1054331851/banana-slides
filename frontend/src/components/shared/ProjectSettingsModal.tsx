@@ -374,7 +374,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   const selectedImageResolution = useMemo(
     () => (visibleResolutionOptions.includes(generationDefaultImageResolution)
       ? generationDefaultImageResolution
-      : PROJECT_DEFAULT_IMAGE_RESOLUTION),
+      : (visibleResolutionOptions[0] || PROJECT_DEFAULT_IMAGE_RESOLUTION)),
     [generationDefaultImageResolution, visibleResolutionOptions]
   );
 

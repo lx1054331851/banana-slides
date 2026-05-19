@@ -60,7 +60,7 @@ export const PROJECT_IMAGE_MODEL_CATALOG = [
     source: 'openai',
     model: 'gemini-3-pro-image-preview-stable',
     label: 'OpenAI Compatible · gemini-3-pro-image-preview-stable',
-    resolutions: ['1K', '2K', '4K'],
+    resolutions: ['1K'],
   },
   {
     source: 'openai',

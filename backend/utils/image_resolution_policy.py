@@ -9,6 +9,7 @@ from typing import Any, List, Optional
 
 BASE_RESOLUTIONS: List[str] = ["1K", "2K", "4K"]
 GEMINI_31_FLASH_RESOLUTIONS: List[str] = ["0.5K", "1K", "2K", "4K"]
+GEMINI_3_PRO_STABLE_RESOLUTIONS: List[str] = ["1K"]
 OPENAI_RESOLUTIONS: List[str] = ["1K"]
 OPENAI_GPT_IMAGE_2_RESOLUTIONS: List[str] = ["1K", "2K", "4K"]
 
@@ -40,6 +41,10 @@ def _is_gpt_image_2_model(model_name: str) -> bool:
     return _normalize_model_name(model_name) == "gpt-image-2"
 
 
+def _is_gemini_3_pro_stable_model(model_name: str) -> bool:
+    return _normalize_model_name(model_name) == "gemini-3-pro-image-preview-stable"
+
+
 def normalize_image_resolution(value: str) -> str:
     raw = (value or "").strip()
     if not raw:
@@ -59,6 +64,8 @@ def get_supported_image_resolutions(provider: Optional[str], model_name: str) ->
     if provider_name == "openai":
         if _is_gpt_image_2_model(model):
             return OPENAI_GPT_IMAGE_2_RESOLUTIONS
+        if _is_gemini_3_pro_stable_model(model):
+            return GEMINI_3_PRO_STABLE_RESOLUTIONS
         return OPENAI_RESOLUTIONS
     if model.startswith("gemini-3.1-flash-image-preview"):
         return GEMINI_31_FLASH_RESOLUTIONS
