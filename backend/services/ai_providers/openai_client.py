@@ -71,6 +71,36 @@ def _normalize_azure_endpoint(endpoint: Optional[str]) -> Optional[str]:
     return endpoint
 
 
+def _normalize_openai_base_url(api_base: Optional[str]) -> Optional[str]:
+    """
+    Normalize OpenAI-compatible base URLs.
+
+    To keep config simpler, allow users to provide a bare host like
+    `https://relay.example.com` and append `/v1` automatically for the standard
+    OpenAI-compatible path. If the URL already has a non-root path, preserve it.
+    """
+    if not api_base:
+        return None
+
+    api_base = api_base.strip()
+    if not api_base:
+        return None
+
+    try:
+        parsed = urlparse(api_base)
+    except Exception:
+        return api_base
+
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return api_base
+
+    path = (parsed.path or "").rstrip("/")
+    if not path:
+        return f"{parsed.scheme}://{parsed.netloc}/v1"
+
+    return api_base.rstrip("/")
+
+
 def make_openai_client(
     *,
     api_key: str,
@@ -101,7 +131,7 @@ def make_openai_client(
 
     return OpenAI(
         api_key=api_key,
-        base_url=api_base,
+        base_url=_normalize_openai_base_url(api_base),
         timeout=timeout,
         max_retries=max_retries,
     )

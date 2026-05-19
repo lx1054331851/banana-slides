@@ -3,6 +3,7 @@ import json
 import pytest
 
 from services.ai_providers.image.openai_provider import ImageApiRequestError, OpenAIImageProvider
+from services.ai_providers.openai_client import _normalize_openai_base_url
 
 
 def _build_provider(monkeypatch, **kwargs) -> OpenAIImageProvider:
@@ -95,3 +96,42 @@ def test_chat_response_string_json_is_supported(monkeypatch):
 
     assert isinstance(message, dict)
     assert message["content"][0]["type"] == "image_url"
+
+
+def test_normalize_openai_base_url_appends_v1_for_bare_host():
+    assert _normalize_openai_base_url("https://relay.example.com") == "https://relay.example.com/v1"
+    assert _normalize_openai_base_url("https://relay.example.com/") == "https://relay.example.com/v1"
+
+
+def test_image_endpoint_candidates_support_base_without_v1(monkeypatch):
+    monkeypatch.setattr(
+        "services.ai_providers.image.openai_provider.make_openai_client",
+        lambda **_unused: object(),
+    )
+    provider = OpenAIImageProvider(
+        api_key="image-key",
+        api_base="https://relay.example.com",
+        model="gpt-image-2",
+    )
+
+    assert provider._build_endpoint_candidates("generations") == [
+        "https://relay.example.com/v1/image/generations",
+        "https://relay.example.com/v1/images/generations",
+    ]
+
+
+def test_image_endpoint_candidates_do_not_duplicate_v1(monkeypatch):
+    monkeypatch.setattr(
+        "services.ai_providers.image.openai_provider.make_openai_client",
+        lambda **_unused: object(),
+    )
+    provider = OpenAIImageProvider(
+        api_key="image-key",
+        api_base="https://relay.example.com/v1",
+        model="gpt-image-2",
+    )
+
+    assert provider._build_endpoint_candidates("generations") == [
+        "https://relay.example.com/v1/image/generations",
+        "https://relay.example.com/v1/images/generations",
+    ]
