@@ -6,7 +6,7 @@
     "kind": "relay",
     "provider": "gemini",
     "api_base": "https://api.viviai.cc",
-    "api_key_env": "IMAGE_API_KEY",
+    "api_key_env": "VIVIAI_API_KEY",
     "adapter": "native",
     "capabilities": ["image"],
     "models": [
