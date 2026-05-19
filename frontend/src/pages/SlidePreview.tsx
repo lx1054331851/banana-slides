@@ -2133,7 +2133,7 @@ export const SlidePreview: React.FC = () => {
                       type="button"
                       onClick={() => setIsPreviewPageTypeMenuOpen((prev) => !prev)}
                       data-testid="preview-page-type-select"
-                      className="inline-flex min-h-[38px] min-w-[140px] items-center justify-between gap-2 rounded-lg border border-[#e8d9b4] bg-[#fff9ec] px-3 py-2 text-sm text-slate-800 transition-colors hover:border-banana-300 focus:outline-none focus:ring-2 focus:ring-banana-400/60 dark:border-[#3c4762] dark:bg-[#1a2335] dark:text-[#f5f7ff] dark:hover:border-banana-500/50"
+                      className="inline-flex h-9 min-w-[136px] items-center justify-between gap-2 rounded-lg border border-[#e8d9b4] bg-[#fff9ec] px-3 py-1.5 text-sm text-slate-800 transition-colors hover:border-banana-300 focus:outline-none focus:ring-2 focus:ring-banana-400/60 dark:border-[#3c4762] dark:bg-[#1a2335] dark:text-[#f5f7ff] dark:hover:border-banana-500/50"
                     >
                       <span className="truncate">{editPageType || t('preview.pageTypePlaceholder')}</span>
                       <ChevronDown
@@ -2142,7 +2142,7 @@ export const SlidePreview: React.FC = () => {
                       />
                     </button>
                     {isPreviewPageTypeMenuOpen && (
-                      <div className="absolute right-0 top-[calc(100%+8px)] z-30 max-h-72 min-w-[220px] overflow-y-auto rounded-xl border border-[#eadfbf] bg-white p-2 shadow-[0_16px_40px_rgba(15,23,42,0.14)] dark:border-[#36415b] dark:bg-[#101521]">
+                      <div className="absolute right-0 top-[calc(100%+8px)] z-30 max-h-72 min-w-full overflow-y-auto rounded-xl border border-[#eadfbf] bg-white p-2 shadow-[0_16px_40px_rgba(15,23,42,0.14)] dark:border-[#36415b] dark:bg-[#101521]">
                         {pageTypeOptions.map((option) => {
                           const isActive = (editPageType || '标准图文页') === option;
                           return (
