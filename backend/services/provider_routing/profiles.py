@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from flask import current_app
@@ -26,6 +27,41 @@ def is_routing_strict() -> bool:
 
 def get_default_adapter_name() -> str:
     return (_get_setting("PROVIDER_ADAPTER_DEFAULT", "native") or "native").strip() or "native"
+
+
+def _load_profiles_payload() -> List[Dict[str, Any]]:
+    profiles_file = str(_get_setting("PROVIDER_PROFILES_FILE", "") or "").strip()
+    if profiles_file:
+        candidate = Path(profiles_file)
+        if not candidate.is_absolute():
+            project_root = Path(__file__).resolve().parents[3]
+            candidate = (project_root / candidate).resolve()
+        try:
+            raw = candidate.read_text(encoding="utf-8")
+            payload = json.loads(raw)
+        except Exception as e:
+            if is_routing_strict():
+                raise ValueError(f"Invalid PROVIDER_PROFILES_FILE '{candidate}': {e}") from e
+            return []
+        if not isinstance(payload, list):
+            if is_routing_strict():
+                raise ValueError("PROVIDER_PROFILES_FILE must contain a JSON array")
+            return []
+        return payload
+
+    raw = _get_setting("PROVIDER_PROFILES_JSON", "[]") or "[]"
+    try:
+        payload = json.loads(raw)
+    except Exception as e:
+        if is_routing_strict():
+            raise ValueError(f"Invalid PROVIDER_PROFILES_JSON: {e}") from e
+        return []
+
+    if not isinstance(payload, list):
+        if is_routing_strict():
+            raise ValueError("PROVIDER_PROFILES_JSON must be a JSON array")
+        return []
+    return payload
 
 
 def _normalize_profile(raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -66,18 +102,7 @@ def _normalize_profile(raw: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def load_provider_profiles() -> Dict[str, Dict[str, Any]]:
-    raw = _get_setting("PROVIDER_PROFILES_JSON", "[]") or "[]"
-    try:
-        payload = json.loads(raw)
-    except Exception as e:
-        if is_routing_strict():
-            raise ValueError(f"Invalid PROVIDER_PROFILES_JSON: {e}") from e
-        payload = []
-
-    if not isinstance(payload, list):
-        if is_routing_strict():
-            raise ValueError("PROVIDER_PROFILES_JSON must be a JSON array")
-        payload = []
+    payload = _load_profiles_payload()
 
     profiles: Dict[str, Dict[str, Any]] = {}
     for item in payload:

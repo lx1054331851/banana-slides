@@ -243,7 +243,7 @@ IMAGE_MODEL=gemini-3.1-flash-image-preview
 ```
 
 手动切换步骤：
-1. 修改 `.env` 中 `IMAGE_MODEL_SOURCE` 与 `IMAGE_API_BASE`，或调整 `PROVIDER_PROFILES_JSON` 中的图片渠道。
+1. 修改 `.env` 中 `IMAGE_MODEL_SOURCE` 与 `IMAGE_API_BASE`，或调整 `PROVIDER_PROFILES_FILE` 指向的图片渠道配置文件。
 2. 重启后端服务，使新环境变量生效。
 3. 在设置页“服务测试 -> 图像生成模型”执行一次测试，确认当前中转配置可用。
 
@@ -256,45 +256,8 @@ IMAGE_MODEL=gemini-3.1-flash-image-preview
 新增环境变量：
 
 ```env
-# JSON 数组：声明可用 profile（支持 source=profile:<id>）
-PROVIDER_PROFILES_JSON=[
-  {
-    "id":"gs88",
-    "channel":"gs88",
-    "label":"GS88",
-    "kind":"relay",
-    "provider":"openai",
-    "api_base":"https://ai.gs88.shop/v1",
-    "api_key_env":"GS88_API_KEY",
-    "adapter":"openai_image_compat",
-    "capabilities":["image"],
-    "models":["gpt-image-2"],
-    "model_defaults":{"image":"gpt-image-2"}
-  },
-  {
-    "id":"147ai",
-    "channel":"147ai",
-    "label":"147AI",
-    "kind":"relay",
-    "provider":"openai",
-    "api_base":"https://nn.147ai.com/v1",
-    "api_key_env":"AI147_API_KEY",
-    "adapter":"openai_image_compat",
-    "capabilities":["image"],
-    "models":[
-      "gpt-image-2-low",
-      "gpt-image-2-medium",
-      "gpt-image-2-high",
-      "gemini-2.5-flash-image",
-      "gemini-2.5-flash-image-preview",
-      "gemini-3-pro-image-preview",
-      "gemini-3-pro-image-preview-stable",
-      "gemini-3.1-flash-image-preview",
-      "grok-4-image"
-    ],
-    "model_defaults":{"image":"gpt-image-2-low"}
-  }
-]
+# 推荐方式：把渠道定义写进独立 JSON 文件，再在 .env 里只保留文件路径
+PROVIDER_PROFILES_FILE=./config/provider_profiles.example.json
 
 # 严格模式：profile / adapter 无效时直接报错（默认 true）
 PROVIDER_ROUTING_STRICT=true
@@ -306,8 +269,8 @@ PROVIDER_ADAPTER_DEFAULT=native
 当前保留的图片渠道建议为：
 
 - `viviai`：Gemini 原生代理，走 `IMAGE_MODEL_SOURCE=gemini`
-- `gs88`：OpenAI 兼容图片渠道，建议通过 `PROVIDER_PROFILES_JSON`
-- `147ai`：OpenAI 兼容图片渠道，建议通过 `PROVIDER_PROFILES_JSON`
+- `gs88`：OpenAI 兼容图片渠道，建议通过 `PROVIDER_PROFILES_FILE`
+- `147ai`：OpenAI 兼容图片渠道，建议通过 `PROVIDER_PROFILES_FILE`
 
 对应官网地址，便于后续查阅：
 
