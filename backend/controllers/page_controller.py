@@ -942,11 +942,17 @@ def edit_page_image(project_id, page_id):
             image_version_id=current_version.id if current_version else None,
         )
         effective_style_json = page_style_json or project.template_style_json
+        current_outline_content = page.get_outline_content() or {}
+        effective_page_type = resolve_effective_page_type(current_outline_content)
 
         # Keep style-related requirements so edit endpoint can fallback to text-to-image mode
+        scoped_style_json = build_preview_style_json_for_page_type(
+            effective_style_json,
+            page_type_key=effective_page_type,
+        ) if effective_style_json else effective_style_json
         combined_requirements = build_combined_style_requirements(
             extra_requirements=project.extra_requirements,
-            style_json=effective_style_json,
+            style_json=scoped_style_json,
             style_text=project.template_style,
         )
         
