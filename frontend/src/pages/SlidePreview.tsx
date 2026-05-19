@@ -30,6 +30,7 @@ import {
   getDescriptionExtraFields,
   serializeExtraFields,
   areStringRecordsEqual,
+  buildPreviewStyleJsonForPageType,
   formatJsonForEditor,
   toCanonicalRenovationJsonText,
   toLocalizedRenovationJsonText,
@@ -1931,9 +1932,10 @@ export const SlidePreview: React.FC = () => {
   const useRenovationPreviewForm = isPptRenovationProject || isTextGenerationPreviewProject;
   const pageTypeOptions = currentProject?.scenario === 'data_report' ? DATA_REPORT_PAGE_TYPE_OPTIONS : PPT_PAGE_TYPE_OPTIONS;
   const activeStyleGuideBindingKey = buildStyleGuideBindingKey(currentImageVersionId);
+  const effectivePreviewPageType = editPageType || selectedPage?.outline_content?.page_type || '';
   const projectStyleGuideJson = (() => {
     if (!useRenovationPreviewForm) return '';
-    return formatJsonForEditor(currentProject?.template_style_json || '');
+    return buildPreviewStyleJsonForPageType(currentProject?.template_style_json || '', effectivePreviewPageType);
   })();
   const currentImageBoundStyleGuide = editStyleGuideBindings[activeStyleGuideBindingKey] || '';
   const pageDefaultStyleGuide = editStyleGuideBindings[PAGE_STYLE_GUIDE_DEFAULT_BINDING] || '';
