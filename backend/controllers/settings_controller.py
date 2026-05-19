@@ -35,26 +35,8 @@ def _build_builtin_image_channels():
         return bool(current_app.config.get(key) or os.getenv(key))
 
     google_base = current_app.config.get("IMAGE_API_BASE") or current_app.config.get("GOOGLE_API_BASE") or os.getenv("IMAGE_API_BASE") or os.getenv("GOOGLE_API_BASE")
-    openai_base = current_app.config.get("IMAGE_API_BASE") or current_app.config.get("OPENAI_API_BASE") or os.getenv("IMAGE_API_BASE") or os.getenv("OPENAI_API_BASE")
-    azure_endpoint = current_app.config.get("AZURE_OPENAI_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
 
     return [
-        {
-            "id": "official-gemini",
-            "channel": "official-gemini",
-            "label": "Gemini Official",
-            "kind": "official",
-            "provider": "gemini",
-            "enabled": True,
-            "configured": _has_value("GOOGLE_API_KEY"),
-            "config_status": "configured" if _has_value("GOOGLE_API_KEY") else "missing",
-            "config_note": "Uses GOOGLE_API_KEY / GOOGLE_API_BASE or saved settings",
-            "api_base": google_base or None,
-            "api_key_present": _has_value("GOOGLE_API_KEY"),
-            "capabilities": ["image"],
-            "models": [],
-            "model_defaults": {},
-        },
         {
             "id": "viviai",
             "channel": "viviai",
@@ -70,54 +52,6 @@ def _build_builtin_image_channels():
             "capabilities": ["image"],
             "models": ["gemini-3.1-flash-image-preview"],
             "model_defaults": {"image": "gemini-3.1-flash-image-preview"},
-        },
-        {
-            "id": "official-openai",
-            "channel": "official-openai",
-            "label": "OpenAI Official",
-            "kind": "official",
-            "provider": "openai",
-            "enabled": True,
-            "configured": _has_value("OPENAI_API_KEY"),
-            "config_status": "configured" if _has_value("OPENAI_API_KEY") else "missing",
-            "config_note": "Uses OPENAI_API_KEY / OPENAI_API_BASE or saved settings",
-            "api_base": openai_base or None,
-            "api_key_present": _has_value("OPENAI_API_KEY"),
-            "capabilities": ["image"],
-            "models": [],
-            "model_defaults": {},
-        },
-        {
-            "id": "azure-openai",
-            "channel": "azure-openai",
-            "label": "Azure OpenAI",
-            "kind": "cloud",
-            "provider": "openai",
-            "enabled": bool(azure_endpoint),
-            "configured": bool(azure_endpoint and _has_value("AZURE_OPENAI_API_KEY")),
-            "config_status": "configured" if (azure_endpoint and _has_value("AZURE_OPENAI_API_KEY")) else ("partial" if azure_endpoint else "missing"),
-            "config_note": "Requires AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY",
-            "api_base": openai_base or None,
-            "api_key_present": _has_value("AZURE_OPENAI_API_KEY"),
-            "capabilities": ["image"],
-            "models": [],
-            "model_defaults": {},
-        },
-        {
-            "id": "vveai",
-            "channel": "vveai",
-            "label": "VVEAI",
-            "kind": "relay",
-            "provider": "openai",
-            "enabled": bool(openai_base and "vveai" in str(openai_base)),
-            "configured": bool(openai_base and "vveai" in str(openai_base) and _has_value("OPENAI_API_KEY")),
-            "config_status": "configured" if (openai_base and "vveai" in str(openai_base) and _has_value("OPENAI_API_KEY")) else ("partial" if openai_base and "vveai" in str(openai_base) else "missing"),
-            "config_note": "Active when IMAGE_API_BASE / OPENAI_API_BASE points to vveai and key is present",
-            "api_base": openai_base or None,
-            "api_key_present": _has_value("OPENAI_API_KEY"),
-            "capabilities": ["image"],
-            "models": [],
-            "model_defaults": {},
         },
     ]
 

@@ -670,7 +670,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
-                    更高的清晰度会生成更详细的图像，但需要更长时间。Azure OpenAI `gpt-image-2` 支持 1K/2K/4K（后端会自动换算为兼容的 size）。
+                    当前支持的生图渠道为 `viviai`、`gs88`、`147ai`。更高的清晰度会生成更详细的图像，但需要更长时间。
                   </p>
                   {availableImageChannels.find((channel) => channel.id === selectedImageChannel)?.config_note && (
                     <p className="text-xs text-gray-500 dark:text-foreground-tertiary">

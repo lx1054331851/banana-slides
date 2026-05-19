@@ -18,19 +18,6 @@ export const IMAGE_PROVIDER_OPTIONS = [
 
 export const BUILTIN_IMAGE_CHANNELS: ImageChannelOption[] = [
   {
-    id: 'official-gemini',
-    provider: 'gemini',
-    label: 'Gemini Official',
-    kind: 'official',
-    source: 'gemini',
-    enabled: true,
-    configured: true,
-    config_status: 'configured',
-    config_note: 'Uses current Gemini env/settings route',
-    adapter: 'native',
-    capabilities: ['image'],
-  },
-  {
     id: 'viviai',
     provider: 'gemini',
     label: 'VIVIAI',
@@ -44,53 +31,6 @@ export const BUILTIN_IMAGE_CHANNELS: ImageChannelOption[] = [
     api_base: 'https://api.viviai.cc',
     capabilities: ['image'],
     model_defaults: { image: 'gemini-3.1-flash-image-preview' },
-  },
-  {
-    id: 'official-openai',
-    provider: 'openai',
-    label: 'OpenAI Official',
-    kind: 'official',
-    source: 'openai',
-    enabled: true,
-    configured: true,
-    config_status: 'configured',
-    config_note: 'Uses current OpenAI env/settings route',
-    adapter: 'native',
-    capabilities: ['image'],
-  },
-  {
-    id: 'azure-openai',
-    provider: 'openai',
-    label: 'Azure OpenAI',
-    kind: 'cloud',
-    source: 'azure-openai',
-    enabled: false,
-    configured: false,
-    config_status: 'missing',
-    config_note: 'Requires Azure endpoint and key in env',
-    adapter: 'native',
-    capabilities: ['image'],
-  },
-  {
-    id: 'vveai',
-    provider: 'openai',
-    label: 'VVEAI',
-    kind: 'relay',
-    source: 'openai',
-    enabled: false,
-    configured: false,
-    config_status: 'missing',
-    config_note: 'Requires relay base URL and key in env',
-    adapter: 'openai_image_compat',
-    api_base: 'https://api.vveai.com/v1',
-    capabilities: ['image'],
-    adapter_options: {
-      endpoint_mode: 'images',
-      path_style: 'singular',
-      response_format: 'b64_json',
-      chat_fallback: false,
-      strict_params: true,
-    },
   },
 ];
 
@@ -214,7 +154,7 @@ export const normalizeImageChannel = (
   if (channels.some((channel) => channel.id === channelId)) {
     return String(channelId);
   }
-  return channels[0]?.id || (provider === 'openai' ? 'official-openai' : 'official-gemini');
+  return channels[0]?.id || (provider === 'openai' ? 'gs88' : 'viviai');
 };
 
 export const getSourceForImageChannel = (

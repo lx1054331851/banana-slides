@@ -104,6 +104,10 @@ def list_provider_profiles_redacted() -> List[Dict[str, Any]]:
     output: List[Dict[str, Any]] = []
     for item in profiles.values():
         api_key_env = item.get("api_key_env")
+        api_key_present = bool(api_key_env and os.getenv(api_key_env))
+        api_base = item.get("api_base")
+        configured = bool(api_base and api_key_present)
+        status = "configured" if configured else ("partial" if api_base or api_key_present else "missing")
         output.append(
             {
                 "id": item.get("id"),
@@ -111,9 +115,13 @@ def list_provider_profiles_redacted() -> List[Dict[str, Any]]:
                 "label": item.get("label"),
                 "kind": item.get("kind"),
                 "provider": item.get("provider"),
-                "api_base": item.get("api_base"),
+                "enabled": configured,
+                "configured": configured,
+                "config_status": status,
+                "config_note": f"Profile channel via {api_key_env}" if api_key_env else "Profile channel",
+                "api_base": api_base,
                 "api_key_env": api_key_env,
-                "api_key_present": bool(api_key_env and os.getenv(api_key_env)),
+                "api_key_present": api_key_present,
                 "adapter": item.get("adapter"),
                 "adapter_options": item.get("adapter_options") or {},
                 "capabilities": item.get("capabilities") or [],

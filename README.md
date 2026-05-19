@@ -234,18 +234,6 @@ IMAGE_OPENAI_CHAT_FALLBACK=true
 IMAGE_OPENAI_STRICT_PARAMS=true
 ```
 
-`vveai` 示例（文生图/图生图优先走 image 端点）：
-
-```env
-IMAGE_MODEL_SOURCE=openai
-IMAGE_API_BASE=https://api.vveai.com/v1
-IMAGE_OPENAI_ENDPOINT_MODE=images
-IMAGE_OPENAI_PATH_STYLE=singular
-IMAGE_OPENAI_RESPONSE_FORMAT=b64_json
-IMAGE_OPENAI_CHAT_FALLBACK=false
-IMAGE_OPENAI_STRICT_PARAMS=true
-```
-
 `viviai` 示例（Gemini 原生更稳定，建议图片走 gemini provider）：
 
 ```env
@@ -255,7 +243,7 @@ IMAGE_MODEL=gemini-3.1-flash-image-preview
 ```
 
 手动切换步骤：
-1. 修改 `.env` 中 `IMAGE_MODEL_SOURCE` 与 `IMAGE_API_BASE`（以及上面的 `IMAGE_OPENAI_*`）。
+1. 修改 `.env` 中 `IMAGE_MODEL_SOURCE` 与 `IMAGE_API_BASE`，或调整 `PROVIDER_PROFILES_JSON` 中的图片渠道。
 2. 重启后端服务，使新环境变量生效。
 3. 在设置页“服务测试 -> 图像生成模型”执行一次测试，确认当前中转配置可用。
 
@@ -272,6 +260,9 @@ IMAGE_MODEL=gemini-3.1-flash-image-preview
 PROVIDER_PROFILES_JSON=[
   {
     "id":"gs88",
+    "channel":"gs88",
+    "label":"GS88",
+    "kind":"relay",
     "provider":"openai",
     "api_base":"https://ai.gs88.shop/v1",
     "api_key_env":"GS88_API_KEY",
@@ -282,6 +273,9 @@ PROVIDER_PROFILES_JSON=[
   },
   {
     "id":"147ai",
+    "channel":"147ai",
+    "label":"147AI",
+    "kind":"relay",
     "provider":"openai",
     "api_base":"https://nn.147ai.com/v1",
     "api_key_env":"AI147_API_KEY",
@@ -299,29 +293,6 @@ PROVIDER_PROFILES_JSON=[
       "grok-4-image"
     ],
     "model_defaults":{"image":"gpt-image-2-low"}
-  },
-  {
-    "id":"gemini_native_cn",
-    "provider":"gemini",
-    "api_base":"https://your-gemini-proxy.example.com",
-    "api_key_env":"IMAGE_API_KEY",
-    "adapter":"native",
-    "capabilities":["image"]
-  },
-  {
-    "id":"openai_vveai_image",
-    "provider":"openai",
-    "api_base":"https://api.vveai.com/v1",
-    "api_key_env":"IMAGE_API_KEY",
-    "adapter":"openai_image_compat",
-    "adapter_options":{
-      "endpoint_mode":"images",
-      "path_style":"singular",
-      "response_format":"b64_json",
-      "chat_fallback":false,
-      "strict_params":true
-    },
-    "capabilities":["image"]
   }
 ]
 
@@ -331,6 +302,12 @@ PROVIDER_ROUTING_STRICT=true
 # profile 未显式设置 adapter 时使用的默认适配器（默认 native）
 PROVIDER_ADAPTER_DEFAULT=native
 ```
+
+当前保留的图片渠道建议为：
+
+- `viviai`：Gemini 原生代理，走 `IMAGE_MODEL_SOURCE=gemini`
+- `gs88`：OpenAI 兼容图片渠道，建议通过 `PROVIDER_PROFILES_JSON`
+- `147ai`：OpenAI 兼容图片渠道，建议通过 `PROVIDER_PROFILES_JSON`
 
 请求级临时覆盖（不落库）：
 
@@ -351,7 +328,7 @@ PROVIDER_ADAPTER_DEFAULT=native
 {
   "generation_defaults": {
     "image": {
-      "source": "profile:gemini_native_cn",
+      "source": "profile:gs88",
       "model": "gemini-3.1-flash-image-preview"
     }
   }
