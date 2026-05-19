@@ -16,6 +16,8 @@ const outlineI18n = {
       deletePage: "删除页面", confirmDeletePage: "确定要删除这一页吗？",
       preview: "预览", clickToPreview: "点击左侧卡片查看详情",
       noPages: "还没有页面", noPagesHint: "点击「添加页面」手动创建，或「自动生成大纲」让 AI 帮你完成",
+      noPagesGenerating: "正在连接模型并生成大纲...",
+      noPagesGeneratingHint: "已开始流式生成，第一页返回前会短暂等待，请勿重复点击生成按钮。",
       parseOutline: "解析大纲", autoGenerate: "自动生成大纲",
       reParseOutline: "重新解析大纲", reGenerate: "重新生成大纲", export: "导出大纲", import: "导入",
       multiSelectDelete: "多选删除", cancelMultiSelect: "取消选择", deleteSelected: "删除已选", selectedCount: "已选 {{count}} 项",
@@ -63,6 +65,8 @@ const outlineI18n = {
       deletePage: "Delete Page", confirmDeletePage: "Are you sure you want to delete this page?",
       preview: "Preview", clickToPreview: "Click a card on the left to view details",
       noPages: "No pages yet", noPagesHint: "Click \"Add Page\" to create manually, or \"Auto Generate\" to let AI help you",
+      noPagesGenerating: "Connecting to the model and generating the outline...",
+      noPagesGeneratingHint: "Streaming has started. There may be a short wait before the first page appears. Please avoid clicking generate again.",
       parseOutline: "Parse Outline", autoGenerate: "Auto Generate Outline",
       reParseOutline: "Re-parse Outline", reGenerate: "Regenerate Outline", export: "Export Outline", import: "Import",
       multiSelectDelete: "Multi-delete", cancelMultiSelect: "Cancel", deleteSelected: "Delete Selected", selectedCount: "{{count}} selected",
@@ -766,17 +770,23 @@ export const OutlineEditor: React.FC = () => {
               <Button
                 variant="secondary"
                 onClick={handleGenerateOutline}
+                disabled={isOutlineStreaming}
                 className="flex-1 sm:flex-initial text-sm md:text-base"
               >
-                {currentProject.creation_type === 'outline' ? t('outline.parseOutline') : t('outline.autoGenerate')}
+                {isOutlineStreaming
+                  ? t('outline.generating')
+                  : (currentProject.creation_type === 'outline' ? t('outline.parseOutline') : t('outline.autoGenerate'))}
               </Button>
             ) : (
               <Button
                 variant="secondary"
                 onClick={handleGenerateOutline}
+                disabled={isOutlineStreaming}
                 className="flex-1 sm:flex-initial text-sm md:text-base"
               >
-                {currentProject.creation_type === 'outline' ? t('outline.reParseOutline') : t('outline.reGenerate')}
+                {isOutlineStreaming
+                  ? t('outline.generating')
+                  : (currentProject.creation_type === 'outline' ? t('outline.reParseOutline') : t('outline.reGenerate'))}
               </Button>
             )}
             <Button
@@ -1079,15 +1089,26 @@ export const OutlineEditor: React.FC = () => {
           <div className={isGlobalLoading ? 'opacity-60 pointer-events-none' : ''}>
             {currentProject.pages.length === 0 ? (
               <div className="text-center py-12 md:py-20">
-                <div className="flex justify-center mb-4">
-                  <FileText size={48} className="text-gray-300" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-foreground-primary mb-2">
-                  {t('outline.noPages')}
-                </h3>
-                <p className="text-gray-500 dark:text-foreground-tertiary mb-6">
-                  {t('outline.noPagesHint')}
-                </p>
+                {isOutlineStreaming ? (
+                  <div className="mx-auto max-w-md rounded-2xl border border-banana-100 bg-white/90 px-6 py-8 shadow-sm dark:border-border-primary dark:bg-background-secondary/90">
+                    <Loading message={t('outline.noPagesGenerating')} />
+                    <p className="mt-4 text-sm text-gray-500 dark:text-foreground-tertiary">
+                      {t('outline.noPagesGeneratingHint')}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-center mb-4">
+                      <FileText size={48} className="text-gray-300" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-foreground-primary mb-2">
+                      {t('outline.noPages')}
+                    </h3>
+                    <p className="text-gray-500 dark:text-foreground-tertiary mb-6">
+                      {t('outline.noPagesHint')}
+                    </p>
+                  </>
+                )}
               </div>
             ) : (
               <DndContext
