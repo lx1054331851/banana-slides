@@ -251,7 +251,7 @@ export const OutlineCard: React.FC<OutlineCardProps> = ({
                 onChange={(e) => setEditPart(e.target.value)}
                 onClick={(e) => e.stopPropagation()}
                 className={`text-xs px-2 py-0.5 border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                  isExpanded ? 'flex-1 min-w-0 max-w-md' : 'w-24'
+                  isExpanded ? 'flex-1 min-w-[220px] max-w-md' : 'flex-1 min-w-[220px] max-w-[320px]'
                 }`}
                 placeholder={t('outlineCard.chapter')}
               />
