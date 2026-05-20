@@ -10,6 +10,18 @@ import type { ProviderProfileSummary } from '@/api/endpoints';
 import { OUTPUT_LANGUAGE_OPTIONS } from '@/api/endpoints';
 import type { Settings as SettingsType } from '@/types';
 import { getImageSourceForModel } from '@/config/projectAiDefaults';
+import {
+  getImageChannelOptionById,
+  getImageChannelOptions,
+  getImageChannelsForProvider,
+  getSelectableImageModelsForChannel,
+  getSourceForImageChannel,
+  getSupportedResolutionsForChannelModel,
+  normalizeImageChannel,
+  normalizeImageProvider,
+  setRuntimeBuiltinImageChannels,
+} from '@/config/projectAiChannels';
+import { getSupportedResolutionsForModel } from '@/config/projectAiDefaults';
 import { SettingsOpenAIOAuthSection } from './components/SettingsOpenAIOAuthSection';
 import { useSettingsOpenAIOAuth } from './hooks/useSettingsOpenAIOAuth';
 
@@ -90,19 +102,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       id: 'image-config',
       title: t('settings.sections.imageConfig'),
       icon: <Image size={20} />,
-      fields: [
-        {
-          key: 'image_resolution',
-          label: t('settings.fields.imageResolution'),
-          type: 'select',
-          description: t('settings.fields.imageResolutionDesc'),
-          options: [
-            { value: '1K', label: '1K (1024px)' },
-            { value: '2K', label: '2K (2048px)' },
-            { value: '4K', label: '4K (按模型约束动态计算)' },
-          ],
-        },
-      ],
+      fields: [],
     },
     {
       id: 'performance-config',
@@ -265,6 +265,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
         setFormData(formDataFromSettings(settingsResp.data));
         sessionStorage.setItem('banana-settings', JSON.stringify(settingsResp.data));
       }
+      setRuntimeBuiltinImageChannels(profilesResp?.data?.builtin_channels || []);
       setProviderProfiles(profilesResp?.data?.profiles || []);
     } catch (error: any) {
       console.error('加载设置失败:', error);
@@ -415,6 +416,71 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
 
   const handleFieldChange = (key: string, value: any) => {
     setFormData(prev => ({ ...prev, [key]: value }));
+  };
+
+  // Keep image model source consistent with the selected image channel/provider path.
+  const handleImageProviderChange = (provider: string) => {
+    const normalizedProvider = normalizeImageProvider(provider);
+    const nextChannel = normalizeImageChannel('', normalizedProvider, providerProfiles);
+    const selectableModels = getSelectableImageModelsForChannel(nextChannel, providerProfiles);
+    const nextModel = selectableModels[0]?.model || '';
+    const fallbackSource = normalizedProvider;
+    setFormData(prev => ({
+      ...prev,
+      image_model_source: nextChannel ? getSourceForImageChannel(nextChannel, providerProfiles) : fallbackSource,
+      image_model: nextModel,
+      image_resolution: getSupportedResolutionsForChannelModel(
+        nextChannel,
+        nextModel,
+        providerProfiles,
+        getSupportedResolutionsForModel(nextModel),
+      )[0] || prev.image_resolution,
+    }));
+  };
+
+  // Keep image model and resolution aligned with the selected channel.
+  const handleImageChannelChange = (channelId: string) => {
+    const channel = getImageChannelOptionById(channelId, providerProfiles);
+    const fallbackModel = getSelectableImageModelsForChannel(channelId, providerProfiles)[0]?.model || '';
+    setFormData(prev => {
+      const selectableModels = getSelectableImageModelsForChannel(channelId, providerProfiles);
+      const keepsCurrentModel = selectableModels.some((item) => item.model === prev.image_model);
+      const nextModel = keepsCurrentModel ? prev.image_model : fallbackModel;
+      const resolutionOptions = getSupportedResolutionsForChannelModel(
+        channelId,
+        nextModel,
+        providerProfiles,
+        getSupportedResolutionsForModel(nextModel),
+      );
+      const nextResolution = resolutionOptions.includes(prev.image_resolution)
+        ? prev.image_resolution
+        : (resolutionOptions[0] || prev.image_resolution);
+      return {
+        ...prev,
+        image_model_source: channel?.source || (channel?.provider || 'gemini'),
+        image_model: nextModel,
+        image_resolution: nextResolution,
+      };
+    });
+  };
+
+  // Keep image resolution within the selected model/channel capability set.
+  const handleImageModelChange = (model: string, channelId: string) => {
+    const source = getSourceForImageChannel(channelId, providerProfiles) || getImageSourceForModel(model, 'gemini');
+    const resolutionOptions = getSupportedResolutionsForChannelModel(
+      channelId,
+      model,
+      providerProfiles,
+      getSupportedResolutionsForModel(model),
+    );
+    setFormData(prev => ({
+      ...prev,
+      image_model: model,
+      image_model_source: source,
+      image_resolution: resolutionOptions.includes(prev.image_resolution)
+        ? prev.image_resolution
+        : (resolutionOptions[0] || prev.image_resolution),
+    }));
   };
 
   const updateServiceTest = (key: string, nextState: ServiceTestState) => {
@@ -716,6 +782,40 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
     const isImageModelGroup = item.usePresetModelSelect === true;
     const isApiKeyProvider = API_KEY_PROVIDERS.has(sourceValue);
     const isLazyllm = sourceValue && isLazyllmVendor(sourceValue);
+    const resolvedImageProvider = isImageModelGroup
+      ? normalizeImageProvider(getImageChannelOptions(providerProfiles).find((channel) => channel.source === sourceValue)?.provider || sourceValue || 'gemini')
+      : '';
+    const resolvedImageChannel = isImageModelGroup
+      ? normalizeImageChannel(
+        getImageChannelOptions(providerProfiles).find((channel) => channel.source === sourceValue)?.id || '',
+        resolvedImageProvider,
+        providerProfiles,
+      )
+      : '';
+    const selectableImageModels = isImageModelGroup
+      ? getSelectableImageModelsForChannel(resolvedImageChannel, providerProfiles)
+      : [];
+    const selectableImageChannels = isImageModelGroup
+      ? getImageChannelsForProvider(resolvedImageProvider, providerProfiles)
+      : [];
+    const channelSelectOptions = isImageModelGroup
+      ? (selectableImageChannels.length > 0
+        ? selectableImageChannels
+        : [{ id: '', label: `${resolvedImageProvider === 'openai' ? 'OpenAI' : 'Gemini'} · 默认通道` }])
+      : [];
+    const visibleImageResolutions = isImageModelGroup
+      ? getSupportedResolutionsForChannelModel(
+        resolvedImageChannel,
+        currentModelValue,
+        providerProfiles,
+        getSupportedResolutionsForModel(currentModelValue),
+      )
+      : [];
+    const fallbackImageModelOptions = isImageModelGroup
+      ? getImageModelSelectOptions(currentModelValue)
+        .filter((option) => getImageSourceForModel(option.value, resolvedImageProvider) === resolvedImageProvider)
+        .filter((option, index, list) => list.findIndex((item) => item.value === option.value) === index)
+      : [];
     // 'openai' in source dropdown means OpenAI format (API key provider), not lazyllm openai vendor
     // lazyllm openai vendor is handled separately
 
@@ -732,28 +832,56 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
           />
         )}
         {isImageModelGroup && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-              {item.label}
-            </label>
-            <select
-              value={currentModelValue}
-              onChange={(e) => {
-                const nextModel = e.target.value;
-                handleFieldChange(item.modelKey, nextModel);
-                if (!nextModel) {
-                  handleFieldChange(item.sourceKey, '');
-                  return;
-                }
-                handleFieldChange(item.sourceKey, getImageSourceForModel(nextModel, 'gemini'));
-              }}
-              className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
-            >
-              <option value="">{item.placeholder}</option>
-              {getImageModelSelectOptions(currentModelValue).map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+                图片模型提供商
+              </label>
+              <select
+                value={resolvedImageProvider}
+                onChange={(e) => handleImageProviderChange(e.target.value)}
+                className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
+              >
+                <option value="gemini">Gemini</option>
+                <option value="openai">OpenAI</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+                图片模型渠道
+              </label>
+              <select
+                value={resolvedImageChannel}
+                onChange={(e) => handleImageChannelChange(e.target.value)}
+                className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
+              >
+                {channelSelectOptions.map((channel) => (
+                  <option key={channel.id} value={channel.id}>
+                    {channel.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+                {item.label}
+              </label>
+              <select
+                value={currentModelValue}
+                onChange={(e) => handleImageModelChange(e.target.value, resolvedImageChannel)}
+                className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
+              >
+                <option value="">{item.placeholder}</option>
+                {(selectableImageModels.length > 0 ? selectableImageModels : fallbackImageModelOptions).map((option) => (
+                  <option
+                    key={('model' in option ? `${option.source}:${option.model}` : option.value)}
+                    value={('model' in option ? option.model : option.value)}
+                  >
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         )}
         {item.description && (
@@ -761,6 +889,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
         )}
 
         {/* 提供商选择 */}
+        {!isImageModelGroup && (
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
             {item.sourceLabel}
@@ -785,6 +914,27 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
             {t('settings.fields.modelProviderDesc')}
           </p>
         </div>
+        )}
+
+        {isImageModelGroup && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+              图像清晰度
+            </label>
+            <select
+              value={visibleImageResolutions.includes(formData.image_resolution) ? formData.image_resolution : (visibleImageResolutions[0] || formData.image_resolution)}
+              onChange={(e) => handleFieldChange('image_resolution', e.target.value)}
+              className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
+            >
+              {visibleImageResolutions.map((resolution) => (
+                <option key={resolution} value={resolution}>{resolution}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
+              按当前渠道与模型动态收敛可选清晰度。
+            </p>
+          </div>
+        )}
 
         {/* Gemini/OpenAI 提供商：显示 API Base URL + API Key */}
         {isApiKeyProvider && (
