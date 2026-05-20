@@ -28,7 +28,7 @@ from .prompts import (
     get_outline_generation_prompt_markdown,
     get_outline_parsing_prompt_markdown,
     get_description_to_outline_prompt_markdown,
-    get_page_description_json_prompt,
+    get_page_description_markdown_prompt,
 )
 from .ai_providers import get_text_provider, get_image_provider, get_caption_provider, TextProvider, ImageProvider
 from config import get_config
@@ -932,6 +932,17 @@ class AIService:
             logger.warning("Failed to get extra field names from settings", exc_info=True)
             return ['视觉元素', '视觉焦点', '排版布局', '演讲者备注']
 
+    def _generate_text(self, prompt: str, thinking_budget: int = 1000) -> str:
+        """生成普通文本响应并返回去首尾空白后的结果。"""
+        actual_budget = self._get_text_thinking_budget()
+        if actual_budget > 0:
+            try:
+                actual_budget = min(actual_budget, int(thinking_budget))
+            except (TypeError, ValueError):
+                pass
+        response_text = self.text_provider.generate_text(prompt, thinking_budget=actual_budget)
+        return (response_text or '').strip()
+
     def generate_page_description(self, project_context: ProjectContext, outline: List[Dict],
                                  page_outline: Dict, page_index: int, language='zh',
                                  detail_level: str = 'default') -> Dict:
@@ -953,14 +964,14 @@ class AIService:
 
         if _generation_logs_enabled():
             logger.info(
-                "[Generate Description] page=%s title=%s language=%s detail=%s mode=structured_json",
+                "[Generate Description] page=%s title=%s language=%s detail=%s mode=markdown_text",
                 page_index,
                 page_outline.get('title', 'Untitled'),
                 language,
                 detail_level,
             )
 
-        json_prompt = get_page_description_json_prompt(
+        markdown_prompt = get_page_description_markdown_prompt(
             project_context=project_context,
             outline=outline,
             page_outline=page_outline,
@@ -969,16 +980,17 @@ class AIService:
             language=language,
             detail_level=detail_level,
         )
-        json_result = self.generate_json(json_prompt, thinking_budget=1000)
-        if isinstance(json_result, list):
-            json_result = json_result[0] if json_result and isinstance(json_result[0], dict) else {}
-        if not isinstance(json_result, dict):
-            raise ValueError(f"structured page description should be dict, got {type(json_result)}")
-        normalized = self._normalize_extracted_page_content_result(json_result)
-        result = {'text': normalized.get('description', '')}
+        raw_text = self._generate_text(markdown_prompt, thinking_budget=1000)
+        cleaned_text, extra_fields = self._parse_extra_fields(
+            raw_text,
+            ['排版建议', '视觉建议', '备注'],
+        )
+        result = {'text': cleaned_text}
+        if extra_fields:
+            result['extra_fields'] = extra_fields
         if _generation_logs_enabled():
             logger.info(
-                "[Generate Description Done] page=%s title=%s chars=%s mode=structured_json",
+                "[Generate Description Done] page=%s title=%s chars=%s mode=markdown_text",
                 page_index,
                 page_outline.get('title', 'Untitled'),
                 len(result.get('text') or ''),

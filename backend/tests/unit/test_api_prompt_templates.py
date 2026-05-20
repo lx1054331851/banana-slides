@@ -9,6 +9,7 @@ def test_prompt_templates_list_endpoint(client):
     page_description_json = next(item for item in templates if item["key"] == "page_description_json")
     assert image_generation["default_content"].strip()
     assert page_description_json["default_content"].strip()
+    assert "Markdown 页面说明" in page_description_json["default_content"]
 
 
 def test_prompt_template_update_endpoint(client):

@@ -34,7 +34,7 @@ _PROMPT_TEMPLATE_TAG_KEYS = {
     'get_description_to_outline_prompt': 'description_to_outline',
     'get_description_to_outline_prompt_markdown': 'description_to_outline_markdown',
     'get_outline_refinement_prompt': 'outline_refinement',
-    'get_page_description_json_prompt': 'page_description_json',
+    'get_page_description_markdown_prompt': 'page_description_json',
     'get_all_descriptions_stream_prompt': 'all_descriptions_stream',
     'get_descriptions_refinement_prompt': 'descriptions_refinement',
 }
@@ -176,6 +176,23 @@ _PAGE_DETAIL_JSON_OUTPUT_FORMAT = """\
   }
 }
 ```
+"""
+
+_PAGE_DETAIL_MARKDOWN_OUTPUT_FORMAT = """\
+# 页面标题
+一句与大纲严格对齐的页面主标题
+
+## 核心结论
+- 1条结论先行表述
+
+## 页面内容
+- 要点1的轻度扩写，保持原意不变
+- 要点2的轻度扩写，保持原意不变
+- 如有必要，补1条执行建议，但不得新增原大纲没有的核心判断
+
+排版建议：建议使用的版式结构，如“上标题+下方双栏要点”
+视觉建议：主体 + 隐喻 + 风格 + 重点
+备注：补充假设、适用边界或需确认信息
 """
 
 
@@ -770,12 +787,12 @@ def get_page_description_prompt(project_context: 'ProjectContext', outline: list
     return _build_prompt(prompt, project_context.reference_files_content, tag='get_page_description_prompt')
 
 
-def get_page_description_json_prompt(project_context: 'ProjectContext', outline: list,
-                                     page_outline: dict, page_index: int,
-                                     part_info: str = "",
-                                     language: str = None,
-                                     detail_level: str = "default") -> str:
-    """为文本生成场景产出结构化单页 JSON（与翻新链路对齐）。"""
+def get_page_description_markdown_prompt(project_context: 'ProjectContext', outline: list,
+                                         page_outline: dict, page_index: int,
+                                         part_info: str = "",
+                                         language: str = None,
+                                         detail_level: str = "default") -> str:
+    """为文本生成场景产出忠于大纲的单页 Markdown 描述。"""
     original_input = _get_original_input(project_context)
     outline_text = json.dumps(outline or [], ensure_ascii=False, indent=2)
     page_outline_text = json.dumps(page_outline or {}, ensure_ascii=False, indent=2)
@@ -796,7 +813,7 @@ def get_page_description_json_prompt(project_context: 'ProjectContext', outline:
 
     prompt = f"""\
 # 角色
-你是一位麦肯锡/BCG风格的高级商业分析师兼PPT架构师。你的任务是基于大纲与上下文，生成可直接渲染的单页结构化 JSON。
+你是一位严谨的商业演示文稿架构师。你的任务是基于大纲与上下文，生成可直接渲染的单页 Markdown 页面说明。
 
 # 输入上下文
 原始需求：
@@ -812,29 +829,39 @@ def get_page_description_json_prompt(project_context: 'ProjectContext', outline:
 {_format_requirements(project_context.description_requirements, "description")}
 {style_block}
 # 目标
-1. 输出一个 JSON 对象，且只能包含 `outline` 与 `slide` 两个顶层键。
-2. 必须根据当前页标题与要点“扩写并丰富内容”，不是仅改字段格式。
-3. 内容要体现结论先行、论据支撑、可执行表达。
-4. 每页必须输出 `type`、`layout_suggestion`、`content`、`visual_suggestion`、`note`。
-5. `type` 必须使用中文值：封面页/目录页/章节页/图表页/图文页/结尾页。
-6. 无法判断时，默认使用图文页。
+1. 输出 Markdown 页面说明，不要输出 JSON，不要输出代码块。
+2. 必须以当前页标题与要点为内容边界，优先保持原意，仅做轻度扩写与结构化表达。
+3. 不得改写原有结论方向、因果关系和主张，不得新增当前页要点中未出现的核心观点。
+4. 内容要体现结论先行、论据支撑、可执行表达，但这些表达必须服务于原大纲，不得脱离原大纲自行发挥。
+5. 若当前页要点本身已经较完整，允许少扩写，重点做清晰整理，而不是强行丰富。
+6. 页面正文以 Markdown 小节和短要点呈现；补充信息统一写在文末字段中。
 {first_page_constraint}
 
 # 详细程度
 当前详细程度要求：{DETAIL_LEVEL_SPECS.get(detail_level, DETAIL_LEVEL_SPECS['default'])}
 
-# 类型要求
-- 图文页：必须提供 `headline_summary` 与 `detailed_items[]`（每项含 `sub_title`、`body`、`highlight_phrases`）。
-- 图表页：必须提供 `chart_type`、`chart_data`、`key_takeaway`、`highlight_phrases`。
-- 封面页：优先使用 `headline`、`sub_headline`、`presenter_info`。
-- 结尾页：优先使用 `final_conclusion`、`vision`、`slogan`。
-- `highlight_phrases` 取值必须“可回指”：每个短语都要能在对应 `body`（图文页）或 `key_takeaway`（图表页）中逐字匹配到，不得改写、概括或替换同义词。
-- `visual_suggestion` 优先使用视觉隐喻，不要平铺直叙；并且必须写清主体、意境、风格、画面重点。
+# 写作要求
+- 默认使用中文。
+- 页面正文优先包含：页面标题、核心结论、页面内容。
+- 封面页内容极简，只保留标题、副标题、汇报信息；不要补正文段落。
+- 若页面适合图表表达，可在正文中说明“建议用图表呈现什么关系”，但不要伪造精确数据。
+- `视觉建议` 优先使用视觉隐喻，不要平铺直叙；并且必须写清主体、意境、风格、画面重点。
+- 文末必须保留以下三个字段名，单独成行：
+  - `排版建议：...`
+  - `视觉建议：...`
+  - `备注：...`
 
-{_get_page_detail_json_output_requirements()}
+# 输出示例
+{_PAGE_DETAIL_MARKDOWN_OUTPUT_FORMAT}
+
+# 硬约束
+- 只输出 Markdown 页面说明，不要解释，不要加围栏代码块。
+- 不要复述“完整大纲”JSON。
+- 不要写“根据以上内容”“如下所示”等提示语。
+- 不得为了语言高级感而替换掉原要点的核心语义。
 {get_language_instruction(language)}
 """
-    return _build_prompt(prompt, project_context.reference_files_content, tag='get_page_description_json_prompt')
+    return _build_prompt(prompt, project_context.reference_files_content, tag='get_page_description_markdown_prompt')
 
 
 def get_all_descriptions_stream_prompt(project_context: 'ProjectContext',
