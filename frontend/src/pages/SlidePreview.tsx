@@ -52,7 +52,6 @@ import { SlidePreviewEditorPane } from './components/SlidePreviewEditorPane';
 import { SlidePreviewTopOverlays } from './components/SlidePreviewTopOverlays';
 import { SlidePreviewDialogs } from './components/SlidePreviewDialogs';
 import { SlidePreviewMainPanel } from './components/SlidePreviewMainPanel';
-import { OutlineQuickEditPanel } from './components/OutlineQuickEditPanel';
 import { useSlidePreviewLayout } from './hooks/useSlidePreviewLayout';
 import { useSlidePreviewGeneration } from './hooks/useSlidePreviewGeneration';
 import { useSlidePreviewDrafts } from './hooks/useSlidePreviewDrafts';
@@ -2343,36 +2342,26 @@ export const SlidePreview: React.FC = () => {
             )}
           </div>
           {useRenovationPreviewForm && renovationJsonViewMode === 'outline' ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-[#eadfbf] bg-white/70 p-4 dark:border-[#36415b] dark:bg-[#101521]/80">
-              <div className="mb-3 text-sm font-medium text-slate-700 dark:text-slate-200">
-                {t('preview.outlineQuickEditTitle')}
-              </div>
-              <OutlineQuickEditPanel
-                t={t}
-                editOutlineTitle={editOutlineTitle}
-                editOutlinePoints={editOutlinePoints}
-                outlineQuickEditMode={outlineQuickEditMode}
-                isOutlineQuickGeneratingDescription={isOutlineQuickGeneratingDescription}
-                outlineQuickPointsTextareaRef={outlineQuickPointsTextareaRef}
-                onEditOutlineTitleChange={(value) => {
-                  setEditOutlineTitle(value);
-                  persistCurrentPageDraft({ title: value });
-                }}
-                onEditOutlineModeChange={setOutlineQuickEditMode}
-                onEditOutlinePointsChange={(value) => {
-                  setEditOutlinePoints(value);
-                  persistCurrentPageDraft({ points: value });
-                }}
-                onOutlineQuickPointsPaste={handleOutlineQuickPointsPaste}
-                onOpenGeneratePrompt={() => {
-                  setOutlineQuickGeneratePrompt('');
-                  setIsOutlineQuickGeneratePromptOpen(true);
-                }}
-                onSaveOutline={() => {
-                  handleSaveOutlineForQuickEditTarget();
-                }}
-              />
-            </div>
+            <MarkdownTextarea
+              ref={outlineQuickPointsTextareaRef}
+              value={editOutlinePoints}
+              onChange={(value: string) => {
+                setEditOutlinePoints(value);
+                persistCurrentPageDraft({ points: value });
+                scheduleTextAutoSave({ points: value });
+              }}
+              onPaste={handleOutlineQuickPointsPaste}
+              onBlur={(value) => persistTextEditsNow({ silent: true, overrides: { points: value } })}
+              placeholder={t('preview.enterPointsPerLine')}
+              data-testid="preview-outline-text-input"
+              rows={14}
+              maxHeight="100%"
+              resizable={false}
+              showUploadButton={false}
+              showImagePreview={false}
+              slashActions={undefined}
+              className="preview-json-editor min-h-[220px] flex-1 border-0 bg-transparent shadow-none focus-within:ring-0 focus-within:border-transparent dark:bg-transparent text-[14px] leading-6 [&_[role=textbox]]:pr-0"
+            />
           ) : useRenovationPreviewForm && renovationJsonViewMode === 'styleGuide' ? (
             <MarkdownTextarea
               ref={styleGuideTextareaRef}
