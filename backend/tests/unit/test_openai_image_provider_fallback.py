@@ -190,6 +190,23 @@ def test_147ai_adapter_forces_chat_mode_and_google_extra_body():
     assert adapted.adapter_options["extra_body_mode"] == "google_image_config"
 
 
+def test_147ai_adapter_keeps_gpt_image_2_variants_on_images_api():
+    route = ResolvedProviderRoute(
+        role="image",
+        provider="openai",
+        source="profile:147ai",
+        model="gpt-image-2-high",
+        channel="147ai",
+        adapter="openai_image_compat",
+        adapter_options={},
+    )
+
+    adapted = OpenAIImageCompatAdapter().apply(route)
+
+    assert adapted.adapter_options.get("endpoint_mode") != "chat"
+    assert adapted.adapter_options.get("extra_body_mode") != "google_image_config"
+
+
 def test_google_image_config_extra_body_shape(monkeypatch):
     provider = _build_provider(
         monkeypatch,

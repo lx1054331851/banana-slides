@@ -25,6 +25,7 @@ class OpenAIImageCompatAdapter(ProviderRouteAdapter):
         opts = dict(route.adapter_options or {})
         mapped = {}
         channel = str(route.channel or "").strip().lower()
+        model = str(route.model or "").strip().lower()
         if "endpoint_mode" in opts:
             mapped["endpoint_mode"] = opts["endpoint_mode"]
         if "path_style" in opts:
@@ -38,9 +39,10 @@ class OpenAIImageCompatAdapter(ProviderRouteAdapter):
         if "extra_body_mode" in opts:
             mapped["extra_body_mode"] = str(opts["extra_body_mode"]).strip()
 
-        # 147AI documents a chat/completions image route that expects
-        # extra_body.google.image_config instead of the generic payload shape.
-        if channel == "147ai":
+        # 147AI exposes two different compatibility surfaces:
+        # - gpt-image-2-* uses the normal OpenAI images endpoints
+        # - gemini image models use chat/completions + extra_body.google.image_config
+        if channel == "147ai" and model.startswith("gemini-"):
             mapped.setdefault("endpoint_mode", "chat")
             mapped.setdefault("extra_body_mode", "google_image_config")
 
