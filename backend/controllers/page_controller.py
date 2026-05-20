@@ -493,13 +493,6 @@ def generate_page_description(project_id, page_id):
                 language=language,
                 detail_level=detail_level
             )
-            desc_result = {
-                **desc_result,
-                'text': ai_service.normalize_renovation_description_text(
-                    desc_result.get('text', ''),
-                    page_outline=page_data,
-                ),
-            }
 
         # Save description (generate_page_description returns dict with text + optional extra_fields)
         desc_content = {
