@@ -6,6 +6,8 @@ from openai import InternalServerError
 
 from services.ai_providers.image.openai_provider import ImageApiRequestError, OpenAIImageProvider
 from services.ai_providers.openai_client import _normalize_openai_base_url
+from services.provider_routing.types import ResolvedProviderRoute
+from services.provider_routing.adapters.openai_image_compat import OpenAIImageCompatAdapter
 
 
 def _build_provider(monkeypatch, **kwargs) -> OpenAIImageProvider:
@@ -169,3 +171,39 @@ def test_chat_mode_retries_retryable_502_then_succeeds(monkeypatch):
     assert provider.generate_image(prompt="p", aspect_ratio="16:9", resolution="4K") is sentinel
     assert fake_completions.calls == 2
     assert sleep_calls == [60.0]
+
+
+def test_147ai_adapter_forces_chat_mode_and_google_extra_body():
+    route = ResolvedProviderRoute(
+        role="image",
+        provider="openai",
+        source="profile:147ai",
+        model="gemini-3.1-flash-image-preview",
+        channel="147ai",
+        adapter="openai_image_compat",
+        adapter_options={},
+    )
+
+    adapted = OpenAIImageCompatAdapter().apply(route)
+
+    assert adapted.adapter_options["endpoint_mode"] == "chat"
+    assert adapted.adapter_options["extra_body_mode"] == "google_image_config"
+
+
+def test_google_image_config_extra_body_shape(monkeypatch):
+    provider = _build_provider(
+        monkeypatch,
+        endpoint_mode="chat",
+        extra_body_mode="google_image_config",
+    )
+
+    payload = provider._build_extra_body("16:9", "4K")
+
+    assert payload == {
+        "google": {
+            "image_config": {
+                "aspect_ratio": "16:9",
+                "image_size": "4K",
+            }
+        }
+    }

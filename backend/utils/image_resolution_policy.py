@@ -11,15 +11,7 @@ GEMINI_3_PRO_STABLE_RESOLUTIONS: List[str] = ["1K"]
 OPENAI_RESOLUTIONS: List[str] = ["1K"]
 OPENAI_GPT_IMAGE_2_RESOLUTIONS: List[str] = ["1K", "2K", "4K"]
 
-CHANNEL_MODEL_RESOLUTION_OVERRIDES: Dict[str, Dict[str, List[str]]] = {
-    # 147AI's OpenAI-compatible relay currently rejects non-1K resolutions for
-    # these image models, even though the generic model families may support
-    # higher presets elsewhere.
-    "147ai": {
-        "gpt-image-2-high": ["1K"],
-        "gemini-3.1-flash-image-preview": ["1K"],
-    }
-}
+CHANNEL_MODEL_RESOLUTION_OVERRIDES: Dict[str, Dict[str, List[str]]] = {}
 
 _RESOLUTION_NORMALIZE_MAP = {
     "0.5k": "0.5K",
@@ -50,7 +42,12 @@ def _normalize_channel_name(channel: Optional[str]) -> str:
 
 
 def _is_gpt_image_2_model(model_name: str) -> bool:
-    return _normalize_model_name(model_name) == "gpt-image-2"
+    model = _normalize_model_name(model_name)
+    return model == "gpt-image-2" or model.startswith("gpt-image-2-")
+
+
+def _is_openai_gemini_31_flash_image_model(model_name: str) -> bool:
+    return _normalize_model_name(model_name).startswith("gemini-3.1-flash-image-preview")
 
 
 def _is_gemini_3_pro_stable_model(model_name: str) -> bool:
@@ -86,6 +83,8 @@ def get_supported_image_resolutions(
     if provider_name == "openai":
         if _is_gpt_image_2_model(model):
             return OPENAI_GPT_IMAGE_2_RESOLUTIONS
+        if _is_openai_gemini_31_flash_image_model(model):
+            return GEMINI_31_FLASH_RESOLUTIONS
         if _is_gemini_3_pro_stable_model(model):
             return GEMINI_3_PRO_STABLE_RESOLUTIONS
         return OPENAI_RESOLUTIONS

@@ -10,16 +10,16 @@ def test_openai_gpt_image_2_supports_1k_2k_4k():
     assert resolutions == ["1K", "2K", "4K"]
 
 
-def test_147ai_channel_limits_gpt_image_2_high_to_1k():
-    """147AI relay currently only supports 1K for gpt-image-2-high."""
+def test_147ai_channel_keeps_gpt_image_2_high_generic_resolution_support():
+    """147AI capability should now rely on protocol adaptation, not hard-coded 1K downgrade."""
     resolutions = get_supported_image_resolutions("openai", "gpt-image-2-high", channel="147ai")
-    assert resolutions == ["1K"]
+    assert resolutions == ["1K", "2K", "4K"]
 
 
-def test_147ai_channel_limits_gemini_31_flash_to_1k():
-    """147AI relay currently only supports 1K for gemini-3.1-flash-image-preview."""
+def test_147ai_channel_keeps_gemini_31_flash_generic_resolution_support():
+    """147AI capability should now rely on protocol adaptation, not hard-coded 1K downgrade."""
     resolutions = get_supported_image_resolutions("openai", "gemini-3.1-flash-image-preview", channel="147ai")
-    assert resolutions == ["1K"]
+    assert resolutions == ["0.5K", "1K", "2K", "4K"]
 
 
 def test_openai_non_gpt_image_2_defaults_to_1k():
@@ -54,14 +54,14 @@ def test_resolve_effective_image_resolution_rejects_4k_for_gemini_3_pro_stable()
         )
 
 
-def test_resolve_effective_image_resolution_rejects_4k_for_147ai_channel():
-    """Channel-specific capability should override generic model capability."""
-    with pytest.raises(ValueError, match="Allowed values: 1K"):
-        resolve_effective_image_resolution(
-            "openai",
-            "gpt-image-2-high",
-            channel="147ai",
-            request_resolution="4K",
-            project_resolution=None,
-            global_resolution="1K",
-        )
+def test_resolve_effective_image_resolution_accepts_4k_for_147ai_channel_after_adapter_fix():
+    """147AI should accept 4K again once request payload is adapted to its documented protocol."""
+    effective = resolve_effective_image_resolution(
+        "openai",
+        "gpt-image-2-high",
+        channel="147ai",
+        request_resolution="4K",
+        project_resolution=None,
+        global_resolution="1K",
+    )
+    assert effective == "4K"

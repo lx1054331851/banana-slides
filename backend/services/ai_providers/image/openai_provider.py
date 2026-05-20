@@ -142,6 +142,7 @@ class OpenAIImageProvider(ImageProvider):
     _VALID_PATH_STYLES = {"auto", "singular", "plural"}
     _VALID_RESPONSE_FORMATS = {"b64_json", "url"}
     _VALID_RESOLUTIONS = {"1K", "2K", "4K"}
+    _VALID_EXTRA_BODY_MODES = {"default", "google_image_config"}
     _GPT_IMAGE_2_MIN_PIXELS = 655_360
     _GPT_IMAGE_2_MAX_PIXELS = 8_294_400
     _GPT_IMAGE_2_MAX_EDGE = 3840
@@ -171,6 +172,7 @@ class OpenAIImageProvider(ImageProvider):
         endpoint_mode: str = None,
         path_style: str = None,
         response_format: str = None,
+        extra_body_mode: str = None,
         chat_fallback: bool = None,
         strict_params: bool = None,
     ):
@@ -211,6 +213,12 @@ class OpenAIImageProvider(ImageProvider):
             "b64_json",
             "IMAGE_OPENAI_RESPONSE_FORMAT",
         )
+        self.extra_body_mode = self._normalize_enum(
+            extra_body_mode if extra_body_mode is not None else getattr(cfg, "IMAGE_OPENAI_EXTRA_BODY_MODE", None),
+            self._VALID_EXTRA_BODY_MODES,
+            "default",
+            "IMAGE_OPENAI_EXTRA_BODY_MODE",
+        )
         self.chat_fallback = self._to_bool(chat_fallback, bool(cfg.IMAGE_OPENAI_CHAT_FALLBACK))
         self.strict_params = self._to_bool(strict_params, bool(cfg.IMAGE_OPENAI_STRICT_PARAMS))
         self.max_attempts = max(int(getattr(cfg, "OPENAI_MAX_RETRIES", 0)) + 1, 1)
@@ -241,6 +249,15 @@ class OpenAIImageProvider(ImageProvider):
 
     def _build_extra_body(self, aspect_ratio: str, resolution: str) -> dict:
         resolution_upper = resolution.upper()
+        if self.extra_body_mode == "google_image_config":
+            return {
+                "google": {
+                    "image_config": {
+                        "aspect_ratio": aspect_ratio,
+                        "image_size": resolution_upper,
+                    }
+                }
+            }
         return {
             "aspect_ratio": aspect_ratio,
             "resolution": resolution_upper,

@@ -474,6 +474,7 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
                 endpoint_mode=opts.get("endpoint_mode"),
                 path_style=opts.get("path_style"),
                 response_format=opts.get("response_format"),
+                extra_body_mode=opts.get("extra_body_mode"),
                 chat_fallback=opts.get("chat_fallback"),
                 strict_params=opts.get("strict_params"),
             )

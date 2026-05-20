@@ -61,15 +61,15 @@
       "grok-4-image"
     ],
     "supported_resolutions": {
-      "gpt-image-2-low": ["1K"],
-      "gpt-image-2-medium": ["1K"],
-      "gpt-image-2-high": ["1K"],
+      "gpt-image-2-low": ["1K", "2K", "4K"],
+      "gpt-image-2-medium": ["1K", "2K", "4K"],
+      "gpt-image-2-high": ["1K", "2K", "4K"],
       "gemini-2.5-flash-image": ["1K"],
       "gemini-2.5-flash-image-preview": ["1K"],
-      "gemini-3-pro-image-preview": ["1K"],
+      "gemini-3-pro-image-preview": ["1K", "2K", "4K"],
       "gemini-3-pro-image-preview-stable": ["1K"],
-      "gemini-3.1-flash-image-preview": ["1K"],
-      "grok-4-image": ["1K"]
+      "gemini-3.1-flash-image-preview": ["0.5K", "1K", "2K", "4K"],
+      "grok-4-image": ["1K", "2K", "4K"]
     },
     "model_defaults": {
       "image": "gpt-image-2-low"
