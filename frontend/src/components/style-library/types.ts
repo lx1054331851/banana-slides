@@ -36,8 +36,23 @@ export interface JsonPresetWorkspaceProps {
   refreshKey?: number;
 }
 
+const PREVIEW_SLOT_ORDER = [
+  'cover_url',
+  'catalog_url',
+  'section_header_url',
+  'agenda_timeline_url',
+  'detail_text_split_url',
+  'bullet_keypoints_url',
+  'comparison_url',
+  'process_flow_url',
+  'framework_matrix_url',
+  'detail_chart_url',
+  'case_showcase_url',
+  'closing_url',
+] as const;
+
 const PREVIEW_LABEL_MAP: Record<string, string> = {
-  cover_url: '首页',
+  cover_url: '封面',
   catalog_url: '目录',
   section_header_url: '章节过渡',
   agenda_timeline_url: '议程时间线',
@@ -51,9 +66,60 @@ const PREVIEW_LABEL_MAP: Record<string, string> = {
   closing_url: '结尾',
 };
 
+const PREVIEW_KEY_ALIAS_MAP: Record<string, string> = {
+  cover: 'cover_url',
+  'cover page': 'cover_url',
+  catalog: 'catalog_url',
+  toc: 'catalog_url',
+  'toc page': 'catalog_url',
+  'catalog page': 'catalog_url',
+  section_header: 'section_header_url',
+  'section header': 'section_header_url',
+  'section header page': 'section_header_url',
+  agenda_timeline: 'agenda_timeline_url',
+  'agenda timeline': 'agenda_timeline_url',
+  'agenda timeline page': 'agenda_timeline_url',
+  detail_text_split: 'detail_text_split_url',
+  content: 'detail_text_split_url',
+  'content page': 'detail_text_split_url',
+  bullet_keypoints: 'bullet_keypoints_url',
+  'bullet keypoints': 'bullet_keypoints_url',
+  'bullet keypoints page': 'bullet_keypoints_url',
+  comparison: 'comparison_url',
+  'comparison page': 'comparison_url',
+  process_flow: 'process_flow_url',
+  'process flow': 'process_flow_url',
+  'process flow page': 'process_flow_url',
+  framework_matrix: 'framework_matrix_url',
+  'framework matrix': 'framework_matrix_url',
+  'framework matrix page': 'framework_matrix_url',
+  detail_chart: 'detail_chart_url',
+  data: 'detail_chart_url',
+  'data page': 'detail_chart_url',
+  case_showcase: 'case_showcase_url',
+  'case showcase': 'case_showcase_url',
+  'case showcase page': 'case_showcase_url',
+  closing: 'closing_url',
+  ending: 'closing_url',
+  'closing page': 'closing_url',
+};
+
+// Normalize preview slot keys and English aliases into canonical preview keys.
+export function normalizePreviewKey(previewKey: string): string {
+  const rawKey = String(previewKey || '').trim();
+  if (!rawKey) return '';
+  if (PREVIEW_LABEL_MAP[rawKey]) return rawKey;
+  const withoutSuffix = rawKey.replace(/_url$/i, '');
+  if (PREVIEW_LABEL_MAP[`${withoutSuffix}_url`]) return `${withoutSuffix}_url`;
+
+  const normalizedAlias = withoutSuffix.replace(/[_-]+/g, ' ').trim().toLowerCase();
+  return PREVIEW_KEY_ALIAS_MAP[normalizedAlias] || rawKey;
+}
+
 export function humanizePreviewKey(previewKey: string): string {
-  if (PREVIEW_LABEL_MAP[previewKey]) return PREVIEW_LABEL_MAP[previewKey];
-  const base = String(previewKey || '').replace(/_url$/i, '');
+  const normalizedKey = normalizePreviewKey(previewKey);
+  if (PREVIEW_LABEL_MAP[normalizedKey]) return PREVIEW_LABEL_MAP[normalizedKey];
+  const base = String(normalizedKey || previewKey || '').replace(/_url$/i, '');
   return base
     .split('_')
     .filter(Boolean)
@@ -62,11 +128,28 @@ export function humanizePreviewKey(previewKey: string): string {
 }
 
 export function getPreviewOrder(previewImages?: Partial<StylePresetPreviewImages>, samplePages?: Record<string, string>): Array<[PreviewKey, string]> {
-  const keys = new Set<string>([
-    ...Object.keys(previewImages || {}),
-    ...Object.keys(samplePages || {}).map((key) => `${key}_url`),
-  ]);
-  return Array.from(keys).map((key) => [key as PreviewKey, humanizePreviewKey(key)]);
+  const normalizedKeys = new Set<string>();
+
+  Object.keys(previewImages || {}).forEach((key) => {
+    const normalizedKey = normalizePreviewKey(key);
+    if (normalizedKey) normalizedKeys.add(normalizedKey);
+  });
+
+  Object.keys(samplePages || {}).forEach((key) => {
+    const normalizedKey = normalizePreviewKey(key);
+    if (normalizedKey) {
+      normalizedKeys.add(normalizedKey);
+      return;
+    }
+    normalizedKeys.add(`${key}_url`);
+  });
+
+  const orderedKeys = [
+    ...PREVIEW_SLOT_ORDER.filter((key) => normalizedKeys.has(key)),
+    ...Array.from(normalizedKeys).filter((key) => !PREVIEW_SLOT_ORDER.includes(key as typeof PREVIEW_SLOT_ORDER[number])),
+  ];
+
+  return orderedKeys.map((key) => [key as PreviewKey, humanizePreviewKey(key)]);
 }
 
 export const RUNNING_TASK_STATUSES = new Set(['PENDING', 'PROCESSING', 'RUNNING']);

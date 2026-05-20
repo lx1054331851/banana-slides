@@ -364,6 +364,35 @@ describe('StyleLibrary page', () => {
     expect(within(row).getByTestId('preset-s1-preview-closing_url')).toBeInTheDocument();
   });
 
+  it('renders Chinese page labels for English preview aliases', async () => {
+    mockListStylePresets.mockResolvedValueOnce(({
+      data: {
+        presets: [
+          {
+            id: 's1',
+            name: 'Preset 1',
+            style_json: '{"preset":1}',
+            preview_images: {
+              'Case Showcase Page': '',
+              'Closing Page': '',
+              cover_url: '/files/style-presets/s1/cover.webp',
+              catalog_url: '/files/style-presets/s1/catalog.webp',
+            },
+          },
+        ],
+      },
+    }) as any);
+
+    render(<StyleLibrary />);
+
+    const row = await screen.findByTestId('preset-row-s1');
+    expect(within(row).getByText('封面')).toBeInTheDocument();
+    expect(within(row).getByText('目录')).toBeInTheDocument();
+    expect(within(row).getByText('结尾')).toBeInTheDocument();
+    expect(within(row).queryByText('Case Showcase Page')).not.toBeInTheDocument();
+    expect(within(row).queryByText('Closing Page')).not.toBeInTheDocument();
+  });
+
   it('formats preset JSON viewer into multi-line pretty JSON', async () => {
     render(<StyleLibrary />);
     fireEvent.click(await screen.findByTestId('preset-s1-view-json'));
