@@ -23,6 +23,7 @@ from typing import Any, Dict, Optional
 from .text import TextProvider, GenAITextProvider, OpenAITextProvider, AnthropicTextProvider, LazyLLMTextProvider, CodexTextProvider
 from .image import ImageProvider, GenAIImageProvider, OpenAIImageProvider, AnthropicImageProvider, LazyLLMImageProvider, CodexImageProvider
 from services.provider_routing.types import ResolvedProviderRoute
+from services.provider_routing.profiles import get_profile
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,51 @@ __all__ = [
 
 # LazyLLM vendor names (used to distinguish from gemini/openai formats)
 LAZYLLM_VENDORS = {'qwen', 'doubao', 'deepseek', 'glm', 'siliconflow', 'sensenova', 'minimax', 'kimi'}
+
+
+def _resolve_profile_source_config(model_type: str, source: str) -> Dict[str, Any]:
+    """Resolve ``profile:*`` source into a provider config for the requested model type."""
+    prefix = model_type.upper()
+    profile_id = source.split(":", 1)[1].strip()
+    profile = get_profile(profile_id)
+    if not profile:
+        raise ValueError(f"Unknown provider profile: {profile_id}")
+
+    capabilities = set(profile.get("capabilities") or [])
+    if model_type not in capabilities:
+        raise ValueError(f"Profile '{profile_id}' does not support role '{model_type}'")
+
+    provider = str(profile.get("provider") or "").strip().lower()
+    api_base = str(profile.get("api_base") or "").strip() or None
+    api_key_env = str(profile.get("api_key_env") or "").strip() or None
+    profile_api_key = os.getenv(api_key_env) if api_key_env else None
+
+    if provider == 'gemini':
+        api_key = profile_api_key or _resolve_setting(f'{prefix}_API_KEY') or _resolve_setting('GOOGLE_API_KEY')
+        if not api_key:
+            raise ValueError(
+                f"API key is required for {model_type} model with profile '{profile_id}'. "
+                f"Set {api_key_env or f'{prefix}_API_KEY'} or GOOGLE_API_KEY."
+            )
+        logger.info("Per-model config — %s: profile:%s -> gemini, api_base: %s", model_type, profile_id, api_base)
+        return {'format': 'gemini', 'api_key': api_key, 'api_base': api_base}
+
+    if provider == 'openai':
+        api_key = (
+            profile_api_key
+            or _resolve_setting(f'{prefix}_API_KEY')
+            or _resolve_setting('OPENAI_API_KEY')
+            or _resolve_setting('AZURE_OPENAI_API_KEY')
+        )
+        if not api_key:
+            raise ValueError(
+                f"API key is required for {model_type} model with profile '{profile_id}'. "
+                f"Set {api_key_env or f'{prefix}_API_KEY'} or OPENAI_API_KEY."
+            )
+        logger.info("Per-model config — %s: profile:%s -> openai, api_base: %s", model_type, profile_id, api_base)
+        return {'format': 'openai', 'api_key': api_key, 'api_base': api_base}
+
+    raise ValueError(f"Unsupported provider '{provider}' for profile '{profile_id}'")
 
 
 def _get_openai_oauth_token() -> Optional[str]:
@@ -228,6 +274,9 @@ def _get_model_type_provider_config(model_type: str) -> Dict[str, Any]:
         return _build_provider_config()
 
     source_lower = source.lower()
+
+    if source_lower.startswith('profile:'):
+        return _resolve_profile_source_config(model_type, source)
 
     if source_lower == 'gemini':
         api_key = _resolve_setting(f'{prefix}_API_KEY') or _resolve_setting('GOOGLE_API_KEY')

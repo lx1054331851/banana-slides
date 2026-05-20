@@ -751,7 +751,6 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
     value: `profile:${p.id}`,
     label: `Profile: ${p.id} (${String(p.provider || '').toUpperCase()})`,
   }));
-  const MODEL_PROVIDER_SOURCES = [...GLOBAL_PROVIDER_SOURCES, ...profileSourceOptions];
 
   // 渲染单个模型配置组（模型名 + 提供商选择 + 条件凭证）
   const renderModelConfigGroup = (item: typeof modelConfigItems[0]) => {
@@ -794,6 +793,18 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
         .filter((option) => getImageSourceForModel(option.value, resolvedImageProvider) === resolvedImageProvider)
         .filter((option, index, list) => list.findIndex((item) => item.value === option.value) === index)
       : [];
+    const capabilityKey = item.sourceKey === 'text_model_source'
+      ? 'text'
+      : (item.sourceKey === 'image_caption_model_source' ? 'image_caption' : 'image');
+    const modelProviderSources = [
+      ...GLOBAL_PROVIDER_SOURCES,
+      ...profileSourceOptions.filter((option) => {
+        const profileId = option.value.replace(/^profile:/, '');
+        const profile = providerProfiles.find((p) => String(p.id) === profileId);
+        const capabilities = Array.isArray(profile?.capabilities) ? profile.capabilities : [];
+        return capabilities.includes(capabilityKey);
+      }),
+    ];
     // 'openai' in source dropdown means OpenAI format (API key provider), not lazyllm openai vendor
     // lazyllm openai vendor is handled separately
 
@@ -865,7 +876,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
             className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
           >
             <option value="">{t('settings.fields.modelProviderPlaceholder')}</option>
-            {MODEL_PROVIDER_SOURCES.map((option) => (
+            {modelProviderSources.map((option) => (
               <option
                 key={option.value}
                 value={option.value}

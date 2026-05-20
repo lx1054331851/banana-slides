@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from services.ai_providers import _get_model_type_provider_config
 from services.provider_routing import resolve_provider_route, resolve_routing_bundle
 
 
@@ -208,3 +209,49 @@ def test_azure_openai_source_alias_routes_to_openai_provider(monkeypatch):
 
     assert route.provider == "openai"
     assert route.source == "azure-openai"
+
+
+def test_text_model_profile_source_resolves_to_openai_config(monkeypatch):
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("TEXT_MODEL_SOURCE", "profile:text_relay")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    monkeypatch.setenv(
+        "PROVIDER_PROFILES_JSON",
+        json.dumps(
+            [
+                {
+                    "id": "text_relay",
+                    "provider": "openai",
+                    "api_base": "https://relay.example.com/v1",
+                    "capabilities": ["text"],
+                }
+            ]
+        ),
+    )
+
+    config = _get_model_type_provider_config("text")
+
+    assert config["format"] == "openai"
+    assert config["api_key"] == "openai-key"
+    assert config["api_base"] == "https://relay.example.com/v1"
+
+
+def test_text_model_profile_source_rejects_image_only_profile(monkeypatch):
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("TEXT_MODEL_SOURCE", "profile:147ai")
+    monkeypatch.setenv(
+        "PROVIDER_PROFILES_JSON",
+        json.dumps(
+            [
+                {
+                    "id": "147ai",
+                    "provider": "openai",
+                    "api_base": "https://relay.example.com/v1",
+                    "capabilities": ["image"],
+                }
+            ]
+        ),
+    )
+
+    with pytest.raises(ValueError, match="does not support role 'text'"):
+        _get_model_type_provider_config("text")
