@@ -297,7 +297,8 @@ class OpenAIImageProvider(ImageProvider):
         return m.startswith("gemini-2.5") or m == "nano-banana"
 
     def _is_gpt_image_2(self, model: str) -> bool:
-        return (model or "").strip().lower() == "gpt-image-2"
+        normalized = (model or "").strip().lower()
+        return normalized == "gpt-image-2" or normalized.startswith("gpt-image-2-")
 
     def _validate_aspect_ratio(self, aspect_ratio: str, strict: bool):
         if strict and not re.fullmatch(r"\d+:\d+", str(aspect_ratio or "").strip()):

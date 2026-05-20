@@ -20,7 +20,7 @@ def _provider(monkeypatch, strict_params=True):
 
 def test_gpt_image2_uses_size_not_aspect_ratio(monkeypatch):
     provider = _provider(monkeypatch, strict_params=True)
-    params = provider._build_image_api_params("gpt-image-2", "16:9", "4K", True)
+    params = provider._build_image_api_params("gpt-image-2-high", "16:9", "4K", True)
 
     assert "aspect_ratio" not in params
     assert params["size"] == "3840x2160"
