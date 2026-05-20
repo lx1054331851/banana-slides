@@ -13,12 +13,10 @@ import { getImageSourceForModel } from '@/config/projectAiDefaults';
 import {
   getImageChannelOptionById,
   getImageChannelOptions,
-  getImageChannelsForProvider,
   getSelectableImageModelsForChannel,
   getSourceForImageChannel,
   getSupportedResolutionsForChannelModel,
   normalizeImageChannel,
-  normalizeImageProvider,
   setRuntimeBuiltinImageChannels,
 } from '@/config/projectAiChannels';
 import { getSupportedResolutionsForModel } from '@/config/projectAiDefaults';
@@ -418,26 +416,6 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
     setFormData(prev => ({ ...prev, [key]: value }));
   };
 
-  // Keep image model source consistent with the selected image channel/provider path.
-  const handleImageProviderChange = (provider: string) => {
-    const normalizedProvider = normalizeImageProvider(provider);
-    const nextChannel = normalizeImageChannel('', normalizedProvider, providerProfiles);
-    const selectableModels = getSelectableImageModelsForChannel(nextChannel, providerProfiles);
-    const nextModel = selectableModels[0]?.model || '';
-    const fallbackSource = normalizedProvider;
-    setFormData(prev => ({
-      ...prev,
-      image_model_source: nextChannel ? getSourceForImageChannel(nextChannel, providerProfiles) : fallbackSource,
-      image_model: nextModel,
-      image_resolution: getSupportedResolutionsForChannelModel(
-        nextChannel,
-        nextModel,
-        providerProfiles,
-        getSupportedResolutionsForModel(nextModel),
-      )[0] || prev.image_resolution,
-    }));
-  };
-
   // Keep image model and resolution aligned with the selected channel.
   const handleImageChannelChange = (channelId: string) => {
     const channel = getImageChannelOptionById(channelId, providerProfiles);
@@ -782,12 +760,15 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
     const isImageModelGroup = item.usePresetModelSelect === true;
     const isApiKeyProvider = API_KEY_PROVIDERS.has(sourceValue);
     const isLazyllm = sourceValue && isLazyllmVendor(sourceValue);
+    const matchedImageChannel = isImageModelGroup
+      ? getImageChannelOptions(providerProfiles).find((channel) => channel.source === sourceValue)
+      : undefined;
     const resolvedImageProvider = isImageModelGroup
-      ? normalizeImageProvider(getImageChannelOptions(providerProfiles).find((channel) => channel.source === sourceValue)?.provider || sourceValue || 'gemini')
+      ? (matchedImageChannel?.provider || sourceValue || 'gemini')
       : '';
     const resolvedImageChannel = isImageModelGroup
       ? normalizeImageChannel(
-        getImageChannelOptions(providerProfiles).find((channel) => channel.source === sourceValue)?.id || '',
+        matchedImageChannel?.id || '',
         resolvedImageProvider,
         providerProfiles,
       )
@@ -795,13 +776,10 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
     const selectableImageModels = isImageModelGroup
       ? getSelectableImageModelsForChannel(resolvedImageChannel, providerProfiles)
       : [];
-    const selectableImageChannels = isImageModelGroup
-      ? getImageChannelsForProvider(resolvedImageProvider, providerProfiles)
-      : [];
     const channelSelectOptions = isImageModelGroup
-      ? (selectableImageChannels.length > 0
-        ? selectableImageChannels
-        : [{ id: '', label: `${resolvedImageProvider === 'openai' ? 'OpenAI' : 'Gemini'} · 默认通道` }])
+      ? (getImageChannelOptions(providerProfiles).length > 0
+        ? getImageChannelOptions(providerProfiles)
+        : [{ id: '', label: '默认通道' }])
       : [];
     const visibleImageResolutions = isImageModelGroup
       ? getSupportedResolutionsForChannelModel(
@@ -833,19 +811,6 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
         )}
         {isImageModelGroup && (
           <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-                图片模型提供商
-              </label>
-              <select
-                value={resolvedImageProvider}
-                onChange={(e) => handleImageProviderChange(e.target.value)}
-                className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
-              >
-                <option value="gemini">Gemini</option>
-                <option value="openai">OpenAI</option>
-              </select>
-            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
                 图片模型渠道
