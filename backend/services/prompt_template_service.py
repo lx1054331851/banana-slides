@@ -84,7 +84,7 @@ def _build_default_content(key: str) -> str:
             get_outline_parsing_prompt,
             get_outline_parsing_prompt_markdown,
             get_outline_refinement_prompt,
-            get_page_description_json_prompt,
+            get_page_description_markdown_prompt,
         )
 
         context = SimpleNamespace(
@@ -119,7 +119,7 @@ def _build_default_content(key: str) -> str:
                 language='zh',
             )
         if key == 'page_description_json':
-            return get_page_description_json_prompt(
+            return get_page_description_markdown_prompt(
                 context,
                 outline=[{'title': '示例标题', 'points': ['要点1', '要点2']}],
                 page_outline={'title': '示例标题', 'points': ['要点1', '要点2']},
