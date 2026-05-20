@@ -23,7 +23,7 @@ def test_gpt_image2_uses_size_not_aspect_ratio(monkeypatch):
     params = provider._build_image_api_params("gpt-image-2", "16:9", "4K", True)
 
     assert "aspect_ratio" not in params
-    assert params["size"] == "3840x2160"
+    assert params["size"] == "2048x1152"
     assert params["quality"] == "high"
 
 
@@ -31,8 +31,15 @@ def test_gpt_image2_clamps_oversized_square(monkeypatch):
     provider = _provider(monkeypatch, strict_params=True)
     params = provider._build_image_api_params("gpt-image-2", "1:1", "4K", True)
 
-    # 3840x3840 would exceed max pixels; expect clamp to 2880x2880
-    assert params["size"] == "2880x2880"
+    # 147AI gpt-image-2-xxx accepts a fixed size enum; square 4K maps to 2048x2048.
+    assert params["size"] == "2048x2048"
+
+
+def test_gpt_image2_4k_wide_maps_to_3072x1024_when_ratio_exceeds_catalog(monkeypatch):
+    provider = _provider(monkeypatch, strict_params=True)
+    params = provider._build_image_api_params("gpt-image-2", "21:9", "4K", True)
+
+    assert params["size"] == "3072x1024"
 
 
 def test_gpt_image2_rejects_ratio_over_3_when_strict(monkeypatch):
