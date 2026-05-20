@@ -22,24 +22,6 @@
     }
   },
   {
-    "id": "gs88",
-    "channel": "gs88",
-    "label": "GS88",
-    "kind": "relay",
-    "provider": "openai",
-    "api_base": "https://ai.gs88.shop",
-    "api_key_env": "GS88_API_KEY",
-    "adapter": "openai_image_compat",
-    "capabilities": ["image"],
-    "models": ["gpt-image-2"],
-    "supported_resolutions": {
-      "gpt-image-2": ["1K", "2K", "4K"]
-    },
-    "model_defaults": {
-      "image": "gpt-image-2"
-    }
-  },
-  {
     "id": "147ai",
     "channel": "147ai",
     "label": "147AI",
