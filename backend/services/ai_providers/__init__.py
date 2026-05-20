@@ -477,6 +477,8 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
                 extra_body_mode=opts.get("extra_body_mode"),
                 chat_fallback=opts.get("chat_fallback"),
                 strict_params=opts.get("strict_params"),
+                channel=route.channel,
+                source_trace=route.source_trace,
             )
         if route.provider == 'lazyllm':
             return LazyLLMImageProvider(

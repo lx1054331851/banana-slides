@@ -175,6 +175,8 @@ class OpenAIImageProvider(ImageProvider):
         extra_body_mode: str = None,
         chat_fallback: bool = None,
         strict_params: bool = None,
+        channel: str = None,
+        source_trace: Optional[Sequence[str]] = None,
     ):
         cfg = get_config()
         azure_endpoint = (azure_endpoint or "").strip() or None
@@ -194,6 +196,8 @@ class OpenAIImageProvider(ImageProvider):
         self.azure_api_version = azure_api_version or ""
         self.model = model
         self.timeout = cfg.OPENAI_TIMEOUT
+        self.channel = str(channel or "").strip()
+        self.source_trace = list(source_trace or [])
 
         self.endpoint_mode = self._normalize_enum(
             endpoint_mode if endpoint_mode is not None else cfg.IMAGE_OPENAI_ENDPOINT_MODE,
@@ -903,13 +907,16 @@ class OpenAIImageProvider(ImageProvider):
         refs = ref_images or []
 
         logger.debug(
-            "OpenAI image call - mode=%s, path_style=%s, model=%s, refs=%s, aspect_ratio=%s, resolution=%s",
+            "OpenAI image call - channel=%s, mode=%s, path_style=%s, extra_body_mode=%s, model=%s, refs=%s, aspect_ratio=%s, resolution=%s, source_trace=%s",
+            self.channel or "(none)",
             self.endpoint_mode,
             self.path_style,
+            self.extra_body_mode,
             self.model,
             len(refs),
             aspect_ratio,
             resolution,
+            self.source_trace,
         )
 
         try:

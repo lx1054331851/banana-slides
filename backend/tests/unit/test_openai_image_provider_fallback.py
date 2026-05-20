@@ -224,3 +224,14 @@ def test_google_image_config_extra_body_shape(monkeypatch):
             }
         }
     }
+
+
+def test_provider_stores_channel_and_source_trace_for_diagnostics(monkeypatch):
+    provider = _build_provider(
+        monkeypatch,
+        channel="147ai",
+        source_trace=["request:image.source", "profile:147ai", "adapter:openai_image_compat"],
+    )
+
+    assert provider.channel == "147ai"
+    assert provider.source_trace == ["request:image.source", "profile:147ai", "adapter:openai_image_compat"]
