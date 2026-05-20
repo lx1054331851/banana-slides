@@ -1,6 +1,7 @@
 import React from 'react';
 import { FilePreviewModal, GlobalAiAssistantDrawer } from '@/components/shared';
 import { OutlineQuickEditModals } from './OutlineQuickEditModals';
+import type { OutlineQuickEditMode } from './OutlineQuickEditPanel';
 
 type SlidePreviewTopOverlaysProps = {
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -17,14 +18,14 @@ type SlidePreviewTopOverlaysProps = {
   outlineQuickEditTitle: string;
   editOutlineTitle: string;
   editOutlinePoints: string;
-  outlineQuickEditMode: 'edit' | 'append';
+  outlineQuickEditMode: OutlineQuickEditMode;
   outlineQuickGeneratePrompt: string;
   outlineQuickPointsTextareaRef: React.RefObject<any>;
   onCloseOutlineQuickEdit: () => void;
   onEditOutlineTitleChange: (value: string) => void;
-  onEditOutlineModeChange: (value: 'edit' | 'append') => void;
+  onEditOutlineModeChange: (value: OutlineQuickEditMode) => void;
   onEditOutlinePointsChange: (value: string) => void;
-  onOutlineQuickPointsPaste: (event: React.ClipboardEvent<HTMLTextAreaElement>) => void;
+  onOutlineQuickPointsPaste: (event: React.ClipboardEvent<HTMLDivElement>) => void;
   onOpenGeneratePrompt: () => void;
   onSaveOutline: () => void;
   onCloseGeneratePrompt: () => void;

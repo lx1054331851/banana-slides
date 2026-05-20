@@ -43,7 +43,7 @@ export const isSupportedDescriptionImageUrl = (url: string): boolean => {
 
 export const escapeMarkdownText = (text: string): string => text.replace(/[[\]()]/g, '\\$&');
 export const DESCRIPTION_UPLOAD_ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg';
-export type RenovationJsonViewMode = 'text' | 'styleGuide';
+export type RenovationJsonViewMode = 'text' | 'styleGuide' | 'outline';
 export const PAGE_STYLE_GUIDE_DEFAULT_BINDING = '__page_default__';
 export const PAGE_AI_DEFAULT_BINDING = '__page_default__';
 

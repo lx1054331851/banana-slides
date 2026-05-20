@@ -52,6 +52,7 @@ import { SlidePreviewEditorPane } from './components/SlidePreviewEditorPane';
 import { SlidePreviewTopOverlays } from './components/SlidePreviewTopOverlays';
 import { SlidePreviewDialogs } from './components/SlidePreviewDialogs';
 import { SlidePreviewMainPanel } from './components/SlidePreviewMainPanel';
+import { OutlineQuickEditPanel } from './components/OutlineQuickEditPanel';
 import { useSlidePreviewLayout } from './hooks/useSlidePreviewLayout';
 import { useSlidePreviewGeneration } from './hooks/useSlidePreviewGeneration';
 import { useSlidePreviewDrafts } from './hooks/useSlidePreviewDrafts';
@@ -497,7 +498,6 @@ export const SlidePreview: React.FC = () => {
   const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
   // 素材生成模态开关（模块本身可复用，这里只是示例入口）
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
-  const [isOutlineQuickEditOpen, setIsOutlineQuickEditOpen] = useState(false);
   const [outlineQuickEditPageId, setOutlineQuickEditPageId] = useState<string | null>(null);
   const [outlineQuickEditMode, setOutlineQuickEditMode] = useState<'edit' | 'preview'>('edit');
   const [isOutlineQuickGeneratePromptOpen, setIsOutlineQuickGeneratePromptOpen] = useState(false);
@@ -1373,7 +1373,7 @@ export const SlidePreview: React.FC = () => {
     setEditPageType(targetPage.outline_content?.page_type || '');
     setEditOutlinePoints(targetPage.outline_content?.points?.join('\n') || '');
     setOutlineQuickEditMode('edit');
-    setIsOutlineQuickEditOpen(true);
+    setRenovationJsonViewMode('outline');
     setIsRegionSelectionMode(false);
     clearSelectionPreview();
   }, [selectedIndex, currentProject]);
@@ -1669,7 +1669,6 @@ export const SlidePreview: React.FC = () => {
     if (!currentProject) return;
     const pageId = handleSaveOutlineForQuickEditTarget({ silent: true });
     if (!pageId) return;
-    setIsOutlineQuickEditOpen(false);
     setIsOutlineQuickGeneratePromptOpen(false);
 
     try {
@@ -2307,6 +2306,17 @@ export const SlidePreview: React.FC = () => {
                   <div className="inline-flex items-center rounded-lg border border-[#e8d9b4] bg-[#fff9ec] p-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
                     <button
                       type="button"
+                      onClick={() => setRenovationJsonViewMode('outline')}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                        renovationJsonViewMode === 'outline'
+                          ? 'bg-banana-500 text-black shadow-sm'
+                          : 'text-[#8a7750] hover:bg-[#f7edd2] dark:text-[#9eaccf] dark:hover:bg-[#232f47]'
+                      }`}
+                    >
+                      {t('preview.jsonOutlineTab')}
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setRenovationJsonViewMode('text')}
                       className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                         renovationJsonViewMode === 'text'
@@ -2332,7 +2342,38 @@ export const SlidePreview: React.FC = () => {
               </div>
             )}
           </div>
-          {useRenovationPreviewForm && renovationJsonViewMode === 'styleGuide' ? (
+          {useRenovationPreviewForm && renovationJsonViewMode === 'outline' ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-[#eadfbf] bg-white/70 p-4 dark:border-[#36415b] dark:bg-[#101521]/80">
+              <div className="mb-3 text-sm font-medium text-slate-700 dark:text-slate-200">
+                {t('preview.outlineQuickEditTitle')}
+              </div>
+              <OutlineQuickEditPanel
+                t={t}
+                editOutlineTitle={editOutlineTitle}
+                editOutlinePoints={editOutlinePoints}
+                outlineQuickEditMode={outlineQuickEditMode}
+                isOutlineQuickGeneratingDescription={isOutlineQuickGeneratingDescription}
+                outlineQuickPointsTextareaRef={outlineQuickPointsTextareaRef}
+                onEditOutlineTitleChange={(value) => {
+                  setEditOutlineTitle(value);
+                  persistCurrentPageDraft({ title: value });
+                }}
+                onEditOutlineModeChange={setOutlineQuickEditMode}
+                onEditOutlinePointsChange={(value) => {
+                  setEditOutlinePoints(value);
+                  persistCurrentPageDraft({ points: value });
+                }}
+                onOutlineQuickPointsPaste={handleOutlineQuickPointsPaste}
+                onOpenGeneratePrompt={() => {
+                  setOutlineQuickGeneratePrompt('');
+                  setIsOutlineQuickGeneratePromptOpen(true);
+                }}
+                onSaveOutline={() => {
+                  handleSaveOutlineForQuickEditTarget();
+                }}
+              />
+            </div>
+          ) : useRenovationPreviewForm && renovationJsonViewMode === 'styleGuide' ? (
             <MarkdownTextarea
               ref={styleGuideTextareaRef}
               value={resolvedStyleGuideText}
@@ -2566,7 +2607,6 @@ export const SlidePreview: React.FC = () => {
   const outlineQuickEditModalTitle = `${t('preview.outlineQuickEditTitle')} · ${t('preview.page', { num: (outlineQuickEditPageIndex >= 0 ? outlineQuickEditPageIndex : selectedIndex) + 1 })}`;
 
   const closeOutlineQuickEditModal = () => {
-    setIsOutlineQuickEditOpen(false);
     setOutlineQuickEditPageId(null);
     setOutlineQuickEditMode('edit');
     setIsOutlineQuickGeneratePromptOpen(false);
@@ -2911,7 +2951,7 @@ export const SlidePreview: React.FC = () => {
         onSubmitGlobalAi={handleAiRefineDescriptions}
         previewFileId={previewFileId}
         onClosePreviewFile={() => setPreviewFileId(null)}
-        isOutlineQuickEditOpen={isOutlineQuickEditOpen}
+        isOutlineQuickEditOpen={false}
         isOutlineQuickGeneratePromptOpen={isOutlineQuickGeneratePromptOpen}
         isOutlineQuickGeneratingDescription={isOutlineQuickGeneratingDescription}
         outlineQuickEditTitle={outlineQuickEditModalTitle}
