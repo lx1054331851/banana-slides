@@ -2009,7 +2009,7 @@ export const SlidePreview: React.FC = () => {
     : 0;
   const isPptRenovationProject = currentProject?.creation_type === 'ppt_renovation';
   const isTextGenerationPreviewProject = currentProject?.creation_type !== 'ppt_renovation';
-  const useRenovationPreviewForm = isPptRenovationProject || isTextGenerationPreviewProject;
+  const useRenovationPreviewForm = isPptRenovationProject;
   const syncDescriptionPageTypeForCurrentMode = useCallback((pageType: string, descriptionText: string) => {
     if (!useRenovationPreviewForm) return descriptionText;
     return syncRenovationJsonPageType(descriptionText, pageType, 4);
