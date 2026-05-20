@@ -147,49 +147,6 @@ class OpenAIImageProvider(ImageProvider):
     _GPT_IMAGE_2_MAX_PIXELS = 8_294_400
     _GPT_IMAGE_2_MAX_EDGE = 3840
     _GPT_IMAGE_2_MULTIPLE = 16
-    _GPT_IMAGE_2_ALLOWED_SIZES = {
-        "1:1": {
-            "1K": "1024x1024",
-            "2K": "1024x1024",
-            "4K": "2048x2048",
-        },
-        "3:2": {
-            "1K": "1536x1024",
-            "2K": "1536x1024",
-            "4K": "2048x1152",
-        },
-        "2:3": {
-            "1K": "1024x1536",
-            "2K": "1024x1536",
-            "4K": "1152x2048",
-        },
-        "4:3": {
-            "1K": "1536x1024",
-            "2K": "1536x1024",
-            "4K": "2048x1536",
-        },
-        "3:4": {
-            "1K": "1024x1536",
-            "2K": "1024x1536",
-            "4K": "1536x2048",
-        },
-        "16:9": {
-            "1K": "1536x1024",
-            "2K": "1536x1024",
-            "4K": "2048x1152",
-        },
-        "9:16": {
-            "1K": "1024x1536",
-            "2K": "1024x1536",
-            "4K": "1152x2048",
-        },
-        "21:9": {
-            "1K": "1536x1024",
-            "2K": "1536x1024",
-            "4K": "3072x1024",
-        },
-    }
-
     # gemini-2.5 / nano-banana pixel mapping (1K only)
     _GEMINI_25_SIZE_MAP = {
         "1:1": "1024x1024",
@@ -380,21 +337,62 @@ class OpenAIImageProvider(ImageProvider):
     def _compute_gpt_image_2_size(self, aspect_ratio: str, resolution: str, strict: bool) -> str:
         ratio_w, ratio_h = self._parse_aspect_ratio(aspect_ratio, strict)
         ratio_w, ratio_h = self._clamp_gpt_image_2_ratio(ratio_w, ratio_h, strict)
-        resolution_upper = (resolution or "").upper()
-        normalized_ratio = f"{ratio_w}:{ratio_h}"
-        allowed = self._GPT_IMAGE_2_ALLOWED_SIZES.get(normalized_ratio)
-        if allowed and resolution_upper in allowed:
-            return allowed[resolution_upper]
 
-        if ratio_w >= ratio_h and (ratio_w / max(1, ratio_h)) > 2:
-            return "3072x1024" if resolution_upper == "4K" else "1536x1024"
-        if ratio_h > ratio_w and (ratio_h / max(1, ratio_w)) > 2:
-            return "1024x3072" if resolution_upper == "4K" else "1024x1536"
-        if ratio_w == ratio_h:
-            return "2048x2048" if resolution_upper == "4K" else "1024x1024"
-        if ratio_w > ratio_h:
-            return "2048x1152" if resolution_upper == "4K" else "1536x1024"
-        return "1152x2048" if resolution_upper == "4K" else "1024x1536"
+        resolution_upper = (resolution or "").upper()
+        long_edge_map = {
+            "1K": 1536,
+            "2K": 2048,
+            "4K": 3840,
+        }
+        target_long_edge = long_edge_map.get(resolution_upper, 1536)
+
+        scale = target_long_edge / max(ratio_w, ratio_h)
+        width = self._round_to_multiple(ratio_w * scale, self._GPT_IMAGE_2_MULTIPLE, self._GPT_IMAGE_2_MULTIPLE)
+        height = self._round_to_multiple(ratio_h * scale, self._GPT_IMAGE_2_MULTIPLE, self._GPT_IMAGE_2_MULTIPLE)
+
+        def _scale_dims(w: int, h: int, scale_factor: float) -> Tuple[int, int]:
+            return (
+                self._round_to_multiple(w * scale_factor, self._GPT_IMAGE_2_MULTIPLE, self._GPT_IMAGE_2_MULTIPLE),
+                self._round_to_multiple(h * scale_factor, self._GPT_IMAGE_2_MULTIPLE, self._GPT_IMAGE_2_MULTIPLE),
+            )
+
+        max_edge = max(width, height)
+        if max_edge > self._GPT_IMAGE_2_MAX_EDGE:
+            width, height = _scale_dims(width, height, self._GPT_IMAGE_2_MAX_EDGE / max_edge)
+
+        pixels = width * height
+        if pixels > self._GPT_IMAGE_2_MAX_PIXELS:
+            width, height = _scale_dims(width, height, math.sqrt(self._GPT_IMAGE_2_MAX_PIXELS / pixels))
+
+        pixels = width * height
+        if pixels < self._GPT_IMAGE_2_MIN_PIXELS:
+            scale_up = math.sqrt(self._GPT_IMAGE_2_MIN_PIXELS / max(1, pixels))
+            candidate_w, candidate_h = _scale_dims(width, height, scale_up)
+            if max(candidate_w, candidate_h) <= self._GPT_IMAGE_2_MAX_EDGE:
+                width, height = candidate_w, candidate_h
+            elif strict:
+                raise ValueError(
+                    f"Unable to satisfy gpt-image-2 min pixels for aspect_ratio={aspect_ratio}; "
+                    f"candidate={candidate_w}x{candidate_h}"
+                )
+
+        width = min(width, self._GPT_IMAGE_2_MAX_EDGE)
+        height = min(height, self._GPT_IMAGE_2_MAX_EDGE)
+        width = self._round_to_multiple(width, self._GPT_IMAGE_2_MULTIPLE, self._GPT_IMAGE_2_MULTIPLE)
+        height = self._round_to_multiple(height, self._GPT_IMAGE_2_MULTIPLE, self._GPT_IMAGE_2_MULTIPLE)
+
+        final_pixels = width * height
+        if strict:
+            if final_pixels < self._GPT_IMAGE_2_MIN_PIXELS or final_pixels > self._GPT_IMAGE_2_MAX_PIXELS:
+                raise ValueError(
+                    f"gpt-image-2 size out of range: {width}x{height}, pixels={final_pixels}, "
+                    f"allowed=[{self._GPT_IMAGE_2_MIN_PIXELS},{self._GPT_IMAGE_2_MAX_PIXELS}]"
+                )
+            final_ratio = max(width, height) / max(1, min(width, height))
+            if final_ratio > 3:
+                raise ValueError(f"gpt-image-2 final ratio out of range: {width}x{height}")
+
+        return f"{width}x{height}"
 
     def _select_gpt_image_2_quality(self, resolution: str) -> str:
         resolution_upper = (resolution or "").upper()

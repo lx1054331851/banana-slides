@@ -99,7 +99,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
           options: [
             { value: '1K', label: '1K (1024px)' },
             { value: '2K', label: '2K (2048px)' },
-            { value: '4K', label: '4K (4096px)' },
+            { value: '4K', label: '4K (按模型约束动态计算)' },
           ],
         },
       ],
