@@ -90,10 +90,12 @@ describe('PageAiWorkbench', () => {
       />
     )
 
-    const textarea = screen.getByPlaceholderText('输入这个区域需要修改的内容...')
-    fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter' })
+    const textarea = document.querySelector('textarea')
+    expect(textarea).not.toBeNull()
+    fireEvent.keyDown(textarea as HTMLTextAreaElement, { key: 'Enter', code: 'Enter' })
 
     expect(screen.getByText('取消')).toBeInTheDocument()
+    expect(screen.getByLabelText('发送评论')).toBeInTheDocument()
     expect(onSubmitPendingRegionComment).toHaveBeenCalledTimes(1)
   })
 })

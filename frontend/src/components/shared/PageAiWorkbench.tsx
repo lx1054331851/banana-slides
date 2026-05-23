@@ -605,23 +605,17 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
       )}
       {pendingRegionPreviewUrl && typeof document !== 'undefined' && createPortal(
         <div className="pointer-events-none fixed inset-0 z-[130]">
-          <div className="pointer-events-auto absolute left-1/2 bottom-6 w-[min(540px,calc(100vw-32px))] -translate-x-1/2">
+          <div className="pointer-events-auto absolute left-1/2 top-[172px] w-[min(700px,calc(100vw-56px))] -translate-x-1/2">
             <div
               className={cn(
-                'rounded-[28px] border border-[#eadfbf] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.18)] dark:border-border-primary dark:bg-background-elevated',
+                'rounded-[999px] border border-[#e6e2d7] bg-white/98 shadow-[0_4px_18px_rgba(15,23,42,0.08)] dark:border-border-primary dark:bg-background-elevated/98',
                 isPendingCommentShakeActive && 'animate-[pending-comment-shake_0.32s_ease-in-out]',
               )}
             >
-              <div className="flex items-start gap-3 px-5 pt-5 pb-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#fff7d9] text-[#8b6a12]">
+              <div className="flex items-center gap-3 px-5 py-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 dark:text-foreground-tertiary">
                   <Crop size={18} />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-slate-900 dark:text-foreground-primary">添加区域修改意见</div>
-                  <div className="mt-1 text-xs text-slate-500 dark:text-foreground-tertiary">固定宽度，自动换行；最多显示 3 行，超出后可滚动</div>
-                </div>
-              </div>
-              <div className="px-5 pb-4">
                 <textarea
                   ref={pendingCommentTextareaRef}
                   value={pendingRegionCommentValue || ''}
@@ -638,23 +632,21 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                       onSubmitPendingRegionComment?.();
                     }
                   }}
-                  rows={3}
-                  placeholder="输入这个区域需要修改的内容..."
-                  className="min-h-[88px] max-h-[88px] w-full resize-none overflow-y-auto rounded-2xl border border-[#eadfbf] bg-[#fffdfa] px-4 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-400 focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-primary dark:text-foreground-primary dark:placeholder:text-foreground-tertiary"
+                  rows={1}
+                  placeholder=""
+                  className="min-h-[24px] max-h-[72px] flex-1 resize-none overflow-y-auto bg-transparent py-1 text-[15px] leading-6 text-slate-800 outline-none placeholder:text-slate-300 dark:text-foreground-primary dark:placeholder:text-foreground-tertiary"
                 />
-              </div>
-              <div className="flex items-center justify-between px-5 pb-5">
                 <button
                   type="button"
                   onClick={onCancelPendingRegionComment}
-                  className="inline-flex h-12 items-center justify-center rounded-full border border-[#e5d8b0] bg-white px-5 text-base font-medium text-slate-700 transition-colors hover:bg-[#fff8e8] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary dark:hover:bg-background-hover"
+                  className="inline-flex h-12 shrink-0 items-center justify-center rounded-full border border-[#e9e5da] bg-white px-5 text-[15px] font-medium text-slate-700 shadow-sm transition-colors hover:bg-[#faf8f3] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary dark:hover:bg-background-hover"
                 >
                   取消
                 </button>
                 <button
                   type="button"
                   onClick={onSubmitPendingRegionComment}
-                  className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-white shadow-[0_12px_24px_rgba(15,23,42,0.2)] transition-transform hover:scale-[1.03] disabled:cursor-not-allowed disabled:bg-slate-300 dark:bg-banana-500 dark:text-black dark:disabled:bg-slate-600"
+                  className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#191c20] text-white shadow-[0_8px_20px_rgba(15,23,42,0.16)] transition-transform hover:scale-[1.03] disabled:cursor-not-allowed disabled:bg-slate-300 dark:bg-white dark:text-black dark:disabled:bg-slate-600"
                   disabled={!pendingRegionCommentValue?.trim()}
                   aria-label="发送评论"
                 >

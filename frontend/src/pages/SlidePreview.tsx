@@ -2665,6 +2665,10 @@ export const SlidePreview: React.FC = () => {
     (reference): reference is PageAiUploadedReference & { regionBounds: PageAiRegionBounds } =>
       reference.sourceType === 'region' && Boolean(reference.regionBounds)
   );
+  const pendingRegionOverlay = pendingRegionCapture ? {
+    regionBounds: pendingRegionCapture.regionBounds,
+    indexLabel: regionOverlayReferences.length + 1,
+  } : null;
   const isCurrentPageDirty = Boolean(
     selectedPage && (
       editOutlineTitle !== (selectedPage.outline_content?.title || '') ||
@@ -2934,6 +2938,7 @@ export const SlidePreview: React.FC = () => {
                       previewContainerRef={previewContainerRef}
                       imageRef={imageRef}
                       regionOverlayReferences={regionOverlayReferences}
+                      pendingRegionOverlay={pendingRegionOverlay}
                       activePreviewReferenceId={activePreviewReferenceId}
                       selectionRect={selectionRect}
                       imageVersions={imageVersions}

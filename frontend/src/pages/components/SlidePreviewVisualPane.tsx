@@ -20,6 +20,11 @@ type RegionOverlayReference = {
   regionBounds: PageAiRegionBounds;
 };
 
+type PendingRegionOverlay = {
+  regionBounds: PageAiRegionBounds;
+  indexLabel: number;
+};
+
 type SlidePreviewVisualPaneProps = {
   t: (key: string, options?: Record<string, unknown>) => string;
   selectedIndex: number;
@@ -32,6 +37,7 @@ type SlidePreviewVisualPaneProps = {
   previewContainerRef: React.RefObject<HTMLDivElement>;
   imageRef: React.RefObject<HTMLImageElement>;
   regionOverlayReferences: RegionOverlayReference[];
+  pendingRegionOverlay?: PendingRegionOverlay | null;
   activePreviewReferenceId: string | null;
   selectionRect: SelectionRect | null;
   imageVersions: ImageVersionItem[];
@@ -57,6 +63,7 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
   previewContainerRef,
   imageRef,
   regionOverlayReferences,
+  pendingRegionOverlay,
   activePreviewReferenceId,
   selectionRect,
   imageVersions,
@@ -242,6 +249,22 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                             </div>
                           );
                         })}
+                        {pendingRegionOverlay && (
+                          <div
+                            className="pointer-events-none absolute"
+                            style={{
+                              left: `${pendingRegionOverlay.regionBounds.leftRatio * 100}%`,
+                              top: `${pendingRegionOverlay.regionBounds.topRatio * 100}%`,
+                              width: `${pendingRegionOverlay.regionBounds.widthRatio * 100}%`,
+                              height: `${pendingRegionOverlay.regionBounds.heightRatio * 100}%`,
+                            }}
+                          >
+                            <div className="h-full w-full rounded-[6px] border-2 border-dashed border-[#2f80ff] bg-[#2f80ff]/10 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]" />
+                            <div className="absolute -bottom-2 -right-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-[#1677ff] px-1 text-xs font-semibold leading-none text-white shadow-sm">
+                              {pendingRegionOverlay.indexLabel}
+                            </div>
+                          </div>
+                        )}
                         {selectionRect && (
                           <div
                             className="pointer-events-none absolute"
