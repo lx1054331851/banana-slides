@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { uploadMaterial, getMaterialByUrl } from '@/api/endpoints';
 import { useT } from '@/hooks/useT';
 
@@ -133,12 +133,20 @@ export const useImagePaste = ({
   const t = useT(imagePasteI18n);
   const [isUploading, setIsUploading] = useState(false);
   const pendingCount = useRef(0);
+  const objectUrlsToCleanupRef = useRef(new Set<string>());
 
   // Use refs so handleFiles always accesses the latest setContent/insertAtCursor
   const setContentRef = useRef(setContent);
   setContentRef.current = setContent;
   const insertAtCursorRef = useRef(insertAtCursor);
   insertAtCursorRef.current = insertAtCursor;
+
+  useEffect(() => {
+    return () => {
+      objectUrlsToCleanupRef.current.forEach((url) => URL.revokeObjectURL(url));
+      objectUrlsToCleanupRef.current.clear();
+    };
+  }, []);
 
   /** Core: upload image files with placeholder insertion */
   const handleFiles = useCallback(async (files: File[]) => {
@@ -157,6 +165,7 @@ export const useImagePaste = ({
 
     const placeholders = imageFiles.map(file => {
       const { blobUrl, markdown } = generatePlaceholder(file);
+      objectUrlsToCleanupRef.current.add(blobUrl);
       return { file, blobUrl, markdown };
     });
 
@@ -181,7 +190,7 @@ export const useImagePaste = ({
     setIsUploading(true);
 
     const results = await Promise.allSettled(
-      placeholders.map(async ({ file, blobUrl, markdown }) => {
+      placeholders.map(async ({ file, markdown }) => {
         try {
           const response = await uploadMaterial(file, projectId ?? null, generateCaption);
           const realUrl = response?.data?.url;
@@ -198,7 +207,6 @@ export const useImagePaste = ({
           setContentRef.current(prev => prev.replace(markdown + '\n', '').replace(markdown, ''));
           return { success: false };
         } finally {
-          URL.revokeObjectURL(blobUrl);
           pendingCount.current--;
           if (pendingCount.current === 0) setIsUploading(false);
         }

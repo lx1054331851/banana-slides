@@ -19,6 +19,9 @@ export const useSlidePreviewHistoryVersions = ({
     () => imageVersions.find((version) => version.is_current)?.version_id || null,
     [imageVersions]
   );
+  const hasSelectedPageImage = Boolean(
+    selectedPage?.generated_image_path || selectedPage?.preview_image_path
+  );
 
   const selectedPageVersionFetchKey = selectedPage?.id
     ? [
@@ -29,7 +32,7 @@ export const useSlidePreviewHistoryVersions = ({
     : null;
 
   useEffect(() => {
-    if (!projectId || !selectedPage?.id || !selectedPageVersionFetchKey) {
+    if (!projectId || !selectedPage?.id || !selectedPageVersionFetchKey || !hasSelectedPageImage) {
       imageVersionsPageIdRef.current = null;
       setImageVersions([]);
       return;
@@ -50,10 +53,13 @@ export const useSlidePreviewHistoryVersions = ({
         if (!cancelled && response.data?.versions) {
           setImageVersions(response.data.versions);
         }
-      } catch (error) {
-        console.error('Failed to load image versions:', error);
-        if (!cancelled && pageChanged) {
+      } catch (error: any) {
+        const isNotFound = error?.response?.status === 404;
+        if (!cancelled && (pageChanged || isNotFound)) {
           setImageVersions([]);
+        }
+        if (!isNotFound) {
+          console.error('Failed to load image versions:', error);
         }
       }
     };
@@ -63,7 +69,7 @@ export const useSlidePreviewHistoryVersions = ({
     return () => {
       cancelled = true;
     };
-  }, [projectId, selectedPage?.id, selectedPageVersionFetchKey]);
+  }, [hasSelectedPageImage, projectId, selectedPage?.id, selectedPageVersionFetchKey]);
 
   useEffect(() => {
     if (imageVersions.length === 0) {
