@@ -1,22 +1,16 @@
 import { useRef, useState, type Dispatch, type MouseEvent, type SetStateAction } from 'react';
-import { createUploadedReference, type PageAiUploadedReference } from '../SlidePreview.pageAi';
+import type { PendingRegionCapture } from '../SlidePreview.pageAi';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 
-type PageAiContextImages = {
-  useTemplate: boolean;
-  descImageUrls: string[];
-  uploadedReferences: PageAiUploadedReference[];
-};
-
 type UseSlidePreviewRegionSelectionParams = {
-  setSelectedContextImages: Dispatch<SetStateAction<PageAiContextImages>>;
+  setPendingRegionCapture: Dispatch<SetStateAction<PendingRegionCapture | null>>;
   show: (options: { message: string; type?: ToastType | string; duration?: number }) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 };
 
 export const useSlidePreviewRegionSelection = ({
-  setSelectedContextImages,
+  setPendingRegionCapture,
   show,
   t,
 }: UseSlidePreviewRegionSelectionParams) => {
@@ -108,25 +102,17 @@ export const useSlidePreviewRegionSelection = ({
         canvas.toBlob((blob) => {
           if (!blob) return;
           const file = new File([blob], `crop-${Date.now()}.png`, { type: 'image/png' });
-          setSelectedContextImages((prev) => ({
-            ...prev,
-            uploadedReferences: [
-              ...prev.uploadedReferences,
-              createUploadedReference(
-                file,
-                'region',
-                `框选区域 ${prev.uploadedReferences.filter((item) => item.sourceType === 'region').length + 1}`,
-                {
-                  regionBounds: {
-                    leftRatio: left / displayWidth,
-                    topRatio: top / displayHeight,
-                    widthRatio: width / displayWidth,
-                    heightRatio: height / displayHeight,
-                  },
-                }
-              ),
-            ],
-          }));
+          const previewUrl = URL.createObjectURL(file);
+          setPendingRegionCapture({
+            file,
+            previewUrl,
+            regionBounds: {
+              leftRatio: left / displayWidth,
+              topRatio: top / displayHeight,
+              widthRatio: width / displayWidth,
+              heightRatio: height / displayHeight,
+            },
+          });
           show({
             message: t('slidePreview.regionCropSuccess'),
             type: 'success',

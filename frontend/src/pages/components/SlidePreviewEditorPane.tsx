@@ -31,6 +31,9 @@ type SlidePreviewEditorPaneProps = {
   editRunImageModelOptions: readonly (string | { value: string; label: string })[];
   isPageAiSubmitting: boolean;
   isRegionSelectionMode: boolean;
+  pendingRegionCommentValue: string;
+  pendingRegionPreviewUrl: string | null;
+  pendingRegionEscStep: number;
   historyVersionsCount: number;
   onEditorVerticalSplitResizeStart: (event: React.MouseEvent<HTMLElement>) => void;
   onLinkedSplitResizeStart: (event: React.MouseEvent<HTMLElement>) => void;
@@ -39,6 +42,10 @@ type SlidePreviewEditorPaneProps = {
   onEditRunImageModelChange: (value: string) => void;
   onPageAiSend: () => void;
   onToggleRegionSelect: () => void;
+  onPendingRegionCommentChange: (value: string) => void;
+  onSubmitPendingRegionComment: () => void;
+  onCancelPendingRegionComment: () => void;
+  onPendingRegionEsc: () => void;
   onToggleTemplate: () => void;
   onToggleDescriptionImage: (...args: any[]) => void;
   onReferenceClick: (reference: PageAiReference) => void;
@@ -68,6 +75,9 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
   editRunImageModelOptions,
   isPageAiSubmitting,
   isRegionSelectionMode,
+  pendingRegionCommentValue,
+  pendingRegionPreviewUrl,
+  pendingRegionEscStep,
   historyVersionsCount,
   onEditorVerticalSplitResizeStart,
   onLinkedSplitResizeStart,
@@ -76,6 +86,10 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
   onEditRunImageModelChange,
   onPageAiSend,
   onToggleRegionSelect,
+  onPendingRegionCommentChange,
+  onSubmitPendingRegionComment,
+  onCancelPendingRegionComment,
+  onPendingRegionEsc,
   onToggleTemplate,
   onToggleDescriptionImage,
   onReferenceClick,
@@ -163,6 +177,9 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
               showModelPickerControl={false}
               isSubmitting={isPageAiSubmitting}
               isRegionSelectionActive={isRegionSelectionMode}
+              pendingRegionCommentValue={pendingRegionCommentValue}
+              pendingRegionPreviewUrl={pendingRegionPreviewUrl}
+              pendingRegionEscStep={pendingRegionEscStep}
               headerActions={!useRenovationPreviewForm ? (
                 <div className="relative">
                   <Button
@@ -187,6 +204,10 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
               onModelChange={onEditRunImageModelChange}
               onSend={onPageAiSend}
               onToggleRegionSelect={onToggleRegionSelect}
+              onPendingRegionCommentChange={onPendingRegionCommentChange}
+              onSubmitPendingRegionComment={onSubmitPendingRegionComment}
+              onCancelPendingRegionComment={onCancelPendingRegionComment}
+              onPendingRegionEsc={onPendingRegionEsc}
               onToggleTemplate={onToggleTemplate}
               onToggleDescriptionImage={onToggleDescriptionImage}
               onReferenceClick={onReferenceClick}

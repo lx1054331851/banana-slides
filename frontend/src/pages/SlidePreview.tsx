@@ -39,6 +39,8 @@ import {
 import {
   type PageAiUploadedReference,
   type MaterialSelectorMode,
+  type PendingRegionCapture,
+  createUploadedReference,
 } from './SlidePreview.pageAi';
 import { PreviewStatusBar } from './components/PreviewStatusBar';
 import { SlidePreviewHeader } from './components/SlidePreviewHeader';
@@ -421,6 +423,9 @@ export const SlidePreview: React.FC = () => {
     descImageUrls: [],
     uploadedReferences: [],
   });
+  const [pendingRegionCapture, setPendingRegionCapture] = useState<PendingRegionCapture | null>(null);
+  const [pendingRegionComment, setPendingRegionComment] = useState('');
+  const [pendingRegionEscStep, setPendingRegionEscStep] = useState(0);
   const {
     imageRef,
     isRegionSelectionMode,
@@ -431,7 +436,7 @@ export const SlidePreview: React.FC = () => {
     handleSelectionMouseUp,
     clearSelectionPreview,
   } = useSlidePreviewRegionSelection({
-    setSelectedContextImages,
+    setPendingRegionCapture,
     show,
     t,
   });
@@ -956,6 +961,67 @@ export const SlidePreview: React.FC = () => {
     setActivePreviewReferenceId,
     t,
   });
+
+  const syncRegionCommentsIntoPrompt = useCallback((references: PageAiUploadedReference[]) => {
+    const regionComments = references
+      .filter((reference) => reference.sourceType === 'region' && reference.regionComment?.trim())
+      .map((reference, index) => `区域${index + 1}：${reference.regionComment?.trim()}`);
+    setEditPrompt(regionComments.join('\n'));
+  }, []);
+
+  const clearPendingRegionCapture = useCallback(() => {
+    if (pendingRegionCapture?.previewUrl) {
+      URL.revokeObjectURL(pendingRegionCapture.previewUrl);
+    }
+    setPendingRegionCapture(null);
+    setPendingRegionComment('');
+    setPendingRegionEscStep(0);
+  }, [pendingRegionCapture]);
+
+  const commitPendingRegionCapture = useCallback(() => {
+    const comment = pendingRegionComment.trim();
+    if (!pendingRegionCapture || !comment) {
+      setPendingRegionEscStep(1);
+      return;
+    }
+
+    setSelectedContextImages((prev) => {
+      const nextReference = createUploadedReference(
+        pendingRegionCapture.file,
+        'region',
+        `框选区域 ${prev.uploadedReferences.filter((item) => item.sourceType === 'region').length + 1}`,
+        {
+          regionBounds: pendingRegionCapture.regionBounds,
+          regionComment: comment,
+        }
+      );
+      const nextUploadedReferences = [...prev.uploadedReferences, nextReference];
+      syncRegionCommentsIntoPrompt(nextUploadedReferences);
+      return {
+        ...prev,
+        uploadedReferences: nextUploadedReferences,
+      };
+    });
+    clearPendingRegionCapture();
+  }, [clearPendingRegionCapture, pendingRegionCapture, pendingRegionComment, syncRegionCommentsIntoPrompt]);
+
+  const cancelPendingRegionCapture = useCallback(() => {
+    clearPendingRegionCapture();
+    clearSelectionPreview();
+  }, [clearPendingRegionCapture, clearSelectionPreview]);
+
+  const handlePendingRegionEsc = useCallback(() => {
+    if (!pendingRegionCapture) {
+      setIsRegionSelectionMode(false);
+      clearSelectionPreview();
+      return;
+    }
+    if (pendingRegionEscStep === 0) {
+      setPendingRegionEscStep(1);
+      return;
+    }
+    cancelPendingRegionCapture();
+  }, [cancelPendingRegionCapture, clearSelectionPreview, pendingRegionCapture, pendingRegionEscStep, setIsRegionSelectionMode]);
   const { pageAiContextByVersion, bindPendingPageAiContext } = useSlidePreviewPageAiContext({
     currentProject,
     selectedIndex,
@@ -1901,6 +1967,30 @@ export const SlidePreview: React.FC = () => {
     setActiveExternalField(null);
     setActivePreviewReferenceId(null);
   }, [selectedIndex]);
+
+  useEffect(() => {
+    setPendingRegionEscStep(0);
+  }, [pendingRegionComment]);
+
+  useEffect(() => {
+    if (!pendingRegionCapture) return;
+    setPendingRegionComment('');
+    setPendingRegionEscStep(0);
+  }, [pendingRegionCapture]);
+
+  useEffect(() => {
+    if (!isRegionSelectionMode || typeof window === 'undefined') return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || pendingRegionCapture) return;
+      event.preventDefault();
+      setIsRegionSelectionMode(false);
+      clearSelectionPreview();
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [clearSelectionPreview, isRegionSelectionMode, pendingRegionCapture, setIsRegionSelectionMode]);
 
   const historyVersionsDescending = [...imageVersions].sort((a, b) => b.version_number - a.version_number);
   const selectedHistoryVersion = historyVersionsDescending.find(
@@ -2888,6 +2978,9 @@ export const SlidePreview: React.FC = () => {
                       editRunImageModelOptions={editRunImageModelOptions}
                       isPageAiSubmitting={isPageAiSubmitting}
                       isRegionSelectionMode={isRegionSelectionMode}
+                      pendingRegionCommentValue={pendingRegionComment}
+                      pendingRegionPreviewUrl={pendingRegionCapture?.previewUrl || null}
+                      pendingRegionEscStep={pendingRegionEscStep}
                       historyVersionsCount={historyVersionsDescending.length}
                       onEditorVerticalSplitResizeStart={handleEditorVerticalSplitResizeStart}
                       onLinkedSplitResizeStart={handleLinkedSplitResizeStart}
@@ -2896,9 +2989,16 @@ export const SlidePreview: React.FC = () => {
                       onEditRunImageModelChange={setEditRunImageModel}
                       onPageAiSend={() => void handlePageAiSend()}
                       onToggleRegionSelect={() => {
+                        if (pendingRegionCapture) {
+                          cancelPendingRegionCapture();
+                        }
                         setIsRegionSelectionMode((prev) => !prev);
                         clearSelectionPreview();
                       }}
+                      onPendingRegionCommentChange={setPendingRegionComment}
+                      onSubmitPendingRegionComment={commitPendingRegionCapture}
+                      onCancelPendingRegionComment={cancelPendingRegionCapture}
+                      onPendingRegionEsc={handlePendingRegionEsc}
                       onToggleTemplate={handleToggleTemplateReference}
                       onToggleDescriptionImage={handleToggleDescriptionImage}
                       onReferenceClick={handlePreviewReferenceFocus}

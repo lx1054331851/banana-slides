@@ -32,10 +32,17 @@ const baseProps = {
   modelOptions: ['gpt-image-1'],
   isSubmitting: false,
   isRegionSelectionActive: false,
+  pendingRegionCommentValue: '',
+  pendingRegionPreviewUrl: null,
+  pendingRegionEscStep: 0,
   onInputChange: vi.fn(),
   onModelChange: vi.fn(),
   onSend: vi.fn(),
   onToggleRegionSelect: vi.fn(),
+  onPendingRegionCommentChange: vi.fn(),
+  onSubmitPendingRegionComment: vi.fn(),
+  onCancelPendingRegionComment: vi.fn(),
+  onPendingRegionEsc: vi.fn(),
   onToggleTemplate: vi.fn(),
   onToggleDescriptionImage: vi.fn(),
   onReferenceClick: vi.fn(),
@@ -70,5 +77,23 @@ describe('PageAiWorkbench', () => {
     })
 
     expect(onSend).toHaveBeenCalledTimes(0)
+  })
+
+  it('shows pending region comment composer and submits on Enter', () => {
+    const onSubmitPendingRegionComment = vi.fn()
+    render(
+      <PageAiWorkbench
+        {...baseProps}
+        pendingRegionPreviewUrl="blob:test"
+        pendingRegionCommentValue="把按钮再突出一点"
+        onSubmitPendingRegionComment={onSubmitPendingRegionComment}
+      />
+    )
+
+    const textarea = screen.getByPlaceholderText('输入这个区域需要修改的内容...')
+    fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter' })
+
+    expect(screen.getByText('取消')).toBeInTheDocument()
+    expect(onSubmitPendingRegionComment).toHaveBeenCalledTimes(1)
   })
 })

@@ -12,7 +12,7 @@ export const previewI18n = {
       saveFailed: "保存失败: {{error}}", refreshFailed: "刷新失败，请稍后重试",
       loadMaterialFailed: "加载素材失败: {{error}}", templateChangeFailed: "选择模版失败: {{error}}",
       versionSwitchFailed: "切换失败: {{error}}", unknownError: "未知错误",
-      regionCropSuccess: "已将选中区域添加到页面级 AI 引用，可继续输入修改要求后发送",
+      regionCropSuccess: "请先填写这个截图区域的修改意见，提交后才会加入页面级 AI 引用",
       regionCropFailed: "无法从当前图片裁剪区域（浏览器安全限制）。可以尝试手动上传参考图片。"
     },
     preview: {
@@ -212,7 +212,7 @@ export const previewI18n = {
       saveFailed: "Save failed: {{error}}", refreshFailed: "Refresh failed, please try again later",
       loadMaterialFailed: "Failed to load material: {{error}}", templateChangeFailed: "Failed to select template: {{error}}",
       versionSwitchFailed: "Switch failed: {{error}}", unknownError: "Unknown error",
-      regionCropSuccess: "Selected region added to page-level AI references. You can continue typing and send it.",
+      regionCropSuccess: "Add a comment for this captured region first. It will be added to page-level AI references after you submit.",
       regionCropFailed: "Cannot crop from current image (browser security restriction). Try uploading a reference image manually."
     },
     preview: {

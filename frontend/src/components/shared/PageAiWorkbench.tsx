@@ -71,11 +71,18 @@ interface PageAiWorkbenchProps {
   modelControlPlacement?: 'toolbar' | 'top';
   isSubmitting: boolean;
   isRegionSelectionActive: boolean;
+  pendingRegionCommentValue?: string;
+  pendingRegionPreviewUrl?: string | null;
+  pendingRegionEscStep?: number;
   headerActions?: React.ReactNode;
   onInputChange: (value: string) => void;
   onModelChange: (value: string) => void;
   onSend: () => void;
   onToggleRegionSelect: () => void;
+  onPendingRegionCommentChange?: (value: string) => void;
+  onSubmitPendingRegionComment?: () => void;
+  onCancelPendingRegionComment?: () => void;
+  onPendingRegionEsc?: () => void;
   onToggleTemplate: () => void;
   onToggleDescriptionImage: (url: string) => void;
   onReferenceClick: (reference: PageAiReference) => void;
@@ -111,11 +118,18 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   modelControlPlacement = 'toolbar',
   isSubmitting,
   isRegionSelectionActive,
+  pendingRegionCommentValue,
+  pendingRegionPreviewUrl,
+  pendingRegionEscStep,
   headerActions,
   onInputChange,
   onModelChange,
   onSend,
   onToggleRegionSelect,
+  onPendingRegionCommentChange,
+  onSubmitPendingRegionComment,
+  onCancelPendingRegionComment,
+  onPendingRegionEsc,
   onToggleTemplate,
   onToggleDescriptionImage,
   onReferenceClick,
@@ -134,8 +148,10 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   const canSend = !isSubmitting && inputValue.trim().length > 0;
   const [showDescriptionPicker, setShowDescriptionPicker] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const [isPendingCommentShakeActive, setIsPendingCommentShakeActive] = useState(false);
   const [descriptionPickerPosition, setDescriptionPickerPosition] = useState<FloatingMenuPosition | null>(null);
   const [modelPickerPosition, setModelPickerPosition] = useState<FloatingMenuPosition | null>(null);
+  const pendingCommentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const normalizedModelOptions = modelOptions.map((option) => (
     typeof option === 'string'
       ? { value: option, label: option }
@@ -219,6 +235,32 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
     };
   }, [showDescriptionPicker, showModelPicker]);
 
+  useEffect(() => {
+    if (!pendingRegionPreviewUrl) return;
+    pendingCommentTextareaRef.current?.focus();
+  }, [pendingRegionPreviewUrl]);
+
+  useEffect(() => {
+    if (pendingRegionEscStep !== 1) return;
+    setIsPendingCommentShakeActive(true);
+    const timer = window.setTimeout(() => setIsPendingCommentShakeActive(false), 360);
+    return () => window.clearTimeout(timer);
+  }, [pendingRegionEscStep]);
+
+  useEffect(() => {
+    if (!pendingRegionPreviewUrl || typeof window === 'undefined') return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      onPendingRegionEsc?.();
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [onPendingRegionEsc, pendingRegionPreviewUrl]);
+
   return (
     <section
       data-testid="page-ai-workbench"
@@ -229,6 +271,15 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
           : 'rounded-[28px] border border-slate-200 bg-white dark:border-border-primary dark:bg-[linear-gradient(180deg,rgba(30,30,36,0.96)_0%,rgba(23,23,30,0.98)_100%)]',
       )}
     >
+      <style>
+        {`@keyframes pending-comment-shake {
+          0%, 100% { transform: translateX(0); }
+          20% { transform: translateX(-6px); }
+          40% { transform: translateX(6px); }
+          60% { transform: translateX(-4px); }
+          80% { transform: translateX(4px); }
+        }`}
+      </style>
       <div className={cn(
         'flex h-full flex-col',
         cardless ? 'px-2 pt-0 pb-0 md:px-3 md:pt-0 md:pb-0' : 'px-5 pt-4 pb-2',
@@ -548,6 +599,69 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                 </button>
               );
             })}
+          </div>
+        </div>,
+        document.body
+      )}
+      {pendingRegionPreviewUrl && typeof document !== 'undefined' && createPortal(
+        <div className="pointer-events-none fixed inset-0 z-[130]">
+          <div className="pointer-events-auto absolute left-1/2 bottom-6 w-[min(540px,calc(100vw-32px))] -translate-x-1/2">
+            <div
+              className={cn(
+                'rounded-[28px] border border-[#eadfbf] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.18)] dark:border-border-primary dark:bg-background-elevated',
+                isPendingCommentShakeActive && 'animate-[pending-comment-shake_0.32s_ease-in-out]',
+              )}
+            >
+              <div className="flex items-start gap-3 px-5 pt-5 pb-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#fff7d9] text-[#8b6a12]">
+                  <Crop size={18} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-slate-900 dark:text-foreground-primary">添加区域修改意见</div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-foreground-tertiary">固定宽度，自动换行；最多显示 3 行，超出后可滚动</div>
+                </div>
+              </div>
+              <div className="px-5 pb-4">
+                <textarea
+                  ref={pendingCommentTextareaRef}
+                  value={pendingRegionCommentValue || ''}
+                  onChange={(event) => onPendingRegionCommentChange?.(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onPendingRegionEsc?.();
+                      return;
+                    }
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      onSubmitPendingRegionComment?.();
+                    }
+                  }}
+                  rows={3}
+                  placeholder="输入这个区域需要修改的内容..."
+                  className="min-h-[88px] max-h-[88px] w-full resize-none overflow-y-auto rounded-2xl border border-[#eadfbf] bg-[#fffdfa] px-4 py-3 text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-400 focus:border-banana-400 focus:ring-2 focus:ring-banana-200 dark:border-border-primary dark:bg-background-primary dark:text-foreground-primary dark:placeholder:text-foreground-tertiary"
+                />
+              </div>
+              <div className="flex items-center justify-between px-5 pb-5">
+                <button
+                  type="button"
+                  onClick={onCancelPendingRegionComment}
+                  className="inline-flex h-12 items-center justify-center rounded-full border border-[#e5d8b0] bg-white px-5 text-base font-medium text-slate-700 transition-colors hover:bg-[#fff8e8] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary dark:hover:bg-background-hover"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={onSubmitPendingRegionComment}
+                  className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-white shadow-[0_12px_24px_rgba(15,23,42,0.2)] transition-transform hover:scale-[1.03] disabled:cursor-not-allowed disabled:bg-slate-300 dark:bg-banana-500 dark:text-black dark:disabled:bg-slate-600"
+                  disabled={!pendingRegionCommentValue?.trim()}
+                  aria-label="发送评论"
+                >
+                  <Check size={22} />
+                </button>
+              </div>
+            </div>
           </div>
         </div>,
         document.body

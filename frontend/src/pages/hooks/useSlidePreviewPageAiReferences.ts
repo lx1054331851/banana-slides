@@ -92,12 +92,19 @@ export const useSlidePreviewPageAiReferences = ({
   const removeUploadedReference = useCallback((referenceId: string) => {
     setSelectedContextImages((prev) => {
       const target = prev.uploadedReferences.find((reference) => reference.id === referenceId);
-      if (target?.markdownUrl) {
+      const nextUploadedReferences = prev.uploadedReferences.filter((reference) => reference.id !== referenceId);
+      if (target?.markdownUrl && target.sourceType !== 'region') {
         setEditPrompt((current) => removeMarkdownImageByUrl(current, target.markdownUrl!));
+      }
+      if (target?.sourceType === 'region') {
+        const nextRegionLines = nextUploadedReferences
+          .filter((reference) => reference.sourceType === 'region' && reference.regionComment?.trim())
+          .map((reference, index) => `区域${index + 1}：${reference.regionComment?.trim()}`);
+        setEditPrompt(nextRegionLines.join('\n'));
       }
       return {
         ...prev,
-        uploadedReferences: prev.uploadedReferences.filter((reference) => reference.id !== referenceId),
+        uploadedReferences: nextUploadedReferences,
       };
     });
   }, [setEditPrompt, setSelectedContextImages]);

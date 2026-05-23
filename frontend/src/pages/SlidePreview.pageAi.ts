@@ -12,6 +12,13 @@ export type PageAiUploadedReference = {
   label: string;
   markdownUrl?: string;
   regionBounds?: PageAiRegionBounds;
+  regionComment?: string;
+};
+
+export type PendingRegionCapture = {
+  file: File;
+  previewUrl: string;
+  regionBounds: PageAiRegionBounds;
 };
 
 export type PageAiContextState = {
@@ -49,7 +56,7 @@ export const createUploadedReference = (
   file: File,
   sourceType: PageAiUploadedReference['sourceType'],
   label: string = file.name,
-  meta?: Pick<PageAiUploadedReference, 'regionBounds' | 'markdownUrl'>,
+  meta?: Pick<PageAiUploadedReference, 'regionBounds' | 'markdownUrl' | 'regionComment'>,
 ): PageAiUploadedReference => {
   const previewUrl = URL.createObjectURL(file);
   return {
@@ -60,5 +67,6 @@ export const createUploadedReference = (
     label,
     markdownUrl: meta?.markdownUrl ?? previewUrl,
     regionBounds: meta?.regionBounds,
+    regionComment: meta?.regionComment,
   };
 };
