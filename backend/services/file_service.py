@@ -64,6 +64,23 @@ def resize_image_for_thumbnail(image: Image.Image, max_width: int = 1920) -> Ima
     return image
 
 
+def normalize_image_for_storage(image: Image.Image, image_format: str) -> Image.Image:
+    """
+    Normalize an image before saving so the target format stays writable and efficient.
+
+    Args:
+        image: PIL Image object
+        image_format: Target storage format
+
+    Returns:
+        PIL Image ready to be written in the requested format
+    """
+    normalized_format = (image_format or '').upper()
+    if normalized_format in {'JPEG', 'JPG'}:
+        return convert_image_to_rgb(image)
+    return image
+
+
 class FileService:
     """Service for file management"""
     
@@ -148,7 +165,7 @@ class FileService:
                            page_id: str, image_format: str = 'PNG',
                            version_number: int = None) -> str:
         """
-        Save generated image with version support
+        Save the original page image to disk with version-aware naming.
 
         Args:
             image: PIL Image object
@@ -176,9 +193,9 @@ class FileService:
 
         filepath = pages_dir / filename
 
-        # Save image - format is determined by file extension or explicitly specified
-        # Some PIL Image objects may not support format parameter, so we use extension
-        image.save(str(filepath))
+        # Save image using a format-compatible pixel mode.
+        image = normalize_image_for_storage(image, image_format)
+        image.save(str(filepath), format=image_format)
 
         # Return relative path
         return filepath.relative_to(self.upload_folder).as_posix()

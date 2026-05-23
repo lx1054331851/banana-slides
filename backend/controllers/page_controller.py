@@ -1042,8 +1042,13 @@ def upload_page_image(project_id, page_id):
         try:
             with Image.open(image_file.stream) as uploaded_image:
                 normalized_image = uploaded_image.copy()
+                uploaded_format = (uploaded_image.format or '').upper()
         except Exception:
             return bad_request("Invalid image file")
+
+        save_format = 'PNG'
+        if uploaded_format in {'JPEG', 'JPG'} and normalized_image.mode not in {'RGBA', 'LA'}:
+            save_format = 'JPEG'
 
         file_service = FileService(current_app.config['UPLOAD_FOLDER'])
         project.updated_at = datetime.utcnow()
@@ -1054,7 +1059,7 @@ def upload_page_image(project_id, page_id):
             page_id,
             file_service,
             page_obj=page,
-            image_format='PNG',
+            image_format=save_format,
             prompt_text=f"upload:{secure_filename(image_file.filename)}",
             operation_type='upload',
         )
