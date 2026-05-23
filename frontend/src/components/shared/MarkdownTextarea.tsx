@@ -359,9 +359,15 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     }
   }, []);
 
-  const applyExternalValue = useCallback((nextValue: string) => {
+  const applyExternalValue = useCallback((nextValue: string, options?: { deferRebuildWhileFocused?: boolean }) => {
     if (!editorRef.current || nextValue === lastValueRef.current) return;
-    if (!patchChips(editorRef.current, lastValueRef.current, nextValue, chipTooltipsRef.current)) {
+    const patched = patchChips(editorRef.current, lastValueRef.current, nextValue, chipTooltipsRef.current);
+    if (!patched) {
+      const isEditorActive = document.activeElement === editorRef.current;
+      if (options?.deferRebuildWhileFocused && (isEditorActive || isComposingRef.current)) {
+        pendingExternalValueRef.current = nextValue;
+        return;
+      }
       buildDOM(editorRef.current, parseSegments(nextValue), chipTooltipsRef.current);
     }
     lastValueRef.current = nextValue;
@@ -374,23 +380,13 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
       // Even when skipping internal edits, check for external changes
       // batched in the same render (e.g. upload completion while typing)
       if (editorRef.current && value !== lastValueRef.current) {
-        const isEditorActive = document.activeElement === editorRef.current;
-        if (isEditorActive || isComposingRef.current) {
-          pendingExternalValueRef.current = value;
-          return;
-        }
-        applyExternalValue(value);
+        applyExternalValue(value, { deferRebuildWhileFocused: true });
       }
       return;
     }
     if (editorRef.current && value !== lastValueRef.current) {
-      const isEditorActive = document.activeElement === editorRef.current;
-      if (isEditorActive || isComposingRef.current) {
-        pendingExternalValueRef.current = value;
-        return;
-      }
       // Try incremental update first (preserves cursor position)
-      applyExternalValue(value);
+      applyExternalValue(value, { deferRebuildWhileFocused: true });
     }
   }, [value, applyExternalValue]);
 
@@ -740,16 +736,16 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
 
   // Flushes the live contentEditable text before parent save handlers run.
   const handleBlur = useCallback(() => {
+    const pending = pendingExternalValueRef.current;
+    if (pending !== null && !isComposingRef.current) {
+      applyExternalValue(pending);
+      pendingExternalValueRef.current = null;
+    }
     const currentValue = editorRef.current ? serializeEditor(editorRef.current) : value;
     if (currentValue !== lastValueRef.current) {
       isInternalRef.current = true;
       lastValueRef.current = currentValue;
       onChange(currentValue);
-    }
-    const pending = pendingExternalValueRef.current;
-    if (pending !== null && !isComposingRef.current) {
-      applyExternalValue(pending);
-      pendingExternalValueRef.current = null;
     }
     onBlur?.(currentValue);
   }, [applyExternalValue, onBlur, onChange, value]);
