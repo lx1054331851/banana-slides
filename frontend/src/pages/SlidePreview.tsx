@@ -2939,6 +2939,14 @@ export const SlidePreview: React.FC = () => {
                       imageRef={imageRef}
                       regionOverlayReferences={regionOverlayReferences}
                       pendingRegionOverlay={pendingRegionOverlay}
+                      pendingRegionComposer={pendingRegionCapture ? {
+                        value: pendingRegionComment,
+                        escStep: pendingRegionEscStep,
+                        onChange: setPendingRegionComment,
+                        onSubmit: commitPendingRegionCapture,
+                        onCancel: cancelPendingRegionCapture,
+                        onEsc: handlePendingRegionEsc,
+                      } : null}
                       activePreviewReferenceId={activePreviewReferenceId}
                       selectionRect={selectionRect}
                       imageVersions={imageVersions}

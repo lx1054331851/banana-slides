@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Check,
   Crop,
   Image as ImageIcon,
   ImagePlus,
@@ -148,10 +147,8 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   const canSend = !isSubmitting && inputValue.trim().length > 0;
   const [showDescriptionPicker, setShowDescriptionPicker] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
-  const [isPendingCommentShakeActive, setIsPendingCommentShakeActive] = useState(false);
   const [descriptionPickerPosition, setDescriptionPickerPosition] = useState<FloatingMenuPosition | null>(null);
   const [modelPickerPosition, setModelPickerPosition] = useState<FloatingMenuPosition | null>(null);
-  const pendingCommentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const normalizedModelOptions = modelOptions.map((option) => (
     typeof option === 'string'
       ? { value: option, label: option }
@@ -234,32 +231,6 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
       window.removeEventListener('scroll', updateFloatingMenuPositions, true);
     };
   }, [showDescriptionPicker, showModelPicker]);
-
-  useEffect(() => {
-    if (!pendingRegionPreviewUrl) return;
-    pendingCommentTextareaRef.current?.focus();
-  }, [pendingRegionPreviewUrl]);
-
-  useEffect(() => {
-    if (pendingRegionEscStep !== 1) return;
-    setIsPendingCommentShakeActive(true);
-    const timer = window.setTimeout(() => setIsPendingCommentShakeActive(false), 360);
-    return () => window.clearTimeout(timer);
-  }, [pendingRegionEscStep]);
-
-  useEffect(() => {
-    if (!pendingRegionPreviewUrl || typeof window === 'undefined') return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      event.stopPropagation();
-      onPendingRegionEsc?.();
-    };
-
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [onPendingRegionEsc, pendingRegionPreviewUrl]);
 
   return (
     <section
@@ -599,61 +570,6 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                 </button>
               );
             })}
-          </div>
-        </div>,
-        document.body
-      )}
-      {pendingRegionPreviewUrl && typeof document !== 'undefined' && createPortal(
-        <div className="pointer-events-none fixed inset-0 z-[130]">
-          <div className="pointer-events-auto absolute left-1/2 top-[172px] w-[min(700px,calc(100vw-56px))] -translate-x-1/2">
-            <div
-              className={cn(
-                'rounded-[999px] border border-[#e6e2d7] bg-white/98 shadow-[0_4px_18px_rgba(15,23,42,0.08)] dark:border-border-primary dark:bg-background-elevated/98',
-                isPendingCommentShakeActive && 'animate-[pending-comment-shake_0.32s_ease-in-out]',
-              )}
-            >
-              <div className="flex items-center gap-3 px-5 py-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 dark:text-foreground-tertiary">
-                  <Crop size={18} />
-                </div>
-                <textarea
-                  ref={pendingCommentTextareaRef}
-                  value={pendingRegionCommentValue || ''}
-                  onChange={(event) => onPendingRegionCommentChange?.(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Escape') {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onPendingRegionEsc?.();
-                      return;
-                    }
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      onSubmitPendingRegionComment?.();
-                    }
-                  }}
-                  rows={1}
-                  placeholder=""
-                  className="min-h-[24px] max-h-[72px] flex-1 resize-none overflow-y-auto bg-transparent py-1 text-[15px] leading-6 text-slate-800 outline-none placeholder:text-slate-300 dark:text-foreground-primary dark:placeholder:text-foreground-tertiary"
-                />
-                <button
-                  type="button"
-                  onClick={onCancelPendingRegionComment}
-                  className="inline-flex h-12 shrink-0 items-center justify-center rounded-full border border-[#e9e5da] bg-white px-5 text-[15px] font-medium text-slate-700 shadow-sm transition-colors hover:bg-[#faf8f3] dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary dark:hover:bg-background-hover"
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  onClick={onSubmitPendingRegionComment}
-                  className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#191c20] text-white shadow-[0_8px_20px_rgba(15,23,42,0.16)] transition-transform hover:scale-[1.03] disabled:cursor-not-allowed disabled:bg-slate-300 dark:bg-white dark:text-black dark:disabled:bg-slate-600"
-                  disabled={!pendingRegionCommentValue?.trim()}
-                  aria-label="发送评论"
-                >
-                  <Check size={22} />
-                </button>
-              </div>
-            </div>
           </div>
         </div>,
         document.body

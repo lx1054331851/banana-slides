@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Check, Maximize2, Minimize2, X } from 'lucide-react';
+import { cn } from '@/utils';
 import type { PageAiRegionBounds } from '@/types';
 
 type ImageVersionItem = {
@@ -25,6 +26,15 @@ type PendingRegionOverlay = {
   indexLabel: number;
 };
 
+type PendingRegionComposer = {
+  value: string;
+  escStep: number;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+  onEsc: () => void;
+};
+
 type SlidePreviewVisualPaneProps = {
   t: (key: string, options?: Record<string, unknown>) => string;
   selectedIndex: number;
@@ -38,6 +48,7 @@ type SlidePreviewVisualPaneProps = {
   imageRef: React.RefObject<HTMLImageElement>;
   regionOverlayReferences: RegionOverlayReference[];
   pendingRegionOverlay?: PendingRegionOverlay | null;
+  pendingRegionComposer?: PendingRegionComposer | null;
   activePreviewReferenceId: string | null;
   selectionRect: SelectionRect | null;
   imageVersions: ImageVersionItem[];
@@ -64,6 +75,7 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
   imageRef,
   regionOverlayReferences,
   pendingRegionOverlay,
+  pendingRegionComposer,
   activePreviewReferenceId,
   selectionRect,
   imageVersions,
@@ -78,12 +90,36 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
 }) => {
   const visualPaneBodyRef = useRef<HTMLDivElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingCommentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
   const [availableSize, setAvailableSize] = useState<{ width: number; height: number } | null>(null);
+  const [isPendingCommentShakeActive, setIsPendingCommentShakeActive] = useState(false);
 
   useEffect(() => {
     setImageAspectRatio(null);
   }, [imageUrl]);
+
+  useEffect(() => {
+    if (!pendingRegionComposer) return;
+    pendingCommentTextareaRef.current?.focus();
+  }, [pendingRegionComposer]);
+
+  useLayoutEffect(() => {
+    const textarea = pendingCommentTextareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = '0px';
+    const nextHeight = Math.min(textarea.scrollHeight, 72);
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > 72 ? 'auto' : 'hidden';
+  }, [pendingRegionComposer?.value]);
+
+  useEffect(() => {
+    if (pendingRegionComposer?.escStep !== 1) return;
+    setIsPendingCommentShakeActive(true);
+    const timer = window.setTimeout(() => setIsPendingCommentShakeActive(false), 360);
+    return () => window.clearTimeout(timer);
+  }, [pendingRegionComposer?.escStep]);
 
   useEffect(() => {
     if (isFullscreen) {
@@ -176,6 +212,34 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
     event.target.value = '';
   };
 
+  const pendingComposerStyle = useMemo(() => {
+    if (!pendingRegionOverlay) return null;
+    const bounds = pendingRegionOverlay.regionBounds;
+    const leftPercent = bounds.leftRatio * 100;
+    const topPercent = bounds.topRatio * 100;
+    const bottomPercent = (bounds.topRatio + bounds.heightRatio) * 100;
+    const widthPercent = bounds.widthRatio * 100;
+    const composerWidth = Math.min(Math.max(widthPercent, 60), 80);
+    const preferredLeft = leftPercent;
+    const maxLeft = 100 - composerWidth - 2;
+    const left = Math.min(Math.max(2, preferredLeft), Math.max(2, maxLeft));
+    const composerHeightPercent = 7.5;
+    const gapPercent = 1.8;
+    const canPlaceAbove = topPercent >= composerHeightPercent + gapPercent + 1;
+    const top = canPlaceAbove
+      ? Math.max(1, topPercent - composerHeightPercent - gapPercent)
+      : Math.min(100 - composerHeightPercent - 1, bottomPercent + gapPercent);
+    return {
+      left: `${left}%`,
+      top: `${top}%`,
+      width: `${composerWidth}%`,
+    } satisfies React.CSSProperties;
+  }, [pendingRegionOverlay]);
+
+  const isPendingComposerMultiline = useMemo(() => {
+    return (pendingRegionComposer?.value.match(/\n/g)?.length || 0) >= 1;
+  }, [pendingRegionComposer?.value]);
+
   return (
     <section
       data-testid="preview-visual-pane"
@@ -262,6 +326,63 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                             <div className="h-full w-full rounded-[6px] border-2 border-dashed border-[#2f80ff] bg-[#2f80ff]/10 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]" />
                             <div className="absolute -bottom-2 -right-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-white bg-[#1677ff] px-1 text-xs font-semibold leading-none text-white shadow-sm">
                               {pendingRegionOverlay.indexLabel}
+                            </div>
+                          </div>
+                        )}
+                        {pendingRegionOverlay && pendingRegionComposer && pendingComposerStyle && (
+                          <div
+                            className={cn(
+                              'absolute z-[240] overflow-hidden rounded-[28px] border border-[#e6e2d7] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.12)]',
+                              isPendingCommentShakeActive && 'animate-[pending-comment-shake_0.32s_ease-in-out]',
+                            )}
+                            style={pendingComposerStyle}
+                          >
+                            <div className={cn(
+                              'px-3 py-2',
+                              isPendingComposerMultiline ? 'flex flex-col gap-2' : 'flex items-start gap-2',
+                            )}>
+                              <textarea
+                                ref={pendingCommentTextareaRef}
+                                value={pendingRegionComposer.value}
+                                onChange={(event) => pendingRegionComposer.onChange(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Escape') {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    pendingRegionComposer.onEsc();
+                                    return;
+                                  }
+                                  if (event.key === 'Enter' && !event.shiftKey) {
+                                    event.preventDefault();
+                                    pendingRegionComposer.onSubmit();
+                                  }
+                                }}
+                                rows={1}
+                                placeholder=""
+                                className="min-h-[24px] max-h-[72px] flex-1 resize-none overflow-y-hidden bg-transparent py-0 text-[15px] leading-6 text-slate-800 outline-none placeholder:text-slate-300"
+                              />
+                              <div className={cn(
+                                'flex shrink-0 gap-2',
+                                isPendingComposerMultiline ? 'items-center justify-end' : 'items-start',
+                              )}>
+                                <button
+                                  type="button"
+                                  onClick={pendingRegionComposer.onCancel}
+                                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[999px] border border-[#e9e5da] bg-white text-slate-700 shadow-sm transition-colors hover:bg-[#faf8f3]"
+                                  aria-label="取消评论"
+                                >
+                                  <X size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={pendingRegionComposer.onSubmit}
+                                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[999px] bg-[#191c20] text-white shadow-[0_8px_18px_rgba(15,23,42,0.14)] transition-transform hover:scale-[1.03] disabled:cursor-not-allowed disabled:bg-slate-300"
+                                  disabled={!pendingRegionComposer.value.trim()}
+                                  aria-label="发送评论"
+                                >
+                                  <Check size={14} />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         )}
