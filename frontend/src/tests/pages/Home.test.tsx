@@ -182,10 +182,10 @@ describe('Home', () => {
     expect(screen.getByRole('button', { name: '数据报告' })).toBeInTheDocument();
   });
 
-  it('does not render the homepage logo in the top navigation', () => {
+  it('does not render homepage branding in the top navigation', () => {
     render(<Home />);
 
     expect(screen.queryByAltText('蕉幻 Banana Slides Logo')).not.toBeInTheDocument();
-    expect(screen.getByText('蕉幻')).toBeInTheDocument();
+    expect(screen.queryByText('蕉幻')).not.toBeInTheDocument();
   });
 });
