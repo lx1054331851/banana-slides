@@ -375,7 +375,14 @@ export const SlidePreview: React.FC = () => {
   const editorJsonContainerRef = useRef<HTMLDivElement | null>(null);
   const previewPageTypeMenuRef = useRef<HTMLDivElement | null>(null);
   const outlineQuickPointsTextareaRef = useRef<MarkdownTextareaRef | null>(null);
-  const activeDescriptionSetContent = useRef<(updater: (prev: string) => string) => void>(setEditDescription);
+  const editDescriptionRef = useRef(editDescription);
+  const persistDescriptionDraftRef = useRef<(value: string) => void>(() => {});
+  const activeDescriptionSetContent = useRef<(updater: (prev: string) => string) => void>((updater) => {
+    const nextValue = updater(editDescriptionRef.current);
+    editDescriptionRef.current = nextValue;
+    setEditDescription(nextValue);
+    persistDescriptionDraftRef.current(nextValue);
+  });
   const activeDescriptionInsertAtCursor = useRef<((markdown: string) => void) | undefined>(undefined);
   const [editExtraFields, setEditExtraFields] = useState<Record<string, string>>({});
   const [activeExternalField, setActiveExternalField] = useState<string | null>(null);
@@ -386,7 +393,12 @@ export const SlidePreview: React.FC = () => {
     insertAtCursor: (markdown) => activeDescriptionInsertAtCursor.current?.(markdown),
   });
   const focusMainDescriptionField = useCallback(() => {
-    activeDescriptionSetContent.current = setEditDescription;
+    activeDescriptionSetContent.current = (updater) => {
+      const nextValue = updater(editDescriptionRef.current);
+      editDescriptionRef.current = nextValue;
+      setEditDescription(nextValue);
+      persistDescriptionDraftRef.current(nextValue);
+    };
     activeDescriptionInsertAtCursor.current = (markdown: string) => {
       descriptionTextareaRef.current?.insertAtCursor(markdown);
     };
@@ -463,6 +475,10 @@ export const SlidePreview: React.FC = () => {
     setEditStyleGuideBindings,
     setStyleGuideManuallyEdited,
   });
+  editDescriptionRef.current = editDescription;
+  persistDescriptionDraftRef.current = (value: string) => {
+    persistCurrentPageDraft({ description: value });
+  };
   const {
     isTemplateModalOpen,
     activeTemplateTab,
