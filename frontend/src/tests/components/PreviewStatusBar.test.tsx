@@ -47,10 +47,10 @@ describe('PreviewStatusBar', () => {
         {...baseProps}
         selectedPageHasImage={true}
         imageStatusLabel="图片已生成"
-        imageResolutionLabel="分辨率 1080 × 1920"
+        imageResolutionLabel="1080 × 1920"
       />
     );
 
-    expect(screen.getByText('分辨率 1080 × 1920')).toBeInTheDocument();
+    expect(screen.getByText('1080 × 1920')).toBeInTheDocument();
   });
 });

@@ -2701,7 +2701,7 @@ export const SlidePreview: React.FC = () => {
       ? '图片已生成'
       : t('preview.notGenerated');
   const selectedImageResolutionLabel = selectedPageHasImage && selectedImageResolution
-    ? `分辨率 ${selectedImageResolution.width} × ${selectedImageResolution.height}`
+    ? `${selectedImageResolution.width} × ${selectedImageResolution.height}`
     : null;
   const generationStatusDetail = selectedPage?.status === 'QUEUED'
     ? '排队等待'
