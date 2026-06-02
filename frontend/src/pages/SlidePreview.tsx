@@ -282,6 +282,7 @@ export const SlidePreview: React.FC = () => {
 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isUploadingPageImage, setIsUploadingPageImage] = useState(false);
+  const [selectedImageResolution, setSelectedImageResolution] = useState<{ width: number; height: number } | null>(null);
   const selectedPageIdRef = useRef<string | null>(null);
   const {
     isMobileView,
