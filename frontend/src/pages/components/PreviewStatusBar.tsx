@@ -11,6 +11,7 @@ type PreviewStatusBarProps = {
   generationStatusDetail: string;
   selectedPageHasImage: boolean;
   imageStatusLabel: string;
+  imageResolutionLabel?: string | null;
   t: (key: string, options?: Record<string, unknown>) => string;
   onPrevPage: () => void;
   onNextPage: () => void;
@@ -26,6 +27,7 @@ export const PreviewStatusBar: React.FC<PreviewStatusBarProps> = ({
   generationStatusDetail,
   selectedPageHasImage,
   imageStatusLabel,
+  imageResolutionLabel,
   t,
   onPrevPage,
   onNextPage,
@@ -59,6 +61,11 @@ export const PreviewStatusBar: React.FC<PreviewStatusBarProps> = ({
             {imageStatusLabel}
           </span>
         )}
+        {imageResolutionLabel ? (
+          <span className="rounded-full bg-violet-100 px-3 py-1 text-violet-700 dark:bg-violet-900/30 dark:text-violet-200">
+            {imageResolutionLabel}
+          </span>
+        ) : null}
       </div>
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Button

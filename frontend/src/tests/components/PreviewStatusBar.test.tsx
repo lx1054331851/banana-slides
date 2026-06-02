@@ -11,6 +11,7 @@ const baseProps = {
   generationStatusDetail: '正在渲染',
   selectedPageHasImage: false,
   imageStatusLabel: '尚未生成图片',
+  imageResolutionLabel: null,
   t: (key: string) => key,
   onPrevPage: vi.fn(),
   onNextPage: vi.fn(),
@@ -38,5 +39,18 @@ describe('PreviewStatusBar', () => {
     );
 
     expect(screen.getByText('正在渲染')).toBeInTheDocument();
+  });
+
+  it('shows selected image resolution when available', () => {
+    render(
+      <PreviewStatusBar
+        {...baseProps}
+        selectedPageHasImage={true}
+        imageStatusLabel="图片已生成"
+        imageResolutionLabel="分辨率 1080 × 1920"
+      />
+    );
+
+    expect(screen.getByText('分辨率 1080 × 1920')).toBeInTheDocument();
   });
 });

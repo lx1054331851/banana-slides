@@ -2700,6 +2700,9 @@ export const SlidePreview: React.FC = () => {
     : selectedPageHasImage
       ? '图片已生成'
       : t('preview.notGenerated');
+  const selectedImageResolutionLabel = selectedPageHasImage && selectedImageResolution
+    ? `分辨率 ${selectedImageResolution.width} × ${selectedImageResolution.height}`
+    : null;
   const generationStatusDetail = selectedPage?.status === 'QUEUED'
     ? '排队等待'
     : '正在渲染';
@@ -2974,6 +2977,7 @@ export const SlidePreview: React.FC = () => {
                       onFloatingFullscreenButtonClick={handleFloatingFullscreenButtonClick}
                       onSwitchVersion={(versionId) => void handleSwitchVersion(versionId)}
                       onUploadPageImage={handleUploadPageImage}
+                      onImageResolutionChange={setSelectedImageResolution}
                     />
 
                     {!isMobileView && !isEditorPaneHidden && (
@@ -3052,6 +3056,7 @@ export const SlidePreview: React.FC = () => {
                 generationStatusDetail={generationStatusDetail}
                 selectedPageHasImage={selectedPageHasImage}
                 imageStatusLabel={imageStatusLabel}
+                imageResolutionLabel={selectedImageResolutionLabel}
                 t={t}
                 onPrevPage={goPrevPage}
                 onNextPage={goNextPage}

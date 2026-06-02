@@ -60,6 +60,7 @@ type SlidePreviewVisualPaneProps = {
   onFloatingFullscreenButtonClick: React.MouseEventHandler<HTMLButtonElement>;
   onSwitchVersion: (versionId: string) => void;
   onUploadPageImage?: (file: File) => void | Promise<void>;
+  onImageResolutionChange?: (size: { width: number; height: number } | null) => void;
 };
 
 export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
@@ -87,6 +88,7 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
   onFloatingFullscreenButtonClick,
   onSwitchVersion,
   onUploadPageImage,
+  onImageResolutionChange,
 }) => {
   const visualPaneBodyRef = useRef<HTMLDivElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -97,7 +99,8 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
 
   useEffect(() => {
     setImageAspectRatio(null);
-  }, [imageUrl]);
+    onImageResolutionChange?.(null);
+  }, [imageUrl, onImageResolutionChange]);
 
   useEffect(() => {
     if (!pendingRegionComposer) return;
@@ -273,6 +276,7 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                             const { naturalWidth, naturalHeight } = event.currentTarget;
                             if (!naturalWidth || !naturalHeight) return;
                             setImageAspectRatio(naturalWidth / naturalHeight);
+                            onImageResolutionChange?.({ width: naturalWidth, height: naturalHeight });
                           }}
                           className={`h-full w-full select-none ${isFullscreen ? 'object-contain' : 'object-contain'}`}
                           draggable={false}
