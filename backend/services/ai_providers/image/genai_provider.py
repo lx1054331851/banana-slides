@@ -250,3 +250,4 @@ class GenAIImageProvider(ImageProvider):
             error_detail = f"Error generating image with GenAI: {type(e).__name__}: {str(e)}{network_hint}"
             logger.error(error_detail, exc_info=True)
             raise Exception(error_detail) from e
+
