@@ -2533,7 +2533,7 @@ export const SlidePreview: React.FC = () => {
     imageRef.current.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
   };
 
-  const handleUploadPageImage = useCallback(async (file: File) => {
+  const handleUploadPageImage = async (file: File) => {
     const targetPage = currentProject?.pages[selectedIndex];
     if (!targetPage?.id) return;
 
@@ -2549,7 +2549,7 @@ export const SlidePreview: React.FC = () => {
     } finally {
       setIsUploadingPageImage(false);
     }
-  }, [currentProject?.pages, selectedIndex, show, t, uploadPageImage]);
+  };
 
   const currentPageDescriptionText = getDescriptionText(selectedPage?.description_content);
   const currentPageExtraFields = getDescriptionExtraFields(selectedPage?.description_content);
