@@ -23,7 +23,7 @@ from services.image_compression_service import ImageCompressionService
 from services.provider_routing import list_provider_profiles_redacted
 
 logger = logging.getLogger(__name__)
-ALLOWED_PROVIDER_FORMATS = {"openai", "gemini", "lazyllm", "codex"} | LAZYLLM_VENDORS
+ALLOWED_PROVIDER_FORMATS = {"openai", "azure-openai", "azure", "gemini", "lazyllm", "codex"} | LAZYLLM_VENDORS
 
 settings_bp = Blueprint(
     "settings", __name__, url_prefix="/api/settings"
@@ -31,7 +31,50 @@ settings_bp = Blueprint(
 
 
 def _build_builtin_image_channels():
-    return []
+    azure_endpoint = (
+        current_app.config.get("IMAGE_AZURE_OPENAI_ENDPOINT")
+        or current_app.config.get("AZURE_OPENAI_ENDPOINT")
+        or ""
+    ).strip()
+    azure_api_key = (
+        current_app.config.get("IMAGE_API_KEY")
+        or current_app.config.get("AZURE_OPENAI_API_KEY")
+        or current_app.config.get("OPENAI_API_KEY")
+        or ""
+    ).strip()
+    configured = bool(azure_endpoint and azure_api_key)
+    config_status = "configured" if configured else ("partial" if azure_endpoint or azure_api_key else "missing")
+    config_note = ""
+    if config_status == "partial":
+        if not azure_endpoint:
+            config_note = "缺少 Azure OpenAI endpoint"
+        elif not azure_api_key:
+            config_note = "缺少 Azure OpenAI API Key"
+    return [
+        {
+            "id": "azure-openai",
+            "provider": "openai",
+            "label": "Azure OpenAI",
+            "kind": "cloud",
+            "source": "azure-openai",
+            "enabled": True,
+            "configured": configured,
+            "config_status": config_status,
+            "config_note": config_note,
+            "models": ["gpt-image-2"],
+            "supported_resolutions": {"gpt-image-2": ["1K", "2K", "4K"]},
+            "model_defaults": {"image": "gpt-image-2"},
+        }
+    ]
+
+
+def _normalize_provider_value(value: str | None) -> str | None:
+    normalized = (value or "").strip().lower()
+    if not normalized:
+        return None
+    if normalized == "azure":
+        return "azure-openai"
+    return normalized
 
 
 @contextmanager

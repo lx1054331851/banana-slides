@@ -212,6 +212,20 @@ export const getSupportedResolutionsForChannelModel = (
   return [...fallbackResolutions];
 };
 
+export const formatImageModelDisplayName = (model: string): string => {
+  const trimmedModel = String(model || '').trim();
+  if (trimmedModel === 'gpt-image-2-low') {
+    return `${trimmedModel}（低质量档，不等于低分辨率）`;
+  }
+  if (trimmedModel === 'gpt-image-2-medium') {
+    return `${trimmedModel}（中质量档，不等于 2K）`;
+  }
+  if (trimmedModel === 'gpt-image-2-high') {
+    return `${trimmedModel}（高质量档，不等于 4K）`;
+  }
+  return trimmedModel;
+};
+
 export const getImageModelDisplayLabel = (
   channelId: string,
   model: string,
@@ -219,6 +233,7 @@ export const getImageModelDisplayLabel = (
 ): string => {
   const channel = getImageChannelOptionById(channelId, providerProfiles);
   const trimmedModel = String(model || '').trim();
-  if (!channel?.label) return trimmedModel;
-  return `${channel.label} -> ${trimmedModel}`;
+  const normalizedModelLabel = formatImageModelDisplayName(trimmedModel);
+  if (!channel?.label) return normalizedModelLabel;
+  return `${channel.label} -> ${normalizedModelLabel}`;
 };
