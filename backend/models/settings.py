@@ -57,10 +57,20 @@ class Settings(db.Model):
     # Per-model API 凭证（当 source 为 gemini/openai 时使用，NULL=使用全局 api_key/api_base_url）
     text_api_key = db.Column(db.String(500), nullable=True)
     text_api_base_url = db.Column(db.String(500), nullable=True)
+    text_azure_openai_endpoint = db.Column(db.String(500), nullable=True)
+    text_azure_openai_api_version = db.Column(db.String(50), nullable=True)
     image_api_key = db.Column(db.String(500), nullable=True)
     image_api_base_url = db.Column(db.String(500), nullable=True)
+    image_azure_openai_endpoint = db.Column(db.String(500), nullable=True)
+    image_azure_openai_api_version = db.Column(db.String(50), nullable=True)
     image_caption_api_key = db.Column(db.String(500), nullable=True)
     image_caption_api_base_url = db.Column(db.String(500), nullable=True)
+    image_caption_azure_openai_endpoint = db.Column(db.String(500), nullable=True)
+    image_caption_azure_openai_api_version = db.Column(db.String(50), nullable=True)
+
+    # Global Azure OpenAI 配置（NULL=使用 .env）
+    azure_openai_endpoint = db.Column(db.String(500), nullable=True)
+    azure_openai_api_version = db.Column(db.String(50), nullable=True)
 
     # OpenAI image API protocol: auto (default), images (force images.generate), chat (force chat.completions)
     openai_image_api_protocol = db.Column(db.String(10), nullable=True)
@@ -143,10 +153,18 @@ class Settings(db.Model):
             'lazyllm_api_keys_info': self._get_lazyllm_api_keys_info(self._val('lazyllm_api_keys', d)),
             'text_api_key_length': len(text_api_key) if text_api_key else 0,
             'text_api_base_url': self._val('text_api_base_url', d),
+            'text_azure_openai_endpoint': self._val('text_azure_openai_endpoint', d),
+            'text_azure_openai_api_version': self._val('text_azure_openai_api_version', d),
             'image_api_key_length': len(image_api_key) if image_api_key else 0,
             'image_api_base_url': self._val('image_api_base_url', d),
+            'image_azure_openai_endpoint': self._val('image_azure_openai_endpoint', d),
+            'image_azure_openai_api_version': self._val('image_azure_openai_api_version', d),
             'image_caption_api_key_length': len(image_caption_api_key) if image_caption_api_key else 0,
             'image_caption_api_base_url': self._val('image_caption_api_base_url', d),
+            'image_caption_azure_openai_endpoint': self._val('image_caption_azure_openai_endpoint', d),
+            'image_caption_azure_openai_api_version': self._val('image_caption_azure_openai_api_version', d),
+            'azure_openai_endpoint': self._val('azure_openai_endpoint', d),
+            'azure_openai_api_version': self._val('azure_openai_api_version', d),
             'openai_image_api_protocol': self._val('openai_image_api_protocol', d) or 'auto',
             'elevenlabs_enabled': self.elevenlabs_enabled,
             'elevenlabs_api_key_length': len(elevenlabs_api_key) if elevenlabs_api_key else 0,
@@ -223,9 +241,9 @@ class Settings(db.Model):
         from services.ai_providers.lazyllm_env import collect_env_lazyllm_api_keys
 
         provider = (Config.AI_PROVIDER_FORMAT or '').lower()
-        if provider == 'openai':
+        if provider in {'openai', 'azure-openai', 'azure'}:
             api_base = Config.OPENAI_API_BASE or None
-            api_key = Config.OPENAI_API_KEY or None
+            api_key = Config.AZURE_OPENAI_API_KEY or Config.OPENAI_API_KEY or None
         elif provider == 'lazyllm':
             api_base = None
             api_key = None
@@ -252,6 +270,14 @@ class Settings(db.Model):
             'image_model_source': getattr(Config, 'IMAGE_MODEL_SOURCE', None),
             'image_caption_model_source': getattr(Config, 'IMAGE_CAPTION_MODEL_SOURCE', None),
             'lazyllm_api_keys': collect_env_lazyllm_api_keys(),
+            'azure_openai_endpoint': Config.AZURE_OPENAI_ENDPOINT or None,
+            'azure_openai_api_version': Config.AZURE_OPENAI_API_VERSION or None,
+            'text_azure_openai_endpoint': getattr(Config, 'TEXT_AZURE_OPENAI_ENDPOINT', None),
+            'text_azure_openai_api_version': getattr(Config, 'TEXT_AZURE_OPENAI_API_VERSION', None),
+            'image_azure_openai_endpoint': getattr(Config, 'IMAGE_AZURE_OPENAI_ENDPOINT', None),
+            'image_azure_openai_api_version': getattr(Config, 'IMAGE_AZURE_OPENAI_API_VERSION', None),
+            'image_caption_azure_openai_endpoint': getattr(Config, 'IMAGE_CAPTION_AZURE_OPENAI_ENDPOINT', None),
+            'image_caption_azure_openai_api_version': getattr(Config, 'IMAGE_CAPTION_AZURE_OPENAI_API_VERSION', None),
         }
 
     @staticmethod

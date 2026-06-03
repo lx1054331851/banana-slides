@@ -298,6 +298,15 @@ def _load_settings_to_config(app):
             else:
                 logging.info("API key is empty in settings, using env var or default")
 
+        if settings.azure_openai_endpoint is not None:
+            app.config['AZURE_OPENAI_ENDPOINT'] = settings.azure_openai_endpoint
+            if settings.azure_openai_endpoint:
+                logging.info(f"Loaded AZURE_OPENAI_ENDPOINT from settings: {settings.azure_openai_endpoint}")
+        if settings.azure_openai_api_version is not None:
+            app.config['AZURE_OPENAI_API_VERSION'] = settings.azure_openai_api_version
+            if settings.azure_openai_api_version:
+                logging.info(f"Loaded AZURE_OPENAI_API_VERSION from settings: {settings.azure_openai_api_version}")
+
         # Load image generation settings (fall back to .env/Config when NULL)
         resolution = settings.image_resolution or Config.DEFAULT_RESOLUTION
         aspect_ratio = settings.image_aspect_ratio or Config.DEFAULT_ASPECT_RATIO
@@ -363,15 +372,20 @@ def _load_settings_to_config(app):
             app.config['IMAGE_CAPTION_MODEL_SOURCE'] = settings.image_caption_model_source
             logging.info(f"Loaded IMAGE_CAPTION_MODEL_SOURCE from settings: {settings.image_caption_model_source}")
 
-        # Load per-model API credentials (for gemini/openai per-model overrides)
+        # Load per-model API credentials / Azure overrides (for gemini/openai/azure-openai per-model overrides)
         for model_type in ('text', 'image', 'image_caption'):
             prefix = model_type.upper()
-            for suffix, setting_suffix in [('_API_KEY', '_api_key'), ('_API_BASE', '_api_base_url')]:
+            for suffix, setting_suffix in [
+                ('_API_KEY', '_api_key'),
+                ('_API_BASE', '_api_base_url'),
+                ('_AZURE_OPENAI_ENDPOINT', '_azure_openai_endpoint'),
+                ('_AZURE_OPENAI_API_VERSION', '_azure_openai_api_version'),
+            ]:
                 config_key = f'{prefix}{suffix}'
                 val = getattr(settings, f'{model_type}{setting_suffix}', None)
                 if val:
                     app.config[config_key] = val
-                    if suffix == '_API_BASE':
+                    if suffix in {'_API_BASE', '_AZURE_OPENAI_ENDPOINT', '_AZURE_OPENAI_API_VERSION'}:
                         logging.info(f"Loaded {config_key} from settings: {val}")
                     else:
                         logging.info(f"Loaded {config_key} from settings")

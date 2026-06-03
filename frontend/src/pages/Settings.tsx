@@ -478,6 +478,8 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       // 只传递用户已填写的非空值
       if (formData.api_key) testSettings.api_key = formData.api_key;
       if (formData.api_base_url) testSettings.api_base_url = formData.api_base_url;
+      if (formData.azure_openai_endpoint) testSettings.azure_openai_endpoint = formData.azure_openai_endpoint;
+      if (formData.azure_openai_api_version) testSettings.azure_openai_api_version = formData.azure_openai_api_version;
       if (formData.ai_provider_format) {
         testSettings.ai_provider_format = formData.ai_provider_format;
       }
@@ -497,10 +499,16 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       // Per-model API credentials
       if (formData.text_api_key) testSettings.text_api_key = formData.text_api_key;
       if (formData.text_api_base_url) testSettings.text_api_base_url = formData.text_api_base_url;
+      if (formData.text_azure_openai_endpoint) testSettings.text_azure_openai_endpoint = formData.text_azure_openai_endpoint;
+      if (formData.text_azure_openai_api_version) testSettings.text_azure_openai_api_version = formData.text_azure_openai_api_version;
       if (formData.image_api_key) testSettings.image_api_key = formData.image_api_key;
       if (formData.image_api_base_url) testSettings.image_api_base_url = formData.image_api_base_url;
+      if (formData.image_azure_openai_endpoint) testSettings.image_azure_openai_endpoint = formData.image_azure_openai_endpoint;
+      if (formData.image_azure_openai_api_version) testSettings.image_azure_openai_api_version = formData.image_azure_openai_api_version;
       if (formData.image_caption_api_key) testSettings.image_caption_api_key = formData.image_caption_api_key;
       if (formData.image_caption_api_base_url) testSettings.image_caption_api_base_url = formData.image_caption_api_base_url;
+      if (formData.image_caption_azure_openai_endpoint) testSettings.image_caption_azure_openai_endpoint = formData.image_caption_azure_openai_endpoint;
+      if (formData.image_caption_azure_openai_api_version) testSettings.image_caption_azure_openai_api_version = formData.image_caption_azure_openai_api_version;
 
       // 推理模式设置
       if (formData.enable_text_reasoning !== undefined) {
@@ -758,6 +766,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
     const currentModelValue = String(formData[item.modelKey] || '');
     const isImageModelGroup = item.usePresetModelSelect === true;
     const isApiKeyProvider = API_KEY_PROVIDERS.has(sourceValue);
+    const isAzureOpenAI = sourceValue === 'azure-openai';
     const isLazyllm = sourceValue && isLazyllmVendor(sourceValue);
     const matchedImageChannel = isImageModelGroup
       ? getImageChannelOptions(providerProfiles).find((channel) => channel.source === sourceValue)
@@ -913,7 +922,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
         )}
 
         {/* Gemini/OpenAI 提供商：显示 API Base URL + API Key */}
-        {isApiKeyProvider && (
+        {isApiKeyProvider && !isAzureOpenAI && (
           <div className="space-y-3 pl-3 border-l-2 border-banana-300 dark:border-banana-600">
             <Input
               label={t('settings.fields.perModelApiBaseUrl')}
@@ -941,8 +950,47 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
           </div>
         )}
 
+        {isAzureOpenAI && (
+          <div className="space-y-3 pl-3 border-l-2 border-banana-300 dark:border-banana-600">
+            <Input
+              label={t('settings.fields.perModelAzureEndpoint')}
+              type="text"
+              placeholder={t('settings.fields.perModelAzureEndpointPlaceholder')}
+              value={formData[`${String(item.modelKey).replace('_model', '')}_azure_openai_endpoint` as keyof typeof initialFormData] as string}
+              onChange={(e) => handleFieldChange(`${String(item.modelKey).replace('_model', '')}_azure_openai_endpoint`, e.target.value)}
+            />
+            <Input
+              label={t('settings.fields.perModelAzureApiVersion')}
+              type="text"
+              placeholder={t('settings.fields.perModelAzureApiVersionPlaceholder')}
+              value={formData[`${String(item.modelKey).replace('_model', '')}_azure_openai_api_version` as keyof typeof initialFormData] as string}
+              onChange={(e) => handleFieldChange(`${String(item.modelKey).replace('_model', '')}_azure_openai_api_version`, e.target.value)}
+            />
+            <div>
+              <Input
+                label={t('settings.fields.perModelApiKey')}
+                type="password"
+                placeholder={
+                  settings && (settings[item.apiKeyLengthKey] as number) > 0
+                    ? t('settings.fields.perModelApiKeySet', { length: settings[item.apiKeyLengthKey] as number })
+                    : t('settings.fields.perModelApiKeyPlaceholder')
+                }
+                value={formData[item.apiKeyKey] as string}
+                onChange={(e) => handleFieldChange(item.apiKeyKey, e.target.value)}
+              />
+              <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
+                {t('settings.fields.perModelApiKeyDesc')}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Image API Protocol: for image model when effective provider is openai */}
-        {item.sourceKey === 'image_model_source' && (sourceValue === 'openai' || (!sourceValue && formData.ai_provider_format === 'openai')) && (
+        {item.sourceKey === 'image_model_source' && (
+          sourceValue === 'openai'
+          || sourceValue === 'azure-openai'
+          || (!sourceValue && (formData.ai_provider_format === 'openai' || formData.ai_provider_format === 'azure-openai'))
+        ) && (
           <div className="pl-3 border-l-2 border-banana-300 dark:border-banana-600">
             <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
               {t('settings.fields.imageApiProtocol')}
@@ -1064,7 +1112,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
                     <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">{t('settings.fields.aiProviderFormatDesc')}</p>
                   </div>
 
-                  {API_KEY_PROVIDERS.has(formData.ai_provider_format) && (
+                  {API_KEY_PROVIDERS.has(formData.ai_provider_format) && formData.ai_provider_format !== 'azure-openai' && (
                     <div className="space-y-3 pl-3 border-l-2 border-banana-300 dark:border-banana-600">
                       <Input
                         label={t('settings.fields.apiBaseUrl')}
@@ -1074,6 +1122,41 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
                         onChange={(e) => handleFieldChange('api_base_url', e.target.value)}
                       />
                       <p className="-mt-2 text-sm text-gray-500 dark:text-foreground-tertiary">{t('settings.fields.apiBaseUrlDesc')}</p>
+                      <div>
+                        <Input
+                          label={t('settings.fields.apiKey')}
+                          type="password"
+                          placeholder={
+                            settings && (settings.api_key_length as number) > 0
+                              ? t('settings.fields.apiKeySet', { length: settings.api_key_length })
+                              : t('settings.fields.apiKeyPlaceholder')
+                          }
+                          value={formData.api_key}
+                          onChange={(e) => handleFieldChange('api_key', e.target.value)}
+                        />
+                        <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">{t('settings.fields.apiKeyDesc')}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {formData.ai_provider_format === 'azure-openai' && (
+                    <div className="space-y-3 pl-3 border-l-2 border-banana-300 dark:border-banana-600">
+                      <Input
+                        label={t('settings.fields.azureOpenaiEndpoint')}
+                        type="text"
+                        placeholder={t('settings.fields.azureOpenaiEndpointPlaceholder')}
+                        value={formData.azure_openai_endpoint}
+                        onChange={(e) => handleFieldChange('azure_openai_endpoint', e.target.value)}
+                      />
+                      <p className="-mt-2 text-sm text-gray-500 dark:text-foreground-tertiary">{t('settings.fields.azureOpenaiEndpointDesc')}</p>
+                      <Input
+                        label={t('settings.fields.azureOpenaiApiVersion')}
+                        type="text"
+                        placeholder={t('settings.fields.azureOpenaiApiVersionPlaceholder')}
+                        value={formData.azure_openai_api_version}
+                        onChange={(e) => handleFieldChange('azure_openai_api_version', e.target.value)}
+                      />
+                      <p className="-mt-2 text-sm text-gray-500 dark:text-foreground-tertiary">{t('settings.fields.azureOpenaiApiVersionDesc')}</p>
                       <div>
                         <Input
                           label={t('settings.fields.apiKey')}

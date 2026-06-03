@@ -1,5 +1,7 @@
 """Regression tests for per-model OpenAI config isolation from global Azure settings."""
 
+import pytest
+
 from services.ai_providers import _get_model_type_provider_config
 from services.ai_providers.image.openai_provider import OpenAIImageProvider
 
@@ -56,6 +58,30 @@ def test_image_openai_uses_global_azure_when_no_image_specific_override(monkeypa
     assert config["api_key"] == "azure-key"
     assert config["azure_endpoint"] == "https://example.cognitiveservices.azure.com"
     assert config["azure_api_version"] == "2024-10-21"
+
+
+def test_image_azure_openai_source_requires_azure_endpoint(monkeypatch):
+    _clear_relevant_env(monkeypatch)
+    monkeypatch.setenv("IMAGE_MODEL_SOURCE", "azure-openai")
+    monkeypatch.setenv("IMAGE_API_KEY", "image-key")
+
+    with pytest.raises(ValueError, match="Azure OpenAI endpoint is required"):
+        _get_model_type_provider_config("image")
+
+
+def test_global_azure_openai_provider_maps_to_openai_config(monkeypatch):
+    _clear_relevant_env(monkeypatch)
+    monkeypatch.setenv("AI_PROVIDER_FORMAT", "azure-openai")
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "azure-key")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example-resource.openai.azure.com")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2025-04-01-preview")
+
+    config = _get_model_type_provider_config("text")
+
+    assert config["format"] == "openai"
+    assert config["api_key"] == "azure-key"
+    assert config["azure_endpoint"] == "https://example-resource.openai.azure.com"
+    assert config["azure_api_version"] == "2025-04-01-preview"
 
 
 def test_openai_image_provider_uses_only_explicit_azure_params(monkeypatch):

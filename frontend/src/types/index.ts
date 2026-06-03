@@ -306,10 +306,18 @@ export interface Settings {
   // Per-model API credentials (for gemini/openai per-model overrides)
   text_api_key_length: number;
   text_api_base_url?: string;
+  text_azure_openai_endpoint?: string;
+  text_azure_openai_api_version?: string;
   image_api_key_length: number;
   image_api_base_url?: string;
+  image_azure_openai_endpoint?: string;
+  image_azure_openai_api_version?: string;
   image_caption_api_key_length: number;
   image_caption_api_base_url?: string;
+  image_caption_azure_openai_endpoint?: string;
+  image_caption_azure_openai_api_version?: string;
+  azure_openai_endpoint?: string;
+  azure_openai_api_version?: string;
   // OpenAI image API protocol
   openai_image_api_protocol?: string;
   // OpenAI Codex OAuth

@@ -103,7 +103,7 @@ class FileParserService:
         if self._provider_format == 'gemini':
             if not self._google_api_key:
                 raise ValueError("Missing Gemini API key for image captioning")
-        elif self._provider_format == 'openai':
+        elif self._provider_format in {'openai', 'azure-openai', 'azure'}:
             if not self._openai_api_key:
                 raise ValueError("Missing OpenAI API key for image captioning")
         elif self._provider_format == 'lazyllm':

@@ -36,6 +36,7 @@ __all__ = [
 
 # LazyLLM vendor names (used to distinguish from gemini/openai formats)
 LAZYLLM_VENDORS = {'qwen', 'doubao', 'deepseek', 'glm', 'siliconflow', 'sensenova', 'minimax', 'kimi'}
+AZURE_OPENAI_SOURCES = {'azure-openai', 'azure'}
 
 
 def _resolve_profile_source_config(model_type: str, source: str) -> Dict[str, Any]:
@@ -107,7 +108,7 @@ def get_provider_format() -> str:
         3. Default: 'gemini'
 
     Returns:
-        "gemini", "openai", "vertex", "lazyllm", or a lazyllm vendor name
+        "gemini", "openai", "azure-openai", "vertex", "lazyllm", or a lazyllm vendor name
         (e.g., "doubao", "qwen", "deepseek")
     """
     # Try to get from Flask app config first (database settings)
@@ -169,7 +170,7 @@ def _build_provider_config() -> Dict[str, Any]:
     fmt = get_provider_format()
     cfg: Dict[str, Any] = {'format': fmt}
 
-    if fmt == 'openai':
+    if fmt == 'openai' or fmt in AZURE_OPENAI_SOURCES:
         cfg['api_key'] = (
             _resolve_setting('AZURE_OPENAI_API_KEY')
             or _resolve_setting('OPENAI_API_KEY')
@@ -178,10 +179,16 @@ def _build_provider_config() -> Dict[str, Any]:
         cfg['api_base'] = _resolve_setting('OPENAI_API_BASE', 'https://aihubmix.com/v1')
         cfg['azure_endpoint'] = _resolve_setting('AZURE_OPENAI_ENDPOINT')
         cfg['azure_api_version'] = _resolve_setting('AZURE_OPENAI_API_VERSION')
+        if fmt in AZURE_OPENAI_SOURCES:
+            cfg['format'] = 'openai'
+            if not cfg['azure_endpoint']:
+                raise ValueError(
+                    "AZURE_OPENAI_ENDPOINT is required when AI_PROVIDER_FORMAT=azure-openai."
+                )
         if not cfg['api_key']:
             raise ValueError(
                 "AZURE_OPENAI_API_KEY or OPENAI_API_KEY or GOOGLE_API_KEY (from database settings or environment) "
-                "is required when AI_PROVIDER_FORMAT=openai."
+                "is required when AI_PROVIDER_FORMAT=openai/azure-openai."
             )
         if cfg.get('azure_endpoint'):
             logger.info(
@@ -289,17 +296,21 @@ def _get_model_type_provider_config(model_type: str) -> Dict[str, Any]:
         logger.info("Per-model config — %s: gemini, api_base: %s", model_type, api_base)
         return {'format': 'gemini', 'api_key': api_key, 'api_base': api_base}
 
-    elif source_lower == 'openai':
+    elif source_lower == 'openai' or source_lower in AZURE_OPENAI_SOURCES:
         model_api_key = _resolve_setting(f'{prefix}_API_KEY')
         model_api_base = _resolve_setting(f'{prefix}_API_BASE')
         model_azure_endpoint = _resolve_setting(f'{prefix}_AZURE_OPENAI_ENDPOINT')
         model_azure_api_version = _resolve_setting(f'{prefix}_AZURE_OPENAI_API_VERSION')
 
         api_base = model_api_base or _resolve_setting('OPENAI_API_BASE', 'https://aihubmix.com/v1')
+        force_azure = source_lower in AZURE_OPENAI_SOURCES
 
         # If model-specific API credentials/base are configured, don't implicitly inherit
         # global Azure endpoint settings. This avoids routing per-model proxy traffic to Azure.
-        if model_azure_endpoint:
+        if force_azure:
+            azure_endpoint = model_azure_endpoint or _resolve_setting('AZURE_OPENAI_ENDPOINT')
+            azure_api_version = model_azure_api_version or _resolve_setting('AZURE_OPENAI_API_VERSION')
+        elif model_azure_endpoint:
             azure_endpoint = model_azure_endpoint
             azure_api_version = model_azure_api_version or _resolve_setting('AZURE_OPENAI_API_VERSION')
         elif model_api_key or model_api_base:
@@ -328,6 +339,11 @@ def _get_model_type_provider_config(model_type: str) -> Dict[str, Any]:
             raise ValueError(
                 f"API key is required for {model_type} model with OpenAI provider. "
                 f"Set {prefix}_API_KEY or AZURE_OPENAI_API_KEY or OPENAI_API_KEY."
+            )
+        if force_azure and not azure_endpoint:
+            raise ValueError(
+                f"Azure OpenAI endpoint is required for {model_type} model. "
+                f"Set {prefix}_AZURE_OPENAI_ENDPOINT or AZURE_OPENAI_ENDPOINT."
             )
         if azure_endpoint:
             logger.info(

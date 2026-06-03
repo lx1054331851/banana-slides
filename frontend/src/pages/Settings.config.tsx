@@ -74,12 +74,13 @@ export const LAZYLLM_SOURCES = [
 export const GLOBAL_PROVIDER_SOURCES = [
   { value: 'gemini', label: 'Gemini' },
   { value: 'openai', label: 'OpenAI' },
+  { value: 'azure-openai', label: 'Azure OpenAI' },
   { value: 'codex', label: 'Codex (OpenAI OAuth)' },
   ...LAZYLLM_SOURCES.filter(s => s.value !== 'openai'), // avoid duplicate 'openai'
 ];
 
 // 需要 API Key + Base URL 的提供商（非 LazyLLM 厂商）
-export const API_KEY_PROVIDERS = new Set(['gemini', 'openai']);
+export const API_KEY_PROVIDERS = new Set(['gemini', 'openai', 'azure-openai']);
 
 // LazyLLM 厂商名集合
 const LAZYLLM_VENDOR_SET = new Set(LAZYLLM_SOURCES.map(s => s.value));
@@ -88,6 +89,8 @@ const LAZYLLM_VENDOR_SET = new Set(LAZYLLM_SOURCES.map(s => s.value));
 export const initialFormData = {
   ai_provider_format: 'gemini' as string,
   api_base_url: '',
+  azure_openai_endpoint: '',
+  azure_openai_api_version: '2024-10-21',
   api_key: '',
   text_model: '',
   image_model: '',
@@ -112,15 +115,23 @@ export const initialFormData = {
   // Per-model API credentials (for gemini/openai per-model overrides)
   text_api_key: '',
   text_api_base_url: '',
+  text_azure_openai_endpoint: '',
+  text_azure_openai_api_version: '2024-10-21',
   image_api_key: '',
   image_api_base_url: '',
+  image_azure_openai_endpoint: '',
+  image_azure_openai_api_version: '2024-10-21',
   image_caption_api_key: '',
   image_caption_api_base_url: '',
+  image_caption_azure_openai_endpoint: '',
+  image_caption_azure_openai_api_version: '2024-10-21',
   openai_image_api_protocol: 'auto',
 };
 
 export const isLazyllmVendor = (vendor: string) =>
   LAZYLLM_VENDOR_SET.has(vendor) && vendor !== 'openai';
+
+const normalizeProviderValue = (value: string) => (value === 'azure' ? 'azure-openai' : value);
 
 // When backend returns "lazyllm", infer specific vendor from configured keys
 const resolveLazyllmVendor = (format: string, keysInfo?: Record<string, number>): string => {
@@ -176,8 +187,10 @@ export const GlobalVendorKeyInput: React.FC<{
 };
 
 export const formDataFromSettings = (data: SettingsType): typeof initialFormData => ({
-  ai_provider_format: resolveLazyllmVendor(data.ai_provider_format || 'gemini', data.lazyllm_api_keys_info),
+  ai_provider_format: normalizeProviderValue(resolveLazyllmVendor(data.ai_provider_format || 'gemini', data.lazyllm_api_keys_info)),
   api_base_url: data.api_base_url || '',
+  azure_openai_endpoint: data.azure_openai_endpoint || '',
+  azure_openai_api_version: data.azure_openai_api_version || '2024-10-21',
   api_key: '',
   image_resolution: data.image_resolution || '2K',
   max_description_workers: data.max_description_workers || 5,
@@ -193,15 +206,21 @@ export const formDataFromSettings = (data: SettingsType): typeof initialFormData
   enable_image_reasoning: data.enable_image_reasoning || false,
   image_thinking_budget: data.image_thinking_budget || 1024,
   baidu_api_key: '',
-  text_model_source: data.text_model_source || '',
-  image_model_source: data.image_model_source || getImageSourceForModel(data.image_model || '', ''),
-  image_caption_model_source: data.image_caption_model_source || '',
+  text_model_source: normalizeProviderValue(data.text_model_source || ''),
+  image_model_source: normalizeProviderValue(data.image_model_source || getImageSourceForModel(data.image_model || '', '')),
+  image_caption_model_source: normalizeProviderValue(data.image_caption_model_source || ''),
   lazyllm_api_keys: {},
   text_api_key: '',
   text_api_base_url: data.text_api_base_url || '',
+  text_azure_openai_endpoint: data.text_azure_openai_endpoint || '',
+  text_azure_openai_api_version: data.text_azure_openai_api_version || '2024-10-21',
   image_api_key: '',
   image_api_base_url: data.image_api_base_url || '',
+  image_azure_openai_endpoint: data.image_azure_openai_endpoint || '',
+  image_azure_openai_api_version: data.image_azure_openai_api_version || '2024-10-21',
   image_caption_api_key: '',
   image_caption_api_base_url: data.image_caption_api_base_url || '',
+  image_caption_azure_openai_endpoint: data.image_caption_azure_openai_endpoint || '',
+  image_caption_azure_openai_api_version: data.image_caption_azure_openai_api_version || '2024-10-21',
   openai_image_api_protocol: data.openai_image_api_protocol || 'auto',
 });

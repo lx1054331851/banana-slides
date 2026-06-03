@@ -109,9 +109,25 @@ def temporary_settings_override(settings_override: dict):
             current_app.config["GOOGLE_API_BASE"] = settings_override["api_base_url"]
             current_app.config["OPENAI_API_BASE"] = settings_override["api_base_url"]
 
+        if "azure_openai_endpoint" in settings_override:
+            original_values["AZURE_OPENAI_ENDPOINT"] = current_app.config.get("AZURE_OPENAI_ENDPOINT")
+            val = (settings_override.get("azure_openai_endpoint") or "").strip()
+            if val:
+                current_app.config["AZURE_OPENAI_ENDPOINT"] = val
+            else:
+                current_app.config.pop("AZURE_OPENAI_ENDPOINT", None)
+
+        if "azure_openai_api_version" in settings_override:
+            original_values["AZURE_OPENAI_API_VERSION"] = current_app.config.get("AZURE_OPENAI_API_VERSION")
+            val = (settings_override.get("azure_openai_api_version") or "").strip()
+            if val:
+                current_app.config["AZURE_OPENAI_API_VERSION"] = val
+            else:
+                current_app.config.pop("AZURE_OPENAI_API_VERSION", None)
+
         if settings_override.get("ai_provider_format"):
             original_values["AI_PROVIDER_FORMAT"] = current_app.config.get("AI_PROVIDER_FORMAT")
-            current_app.config["AI_PROVIDER_FORMAT"] = settings_override["ai_provider_format"]
+            current_app.config["AI_PROVIDER_FORMAT"] = _normalize_provider_value(settings_override["ai_provider_format"]) or settings_override["ai_provider_format"]
 
         if settings_override.get("text_model"):
             original_values["TEXT_MODEL"] = current_app.config.get("TEXT_MODEL")
@@ -144,6 +160,8 @@ def temporary_settings_override(settings_override: dict):
             prefix = model_type.upper()
             key_field = f'{model_type}_api_key'
             base_field = f'{model_type}_api_base_url'
+            azure_endpoint_field = f'{model_type}_azure_openai_endpoint'
+            azure_api_version_field = f'{model_type}_azure_openai_api_version'
             if settings_override.get(key_field):
                 config_key = f'{prefix}_API_KEY'
                 original_values[config_key] = current_app.config.get(config_key)
@@ -152,6 +170,22 @@ def temporary_settings_override(settings_override: dict):
                 config_key = f'{prefix}_API_BASE'
                 original_values[config_key] = current_app.config.get(config_key)
                 current_app.config[config_key] = settings_override[base_field]
+            if azure_endpoint_field in settings_override:
+                config_key = f'{prefix}_AZURE_OPENAI_ENDPOINT'
+                original_values[config_key] = current_app.config.get(config_key)
+                val = (settings_override.get(azure_endpoint_field) or "").strip()
+                if val:
+                    current_app.config[config_key] = val
+                else:
+                    current_app.config.pop(config_key, None)
+            if azure_api_version_field in settings_override:
+                config_key = f'{prefix}_AZURE_OPENAI_API_VERSION'
+                original_values[config_key] = current_app.config.get(config_key)
+                val = (settings_override.get(azure_api_version_field) or "").strip()
+                if val:
+                    current_app.config[config_key] = val
+                else:
+                    current_app.config.pop(config_key, None)
 
         if settings_override.get("mineru_api_base"):
             original_values["MINERU_API_BASE"] = current_app.config.get("MINERU_API_BASE")
@@ -239,7 +273,7 @@ def update_settings():
 
         # Update AI provider format configuration
         if "ai_provider_format" in data:
-            provider_format = data["ai_provider_format"]
+            provider_format = _normalize_provider_value(data["ai_provider_format"]) or ""
             if provider_format not in ALLOWED_PROVIDER_FORMATS:
                 allowed_values = "', '".join(sorted(ALLOWED_PROVIDER_FORMATS))
                 return bad_request(f"AI provider format must be one of '{allowed_values}'")
@@ -254,6 +288,12 @@ def update_settings():
             else:
                 value = str(raw_base_url).strip()
                 settings.api_base_url = value if value != "" else None
+
+        if "azure_openai_endpoint" in data:
+            settings.azure_openai_endpoint = (data["azure_openai_endpoint"] or "").strip() or None
+
+        if "azure_openai_api_version" in data:
+            settings.azure_openai_api_version = (data["azure_openai_api_version"] or "").strip() or None
 
         if "api_key" in data:
             settings.api_key = data["api_key"]
@@ -367,10 +407,10 @@ def update_settings():
 
         # Update per-model provider source configuration
         if "text_model_source" in data:
-            settings.text_model_source = (data["text_model_source"] or "").strip() or None
+            settings.text_model_source = _normalize_provider_value(data["text_model_source"]) or None
 
         if "image_model_source" in data:
-            settings.image_model_source = (data["image_model_source"] or "").strip() or None
+            settings.image_model_source = _normalize_provider_value(data["image_model_source"]) or None
 
         if "openai_image_api_protocol" in data:
             protocol = data["openai_image_api_protocol"]
@@ -379,18 +419,26 @@ def update_settings():
             settings.openai_image_api_protocol = protocol if protocol != "auto" else None
 
         if "image_caption_model_source" in data:
-            settings.image_caption_model_source = (data["image_caption_model_source"] or "").strip() or None
+            settings.image_caption_model_source = _normalize_provider_value(data["image_caption_model_source"]) or None
 
         # Update per-model API credentials (for gemini/openai per-model overrides)
         for model_type in ('text', 'image', 'image_caption'):
             key_field = f'{model_type}_api_key'
             base_field = f'{model_type}_api_base_url'
+            azure_endpoint_field = f'{model_type}_azure_openai_endpoint'
+            azure_api_version_field = f'{model_type}_azure_openai_api_version'
 
             if key_field in data:
                 setattr(settings, key_field, data[key_field] or None)
 
             if base_field in data:
                 setattr(settings, base_field, (data[base_field] or "").strip() or None)
+
+            if azure_endpoint_field in data:
+                setattr(settings, azure_endpoint_field, (data[azure_endpoint_field] or "").strip() or None)
+
+            if azure_api_version_field in data:
+                setattr(settings, azure_api_version_field, (data[azure_api_version_field] or "").strip() or None)
 
         if "lazyllm_api_keys" in data:
             keys_data = data["lazyllm_api_keys"]
@@ -437,6 +485,8 @@ def reset_settings():
         settings.ai_provider_format = None
         settings.api_base_url = None
         settings.api_key = None
+        settings.azure_openai_endpoint = None
+        settings.azure_openai_api_version = None
         settings.text_model = None
         settings.image_model = None
         settings.mineru_api_base = None
@@ -462,6 +512,8 @@ def reset_settings():
         for model_type in ('text', 'image', 'image_caption'):
             setattr(settings, f'{model_type}_api_key', None)
             setattr(settings, f'{model_type}_api_base_url', None)
+            setattr(settings, f'{model_type}_azure_openai_endpoint', None)
+            setattr(settings, f'{model_type}_azure_openai_api_version', None)
         settings.image_resolution = None
         settings.image_aspect_ratio = None
         settings.max_description_workers = None
@@ -723,6 +775,17 @@ def _sync_settings_to_config(settings: Settings):
             logger.info("API key cleared, falling back to .env defaults")
         current_app.config["GOOGLE_API_KEY"] = env_key_google
         current_app.config["OPENAI_API_KEY"] = env_key_openai
+
+    # Sync global Azure OpenAI endpoint/version (fall back to Config when NULL)
+    for config_key, setting_attr, env_default in [
+        ("AZURE_OPENAI_ENDPOINT", "azure_openai_endpoint", Config.AZURE_OPENAI_ENDPOINT),
+        ("AZURE_OPENAI_API_VERSION", "azure_openai_api_version", Config.AZURE_OPENAI_API_VERSION),
+    ]:
+        val = getattr(settings, setting_attr, None)
+        next_val = val if val is not None else env_default
+        if current_app.config.get(config_key) != next_val:
+            ai_config_changed = True
+        current_app.config[config_key] = next_val
     
     # Check model changes
     new_text_model = settings.text_model or Config.TEXT_MODEL
@@ -790,10 +853,15 @@ def _sync_settings_to_config(settings: Settings):
                 ai_config_changed = True
             current_app.config.pop(config_key, None)
 
-    # Sync per-model API credentials (for gemini/openai per-model overrides)
+    # Sync per-model API credentials / Azure overrides (for gemini/openai/azure-openai per-model overrides)
     for model_type in ('text', 'image', 'image_caption'):
         prefix = model_type.upper()
-        for suffix, setting_suffix in [('_API_KEY', '_api_key'), ('_API_BASE', '_api_base_url')]:
+        for suffix, setting_suffix in [
+            ('_API_KEY', '_api_key'),
+            ('_API_BASE', '_api_base_url'),
+            ('_AZURE_OPENAI_ENDPOINT', '_azure_openai_endpoint'),
+            ('_AZURE_OPENAI_API_VERSION', '_azure_openai_api_version'),
+        ]:
             config_key = f'{prefix}{suffix}'
             val = getattr(settings, f'{model_type}{setting_suffix}', None)
             if val:
@@ -868,7 +936,7 @@ def _create_file_parser():
         source_lower = caption_source.lower()
         if source_lower == 'gemini':
             caption_format = 'gemini'
-        elif source_lower == 'openai':
+        elif source_lower in ('openai', 'azure-openai', 'azure'):
             caption_format = 'openai'
         elif source_lower == 'codex':
             caption_format = 'codex'
@@ -877,7 +945,7 @@ def _create_file_parser():
         else:
             caption_format = global_format
     else:
-        caption_format = global_format
+        caption_format = 'openai' if str(global_format).lower() in ('azure-openai', 'azure') else global_format
 
     # Resolve API credentials based on caption format
     if caption_format == 'gemini':
@@ -1218,11 +1286,15 @@ def run_settings_test(test_name: str):
             test_settings["image_caption_model_source"] = current_app.config.get("IMAGE_CAPTION_MODEL_SOURCE")
         # Per-model provider sources and credentials
         for model_type in ('text', 'image', 'image_caption'):
-            for suffix in ('model_source', 'api_key', 'api_base_url'):
+            for suffix in ('model_source', 'api_key', 'api_base_url', 'azure_openai_endpoint', 'azure_openai_api_version'):
                 attr = f'{model_type}_{suffix}'
                 val = getattr(global_settings, attr, None)
                 if val:
                     test_settings[attr] = val
+        if global_settings.azure_openai_endpoint:
+            test_settings["azure_openai_endpoint"] = global_settings.azure_openai_endpoint
+        if global_settings.azure_openai_api_version:
+            test_settings["azure_openai_api_version"] = global_settings.azure_openai_api_version
         if global_settings.mineru_api_base:
             test_settings["mineru_api_base"] = global_settings.mineru_api_base
         if global_settings.mineru_token:

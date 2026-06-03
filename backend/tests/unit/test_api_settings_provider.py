@@ -45,6 +45,24 @@ def test_update_settings_accepts_lazyllm_provider():
     assert data['data']['ai_provider_format'] == 'lazyllm'
 
 
+def test_update_settings_accepts_azure_openai_provider():
+    """`azure-openai` should be accepted as a valid provider format."""
+    app = Flask(__name__)
+
+    settings = _build_settings()
+    with app.app_context():
+        with app.test_request_context('/api/settings/', method='PUT', json={'ai_provider_format': 'azure-openai'}):
+            with patch('controllers.settings_controller.Settings.get_settings', return_value=settings):
+                with patch('controllers.settings_controller.db.session.commit'):
+                    with patch('controllers.settings_controller._sync_settings_to_config'):
+                        response, status_code = update_settings()
+
+    assert status_code == 200
+    data = response.get_json()
+    assert data['success'] is True
+    assert data['data']['ai_provider_format'] == 'azure-openai'
+
+
 def test_verify_uses_configured_text_model():
     """Verify endpoint should use configured text model, not a hardcoded gemini model."""
     app = Flask(__name__)
