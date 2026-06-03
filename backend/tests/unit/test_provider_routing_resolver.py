@@ -112,6 +112,44 @@ def test_profile_source_and_adapter_options(monkeypatch):
     assert route.adapter_options["path_style"] == "singular"
 
 
+def test_profile_azure_image_channel_sets_azure_route(monkeypatch):
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("PROVIDER_ROUTING_STRICT", "true")
+    monkeypatch.setenv("AZURE_SWEDEN_API_KEY", "azure-image-key")
+    monkeypatch.setenv("AZURE_SWEDEN_ENDPOINT", "https://example-resource.openai.azure.com")
+    monkeypatch.setenv(
+        "PROVIDER_PROFILES_JSON",
+        json.dumps(
+            [
+                {
+                    "id": "azure_sweden",
+                    "channel": "azure-sweden",
+                    "label": "Azure Sweden",
+                    "kind": "cloud",
+                    "provider": "openai",
+                    "api_key_env": "AZURE_SWEDEN_API_KEY",
+                    "azure_endpoint_env": "AZURE_SWEDEN_ENDPOINT",
+                    "azure_api_version": "2025-04-01-preview",
+                    "capabilities": ["image"],
+                    "models": ["gpt-image-2"],
+                    "model_defaults": {"image": "gpt-image-2"},
+                }
+            ]
+        ),
+    )
+
+    route = resolve_provider_route(
+        "image",
+        generation_override={"image": {"source": "profile:azure_sweden", "model": "gpt-image-2"}},
+    )
+
+    assert route.provider == "openai"
+    assert route.channel == "azure-sweden"
+    assert route.api_key == "azure-image-key"
+    assert route.azure_endpoint == "https://example-resource.openai.azure.com"
+    assert route.azure_api_version == "2025-04-01-preview"
+
+
 def test_profile_adapter_options_parse_string_booleans(monkeypatch):
     _clear_env(monkeypatch)
     monkeypatch.setenv("PROVIDER_ROUTING_STRICT", "true")

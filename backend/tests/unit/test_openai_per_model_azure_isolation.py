@@ -84,6 +84,26 @@ def test_global_azure_openai_provider_maps_to_openai_config(monkeypatch):
     assert config["azure_api_version"] == "2025-04-01-preview"
 
 
+def test_image_profile_source_can_supply_azure_endpoint(monkeypatch):
+    _clear_relevant_env(monkeypatch)
+    monkeypatch.setenv("IMAGE_MODEL_SOURCE", "profile:azure_sweden")
+    monkeypatch.setenv("AZURE_SWEDEN_API_KEY", "azure-key")
+    monkeypatch.setenv("AZURE_SWEDEN_ENDPOINT", "https://example-resource.openai.azure.com")
+    monkeypatch.setenv(
+        "PROVIDER_PROFILES_JSON",
+        '[{"id":"azure_sweden","provider":"openai","api_key_env":"AZURE_SWEDEN_API_KEY",'
+        '"azure_endpoint_env":"AZURE_SWEDEN_ENDPOINT","azure_api_version":"2025-04-01-preview",'
+        '"capabilities":["image"]}]'
+    )
+
+    config = _get_model_type_provider_config("image")
+
+    assert config["format"] == "openai"
+    assert config["api_key"] == "azure-key"
+    assert config["azure_endpoint"] == "https://example-resource.openai.azure.com"
+    assert config["azure_api_version"] == "2025-04-01-preview"
+
+
 def test_openai_image_provider_uses_only_explicit_azure_params(monkeypatch):
     captured = {}
 

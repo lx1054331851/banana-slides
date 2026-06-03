@@ -275,10 +275,17 @@ def _resolve_route_from_profile(
     api_key_env = profile.get("api_key_env")
     api_key = str((override or {}).get("api_key") or "") or (os.getenv(api_key_env) if api_key_env else None)
     api_base = (override or {}).get("api_base_url") or profile.get("api_base")
+    azure_endpoint_env = profile.get("azure_endpoint_env")
+    azure_api_version_env = profile.get("azure_api_version_env")
+    azure_endpoint = profile.get("azure_endpoint") or (os.getenv(azure_endpoint_env) if azure_endpoint_env else None)
+    azure_api_version = profile.get("azure_api_version") or (os.getenv(azure_api_version_env) if azure_api_version_env else None)
 
     adapter = (override or {}).get("adapter") or profile.get("adapter") or get_default_adapter_name()
     adapter_options = dict(profile.get("adapter_options") or {})
     adapter_options.update((override or {}).get("adapter_options") or {})
+
+    if provider == "openai" and azure_endpoint and not azure_api_version and strict:
+        raise ValueError(f"Profile '{profile_id}' is missing Azure API version")
 
     route = ResolvedProviderRoute(
         role=role,
@@ -288,6 +295,8 @@ def _resolve_route_from_profile(
         model=model,
         api_key=api_key,
         api_base=api_base,
+        azure_endpoint=azure_endpoint,
+        azure_api_version=azure_api_version,
         adapter=adapter,
         adapter_options=adapter_options,
         source_trace=traces + [f"profile:{profile_id}"],

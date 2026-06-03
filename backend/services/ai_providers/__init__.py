@@ -55,6 +55,14 @@ def _resolve_profile_source_config(model_type: str, source: str) -> Dict[str, An
     api_base = str(profile.get("api_base") or "").strip() or None
     api_key_env = str(profile.get("api_key_env") or "").strip() or None
     profile_api_key = os.getenv(api_key_env) if api_key_env else None
+    azure_endpoint = (
+        str(profile.get("azure_endpoint") or "").strip()
+        or (os.getenv(str(profile.get("azure_endpoint_env") or "").strip()) if profile.get("azure_endpoint_env") else "")
+    ) or None
+    azure_api_version = (
+        str(profile.get("azure_api_version") or "").strip()
+        or (os.getenv(str(profile.get("azure_api_version_env") or "").strip()) if profile.get("azure_api_version_env") else "")
+    ) or None
 
     if provider == 'gemini':
         api_key = profile_api_key or _resolve_setting(f'{prefix}_API_KEY') or _resolve_setting('GOOGLE_API_KEY')
@@ -78,8 +86,19 @@ def _resolve_profile_source_config(model_type: str, source: str) -> Dict[str, An
                 f"API key is required for {model_type} model with profile '{profile_id}'. "
                 f"Set {api_key_env or f'{prefix}_API_KEY'} or OPENAI_API_KEY."
             )
+        if azure_endpoint and not azure_api_version:
+            raise ValueError(
+                f"Azure API version is required for {model_type} model with profile '{profile_id}'. "
+                "Set azure_api_version or azure_api_version_env in the profile."
+            )
         logger.info("Per-model config — %s: profile:%s -> openai, api_base: %s", model_type, profile_id, api_base)
-        return {'format': 'openai', 'api_key': api_key, 'api_base': api_base}
+        return {
+            'format': 'openai',
+            'api_key': api_key,
+            'api_base': api_base,
+            'azure_endpoint': azure_endpoint,
+            'azure_api_version': azure_api_version,
+        }
 
     raise ValueError(f"Unsupported provider '{provider}' for profile '{profile_id}'")
 

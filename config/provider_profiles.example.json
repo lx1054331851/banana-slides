@@ -74,5 +74,24 @@
     "model_defaults": {
       "image": "gpt-image-2-low"
     }
+  },
+  {
+    "id": "azure-sweden",
+    "channel": "azure-sweden",
+    "label": "Azure Sweden",
+    "kind": "cloud",
+    "provider": "openai",
+    "api_key_env": "AZURE_SWEDEN_API_KEY",
+    "azure_endpoint_env": "AZURE_SWEDEN_ENDPOINT",
+    "azure_api_version": "2025-04-01-preview",
+    "adapter": "native",
+    "capabilities": ["image"],
+    "models": ["gpt-image-2"],
+    "supported_resolutions": {
+      "gpt-image-2": ["1K", "2K", "4K"]
+    },
+    "model_defaults": {
+      "image": "gpt-image-2"
+    }
   }
 ]

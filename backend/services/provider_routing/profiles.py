@@ -10,14 +10,22 @@ from flask import current_app
 
 
 def _get_setting(key: str, default: Optional[str] = None) -> Optional[str]:
+    env_val = os.getenv(key)
     try:
         if current_app and hasattr(current_app, "config"):
             val = current_app.config.get(key)
             if val is not None:
+                text = str(val)
+                # Let explicit environment profile settings override config defaults
+                # like "" / "[]" that were loaded from Config at app startup.
+                if env_val is not None:
+                    normalized = text.strip()
+                    if normalized == "" or (key == "PROVIDER_PROFILES_JSON" and normalized == "[]"):
+                        return env_val
                 return str(val)
     except RuntimeError:
         pass
-    return os.getenv(key, default)
+    return env_val if env_val is not None else default
 
 
 def is_routing_strict() -> bool:
@@ -93,6 +101,10 @@ def _normalize_profile(raw: Dict[str, Any]) -> Dict[str, Any]:
         "provider": provider,
         "api_base": str(profile.get("api_base") or "").strip() or None,
         "api_key_env": str(profile.get("api_key_env") or "").strip() or None,
+        "azure_endpoint": str(profile.get("azure_endpoint") or "").strip() or None,
+        "azure_endpoint_env": str(profile.get("azure_endpoint_env") or "").strip() or None,
+        "azure_api_version": str(profile.get("azure_api_version") or "").strip() or None,
+        "azure_api_version_env": str(profile.get("azure_api_version_env") or "").strip() or None,
         "adapter": adapter,
         "adapter_options": adapter_options,
         "capabilities": [str(c).strip().lower() for c in capabilities if str(c).strip()],
@@ -132,8 +144,26 @@ def list_provider_profiles_redacted() -> List[Dict[str, Any]]:
         api_key_env = item.get("api_key_env")
         api_key_present = bool(api_key_env and os.getenv(api_key_env))
         api_base = item.get("api_base")
-        configured = bool(api_base and api_key_present)
-        status = "configured" if configured else ("partial" if api_base or api_key_present else "missing")
+        azure_endpoint_env = item.get("azure_endpoint_env")
+        azure_endpoint = item.get("azure_endpoint") or (os.getenv(azure_endpoint_env) if azure_endpoint_env else None)
+        azure_api_version_env = item.get("azure_api_version_env")
+        azure_api_version = item.get("azure_api_version") or (os.getenv(azure_api_version_env) if azure_api_version_env else None)
+        uses_azure = bool(azure_endpoint)
+        configured = bool(api_key_present and ((azure_endpoint and azure_api_version) or api_base))
+        status = "configured" if configured else (
+            "partial" if api_base or api_key_present or azure_endpoint or azure_api_version else "missing"
+        )
+        if uses_azure:
+            if configured:
+                note = f"Azure profile via {api_key_env}"
+            elif not azure_endpoint:
+                note = f"Missing Azure endpoint ({azure_endpoint_env or 'inline azure_endpoint'})"
+            elif not azure_api_version:
+                note = f"Missing Azure API version ({azure_api_version_env or 'inline azure_api_version'})"
+            else:
+                note = f"Missing API key ({api_key_env})"
+        else:
+            note = f"Profile channel via {api_key_env}" if api_key_env else "Profile channel"
         output.append(
             {
                 "id": item.get("id"),
@@ -144,10 +174,12 @@ def list_provider_profiles_redacted() -> List[Dict[str, Any]]:
                 "enabled": configured,
                 "configured": configured,
                 "config_status": status,
-                "config_note": f"Profile channel via {api_key_env}" if api_key_env else "Profile channel",
+                "config_note": note,
                 "api_base": api_base,
                 "api_key_env": api_key_env,
                 "api_key_present": api_key_present,
+                "azure_endpoint_env": azure_endpoint_env,
+                "azure_api_version_env": azure_api_version_env,
                 "adapter": item.get("adapter"),
                 "adapter_options": item.get("adapter_options") or {},
                 "capabilities": item.get("capabilities") or [],
