@@ -65,3 +65,18 @@ def test_resolve_effective_image_resolution_accepts_4k_for_147ai_channel_after_a
         global_resolution="1K",
     )
     assert effective == "4K"
+
+def test_openai_gemini_3_pro_supports_1k_2k_4k():
+    resolutions = get_supported_image_resolutions("openai", "gemini-3-pro-image-preview")
+    assert resolutions == ["1K", "2K", "4K"]
+
+
+def test_resolve_effective_image_resolution_accepts_4k_for_gemini_3_pro():
+    effective = resolve_effective_image_resolution(
+        "openai",
+        "gemini-3-pro-image-preview",
+        request_resolution="4K",
+        project_resolution=None,
+        global_resolution="1K",
+    )
+    assert effective == "4K"
