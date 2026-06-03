@@ -47,6 +47,11 @@
 .env
 .worktrees/
 
+# Logs
+*.log
+logs/
+**/logs/
+
 # GCP service-account key (sensitive — never commit)
 gcp-service-account.json
 *.ppt
