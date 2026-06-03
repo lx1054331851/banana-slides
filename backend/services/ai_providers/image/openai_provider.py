@@ -955,3 +955,4 @@ class OpenAIImageProvider(ImageProvider):
             )
             logger.error(error_detail, exc_info=True)
             raise Exception(error_detail) from e
+

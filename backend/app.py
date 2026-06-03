@@ -415,6 +415,23 @@ def _compute_worktree_port(base_port: int) -> int:
     return base_port + offset
 
 
+def _build_startup_banner(port: int, debug: bool) -> str:
+    """Return a console-safe startup banner for Windows and UTF-8 terminals."""
+    return (
+        "\n"
+        "========================================\n"
+        " Banana Slides API Server\n"
+        "========================================\n"
+        f"Server starting on: http://localhost:{port}\n"
+        f"Output Language: {Config.OUTPUT_LANGUAGE}\n"
+        f"Environment: {os.getenv('FLASK_ENV', 'development')}\n"
+        f"Debug mode: {debug}\n"
+        f"API Base URL: http://localhost:{port}/api\n"
+        f"Database: {app.config['SQLALCHEMY_DATABASE_URI']}\n"
+        f"Uploads: {app.config['UPLOAD_FOLDER']}"
+    )
+
+
 if __name__ == '__main__':
     # Run development server
     if os.getenv("IN_DOCKER", "0") == "1":
@@ -425,19 +442,7 @@ if __name__ == '__main__':
         port = _compute_worktree_port(5000)
     debug = os.getenv('FLASK_ENV', 'development') == 'development'
     
-    logging.info(
-        "\n"
-        "╔══════════════════════════════════════╗\n"
-        "║   🍌 Banana Slides API Server 🍌   ║\n"
-        "╚══════════════════════════════════════╝\n"
-        f"Server starting on: http://localhost:{port}\n"
-        f"Output Language: {Config.OUTPUT_LANGUAGE}\n"
-        f"Environment: {os.getenv('FLASK_ENV', 'development')}\n"
-        f"Debug mode: {debug}\n"
-        f"API Base URL: http://localhost:{port}/api\n"
-        f"Database: {app.config['SQLALCHEMY_DATABASE_URI']}\n"
-        f"Uploads: {app.config['UPLOAD_FOLDER']}"
-    )
+    logging.info(_build_startup_banner(port, debug))
     
     # Using absolute paths for database, so WSL path issues should not occur
     app.run(host='0.0.0.0', port=port, debug=debug, use_reloader=debug)

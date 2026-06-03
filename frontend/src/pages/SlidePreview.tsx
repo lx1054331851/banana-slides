@@ -21,8 +21,6 @@ import {
   type StyleGuideBindings,
   normalizeOutlinePasteToMarkdown,
   isSupportedDescriptionImageUrl,
-  PAGE_STYLE_GUIDE_DEFAULT_BINDING,
-  buildStyleGuideBindingKey,
   getDescriptionStyleGuideBindings,
   serializeStyleGuideBindings,
   areStyleGuideBindingsEqual,
@@ -30,9 +28,7 @@ import {
   getDescriptionExtraFields,
   serializeExtraFields,
   areStringRecordsEqual,
-  buildPreviewStyleJsonForPageType,
   formatJsonForEditor,
-  syncRenovationJsonPageType,
   toCanonicalRenovationJsonText,
   toLocalizedRenovationJsonText,
 } from './SlidePreview.utils';
@@ -71,6 +67,7 @@ import { useSlidePreviewReorder } from './hooks/useSlidePreviewReorder';
 import { useSlidePreviewJsonRefine } from './hooks/useSlidePreviewJsonRefine';
 import { useSlidePreviewRegionSelection } from './hooks/useSlidePreviewRegionSelection';
 import { useSlidePreviewHistoryActions } from './hooks/useSlidePreviewHistoryActions';
+import { useSlidePreviewEditorState } from './hooks/useSlidePreviewEditorState';
 import {
   ChevronLeft,
   ChevronRight,
@@ -170,21 +167,6 @@ const VIDEO_VOICE_OPTIONS = [
   ]},
 ];
 
-const PPT_PAGE_TYPE_OPTIONS = [
-  '封面页',
-  '目录页',
-  '章节过渡页',
-  '议程时间线页',
-  '标准图文页',
-  '要点列表页',
-  '对比页',
-  '流程页',
-  '框架矩阵页',
-  '图表页',
-  '案例展示页',
-  '结尾页',
-];
-
 const buildRuntimeImageModelValue = (channelId: string, model: string) => `${channelId}::${model}`;
 
 const parseRuntimeImageModelValue = (value?: string): { channelId: string; model: string } => {
@@ -198,33 +180,6 @@ const parseRuntimeImageModelValue = (value?: string): { channelId: string; model
     model: raw.slice(separatorIndex + 2),
   };
 };
-
-const DATA_REPORT_PAGE_TYPE_OPTIONS = [
-  '报告封面',
-  '执行摘要',
-  '目录',
-  '研究方法',
-  '章节页',
-  '品牌概览页',
-  '品牌历程页',
-  '品牌画像页',
-  '品牌定位页',
-  '核心指标总览页',
-  '市场概览页',
-  '品牌对标页',
-  '品类结构页',
-  '价格带分布页',
-  '渠道平台表现页',
-  '商品SKU诊断页',
-  '数据明细页',
-  '洞察图文页',
-  '洞察图表页',
-  '矩阵图谱页',
-  '时间轴生命周期页',
-  '人群画像页',
-  '策略建议页',
-  '封底页',
-];
 
 export const SlidePreview: React.FC = () => {
   const navigate = useNavigate();
@@ -2043,6 +1998,36 @@ export const SlidePreview: React.FC = () => {
     selectedContextImages,
     bindPendingPageAiContext,
   });
+  const selectedPage = currentProject?.pages[selectedIndex];
+  const {
+    useRenovationPreviewForm,
+    pageTypeOptions,
+    resolvedStyleGuideText,
+    syncDescriptionPageTypeForCurrentMode,
+    syncStyleGuideBindingsForPageType,
+    handleStyleGuideTextChange,
+    editorGridClasses,
+    shouldUseEditorVerticalSplit,
+    isEditorPaneHidden,
+    handleEditorContainerMouseDown,
+  } = useSlidePreviewEditorState({
+    currentProject,
+    selectedPage,
+    currentImageVersionId,
+    editPageType,
+    editStyleGuideBindings,
+    styleGuideManuallyEdited,
+    setStyleGuideManuallyEdited,
+    setEditStyleGuideBindings,
+    persistCurrentPageDraft,
+    scheduleTextAutoSave,
+    isMobileView,
+    isEditorPaneCollapsed,
+    renovationJsonViewMode,
+    styleGuideTextareaRef,
+    descriptionTextareaRef,
+    editorJsonContainerRef,
+  });
 
   if (!currentProject) {
     return <Loading fullscreen message={t('preview.messages.loadingProject')} />;
@@ -2075,8 +2060,6 @@ export const SlidePreview: React.FC = () => {
       />
     );
   }
-
-  const selectedPage = currentProject.pages[selectedIndex];
 
   const imageUrl = getPageImageUrl(selectedPage);
 
@@ -2114,114 +2097,6 @@ export const SlidePreview: React.FC = () => {
   const renovationProgressPercent = renovationProgress && renovationProgress.total > 0
     ? Math.max(0, Math.min(100, Math.round((renovationProgress.completed / renovationProgress.total) * 100)))
     : 0;
-  const isPptRenovationProject = currentProject?.creation_type === 'ppt_renovation';
-  const isTextGenerationPreviewProject = currentProject?.creation_type !== 'ppt_renovation';
-  const useRenovationPreviewForm = isPptRenovationProject || isTextGenerationPreviewProject;
-  const syncDescriptionPageTypeForCurrentMode = useCallback((pageType: string, descriptionText: string) => {
-    if (!useRenovationPreviewForm) return descriptionText;
-    return syncRenovationJsonPageType(descriptionText, pageType, 4);
-  }, [useRenovationPreviewForm]);
-  const pageTypeOptions = currentProject?.scenario === 'data_report' ? DATA_REPORT_PAGE_TYPE_OPTIONS : PPT_PAGE_TYPE_OPTIONS;
-  const activeStyleGuideBindingKey = buildStyleGuideBindingKey(currentImageVersionId);
-  const effectivePreviewPageType = editPageType || selectedPage?.outline_content?.page_type || '';
-  const projectStyleGuideJson = (() => {
-    if (!useRenovationPreviewForm) return '';
-    return buildPreviewStyleJsonForPageType(currentProject?.template_style_json || '', effectivePreviewPageType);
-  })();
-  const currentImageBoundStyleGuide = editStyleGuideBindings[activeStyleGuideBindingKey] || '';
-  const pageDefaultStyleGuide = editStyleGuideBindings[PAGE_STYLE_GUIDE_DEFAULT_BINDING] || '';
-  const resolvedStyleGuideText = currentImageBoundStyleGuide || pageDefaultStyleGuide || projectStyleGuideJson || '';
-  // 根据当前输入构建风格指导覆盖，供 onChange 与 blur 保存共用。
-  const buildStyleGuideBindingsFromText = (value: string, base: StyleGuideBindings) => {
-    const next = { ...base };
-    if (value.trim()) {
-      next[PAGE_STYLE_GUIDE_DEFAULT_BINDING] = value;
-      if (activeStyleGuideBindingKey !== PAGE_STYLE_GUIDE_DEFAULT_BINDING) {
-        next[activeStyleGuideBindingKey] = value;
-      }
-    } else {
-      delete next[activeStyleGuideBindingKey];
-      delete next[PAGE_STYLE_GUIDE_DEFAULT_BINDING];
-    }
-    return next;
-  };
-
-  const syncStyleGuideBindingsForPageType = useCallback((
-    nextPageType: string,
-    baseBindings: StyleGuideBindings,
-  ): StyleGuideBindings => {
-    if (!useRenovationPreviewForm) return baseBindings;
-    if (styleGuideManuallyEdited) return baseBindings;
-
-    const nextTemplateStyleGuide = buildPreviewStyleJsonForPageType(
-      currentProject?.template_style_json || '',
-      nextPageType,
-    );
-
-    if (!nextTemplateStyleGuide.trim()) return baseBindings;
-
-    const nextBindings = { ...baseBindings };
-    nextBindings[PAGE_STYLE_GUIDE_DEFAULT_BINDING] = nextTemplateStyleGuide;
-    if (activeStyleGuideBindingKey !== PAGE_STYLE_GUIDE_DEFAULT_BINDING) {
-      nextBindings[activeStyleGuideBindingKey] = nextTemplateStyleGuide;
-    }
-
-    return nextBindings;
-  }, [
-    activeStyleGuideBindingKey,
-    currentProject?.template_style_json,
-    styleGuideManuallyEdited,
-    useRenovationPreviewForm,
-  ]);
-
-  // 记录风格指导输入并携带最新值触发自动保存。
-  const handleStyleGuideTextChange = (value: string) => {
-    setStyleGuideManuallyEdited(true);
-    setEditStyleGuideBindings((prev) => {
-      const next = buildStyleGuideBindingsFromText(value, prev);
-      persistCurrentPageDraft({ styleGuideBindings: next, styleGuideManuallyEdited: true });
-      scheduleTextAutoSave({ styleGuideBindings: next });
-      return next;
-    });
-  };
-  const editorGridClasses = useRenovationPreviewForm
-    ? 'grid h-full min-h-0 gap-2 grid-rows-[minmax(0,1fr)] lg:gap-3 lg:grid-rows-[minmax(0,1fr)]'
-    : 'grid h-full min-h-0 gap-3 grid-rows-[auto_auto_minmax(0,1fr)] lg:gap-4 lg:grid-rows-[auto_minmax(120px,0.6fr)_minmax(0,1fr)]';
-  const shouldUseEditorVerticalSplit = useRenovationPreviewForm && !isMobileView;
-  const isEditorPaneHidden = !isMobileView && isEditorPaneCollapsed;
-  const focusJsonEditorField = (mode: 'text' | 'styleGuide') => {
-    if (mode === 'styleGuide') {
-      styleGuideTextareaRef.current?.focus();
-    } else {
-      descriptionTextareaRef.current?.focus();
-    }
-
-    const testId = mode === 'styleGuide' ? 'preview-style-guide-input' : 'preview-text-description-input';
-    const container = editorJsonContainerRef.current;
-    if (!container) return;
-
-    const root = container.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null;
-    const textbox = root?.getAttribute('role') === 'textbox'
-      ? root
-      : (root?.querySelector('[role="textbox"]') as HTMLElement | null);
-    textbox?.focus();
-  };
-
-  const handleEditorContainerMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement | null;
-    if (!target) return;
-
-    const shouldSkipFocus = Boolean(
-      target.closest('button, a, input, textarea, select, [role="button"], [role="textbox"], [contenteditable="true"]')
-    );
-    if (shouldSkipFocus) return;
-
-    if (useRenovationPreviewForm && renovationJsonViewMode === 'styleGuide') {
-      focusJsonEditorField('styleGuide');
-      return;
-    }
-    focusJsonEditorField('text');
-  };
 
   const editorCanvasContent = (
     <div
