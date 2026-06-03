@@ -7,6 +7,7 @@ import services.task_manager as task_manager_module
 from types import SimpleNamespace
 
 from services.task_manager import (
+    _build_resolution_mismatch_warning_message,
     _build_image_request_snapshot,
     _get_existing_page_image_path,
     _load_page_generation_snapshot,
@@ -257,6 +258,55 @@ def test_resolve_image_model_label_prefers_routing_bundle_route():
 
     label = _resolve_image_model_label(ai_service)
     assert label == 'provider=openai, source=azure, model=gpt-image-1'
+
+
+def test_build_resolution_mismatch_warning_message_suggests_gemini_for_non_gemini_route():
+    ai_service = SimpleNamespace(
+        routing_bundle=SimpleNamespace(
+            image=SimpleNamespace(
+                provider='openai',
+                source='azure',
+                model='gpt-image-1',
+            )
+        ),
+    )
+
+    warning = _build_resolution_mismatch_warning_message(
+        ai_service,
+        requested_resolution='2K',
+        actual_resolution='1K',
+        image_size=(1536, 864),
+    )
+
+    assert '请求 2K' in warning
+    assert '实际判定 1K' in warning
+    assert '实际尺寸 1536x864' in warning
+    assert '可尝试切换到 Gemini 格式' in warning
+
+
+def test_build_resolution_mismatch_warning_message_skips_gemini_suggestion_for_gemini_route():
+    ai_service = SimpleNamespace(
+        routing_bundle=SimpleNamespace(
+            image=SimpleNamespace(
+                provider='gemini',
+                source='gemini',
+                model='gemini-3.1-flash-image-preview',
+            )
+        ),
+    )
+
+    warning = _build_resolution_mismatch_warning_message(
+        ai_service,
+        requested_resolution='4K',
+        actual_resolution='2K',
+        image_size=(2304, 1296),
+    )
+
+    assert '请求 4K' in warning
+    assert '实际判定 2K' in warning
+    assert '实际尺寸 2304x1296' in warning
+    assert '调整分辨率后重试' in warning
+    assert '切换到 Gemini 格式' not in warning
 
 
 def test_get_renovation_page_sources_reuses_existing_split_pages(tmp_path):

@@ -119,6 +119,20 @@ def _format_list_section(title: str, values: Optional[List[str]]) -> str:
 
 def _resolve_image_model_label(ai_service) -> str:
     """Return a readable image model label for history snapshot."""
+    metadata = _get_image_route_metadata(ai_service)
+
+    fields = []
+    if metadata["provider"]:
+        fields.append(f"provider={metadata['provider']}")
+    if metadata["source"]:
+        fields.append(f"source={metadata['source']}")
+    if metadata["model"]:
+        fields.append(f"model={metadata['model']}")
+    return ', '.join(fields) if fields else '未记录'
+
+
+def _get_image_route_metadata(ai_service) -> Dict[str, str]:
+    """Extract provider/source/model values for UI copy and task snapshots."""
     route = getattr(getattr(ai_service, 'routing_bundle', None), 'image', None)
     provider = str(getattr(route, 'provider', '') or '').strip()
     source = str(getattr(route, 'source', '') or '').strip()
@@ -127,15 +141,35 @@ def _resolve_image_model_label(ai_service) -> str:
         model = str(getattr(ai_service, 'image_model', '') or '').strip()
     if not model:
         model = str(getattr(getattr(ai_service, 'image_provider', None), 'model', '') or '').strip()
+    return {
+        "provider": provider,
+        "source": source,
+        "model": model,
+    }
 
-    fields = []
-    if provider:
-        fields.append(f"provider={provider}")
-    if source:
-        fields.append(f"source={source}")
-    if model:
-        fields.append(f"model={model}")
-    return ', '.join(fields) if fields else '未记录'
+
+def _build_resolution_mismatch_warning_message(
+    ai_service,
+    requested_resolution: str,
+    actual_resolution: str,
+    image_size: tuple[int, int],
+) -> str:
+    """Build a user-facing mismatch warning with actionable, route-aware guidance."""
+    metadata = _get_image_route_metadata(ai_service)
+    is_gemini_format = (
+        metadata["provider"].lower() == "gemini"
+        or (not metadata["provider"] and metadata["source"].lower() == "gemini")
+    )
+    width, height = image_size
+    base_message = (
+        "图片返回分辨率与设置不符"
+        f"（请求 {str(requested_resolution or '').upper() or '未记录'}，"
+        f"实际判定 {str(actual_resolution or '').upper() or '未记录'}，"
+        f"实际尺寸 {width}x{height}）。"
+    )
+    if is_gemini_format:
+        return base_message + " 请按实际结果检查版式或调整分辨率后重试。"
+    return base_message + " 当前通道未必严格遵循分辨率设置，如需更稳定控制，可尝试切换到 Gemini 格式。"
 
 
 def _build_image_request_snapshot(
@@ -930,6 +964,7 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
             completed = 0
             failed = 0
             resolution_mismatched = 0  # Count of resolution mismatches
+            first_resolution_warning_message = None
             
             total_pages = len(all_pages_data)
 
@@ -1043,8 +1078,15 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                         
                         # Check resolution for all providers
                         actual_res, is_match = check_image_resolution(image, resolution)
+                        warning_message = None
                         if not is_match:
                             logger.warning(f"Resolution mismatch for page {page_index}: requested {resolution}, got {actual_res}")
+                            warning_message = _build_resolution_mismatch_warning_message(
+                                ai_service,
+                                requested_resolution=resolution,
+                                actual_resolution=actual_res,
+                                image_size=(image.width, image.height),
+                            )
                         
                         # 优化：直接在子线程中计算版本号并保存到最终位置
                         # 每个页面独立，使用数据库事务保证版本号原子性，避免临时文件
@@ -1083,13 +1125,13 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                                 image_path,
                             )
                         
-                        return (page_id, image_path, None, not is_match)
+                        return (page_id, image_path, None, not is_match, warning_message)
                         
                     except Exception as e:
                         import traceback
                         error_detail = traceback.format_exc()
                         logger.error(f"Failed to generate image for page {page_id}: {error_detail}")
-                        return (page_id, None, str(e), None)
+                        return (page_id, None, str(e), None, None)
                     finally:
                         _remove_scoped_session()
 
@@ -1109,10 +1151,12 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                 
                 # Process results as they complete
                 for future in as_completed(futures):
-                    page_id, image_path, error, is_mismatched = future.result()
+                    page_id, image_path, error, is_mismatched, mismatch_warning_message = future.result()
                     
                     if is_mismatched:
                         resolution_mismatched += 1
+                        if not first_resolution_warning_message and mismatch_warning_message:
+                            first_resolution_warning_message = mismatch_warning_message
                     
                     db.session.expire_all()
                     
@@ -1143,8 +1187,12 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                         progress['completed'] = completed
                         progress['failed'] = failed
                         # 第一次检测到不匹配时设置警告
-                        if resolution_mismatched > 0 and 'warning_message' not in progress:
-                            progress['warning_message'] = "图片返回分辨率与设置不符，建议使用gemini格式以避免此问题"
+                        if (
+                            resolution_mismatched > 0
+                            and 'warning_message' not in progress
+                            and first_resolution_warning_message
+                        ):
+                            progress['warning_message'] = first_resolution_warning_message
                         task.set_progress(progress)
                         db.session.commit()
                         logger.info(f"Image Progress: {completed}/{len(pages)} pages completed")
