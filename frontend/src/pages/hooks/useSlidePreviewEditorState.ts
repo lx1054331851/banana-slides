@@ -213,6 +213,7 @@ export const useSlidePreviewEditorState = ({
     useRenovationPreviewForm,
     pageTypeOptions,
     resolvedStyleGuideText,
+    buildStyleGuideBindingsFromText,
     syncDescriptionPageTypeForCurrentMode,
     syncStyleGuideBindingsForPageType,
     handleStyleGuideTextChange,

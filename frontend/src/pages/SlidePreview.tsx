@@ -2003,6 +2003,7 @@ export const SlidePreview: React.FC = () => {
     useRenovationPreviewForm,
     pageTypeOptions,
     resolvedStyleGuideText,
+    buildStyleGuideBindingsFromText,
     syncDescriptionPageTypeForCurrentMode,
     syncStyleGuideBindingsForPageType,
     handleStyleGuideTextChange,
