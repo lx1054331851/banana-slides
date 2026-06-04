@@ -65,3 +65,14 @@ _local_backup/
 
 # 本地 ML 模型（RMBG 等）
 /models/
+
+# Codex runtime artifacts
+.codex-run/
+backend/.codex-run/
+
+# Local logs
+frontend.log
+backend.log
+
+# Python packaging metadata
+banana_slides.egg-info/
