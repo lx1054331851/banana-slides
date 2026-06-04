@@ -194,6 +194,7 @@ export const SlidePreview: React.FC = () => {
   const {
     currentProject,
     syncProject,
+    generatePageImage,
     generateImages,
     generateDescriptions,
     editPageImage,

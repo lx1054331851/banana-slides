@@ -1,9 +1,9 @@
-name: Sync Upstream
+name: Sync upstream
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '17 */6 * * *'
 
 permissions:
   contents: write
@@ -12,25 +12,20 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Check out fork
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Configure git
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-
-      - name: Add upstream
+      - name: Add upstream remote
         run: |
           git remote get-url upstream >/dev/null 2>&1 || git remote add upstream https://github.com/Anionex/banana-slides.git
-
-      - name: Sync main from upstream
-        run: |
           git fetch upstream main
+
+      - name: Fast-forward default branch
+        run: |
           git checkout main
           git merge --ff-only upstream/main
 
-      - name: Push changes
+      - name: Push updates
         run: git push origin main
