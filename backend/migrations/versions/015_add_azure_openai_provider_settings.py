@@ -1,7 +1,7 @@
 """add azure openai provider settings
 
-Revision ID: 015
-Revises: 014
+Revision ID: 20260603_add_azure_openai_provider_settings
+Revises: 20260518_merge_style_template_scenario_head
 Create Date: 2026-06-03
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '015'
-down_revision = '014'
+revision = '20260603_add_azure_openai_provider_settings'
+down_revision = '20260518_merge_style_template_scenario_head'
 branch_labels = None
 depends_on = None
 
