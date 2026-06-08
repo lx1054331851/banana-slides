@@ -77,9 +77,7 @@ export const SlideCard: React.FC<SlideCardProps> = ({
       />
       {!hideActions && (
         <div
-          className={`absolute top-2 right-2 z-20 flex items-center gap-1.5 transition-opacity ${
-            hasImage ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100' : 'opacity-100'
-          }`}
+          className="absolute top-2 right-2 z-20 flex items-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
         >
           <button
             type="button"
