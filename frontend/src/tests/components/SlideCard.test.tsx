@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { SlideCard } from '@/components/preview/SlideCard'
 import type { Page } from '@/types'
 
@@ -13,7 +13,7 @@ vi.mock('@/components/shared', () => ({
 }))
 
 vi.mock('@/api/client', () => ({
-  getImageUrl: (path: string) => path,
+  getPageImageUrl: () => '/mock-image.png',
 }))
 
 describe('SlideCard', () => {
@@ -25,22 +25,18 @@ describe('SlideCard', () => {
     outline_content: { title: 'New slide', points: [] },
   }
 
-  it('renders edit button for pages without images', () => {
-    const onEdit = vi.fn()
-
+  it('does not render the edit button for pages without images', () => {
     render(
       <SlideCard
         page={basePage}
         index={1}
         isSelected={false}
         onClick={vi.fn()}
-        onEdit={onEdit}
         onDelete={vi.fn()}
       />
     )
 
-    fireEvent.click(screen.getByLabelText('slideCard.editPage'))
-    expect(onEdit).toHaveBeenCalledTimes(1)
+    expect(screen.queryByLabelText('slideCard.editPage')).not.toBeInTheDocument()
   })
 
   it('hides edit and delete actions while image generation is in progress', () => {
@@ -50,7 +46,6 @@ describe('SlideCard', () => {
         index={1}
         isSelected={false}
         onClick={vi.fn()}
-        onEdit={vi.fn()}
         onDelete={vi.fn()}
       />
     )
@@ -66,7 +61,6 @@ describe('SlideCard', () => {
         index={1}
         isSelected={false}
         onClick={vi.fn()}
-        onEdit={vi.fn()}
         onDelete={vi.fn()}
       />
     )
@@ -81,7 +75,6 @@ describe('SlideCard', () => {
         index={1}
         isSelected={true}
         onClick={vi.fn()}
-        onEdit={vi.fn()}
         onDelete={vi.fn()}
       />
     )

@@ -1385,37 +1385,6 @@ export const SlidePreview: React.FC = () => {
     return matches;
   };
 
-  const handleEditPage = useCallback((targetPageKey?: string | null, targetIndex?: number) => {
-    if (!currentProject?.pages?.length) return;
-
-    let nextIndex = -1;
-    if (targetPageKey) {
-      nextIndex = currentProject.pages.findIndex(
-        (page) => (page.id || page.page_id) === targetPageKey
-      );
-    }
-    if (nextIndex < 0 && typeof targetIndex === 'number') {
-      nextIndex = targetIndex;
-    }
-    if (nextIndex < 0) {
-      nextIndex = selectedIndex;
-    }
-    if (!currentProject.pages[nextIndex]) return;
-
-    const targetPage = currentProject.pages[nextIndex];
-    const targetPageId = targetPage.id || targetPage.page_id || null;
-    selectedPageIdRef.current = targetPageId;
-    setOutlineQuickEditPageId(targetPageId);
-    setSelectedIndex(nextIndex);
-    setEditOutlineTitle(targetPage.outline_content?.title || '');
-    setEditPageType(targetPage.outline_content?.page_type || '');
-    setEditOutlinePoints(targetPage.outline_content?.points?.join('\n') || '');
-    setOutlineQuickEditMode('edit');
-    setRenovationJsonViewMode('outline');
-    setIsRegionSelectionMode(false);
-    clearSelectionPreview();
-  }, [selectedIndex, currentProject]);
-
   const handleOutlineQuickPointsPaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>) => {
     if (event.defaultPrevented) return;
     const plainText = event.clipboardData.getData('text/plain');
@@ -2746,7 +2715,6 @@ export const SlidePreview: React.FC = () => {
             onSelectPageByIndex={handleSelectPageByIndex}
             onDeletePage={handleDeletePage}
             onInsertPageAfter={handleInsertPageAfter}
-            onEditPage={handleEditPage}
             onPreviewThumbnailDragEnd={handlePreviewThumbnailDragEnd}
           />
         </SlidePreviewSidebarShell>

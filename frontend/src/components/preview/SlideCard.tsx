@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit2, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 import { StatusBadge, Skeleton } from '@/components/shared';
 import { getPageImageUrl } from '@/api/client';
@@ -10,7 +10,6 @@ const slideCardI18n = {
   zh: {
     slideCard: {
       notGenerated: "未生成",
-      editPage: "快速编辑本页大纲",
       confirmDeletePage: "确定要删除这一页吗？",
       confirmDeleteTitle: "确认删除",
       coverPage: "封面",
@@ -20,7 +19,6 @@ const slideCardI18n = {
   en: {
     slideCard: {
       notGenerated: "Not Generated",
-      editPage: "Quick edit this page outline",
       confirmDeletePage: "Are you sure you want to delete this page?",
       confirmDeleteTitle: "Confirm Delete",
       coverPage: "Cover",
@@ -34,7 +32,6 @@ interface SlideCardProps {
   index: number;
   isSelected: boolean;
   onClick: () => void;
-  onEdit: () => void;
   onDelete: () => void;
   showDelete?: boolean;
   isGenerating?: boolean;
@@ -46,7 +43,6 @@ export const SlideCard: React.FC<SlideCardProps> = ({
   index,
   isSelected,
   onClick,
-  onEdit,
   onDelete,
   showDelete = true,
   isGenerating = false,
@@ -79,18 +75,6 @@ export const SlideCard: React.FC<SlideCardProps> = ({
         <div
           className="absolute top-2 right-2 z-20 flex items-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
         >
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit();
-            }}
-            className="p-1.5 bg-white/95 dark:bg-background-secondary rounded-lg border border-gray-200 dark:border-border-primary text-gray-700 dark:text-foreground-secondary transition-colors hover:bg-banana-50 dark:hover:bg-background-hover"
-            aria-label={t('slideCard.editPage')}
-            title={t('slideCard.editPage')}
-          >
-            <Edit2 size={16} />
-          </button>
           {showDelete && (
             <button
               type="button"

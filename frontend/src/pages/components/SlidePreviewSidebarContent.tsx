@@ -43,7 +43,6 @@ type SlidePreviewSidebarContentProps = {
   onSelectPageByIndex: (index: number) => void;
   onDeletePage: (page: Page) => void;
   onInsertPageAfter: (targetPage?: Page | null, fallbackIndex?: number) => Promise<void>;
-  onEditPage: (targetPageKey?: string | null, targetIndex?: number) => void;
   onPreviewThumbnailDragEnd: (event: DragEndEvent) => void;
 };
 
@@ -73,7 +72,6 @@ export const SlidePreviewSidebarContent: React.FC<SlidePreviewSidebarContentProp
   onSelectPageByIndex,
   onDeletePage,
   onInsertPageAfter,
-  onEditPage,
   onPreviewThumbnailDragEnd,
 }) => {
   return isSidebarCollapsed && !isMobileView ? (
@@ -485,9 +483,6 @@ export const SlidePreviewSidebarContent: React.FC<SlidePreviewSidebarContentProp
                             onSelectPageByIndex(index);
                           }
                         }}
-                        onEdit={() => {
-                          onEditPage(page.id || page.page_id, index);
-                        }}
                         onDelete={() => onDeletePage(page)}
                         showDelete={!isMultiSelectMode}
                         isGenerating={page.id ? isPageGenerating(page) : false}
@@ -582,9 +577,6 @@ export const SlidePreviewSidebarContent: React.FC<SlidePreviewSidebarContentProp
                       } else {
                         onSelectPageByIndex(index);
                       }
-                    }}
-                    onEdit={() => {
-                      onEditPage(page.id || page.page_id, index);
                     }}
                     onDelete={() => onDeletePage(page)}
                     showDelete={!isMultiSelectMode}
