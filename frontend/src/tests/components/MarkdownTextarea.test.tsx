@@ -109,4 +109,25 @@ describe('MarkdownTextarea drop handling', () => {
     expect(onDocumentFiles).not.toHaveBeenCalled()
     expect(onFiles).toHaveBeenCalledWith([png, jpg])
   })
+
+  it('opens lightbox when clicking an inline image chip thumbnail', async () => {
+    render(
+      <MarkdownTextarea
+        value={'![一个空白编辑界面中间显示“尚未生成图片”，并提供上传本地图片按钮。](https://example.com/test.png)'}
+        onChange={() => {}}
+      />
+    )
+
+    fireEvent.mouseUp(
+      screen.getByRole('img', {
+        name: '一个空白编辑界面中间显示“尚未生成图片”，并提供上传本地图片按钮。',
+      })
+    )
+
+    expect(
+      await screen.findByRole('dialog', {
+        name: '一个空白编辑界面中间显示“尚未生成图片”，并提供上传本地图片按钮。',
+      })
+    ).toBeInTheDocument()
+  })
 })

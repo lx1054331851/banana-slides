@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { cn } from '@/utils';
 import { useT } from '@/hooks/useT';
 import { isUploadingUrl, getUploadingPreviewUrl } from '@/hooks/useImagePaste';
+import { ImageLightbox } from './ImageLightbox';
 
 const markdownTextareaI18n = {
   zh: {
@@ -338,6 +339,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   const [activeSlashIndex, setActiveSlashIndex] = useState(0);
   const [editAlt, setEditAlt] = useState('');
   const [showUploadMenu, setShowUploadMenu] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<{ src: string; title?: string } | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const dragCountRef = useRef(0);
 
@@ -812,6 +814,20 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     setSlashMenuPosition(null);
   }, [saveSelectionRange]);
 
+  const handleMouseUp = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const targetChip = (e.target as HTMLElement).closest('.' + CHIP_CLASS) as HTMLElement | null;
+    if (!targetChip?.dataset?.markdown) return;
+
+    const clickedImage = (e.target as HTMLElement).closest('img');
+    const previewSrc = targetChip.dataset.preview || targetChip.dataset.url;
+    if (!clickedImage || !previewSrc || isUploadingUrl(targetChip.dataset.url || '')) return;
+
+    setLightboxImage({
+      src: previewSrc,
+      title: getDisplayName(targetChip.dataset.alt || '', targetChip.dataset.url || previewSrc),
+    });
+  }, []);
+
   const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const target = (e.target as HTMLElement).closest('.' + CHIP_CLASS) as HTMLElement | null;
     if (target?.dataset?.markdown) {
@@ -936,6 +952,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
               onCopy={handleCopy}
               onCut={handleCut}
               onClick={handleClick}
+              onMouseUp={handleMouseUp}
               onDoubleClick={handleDoubleClick}
               onDragEnter={handleDragEnter}
               onDragLeave={handleDragLeave}
@@ -1150,6 +1167,12 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
         </div>,
         document.body
       )}
+      <ImageLightbox
+        isOpen={Boolean(lightboxImage?.src)}
+        src={lightboxImage?.src}
+        title={lightboxImage?.title}
+        onClose={() => setLightboxImage(null)}
+      />
     </div>
   );
 });
