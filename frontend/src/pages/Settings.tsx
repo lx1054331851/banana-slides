@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Key, Image, Zap, Save, RotateCcw, Globe, FileText, Brain, HelpCircle, Link2 } from 'lucide-react';
+import { Key, Image, Zap, Save, RotateCcw, Globe, FileText, Brain, HelpCircle, Link2, RefreshCw, CheckCircle, ArrowUp, Info } from 'lucide-react';
 import { useT } from '@/hooks/useT';
+import { appVersion } from '@/utils/appVersion';
 
 import { settingsI18n } from './Settings.i18n';
 import { getActiveSettingsSectionId, type SettingsSectionBounds } from './Settings.scrollSpy';
@@ -39,6 +40,109 @@ import {
   type SettingsNavItem,
   type TestStatus,
 } from './Settings.config';
+
+type SettingsTranslator = (key: string, vars?: Record<string, string>) => string;
+
+function getLatestVersionLabel(info: any): string {
+  const sha = info?.latest?.sha;
+  if (sha) {
+    return sha.length > 7 ? sha.slice(0, 7) : sha;
+  }
+  return info?.latest?.tag || '';
+}
+
+function formatUpdateMessage(t: SettingsTranslator, info: any): string {
+  if (info?.status === 'up_to_date') return t('settings.about.upToDate');
+  if (info?.status === 'update_available') {
+    return t('settings.about.updateAvailable', { version: getLatestVersionLabel(info) });
+  }
+  return t('settings.about.unknown');
+}
+
+export const SettingsAbout: React.FC<{ t: SettingsTranslator }> = ({ t }) => {
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<any | null>(null);
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true);
+    try {
+      const response = await api.checkForUpdates();
+      setUpdateInfo(response.data || null);
+    } catch {
+      setUpdateInfo({ status: 'unknown' });
+    } finally {
+      setCheckingUpdate(false);
+      setUpdateDialogOpen(true);
+    }
+  };
+
+  return (
+    <>
+      <div className="pt-4 border-t border-gray-200 dark:border-border-primary">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-foreground-primary mb-3 flex items-center">
+          <Info size={20} />
+          <span className="ml-2">{t('settings.sections.about')}</span>
+        </h2>
+        <div className="flex flex-col gap-3 text-sm text-gray-600 dark:text-foreground-tertiary sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <div title={appVersion.detail} aria-label={`${t('settings.about.version')} ${appVersion.detail}`}>
+              {t('settings.about.version')}: {appVersion.display}
+            </div>
+            <a
+              href="https://github.com/Anionex/banana-slides"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-banana-700 dark:text-banana hover:underline"
+            >
+              {t('settings.about.source')}
+            </a>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<RefreshCw size={16} className={checkingUpdate ? 'animate-spin' : ''} />}
+            onClick={handleCheckUpdate}
+            loading={checkingUpdate}
+          >
+            {checkingUpdate ? t('settings.about.checking') : t('settings.about.checkUpdate')}
+          </Button>
+        </div>
+      </div>
+
+      {updateDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div role="dialog" aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-background-secondary">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-foreground-primary">
+                {t('settings.about.resultTitle')}
+              </h3>
+              <div className="flex flex-col items-center gap-3 py-2 text-center">
+                {updateInfo?.status === 'up_to_date' && (
+                  <CheckCircle size={44} data-testid="update-success-icon" className="text-green-600 dark:text-green-400" />
+                )}
+                {updateInfo?.status === 'update_available' && (
+                  <ArrowUp size={44} data-testid="update-available-icon" className="text-orange-600 dark:text-orange-400" />
+                )}
+                <p className={updateInfo?.status === 'update_available'
+                  ? 'text-xl font-semibold text-orange-600 dark:text-orange-400'
+                  : 'text-xl font-semibold text-gray-900 dark:text-foreground-primary'}
+                >
+                  {formatUpdateMessage(t, updateInfo)}
+                </p>
+              </div>
+              <div className="flex justify-end">
+                <Button variant="secondary" size="sm" onClick={() => setUpdateDialogOpen(false)}>
+                  {t('settings.about.close')}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
 // Settings 组件 - 纯嵌入模式（可复用）
 interface SettingsProps {
   refreshToken?: number;

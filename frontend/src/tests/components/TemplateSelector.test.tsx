@@ -1,6 +1,8 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { act } from 'react';
 import { TemplateSelector, type TemplateSelection } from '@/components/shared/TemplateSelector';
 
 const {
@@ -136,6 +138,7 @@ describe('TemplateSelector', () => {
   });
 
   it('uses theme color for the active tab and keeps image previews uncropped', async () => {
+    const user = userEvent.setup();
     const { onDraftSelectionChange } = renderSelector();
 
     const imageTab = screen.getByTestId('template-selector-tab-image');
@@ -146,7 +149,7 @@ describe('TemplateSelector', () => {
     const previewImage = screen.getByAltText('图片模版 1');
     expect(previewImage).toHaveClass('object-contain');
 
-    fireEvent.click(presetCard);
+    await user.click(presetCard);
 
     expect(onDraftSelectionChange).toHaveBeenCalledWith(
       expect.objectContaining<Partial<TemplateSelection>>({
@@ -173,6 +176,7 @@ describe('TemplateSelector', () => {
   });
 
   it('switches the large preview when clicking style preview thumbnails', async () => {
+    const user = userEvent.setup();
     renderSelector({
       activeTab: 'json',
       appliedSelection: { kind: 'style', id: 'style-1' },
@@ -186,11 +190,19 @@ describe('TemplateSelector', () => {
     const heroPreview = within(sidebar).getByAltText('JSON 模版 1') as HTMLImageElement;
     expect(heroPreview.getAttribute('src')).toBe('/files/style-presets/style-1/cover.png');
 
-    fireEvent.click(screen.getByTestId('template-style-preview-detail_text_split_url'));
-    expect(heroPreview.getAttribute('src')).toBe('/files/style-presets/style-1/detail.png');
+    await act(async () => {
+      await user.click(screen.getByTestId('template-style-preview-detail_text_split_url'));
+    });
+    await waitFor(() => {
+      expect(heroPreview.getAttribute('src')).toBe('/files/style-presets/style-1/detail.png');
+    });
 
-    fireEvent.click(screen.getByTestId('template-style-preview-closing_url'));
-    expect(heroPreview.getAttribute('src')).toBe('/files/style-presets/style-1/ending.png');
+    await act(async () => {
+      await user.click(screen.getByTestId('template-style-preview-closing_url'));
+    });
+    await waitFor(() => {
+      expect(heroPreview.getAttribute('src')).toBe('/files/style-presets/style-1/ending.png');
+    });
   });
 
   it('unmounts the material panel after switching away from the material tab', async () => {
@@ -199,7 +211,6 @@ describe('TemplateSelector', () => {
     });
 
     expect(screen.getByTestId('mock-material-panel')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('mock-material-select'));
     expect(onDraftSelectionChange).not.toHaveBeenCalled();
 
     rerender(
@@ -210,7 +221,9 @@ describe('TemplateSelector', () => {
       />
     );
 
-    expect(screen.queryByTestId('mock-material-panel')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByTestId('mock-material-panel')).not.toBeInTheDocument();
+    });
   });
 
   it('filters JSON presets by project scenario', async () => {

@@ -1477,6 +1477,7 @@ class AIService:
 
             # 构建参考图片列表
             ref_images = []
+            owned_images = []
             
             # 添加主参考图片（如果提供了路径）
             if ref_image_path:
@@ -1493,9 +1494,11 @@ class AIService:
                         ref_images.append(ref_img)
                     elif isinstance(ref_img, str):
                         # 可能是本地路径或 URL
-                        if os.path.exists(ref_img):
+                        if os.path.isfile(ref_img):
                             # 本地路径
-                            ref_images.append(Image.open(ref_img))
+                            opened = Image.open(ref_img)
+                            ref_images.append(opened)
+                            owned_images.append(opened)
                         elif ref_img.startswith('http://') or ref_img.startswith('https://'):
                             # URL，需要下载
                             downloaded_img = self.download_image_from_url(ref_img)
@@ -1506,23 +1509,34 @@ class AIService:
                         elif ref_img.startswith('/files/mineru/'):
                             # MinerU 本地文件路径，需要转换为文件系统路径（支持前缀匹配）
                             local_path = self._convert_mineru_path_to_local(ref_img)
-                            if local_path and os.path.exists(local_path):
-                                ref_images.append(Image.open(local_path))
+                            if local_path and os.path.isfile(local_path):
+                                opened = Image.open(local_path)
+                                ref_images.append(opened)
+                                owned_images.append(opened)
                                 logger.debug(f"Loaded MinerU image from local path: {local_path}")
                             else:
                                 logger.warning(f"MinerU image file not found (with prefix matching): {ref_img}, skipping...")
                         elif ref_img.startswith('/files/'):
                             # 通用 /files/ 路径（materials、项目文件等），转换为文件系统路径
                             upload_folder = get_config().UPLOAD_FOLDER
-                            relative_path = ref_img[len('/files/'):].lstrip('/')
-                            local_path = os.path.abspath(os.path.join(upload_folder, relative_path))
-                            if not local_path.startswith(os.path.abspath(upload_folder)):
+                            upload_folder_real = os.path.realpath(upload_folder)
+                            relative_path = ref_img[len('/files/'):].lstrip('/\\')
+                            local_path = os.path.realpath(os.path.join(upload_folder, relative_path))
+                            try:
+                                is_inside_upload_folder = (
+                                    os.path.commonpath([local_path, upload_folder_real]) == upload_folder_real
+                                )
+                            except ValueError:
+                                is_inside_upload_folder = False
+                            if not is_inside_upload_folder:
                                 logger.warning(f"Path traversal attempt blocked: {ref_img}, skipping...")
-                            elif os.path.exists(local_path):
-                                ref_images.append(Image.open(local_path))
+                            elif os.path.isfile(local_path):
+                                opened = Image.open(local_path)
+                                ref_images.append(opened)
+                                owned_images.append(opened)
                                 logger.debug(f"Loaded image from local path: {local_path}")
                             else:
-                                logger.warning(f"Local file not found: {local_path} (from {ref_img}), skipping...")
+                                logger.warning(f"Local file not found or not a file: {local_path} (from {ref_img}), skipping...")
                         else:
                             logger.warning(f"Invalid image reference: {ref_img}, skipping...")
             
@@ -1553,6 +1567,12 @@ class AIService:
             error_detail = f"Error generating image: {type(e).__name__}: {str(e)}"
             logger.error(error_detail, exc_info=True)
             raise Exception(error_detail) from e
+        finally:
+            for opened in owned_images:
+                try:
+                    opened.close()
+                except Exception:
+                    pass
     
     def edit_image(self, prompt: str, current_image_path: str,
                   aspect_ratio: str = "16:9", resolution: str = "2K",
