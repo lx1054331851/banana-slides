@@ -1,6 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Check, Maximize2, Minimize2, X } from 'lucide-react';
-import { ImageLightbox } from '@/components/shared';
 import { cn } from '@/utils';
 import type { PageAiRegionBounds } from '@/types';
 
@@ -97,16 +96,11 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
   const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
   const [availableSize, setAvailableSize] = useState<{ width: number; height: number } | null>(null);
   const [isPendingCommentShakeActive, setIsPendingCommentShakeActive] = useState(false);
-  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
   useEffect(() => {
     setImageAspectRatio(null);
     onImageResolutionChange?.(null);
   }, [imageUrl, onImageResolutionChange]);
-
-  useEffect(() => {
-    setIsLightboxOpen(false);
-  }, [imageUrl]);
 
   useEffect(() => {
     if (!pendingRegionComposer) return;
@@ -278,18 +272,13 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                           ref={imageRef}
                           src={imageUrl}
                           alt={`Slide ${selectedIndex + 1}`}
-                          onClick={() => {
-                            if (!isFullscreen) {
-                              setIsLightboxOpen(true);
-                            }
-                          }}
                           onLoad={(event) => {
                             const { naturalWidth, naturalHeight } = event.currentTarget;
                             if (!naturalWidth || !naturalHeight) return;
                             setImageAspectRatio(naturalWidth / naturalHeight);
                             onImageResolutionChange?.({ width: naturalWidth, height: naturalHeight });
                           }}
-                          className={`h-full w-full select-none object-contain ${isFullscreen ? '' : 'cursor-zoom-in'}`}
+                          className="h-full w-full select-none object-contain"
                           draggable={false}
                           crossOrigin="anonymous"
                         />
@@ -486,12 +475,6 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
           </div>
         </div>
       </div>
-      <ImageLightbox
-        isOpen={isLightboxOpen}
-        src={imageUrl}
-        title={`Slide ${selectedIndex + 1}`}
-        onClose={() => setIsLightboxOpen(false)}
-      />
     </section>
   );
 };

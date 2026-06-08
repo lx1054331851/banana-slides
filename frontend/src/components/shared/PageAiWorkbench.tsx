@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/utils';
 import type { PageAiMessage, PageAiReference } from '@/types';
+import { ImageLightbox } from './ImageLightbox';
 import { MarkdownTextarea, type MarkdownTextareaRef } from './MarkdownTextarea';
 
 type DescriptionImageOption = {
@@ -149,6 +150,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [descriptionPickerPosition, setDescriptionPickerPosition] = useState<FloatingMenuPosition | null>(null);
   const [modelPickerPosition, setModelPickerPosition] = useState<FloatingMenuPosition | null>(null);
+  const [lightboxReference, setLightboxReference] = useState<PageAiReference | null>(null);
   const normalizedModelOptions = modelOptions.map((option) => (
     typeof option === 'string'
       ? { value: option, label: option }
@@ -232,6 +234,18 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
     };
   }, [showDescriptionPicker, showModelPicker]);
 
+  useEffect(() => {
+    if (!lightboxReference) return;
+    const matchedReference = references.find((reference) => reference.id === lightboxReference.id);
+    if (!matchedReference?.previewUrl) {
+      setLightboxReference(null);
+      return;
+    }
+    if (matchedReference.previewUrl !== lightboxReference.previewUrl || matchedReference.label !== lightboxReference.label) {
+      setLightboxReference(matchedReference);
+    }
+  }, [lightboxReference, references]);
+
   return (
     <section
       data-testid="page-ai-workbench"
@@ -301,7 +315,15 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                   >
                     <button
                       type="button"
-                      onClick={() => onReferenceClick(reference)}
+                      onClick={() => {
+                        if (reference.sourceType === 'region') {
+                          onReferenceClick(reference);
+                          return;
+                        }
+                        if (reference.previewUrl) {
+                          setLightboxReference(reference);
+                        }
+                      }}
                       className={cn(
                         'relative overflow-hidden rounded-2xl border bg-slate-50 transition-all hover:border-banana-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 dark:bg-background-primary dark:hover:border-banana-500/60',
                         activeReferenceId === reference.id
@@ -574,6 +596,12 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
         </div>,
         document.body
       )}
+      <ImageLightbox
+        isOpen={Boolean(lightboxReference?.previewUrl)}
+        src={lightboxReference?.previewUrl}
+        title={lightboxReference?.label}
+        onClose={() => setLightboxReference(null)}
+      />
     </section>
   );
 };

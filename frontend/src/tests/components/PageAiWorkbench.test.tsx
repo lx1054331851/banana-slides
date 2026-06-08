@@ -79,23 +79,36 @@ describe('PageAiWorkbench', () => {
     expect(onSend).toHaveBeenCalledTimes(0)
   })
 
-  it('shows pending region comment composer and submits on Enter', () => {
-    const onSubmitPendingRegionComment = vi.fn()
+  it('does not render pending region composer in the workbench shell', () => {
     render(
       <PageAiWorkbench
         {...baseProps}
         pendingRegionPreviewUrl="blob:test"
         pendingRegionCommentValue="把按钮再突出一点"
-        onSubmitPendingRegionComment={onSubmitPendingRegionComment}
       />
     )
 
-    const textarea = document.querySelector('textarea')
-    expect(textarea).not.toBeNull()
-    fireEvent.keyDown(textarea as HTMLTextAreaElement, { key: 'Enter', code: 'Enter' })
+    expect(screen.queryByLabelText('发送评论')).not.toBeInTheDocument()
+    expect(screen.queryByText('取消')).not.toBeInTheDocument()
+  })
 
-    expect(screen.getByText('取消')).toBeInTheDocument()
-    expect(screen.getByLabelText('发送评论')).toBeInTheDocument()
-    expect(onSubmitPendingRegionComment).toHaveBeenCalledTimes(1)
+  it('opens lightbox when an uploaded reference thumbnail is clicked', async () => {
+    render(
+      <PageAiWorkbench
+        {...baseProps}
+        references={[
+          {
+            id: 'upload-1',
+            sourceType: 'upload',
+            label: '一个空白图',
+            previewUrl: 'https://example.com/upload-1.png',
+          },
+        ]}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('img', { name: '一个空白图' }))
+
+    expect(await screen.findByRole('dialog', { name: '一个空白图' })).toBeInTheDocument()
   })
 })
