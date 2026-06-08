@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Project, GenerationOverride, ProjectScenario } from '@/types';
 import * as api from '@/api/endpoints';
-import { normalizeProject, normalizeErrorMessage } from '@/utils';
+import { downloadFromUrl, normalizeProject, normalizeErrorMessage } from '@/utils';
 import { devLog } from '@/utils/logger';
 import { getT } from '@/utils/i18nHelper';
 
@@ -1497,8 +1497,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
         throw new Error(t('store.exportLinkFailed'));
       }
 
-      // 使用浏览器直接下载链接，避免 axios 受带宽和超时影响
-      window.open(downloadUrl, '_blank');
+      downloadFromUrl(downloadUrl, `presentation_${currentProject.id}.pptx`);
     } catch (error: any) {
       set({ error: error.message || t('store.exportFailed') });
     } finally {
@@ -1522,8 +1521,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
         throw new Error(t('store.exportLinkFailed'));
       }
 
-      // 使用浏览器直接下载链接，避免 axios 受带宽和超时影响
-      window.open(downloadUrl, '_blank');
+      downloadFromUrl(downloadUrl, `presentation_${currentProject.id}.pdf`);
     } catch (error: any) {
       set({ error: error.message || t('store.exportFailed') });
     } finally {

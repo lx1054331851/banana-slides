@@ -862,6 +862,20 @@ const buildPageIdsQuery = (pageIds?: string[]): string => {
   return `?${params.toString()}`;
 };
 
+const buildExportQuery = (params: Record<string, string | string[] | boolean | undefined>): string => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined) return;
+    if (Array.isArray(value)) {
+      if (value.length > 0) query.set(key, value.join(','));
+      return;
+    }
+    query.set(key, String(value));
+  });
+  const queryString = query.toString();
+  return queryString ? `?${queryString}` : '';
+};
+
 /**
  * 导出为PPTX
  * @param projectId 项目ID
@@ -869,9 +883,17 @@ const buildPageIdsQuery = (pageIds?: string[]): string => {
  */
 export const exportPPTX = async (
   projectId: string,
-  pageIds?: string[]
+  pageIds?: string[],
+  options?: {
+    transitionEnabled?: boolean;
+    transitionEffects?: string[];
+  }
 ): Promise<ApiResponse<{ download_url: string; download_url_absolute?: string }>> => {
-  const url = `/api/projects/${projectId}/export/pptx${buildPageIdsQuery(pageIds)}`;
+  const url = `/api/projects/${projectId}/export/pptx${buildExportQuery({
+    page_ids: pageIds,
+    transition_enabled: options?.transitionEnabled ? true : undefined,
+    transition_effects: options?.transitionEnabled ? options.transitionEffects : undefined,
+  })}`;
   const response = await apiClient.get<
     ApiResponse<{ download_url: string; download_url_absolute?: string }>
   >(url);
@@ -1848,6 +1870,30 @@ export const getTestStatus = async (taskId: string): Promise<ApiResponse<{
   message?: string;
 }>> => {
   const response = await apiClient.get<ApiResponse<any>>(`/api/settings/tests/${taskId}/status`);
+  return response.data;
+};
+
+export interface UpdateCheckInfo {
+  status: 'up_to_date' | 'update_available' | 'unknown';
+  update_available: boolean;
+  message: string;
+  repository: string;
+  current: {
+    tag?: string;
+    commit_sha?: string;
+    short_sha?: string;
+    is_docker: boolean;
+  };
+  latest: null | {
+    tag: string;
+    sha?: string;
+    last_updated: string;
+    image: string;
+  };
+}
+
+export const checkForUpdates = async (): Promise<ApiResponse<UpdateCheckInfo>> => {
+  const response = await apiClient.get<ApiResponse<UpdateCheckInfo>>('/api/settings/check-update');
   return response.data;
 };
 
