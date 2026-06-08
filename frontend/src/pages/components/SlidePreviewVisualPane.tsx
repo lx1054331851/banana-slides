@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Check, Maximize2, Minimize2, X } from 'lucide-react';
+import { ImageLightbox } from '@/components/shared';
 import { cn } from '@/utils';
 import type { PageAiRegionBounds } from '@/types';
 
@@ -96,11 +97,16 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
   const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
   const [availableSize, setAvailableSize] = useState<{ width: number; height: number } | null>(null);
   const [isPendingCommentShakeActive, setIsPendingCommentShakeActive] = useState(false);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
   useEffect(() => {
     setImageAspectRatio(null);
     onImageResolutionChange?.(null);
   }, [imageUrl, onImageResolutionChange]);
+
+  useEffect(() => {
+    setIsLightboxOpen(false);
+  }, [imageUrl]);
 
   useEffect(() => {
     if (!pendingRegionComposer) return;
@@ -272,13 +278,18 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                           ref={imageRef}
                           src={imageUrl}
                           alt={`Slide ${selectedIndex + 1}`}
+                          onClick={() => {
+                            if (!isFullscreen) {
+                              setIsLightboxOpen(true);
+                            }
+                          }}
                           onLoad={(event) => {
                             const { naturalWidth, naturalHeight } = event.currentTarget;
                             if (!naturalWidth || !naturalHeight) return;
                             setImageAspectRatio(naturalWidth / naturalHeight);
                             onImageResolutionChange?.({ width: naturalWidth, height: naturalHeight });
                           }}
-                          className={`h-full w-full select-none ${isFullscreen ? 'object-contain' : 'object-contain'}`}
+                          className={`h-full w-full select-none object-contain ${isFullscreen ? '' : 'cursor-zoom-in'}`}
                           draggable={false}
                           crossOrigin="anonymous"
                         />
@@ -286,8 +297,14 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                           type="button"
                           aria-label={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
                           title={isFullscreen ? t('preview.exitFullscreen') : t('preview.fullscreen')}
-                          onMouseDown={onFloatingFullscreenButtonMouseDown}
-                          onClick={onFloatingFullscreenButtonClick}
+                          onMouseDown={(event) => {
+                            event.stopPropagation();
+                            onFloatingFullscreenButtonMouseDown(event);
+                          }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onFloatingFullscreenButtonClick(event);
+                          }}
                           className={`absolute z-20 inline-flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-800 shadow-[0_10px_28px_rgba(15,23,42,0.18),0_0_0_1px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.7)] transition-colors hover:border-banana-400 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 ${isDraggingFloatingFullscreenButton ? 'cursor-grabbing' : 'cursor-grab'}`}
                           style={{
                             left: `${floatingFullscreenButtonPosition.x * 100}%`,
@@ -469,6 +486,12 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
           </div>
         </div>
       </div>
+      <ImageLightbox
+        isOpen={isLightboxOpen}
+        src={imageUrl}
+        title={`Slide ${selectedIndex + 1}`}
+        onClose={() => setIsLightboxOpen(false)}
+      />
     </section>
   );
 };
