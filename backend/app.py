@@ -5,6 +5,7 @@ import os
 import sys
 import hmac
 import logging
+from logging import FileHandler
 import tempfile
 import time
 from pathlib import Path
@@ -152,6 +153,7 @@ def create_app(load_settings_from_db=None):
     except (ValueError, TypeError):
         werkzeug_logger.setLevel(logging.INFO)
     logging.getLogger('volcenginesdkarkruntime').setLevel(logging.WARNING)
+    _setup_image_audit_logger(app, log_level)
 
     @app.before_request
     def _mark_request_start():
@@ -276,6 +278,33 @@ def create_app(load_settings_from_db=None):
         }
     
     return app
+
+
+def _setup_image_audit_logger(app, log_level: int) -> None:
+    """Configure a dedicated local file logger for image-generation audit records."""
+    audit_logger = logging.getLogger('image_audit')
+    audit_logger.setLevel(log_level)
+    audit_logger.propagate = False
+
+    raw_path = app.config.get('IMAGE_AUDIT_LOG_PATH')
+    if not raw_path:
+        return
+
+    try:
+        target_path = os.path.abspath(str(raw_path))
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    except Exception:
+        app.logger.warning("Failed to prepare image audit log path: %s", raw_path, exc_info=True)
+        return
+
+    for handler in audit_logger.handlers:
+        if isinstance(handler, FileHandler) and getattr(handler, 'baseFilename', None) == target_path:
+            return
+
+    file_handler = FileHandler(target_path, encoding='utf-8')
+    file_handler.setLevel(log_level)
+    file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s - %(message)s"))
+    audit_logger.addHandler(file_handler)
 
 
 def _load_settings_to_config(app):

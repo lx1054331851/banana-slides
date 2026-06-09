@@ -57,6 +57,7 @@ from services.pdf_service import split_pdf_to_pages
 from services.export_helpers import maybe_compress_export_images
 
 logger = logging.getLogger(__name__)
+audit_logger = logging.getLogger("image_audit")
 
 
 class ResourceLimiter:
@@ -192,6 +193,11 @@ def _get_image_route_metadata(ai_service) -> Dict[str, str]:
         "source": source,
         "model": model,
     }
+
+
+def _log_image_audit_event(event: str, **fields: Any) -> None:
+    parts = [f"{key}={fields[key]!r}" for key in sorted(fields)]
+    audit_logger.info("%s %s", event, " ".join(parts))
 
 
 def _build_resolution_mismatch_warning_message(
@@ -1145,6 +1151,22 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                                 aspect_ratio=aspect_ratio
                             )
                             logger.debug(f"Generated image prompt for page {page_id}")
+                            route_meta = _get_image_route_metadata(ai_service)
+                            _log_image_audit_event(
+                                "image_task_request",
+                                task_id=task_id,
+                                project_id=project_id,
+                                page_id=page_id,
+                                operation="generate_batch_page",
+                                provider=route_meta.get("provider"),
+                                source=route_meta.get("source"),
+                                model=route_meta.get("model"),
+                                aspect_ratio=aspect_ratio,
+                                resolution=resolution,
+                                use_template=use_template,
+                                has_template=bool(page_ref_image_path),
+                                ref_count=len(page_additional_ref_images),
+                            )
 
                             logger.info(f"🎨 Calling AI service to generate image for page {page_index}/{total_pages}...")
                             image = ai_service.generate_image(
@@ -1166,6 +1188,18 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                             image.width,
                             image.height,
                             aspect_ratio,
+                        )
+                        _log_image_audit_event(
+                            "image_task_result",
+                            task_id=task_id,
+                            project_id=project_id,
+                            page_id=page_id,
+                            operation="generate_batch_page",
+                            model=_resolve_image_model_label(ai_service),
+                            requested_resolution=resolution,
+                            actual_width=image.width,
+                            actual_height=image.height,
+                            aspect_ratio=aspect_ratio,
                         )
 
                         # Check resolution for all providers
@@ -1222,6 +1256,15 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                     except Exception as e:
                         import traceback
                         error_detail = traceback.format_exc()
+                        _log_image_audit_event(
+                            "image_task_error",
+                            task_id=task_id,
+                            project_id=project_id,
+                            page_id=page_id,
+                            operation="generate_batch_page",
+                            error=type(e).__name__,
+                            detail=str(e),
+                        )
                         logger.error(f"Failed to generate image for page {page_id}: {error_detail}")
                         return (page_id, None, str(e), None, None)
                     finally:
@@ -1398,6 +1441,22 @@ def generate_single_page_image_task(task_id: str, project_id: str, page_id: str,
                 has_template=use_template,
                 aspect_ratio=aspect_ratio
             )
+            route_meta = _get_image_route_metadata(ai_service)
+            _log_image_audit_event(
+                "image_task_request",
+                task_id=task_id,
+                project_id=project_id,
+                page_id=page_id,
+                operation="generate_single_page",
+                provider=route_meta.get("provider"),
+                source=route_meta.get("source"),
+                model=route_meta.get("model"),
+                aspect_ratio=aspect_ratio,
+                resolution=resolution,
+                use_template=use_template,
+                has_template=bool(ref_image_path),
+                ref_count=len(additional_ref_images),
+            )
             
             logger.info(f"🎨 Generating image for page {page_id}...")
             def mark_generating():
@@ -1421,6 +1480,18 @@ def generate_single_page_image_task(task_id: str, project_id: str, page_id: str,
             
             if not image:
                 raise ValueError("Failed to generate image")
+            _log_image_audit_event(
+                "image_task_result",
+                task_id=task_id,
+                project_id=project_id,
+                page_id=page_id,
+                operation="generate_single_page",
+                model=_resolve_image_model_label(ai_service),
+                requested_resolution=resolution,
+                actual_width=image.width,
+                actual_height=image.height,
+                aspect_ratio=aspect_ratio,
+            )
             
             # 保存图片并创建历史版本记录
             page = db.session.get(Page, page_id)
@@ -1466,6 +1537,15 @@ def generate_single_page_image_task(task_id: str, project_id: str, page_id: str,
         except Exception as e:
             import traceback
             error_detail = traceback.format_exc()
+            _log_image_audit_event(
+                "image_task_error",
+                task_id=task_id,
+                project_id=project_id,
+                page_id=page_id,
+                operation="generate_single_page",
+                error=type(e).__name__,
+                detail=str(e),
+            )
             logger.error(f"Task {task_id} FAILED: {error_detail}")
             
             # Mark task as failed
@@ -1547,6 +1627,22 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                     edit_instruction=effective_edit_instruction,
                     reference_image_count=1 + len(merged_edit_refs),
                 )
+                route_meta = _get_image_route_metadata(ai_service)
+                _log_image_audit_event(
+                    "image_task_request",
+                    task_id=task_id,
+                    project_id=project_id,
+                    page_id=page_id,
+                    operation="edit_page_image",
+                    provider=route_meta.get("provider"),
+                    source=route_meta.get("source"),
+                    model=route_meta.get("model"),
+                    aspect_ratio=aspect_ratio,
+                    resolution=resolution,
+                    use_template=use_template,
+                    has_template=bool(template_path),
+                    ref_count=len(merged_edit_refs) + 1,
+                )
                 request_snapshot = _build_image_request_snapshot(
                     operation_type=operation_type,
                     aspect_ratio=aspect_ratio,
@@ -1595,6 +1691,18 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
             
             if not image:
                 raise ValueError("Failed to edit image")
+            _log_image_audit_event(
+                "image_task_result",
+                task_id=task_id,
+                project_id=project_id,
+                page_id=page_id,
+                operation="edit_page_image",
+                model=_resolve_image_model_label(ai_service),
+                requested_resolution=resolution,
+                actual_width=image.width,
+                actual_height=image.height,
+                aspect_ratio=aspect_ratio,
+            )
             
             # 保存编辑后的图片并创建历史版本记录
             page = db.session.get(Page, page_id)
@@ -1627,6 +1735,15 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
         except Exception as e:
             import traceback
             error_detail = traceback.format_exc()
+            _log_image_audit_event(
+                "image_task_error",
+                task_id=task_id,
+                project_id=project_id,
+                page_id=page_id,
+                operation="edit_page_image",
+                error=type(e).__name__,
+                detail=str(e),
+            )
             logger.error(f"Task {task_id} FAILED: {error_detail}")
             
             # Clean up temp directory on error

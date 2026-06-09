@@ -30,6 +30,7 @@ from ..openai_client import _normalize_openai_base_url, make_openai_client
 from .base import ImageProvider
 
 logger = logging.getLogger(__name__)
+audit_logger = logging.getLogger("image_audit")
 
 
 _GPT_IMAGE_SIZE_LONG_EDGE = {
@@ -610,6 +611,7 @@ class OpenAIImageProvider(ImageProvider):
                     payload_summary["aspect_ratio"] = form_data.get("aspect_ratio") if isinstance(form_data, dict) else None
                     payload_summary["file_count"] = len(files or [])
                 logger.info("OpenAI image endpoint request: %s", payload_summary)
+                audit_logger.info("openai_endpoint_request %s", payload_summary)
                 if json_payload is not None:
                     response = requests.post(url, headers=headers, json=json_payload, timeout=self.timeout)
                 else:
@@ -876,6 +878,15 @@ class OpenAIImageProvider(ImageProvider):
             resolution,
             extra_body,
         )
+        audit_logger.info(
+            "openai_chat_request channel=%s model=%s refs=%s aspect_ratio=%s resolution=%s extra_body=%s",
+            self.channel or "(none)",
+            self.model,
+            len(ref_images or []),
+            aspect_ratio,
+            resolution,
+            extra_body,
+        )
         for attempt in range(1, self.max_attempts + 1):
             try:
                 response = self.client.chat.completions.create(
@@ -958,11 +969,28 @@ class OpenAIImageProvider(ImageProvider):
                     resolution,
                     len(refs),
                 )
+                audit_logger.info(
+                    "openai_route_selected route=chat channel=%s model=%s aspect_ratio=%s resolution=%s refs=%s",
+                    self.channel or "(none)",
+                    self.model,
+                    aspect_ratio,
+                    resolution,
+                    len(refs),
+                )
                 return self._call_via_chat_completions(prompt, refs, aspect_ratio, resolution)
 
             # images or auto mode: prioritize dedicated image endpoints
             logger.info(
                 "OpenAI image route selected: route=images channel=%s model=%s aspect_ratio=%s resolution=%s refs=%s endpoint_mode=%s",
+                self.channel or "(none)",
+                self.model,
+                aspect_ratio,
+                resolution,
+                len(refs),
+                self.endpoint_mode,
+            )
+            audit_logger.info(
+                "openai_route_selected route=images channel=%s model=%s aspect_ratio=%s resolution=%s refs=%s endpoint_mode=%s",
                 self.channel or "(none)",
                 self.model,
                 aspect_ratio,
@@ -984,6 +1012,14 @@ class OpenAIImageProvider(ImageProvider):
                     resolution,
                     e,
                 )
+                audit_logger.warning(
+                    "openai_fallback reason=endpoint_unavailable channel=%s model=%s aspect_ratio=%s resolution=%s error=%s",
+                    self.channel or "(none)",
+                    self.model,
+                    aspect_ratio,
+                    resolution,
+                    e,
+                )
                 return self._call_via_chat_completions(prompt, refs, aspect_ratio, resolution)
             raise Exception(
                 f"Image endpoint unavailable (mode={self.endpoint_mode}, model={self.model}, "
@@ -999,6 +1035,16 @@ class OpenAIImageProvider(ImageProvider):
                 logger.warning(
                     "OpenAI image fallback triggered: reason=request_error channel=%s model=%s "
                     "aspect_ratio=%s resolution=%s status=%s endpoint=%s error=%s",
+                    self.channel or "(none)",
+                    self.model,
+                    aspect_ratio,
+                    resolution,
+                    e.status_code,
+                    e.url,
+                    e.response_text,
+                )
+                audit_logger.warning(
+                    "openai_fallback reason=request_error channel=%s model=%s aspect_ratio=%s resolution=%s status=%s endpoint=%s error=%s",
                     self.channel or "(none)",
                     self.model,
                     aspect_ratio,
