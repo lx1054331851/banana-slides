@@ -590,6 +590,26 @@ class OpenAIImageProvider(ImageProvider):
                 headers["Content-Type"] = "application/json"
 
             try:
+                payload_summary = {
+                    "endpoint_kind": endpoint_kind,
+                    "url": url,
+                    "model": self.model,
+                    "channel": self.channel or "(none)",
+                    "path_style": self.path_style,
+                    "response_format": self.response_format,
+                }
+                if json_payload is not None:
+                    payload_summary["payload_keys"] = sorted(json_payload.keys())
+                    payload_summary["size"] = json_payload.get("size")
+                    payload_summary["quality"] = json_payload.get("quality")
+                    payload_summary["aspect_ratio"] = json_payload.get("aspect_ratio")
+                else:
+                    payload_summary["form_keys"] = sorted(form_data.keys()) if isinstance(form_data, dict) else []
+                    payload_summary["size"] = form_data.get("size") if isinstance(form_data, dict) else None
+                    payload_summary["quality"] = form_data.get("quality") if isinstance(form_data, dict) else None
+                    payload_summary["aspect_ratio"] = form_data.get("aspect_ratio") if isinstance(form_data, dict) else None
+                    payload_summary["file_count"] = len(files or [])
+                logger.info("OpenAI image endpoint request: %s", payload_summary)
                 if json_payload is not None:
                     response = requests.post(url, headers=headers, json=json_payload, timeout=self.timeout)
                 else:
@@ -847,6 +867,15 @@ class OpenAIImageProvider(ImageProvider):
         content.append({"type": "text", "text": prompt})
 
         extra_body = self._build_extra_body(aspect_ratio, resolution)
+        logger.info(
+            "OpenAI image chat request: channel=%s model=%s refs=%s aspect_ratio=%s resolution=%s extra_body=%s",
+            self.channel or "(none)",
+            self.model,
+            len(ref_images or []),
+            aspect_ratio,
+            resolution,
+            extra_body,
+        )
         for attempt in range(1, self.max_attempts + 1):
             try:
                 response = self.client.chat.completions.create(
@@ -921,16 +950,40 @@ class OpenAIImageProvider(ImageProvider):
 
         try:
             if self.endpoint_mode == "chat":
+                logger.info(
+                    "OpenAI image route selected: route=chat channel=%s model=%s aspect_ratio=%s resolution=%s refs=%s",
+                    self.channel or "(none)",
+                    self.model,
+                    aspect_ratio,
+                    resolution,
+                    len(refs),
+                )
                 return self._call_via_chat_completions(prompt, refs, aspect_ratio, resolution)
 
             # images or auto mode: prioritize dedicated image endpoints
+            logger.info(
+                "OpenAI image route selected: route=images channel=%s model=%s aspect_ratio=%s resolution=%s refs=%s endpoint_mode=%s",
+                self.channel or "(none)",
+                self.model,
+                aspect_ratio,
+                resolution,
+                len(refs),
+                self.endpoint_mode,
+            )
             if refs:
                 return self._call_via_image_api_edits(prompt, refs, aspect_ratio, resolution)
             return self._call_via_image_api_generations(prompt, aspect_ratio, resolution)
 
         except ImageEndpointUnavailableError as e:
             if self.endpoint_mode == "auto" and self.chat_fallback:
-                logger.warning("Image endpoint unavailable, falling back to chat/completions: %s", e)
+                logger.warning(
+                    "OpenAI image fallback triggered: reason=endpoint_unavailable channel=%s model=%s aspect_ratio=%s resolution=%s error=%s",
+                    self.channel or "(none)",
+                    self.model,
+                    aspect_ratio,
+                    resolution,
+                    e,
+                )
                 return self._call_via_chat_completions(prompt, refs, aspect_ratio, resolution)
             raise Exception(
                 f"Image endpoint unavailable (mode={self.endpoint_mode}, model={self.model}, "
@@ -944,9 +997,12 @@ class OpenAIImageProvider(ImageProvider):
                 and self._should_fallback_to_chat(e)
             ):
                 logger.warning(
-                    "Image endpoint rejected model=%s, falling back to chat/completions. "
-                    "status=%s, endpoint=%s, error=%s",
+                    "OpenAI image fallback triggered: reason=request_error channel=%s model=%s "
+                    "aspect_ratio=%s resolution=%s status=%s endpoint=%s error=%s",
+                    self.channel or "(none)",
                     self.model,
+                    aspect_ratio,
+                    resolution,
                     e.status_code,
                     e.url,
                     e.response_text,

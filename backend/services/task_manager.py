@@ -1152,10 +1152,22 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                                 additional_ref_images=page_additional_ref_images if page_additional_ref_images else None
                             )
                         logger.info(f"✅ Image generated successfully for page {page_index}")
-                        
+
                         if not image:
                             raise ValueError("Failed to generate image")
-                        
+
+                        logger.info(
+                            "Image generation result: task=%s project=%s page=%s model=%s requested_resolution=%s actual_size=%sx%s aspect_ratio=%s",
+                            task_id,
+                            project_id,
+                            page_id,
+                            _resolve_image_model_label(ai_service),
+                            resolution,
+                            image.width,
+                            image.height,
+                            aspect_ratio,
+                        )
+
                         # Check resolution for all providers
                         actual_res, is_match = check_image_resolution(image, resolution)
                         warning_message = None
