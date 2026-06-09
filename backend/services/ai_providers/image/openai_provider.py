@@ -558,6 +558,10 @@ class OpenAIImageProvider(ImageProvider):
         return any(m in text for m in unsupported_markers) and any(m in text for m in image_markers)
 
     def _should_fallback_to_chat(self, err: "ImageApiRequestError") -> bool:
+        if self._is_gpt_image_2(self.model):
+            # gpt-image-2 relies on the dedicated image API to honor size/quality.
+            # Falling back to chat/completions can silently drop the requested 4K size.
+            return False
         if self._is_model_unsupported_on_image_endpoint(err.status_code, err.response_text):
             return True
         # Some OpenAI-compatible relays return generic HTTP 5xx for image endpoints
@@ -955,4 +959,3 @@ class OpenAIImageProvider(ImageProvider):
             )
             logger.error(error_detail, exc_info=True)
             raise Exception(error_detail) from e
-
