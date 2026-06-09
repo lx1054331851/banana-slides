@@ -1,6 +1,7 @@
 import { useCallback, useMemo, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
 import { getImageUrl } from '@/api/client';
+import { uploadMaterial } from '@/api/endpoints';
 import type { PageAiReference } from '@/types';
 import {
   escapeMarkdownText,
@@ -24,6 +25,8 @@ type UseSlidePreviewPageAiReferencesParams = {
   pageAiTextareaRef: RefObject<MarkdownTextareaRef | null>;
   activePreviewReferenceId: string | null;
   setActivePreviewReferenceId: Dispatch<SetStateAction<string | null>>;
+  projectId?: string;
+  show: (options: { message: string; type?: 'success' | 'error' | 'warning' | 'info' | string; duration?: number }) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 };
 
@@ -35,6 +38,8 @@ export const useSlidePreviewPageAiReferences = ({
   pageAiTextareaRef,
   activePreviewReferenceId,
   setActivePreviewReferenceId,
+  projectId,
+  show,
   t,
 }: UseSlidePreviewPageAiReferencesParams) => {
   const extractImageUrlsFromDescription = useCallback((descriptionText: string | undefined): string[] => {
@@ -52,15 +57,62 @@ export const useSlidePreviewPageAiReferences = ({
     return matches;
   }, []);
 
-  const handleFileUpload = useCallback((files: File[]) => {
+  const handleFileUpload = useCallback(async (files: File[]) => {
+    const nextReferences = files.map((file) => createUploadedReference(file, 'upload'));
     setSelectedContextImages((prev) => ({
       ...prev,
-      uploadedReferences: [
-        ...prev.uploadedReferences,
-        ...files.map((file) => createUploadedReference(file, 'upload')),
-      ],
+      uploadedReferences: [...prev.uploadedReferences, ...nextReferences],
     }));
-  }, [setSelectedContextImages]);
+
+    nextReferences.forEach((reference) => {
+      pageAiTextareaRef.current?.insertAtCursor(
+        `![${escapeMarkdownText(reference.label)}](uploading:${reference.previewUrl})\n`
+      );
+    });
+    pageAiTextareaRef.current?.focus();
+
+    const failedFiles: string[] = [];
+
+    await Promise.allSettled(nextReferences.map(async (reference) => {
+      const placeholderUrl = `uploading:${reference.previewUrl}`;
+      try {
+        const response = await uploadMaterial(reference.file, projectId ?? null, true);
+        const realUrl = response?.data?.url;
+        const caption = (response?.data?.caption || reference.label || reference.file.name || 'image').trim();
+        if (!realUrl) {
+          throw new Error('No URL in response');
+        }
+
+        setEditPrompt((current) => current.replace(
+          `![${escapeMarkdownText(reference.label)}](${placeholderUrl})`,
+          `![${escapeMarkdownText(caption)}](${realUrl})`,
+        ));
+
+        setSelectedContextImages((prev) => ({
+          ...prev,
+          uploadedReferences: prev.uploadedReferences.map((item) => (
+            item.id === reference.id
+              ? { ...item, label: caption, markdownUrl: realUrl }
+              : item
+          )),
+        }));
+      } catch {
+        failedFiles.push(reference.file.name || reference.label || 'image');
+        setEditPrompt((current) => removeMarkdownImageByUrl(current, placeholderUrl));
+        setSelectedContextImages((prev) => ({
+          ...prev,
+          uploadedReferences: prev.uploadedReferences.filter((item) => item.id !== reference.id),
+        }));
+      }
+    }));
+
+    if (failedFiles.length > 0) {
+      show({
+        message: t('preview.uploadPageAiImageFailed', { count: String(failedFiles.length) }),
+        type: 'error',
+      });
+    }
+  }, [pageAiTextareaRef, projectId, setEditPrompt, setSelectedContextImages, show, t]);
 
   const appendPageAiFiles = useCallback((files: File[], options?: {
     sourceType?: PageAiUploadedReference['sourceType'];

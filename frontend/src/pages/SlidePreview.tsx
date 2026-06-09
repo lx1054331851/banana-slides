@@ -937,6 +937,8 @@ export const SlidePreview: React.FC = () => {
     pageAiTextareaRef,
     activePreviewReferenceId,
     setActivePreviewReferenceId,
+    projectId,
+    show,
     t,
   });
 
