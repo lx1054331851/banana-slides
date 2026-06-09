@@ -593,6 +593,25 @@ class TestProjectUpdate:
         data = response.get_json()
         assert data['success'] is True
 
+    def test_update_project_title_persists_after_reload(self, client, sample_project):
+        """测试项目名称更新后再次读取仍为新值"""
+        if not sample_project:
+            pytest.skip("项目创建失败")
+
+        project_id = sample_project['project_id']
+        new_title = '刷新后仍保留的新标题'
+
+        update_response = client.put(f'/api/projects/{project_id}', json={
+            'project_title': new_title,
+        })
+
+        update_data = assert_success_response(update_response)
+        assert update_data['data']['project_title'] == new_title
+
+        get_response = client.get(f'/api/projects/{project_id}')
+        get_data = assert_success_response(get_response)
+        assert get_data['data']['project_title'] == new_title
+
 
 class TestProjectDelete:
     """项目删除测试"""
