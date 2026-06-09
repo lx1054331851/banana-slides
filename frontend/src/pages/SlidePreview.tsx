@@ -515,6 +515,7 @@ export const SlidePreview: React.FC = () => {
   const [projectDefaultImageModel, setProjectDefaultImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   const [projectDefaultImageResolution, setProjectDefaultImageResolution] = useState<string>(PROJECT_DEFAULT_IMAGE_RESOLUTION);
   const [providerProfiles, setProviderProfiles] = useState<ProviderProfileSummary[]>([]);
+  const [batchRunImageModel, setBatchRunImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   const [editRunImageModel, setEditRunImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   const normalizedProjectImageModel = useMemo(
     () => normalizeProjectDefaultImageModel(projectDefaultImageModel),
@@ -524,7 +525,7 @@ export const SlidePreview: React.FC = () => {
     () => getSourceForImageChannel(projectDefaultImageChannel, providerProfiles),
     [projectDefaultImageChannel, providerProfiles]
   );
-  const editRunImageModelOptions = useMemo(
+  const runtimeImageModelOptions = useMemo(
     () => getImageChannelOptions(providerProfiles).flatMap((channel) => (
       getSelectableImageModelsForChannel(channel.id, providerProfiles).map((item) => ({
         value: buildRuntimeImageModelValue(channel.id, item.model),
@@ -533,17 +534,21 @@ export const SlidePreview: React.FC = () => {
     )),
     [providerProfiles]
   );
-  const parsedEditRunImageSelection = useMemo(
-    () => parseRuntimeImageModelValue(editRunImageModel),
-    [editRunImageModel]
+  const defaultRuntimeImageModelValue = useMemo(
+    () => buildRuntimeImageModelValue(projectDefaultImageChannel, normalizedProjectImageModel),
+    [normalizedProjectImageModel, projectDefaultImageChannel]
+  );
+  const parsedBatchRunImageSelection = useMemo(
+    () => parseRuntimeImageModelValue(batchRunImageModel),
+    [batchRunImageModel]
   );
   const normalizedRunImageModel = useMemo(
-    () => normalizeProjectDefaultImageModel(parsedEditRunImageSelection.model || projectDefaultImageModel),
-    [parsedEditRunImageSelection.model, projectDefaultImageModel]
+    () => normalizeProjectDefaultImageModel(parsedBatchRunImageSelection.model || normalizedProjectImageModel),
+    [normalizedProjectImageModel, parsedBatchRunImageSelection.model]
   );
   const runtimeSelectedImageChannel = useMemo(
-    () => parsedEditRunImageSelection.channelId || projectDefaultImageChannel,
-    [parsedEditRunImageSelection.channelId, projectDefaultImageChannel]
+    () => parsedBatchRunImageSelection.channelId || projectDefaultImageChannel,
+    [parsedBatchRunImageSelection.channelId, projectDefaultImageChannel]
   );
   const runtimeSelectedImageProvider = useMemo(
     () => getImageChannelOptions(providerProfiles).find((channel) => channel.id === runtimeSelectedImageChannel)?.provider
@@ -999,7 +1004,7 @@ export const SlidePreview: React.FC = () => {
     currentProject,
     selectedIndex,
     currentImageVersionId,
-    defaultModel: PROJECT_DEFAULT_IMAGE_MODEL,
+    defaultModel: defaultRuntimeImageModelValue,
     editPrompt,
     setEditPrompt,
     pageAiMessages,
@@ -1149,7 +1154,7 @@ export const SlidePreview: React.FC = () => {
         setProjectDefaultImageProvider(channelSelection.provider);
         setProjectDefaultImageChannel(channelSelection.channel || preferredChannel?.id || '');
         setProjectDefaultImageModel(normalizedModel);
-        setEditRunImageModel(buildRuntimeImageModelValue(channelSelection.channel || preferredChannel?.id || '', normalizedModel));
+        setBatchRunImageModel(buildRuntimeImageModelValue(channelSelection.channel || preferredChannel?.id || '', normalizedModel));
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
         setDescriptionRequirementsDraft(currentProject.description_requirements || '');
         lastProjectId.current = currentProject.id || null;
@@ -1179,7 +1184,7 @@ export const SlidePreview: React.FC = () => {
         setProjectDefaultImageProvider(channelSelection.provider);
         setProjectDefaultImageChannel(channelSelection.channel || preferredChannel?.id || '');
         setProjectDefaultImageModel(normalizedModel);
-        setEditRunImageModel(buildRuntimeImageModelValue(channelSelection.channel || preferredChannel?.id || '', normalizedModel));
+        setBatchRunImageModel(buildRuntimeImageModelValue(channelSelection.channel || preferredChannel?.id || '', normalizedModel));
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
         setDescriptionRequirementsDraft(currentProject.description_requirements || '');
       }
@@ -2156,7 +2161,7 @@ export const SlidePreview: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowRunModelMenu((prev) => !prev)}
-                    title={`${t('preview.editRunImageModelLabel')}：${editRunImageModel}`}
+                    title={`${t('preview.editRunImageModelLabel')}：${batchRunImageModel}`}
                     aria-label={t('preview.editRunImageModelLabel')}
                     className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm transition-all ${
                       showRunModelMenu
@@ -2169,14 +2174,14 @@ export const SlidePreview: React.FC = () => {
                   {showRunModelMenu && (
                     <div className="absolute right-0 top-full z-40 mt-2 w-[300px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated dark:shadow-[0_18px_40px_rgba(0,0,0,0.36)]">
                       <div className="max-h-[320px] overflow-y-auto">
-                        {editRunImageModelOptions.map((option) => {
-                          const selected = option.value === editRunImageModel;
+                        {runtimeImageModelOptions.map((option) => {
+                          const selected = option.value === batchRunImageModel;
                           return (
                             <button
                               key={option.value}
                               type="button"
                               onClick={() => {
-                                setEditRunImageModel(option.value);
+                                setBatchRunImageModel(option.value);
                                 setShowRunModelMenu(false);
                               }}
                               className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
@@ -2854,7 +2859,7 @@ export const SlidePreview: React.FC = () => {
                       pageAiTextareaRef={pageAiTextareaRef}
                       pageAiSlashActions={pageAiSlashActions}
                       editRunImageModel={editRunImageModel}
-                      editRunImageModelOptions={editRunImageModelOptions}
+                      editRunImageModelOptions={runtimeImageModelOptions}
                       isPageAiSubmitting={isPageAiSubmitting}
                       isRegionSelectionMode={isRegionSelectionMode}
                       pendingRegionCommentValue={pendingRegionComment}
