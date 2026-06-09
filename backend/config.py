@@ -103,13 +103,13 @@ class Config:
     VERTEX_LOCATION = os.getenv('VERTEX_LOCATION', 'us-central1')
     
     # GenAI (Gemini) 格式专用配置
-    GENAI_TIMEOUT = float(os.getenv('GENAI_TIMEOUT', '300.0'))  # Gemini 超时时间（秒）
+    GENAI_TIMEOUT = float(os.getenv('GENAI_TIMEOUT', '600.0'))  # Gemini 超时时间（秒）
     GENAI_MAX_RETRIES = int(os.getenv('GENAI_MAX_RETRIES', '2'))  # Gemini 最大重试次数（应用层实现）
     
     # OpenAI 格式专用配置（当 AI_PROVIDER_FORMAT=openai 时使用）
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')  # 当 AI_PROVIDER_FORMAT=openai 时必须设置
     OPENAI_API_BASE = os.getenv('OPENAI_API_BASE', 'https://aihubmix.com/v1')
-    OPENAI_TIMEOUT = float(os.getenv('OPENAI_TIMEOUT', '480.0'))  # 8 分钟：留出 gpt-image-2 生图(~225s)+传输的余量
+    OPENAI_TIMEOUT = float(os.getenv('OPENAI_TIMEOUT', '600.0'))  # 10 分钟：兼容慢速图片生成与传输
     OPENAI_MAX_RETRIES = int(os.getenv('OPENAI_MAX_RETRIES', '2'))  # 减少重试次数，避免过多重试导致累积超时
     # 文本调用协议：chat_completions（默认）或 responses。
     # 一些 OpenAI 兼容网关对 responses 的大上下文稳定性更好，可按需切换。
@@ -178,7 +178,7 @@ class Config:
     MAX_DESCRIPTION_WORKERS = int(os.getenv('MAX_DESCRIPTION_WORKERS', '5'))
     MAX_IMAGE_WORKERS = int(os.getenv('MAX_IMAGE_WORKERS', '8'))
     # 异步任务卡死保护：任务处于 PENDING/PROCESSING 超过该时间会被判定为失败（秒）
-    TASK_STALE_TIMEOUT_SECONDS = int(os.getenv('TASK_STALE_TIMEOUT_SECONDS', '300'))
+    TASK_STALE_TIMEOUT_SECONDS = int(os.getenv('TASK_STALE_TIMEOUT_SECONDS', '900'))
     # 风格模板任务（尤其是 24 页 data_report 模板）在生成 style_json 推荐稿时耗时明显更长，
     # 这里单独放宽其“陈旧任务”判定，避免后台仍在执行时被列表页误判失败。
     STYLE_PRESET_TASK_STALE_TIMEOUT_SECONDS = int(os.getenv('STYLE_PRESET_TASK_STALE_TIMEOUT_SECONDS', '1800'))
