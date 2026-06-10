@@ -28,6 +28,25 @@ type UseSlidePreviewPageAiContextParams = {
   setSelectedContextImages: Dispatch<SetStateAction<PageAiContextImages>>;
 };
 
+const areStringArraysEqual = (left: string[], right: string[]) => (
+  left.length === right.length && left.every((item, index) => item === right[index])
+);
+
+const areUploadedReferencesEqual = (
+  left: PageAiUploadedReference[],
+  right: PageAiUploadedReference[],
+) => (
+  left.length === right.length
+  && left.every((item, index) => (
+    item.id === right[index]?.id
+    && item.label === right[index]?.label
+    && item.markdownUrl === right[index]?.markdownUrl
+    && item.previewUrl === right[index]?.previewUrl
+    && item.sourceType === right[index]?.sourceType
+    && item.regionComment === right[index]?.regionComment
+  ))
+);
+
 export const useSlidePreviewPageAiContext = ({
   currentProject,
   selectedIndex,
@@ -44,12 +63,14 @@ export const useSlidePreviewPageAiContext = ({
 }: UseSlidePreviewPageAiContextParams) => {
   const [pageAiContextByVersion, setPageAiContextByVersion] = useState<Record<string, PageAiContextState>>({});
   const pendingPageAiContextBindingRef = useRef<Record<string, PendingPageAiContextBinding>>({});
+  const lastHydratedContextKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!currentProject) return;
     const page = currentProject.pages[selectedIndex];
     const pageId = page?.id;
     if (!pageId) {
+      lastHydratedContextKeyRef.current = null;
       setEditPrompt('');
       setPageAiMessages([]);
       setEditRunImageModel(defaultModel);
@@ -63,11 +84,15 @@ export const useSlidePreviewPageAiContext = ({
 
     const versionScopedKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
     const fallbackKey = buildPageAiContextStoreKey(pageId, null);
+    if (lastHydratedContextKeyRef.current === versionScopedKey) {
+      return;
+    }
     const pendingBoundContext = pendingPageAiContextBindingRef.current[pageId]?.context;
     const cached = pageAiContextByVersion[versionScopedKey]
       || pendingBoundContext
       || pageAiContextByVersion[fallbackKey];
     if (!cached) {
+      lastHydratedContextKeyRef.current = versionScopedKey;
       setEditPrompt('');
       setPageAiMessages([]);
       setEditRunImageModel(defaultModel);
@@ -79,6 +104,7 @@ export const useSlidePreviewPageAiContext = ({
       return;
     }
 
+    lastHydratedContextKeyRef.current = versionScopedKey;
     setEditPrompt(cached.draftInput);
     setPageAiMessages(cached.messages);
     setEditRunImageModel(cached.model);
@@ -91,6 +117,7 @@ export const useSlidePreviewPageAiContext = ({
     currentProject?.id,
     currentImageVersionId,
     defaultModel,
+    pageAiContextByVersion,
     selectedIndex,
   ]);
 
@@ -129,9 +156,8 @@ export const useSlidePreviewPageAiContext = ({
     if (!pageId) return;
 
     const contextKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
-    setPageAiContextByVersion((prev) => ({
-      ...prev,
-      [contextKey]: {
+    setPageAiContextByVersion((prev) => {
+      const nextContext = {
         draftInput: editPrompt,
         messages: pageAiMessages,
         model: editRunImageModel,
@@ -140,8 +166,24 @@ export const useSlidePreviewPageAiContext = ({
           descImageUrls: [...selectedContextImages.descImageUrls],
           uploadedReferences: [...selectedContextImages.uploadedReferences],
         },
-      },
-    }));
+      };
+      const existing = prev[contextKey];
+      if (
+        existing
+        && existing.draftInput === nextContext.draftInput
+        && existing.model === nextContext.model
+        && existing.messages === nextContext.messages
+        && existing.contextImages.useTemplate === nextContext.contextImages.useTemplate
+        && areStringArraysEqual(existing.contextImages.descImageUrls, nextContext.contextImages.descImageUrls)
+        && areUploadedReferencesEqual(existing.contextImages.uploadedReferences, nextContext.contextImages.uploadedReferences)
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [contextKey]: nextContext,
+      };
+    });
   }, [
     currentProject,
     currentImageVersionId,

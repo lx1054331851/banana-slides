@@ -80,4 +80,58 @@ describe('useSlidePreviewPageAiContext', () => {
 
     expect(result.current.editRunImageModel).toBe('azure-openai::gpt-image-2')
   })
+
+  it('does not immediately reset the selected model on same-page rerender', () => {
+    const project = createProject()
+
+    const { result, rerender } = renderHook(({ projectVersion }) => {
+      const [editPrompt, setEditPrompt] = useState('')
+      const [pageAiMessages, setPageAiMessages] = useState([])
+      const [editRunImageModel, setEditRunImageModel] = useState('gs88::gpt-image-2-high')
+      const [selectedContextImages, setSelectedContextImages] = useState({
+        useTemplate: false,
+        descImageUrls: [] as string[],
+        uploadedReferences: [],
+      })
+
+      const currentProject = {
+        ...project,
+        updated_at: projectVersion,
+      }
+
+      useSlidePreviewPageAiContext({
+        currentProject,
+        selectedIndex: 0,
+        currentImageVersionId: null,
+        defaultModel: 'gs88::gpt-image-2-high',
+        editPrompt,
+        setEditPrompt,
+        pageAiMessages,
+        setPageAiMessages,
+        editRunImageModel,
+        setEditRunImageModel,
+        selectedContextImages,
+        setSelectedContextImages,
+      })
+
+      return {
+        editRunImageModel,
+        setEditRunImageModel,
+      }
+    }, {
+      initialProps: {
+        projectVersion: '2026-06-10T00:00:00Z',
+      },
+    })
+
+    act(() => {
+      result.current.setEditRunImageModel('azure-sweden::gpt-image-2')
+    })
+
+    rerender({
+      projectVersion: '2026-06-10T00:00:01Z',
+    })
+
+    expect(result.current.editRunImageModel).toBe('azure-sweden::gpt-image-2')
+  })
 })
