@@ -50,6 +50,7 @@ import { SlidePreviewEditorPane } from './components/SlidePreviewEditorPane';
 import { SlidePreviewTopOverlays } from './components/SlidePreviewTopOverlays';
 import { SlidePreviewDialogs } from './components/SlidePreviewDialogs';
 import { SlidePreviewMainPanel } from './components/SlidePreviewMainPanel';
+import { SlidePreviewFloatingMenu } from './components/SlidePreviewFloatingMenu';
 import { useSlidePreviewLayout } from './hooks/useSlidePreviewLayout';
 import { useSlidePreviewGeneration } from './hooks/useSlidePreviewGeneration';
 import { useSlidePreviewDrafts } from './hooks/useSlidePreviewDrafts';
@@ -295,7 +296,7 @@ export const SlidePreview: React.FC = () => {
   const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const [showRunModelMenu, setShowRunModelMenu] = useState(false);
-  const runModelMenuRef = useRef<HTMLDivElement | null>(null);
+  const runModelButtonRef = useRef<HTMLButtonElement | null>(null);
   const settingsSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const textAutoSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const textChangesPendingPersistRef = useRef(false);
@@ -329,7 +330,7 @@ export const SlidePreview: React.FC = () => {
   const descriptionTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const styleGuideTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const editorJsonContainerRef = useRef<HTMLDivElement | null>(null);
-  const previewPageTypeMenuRef = useRef<HTMLDivElement | null>(null);
+  const previewPageTypeButtonRef = useRef<HTMLButtonElement | null>(null);
   const outlineQuickPointsTextareaRef = useRef<MarkdownTextareaRef | null>(null);
   const editDescriptionRef = useRef(editDescription);
   const persistDescriptionDraftRef = useRef<(value: string) => void>(() => {});
@@ -457,18 +458,6 @@ export const SlidePreview: React.FC = () => {
     if (pendingOutlineFocusIndexRef.current !== selectedIndex) return;
     pendingOutlineFocusIndexRef.current = null;
   }, [selectedIndex, canQuickEditOutlineInPreview]);
-  useEffect(() => {
-    if (!isPreviewPageTypeMenuOpen) return;
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!previewPageTypeMenuRef.current?.contains(event.target as Node)) {
-        setIsPreviewPageTypeMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, [isPreviewPageTypeMenuOpen]);
   const isEditingTemplateStyle = useRef(false); // 跟踪用户是否正在编辑风格描述
   const lastProjectId = useRef<string | null>(null); // 跟踪上一次的项目ID
   const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
@@ -682,18 +671,15 @@ export const SlidePreview: React.FC = () => {
       if (fileMenuRef.current && !fileMenuRef.current.contains(event.target as Node)) {
         setFileMenuOpen(false);
       }
-      if (runModelMenuRef.current && !runModelMenuRef.current.contains(event.target as Node)) {
-        setShowRunModelMenu(false);
-      }
       if (externalFieldPopoverRef.current && !externalFieldPopoverRef.current.contains(event.target as Node)) {
         setActiveExternalField(null);
       }
     };
-    if (fileMenuOpen || showRunModelMenu || activeExternalField) {
+    if (fileMenuOpen || activeExternalField) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [fileMenuOpen, showRunModelMenu, activeExternalField]);
+  }, [fileMenuOpen, activeExternalField]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -2164,56 +2150,69 @@ export const SlidePreview: React.FC = () => {
               )}
             </div>
             {useRenovationPreviewForm && (
-              <div className="flex items-center gap-2">
-                <div className="relative" ref={runModelMenuRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowRunModelMenu((prev) => !prev)}
-                    title={`${t('preview.editRunImageModelLabel')}：${batchRunImageModel}`}
-                    aria-label={t('preview.editRunImageModelLabel')}
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm transition-all ${
-                      showRunModelMenu
-                        ? 'border-banana-300 bg-[#fff7d9] text-slate-900 dark:border-banana-500/60 dark:bg-banana-500/10 dark:text-banana'
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <button
+                      ref={runModelButtonRef}
+                      type="button"
+                      onClick={() => setShowRunModelMenu((prev) => !prev)}
+                      title={`${t('preview.editRunImageModelLabel')}：${batchRunImageModel}`}
+                      aria-label={t('preview.editRunImageModelLabel')}
+                      aria-haspopup="menu"
+                      aria-expanded={showRunModelMenu}
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm transition-all ${
+                        showRunModelMenu
+                          ? 'border-banana-300 bg-[#fff7d9] text-slate-900 dark:border-banana-500/60 dark:bg-banana-500/10 dark:text-banana'
                         : 'border-[#e8d9b4] bg-[#fff9ec] text-[#8a7750] hover:border-[#d1be8b] hover:bg-[#fff6e2] dark:border-[#3c4762] dark:bg-[#1a2335] dark:text-[#9eaccf] dark:hover:border-[#4b5a7b] dark:hover:bg-[#202b3f]'
                     }`}
+                    >
+                      <Settings2 size={14} />
+                    </button>
+                  </div>
+                  <SlidePreviewFloatingMenu
+                    anchorRef={runModelButtonRef}
+                    isOpen={showRunModelMenu}
+                    onClose={() => setShowRunModelMenu(false)}
+                    width={420}
+                    maxHeight={360}
+                    ariaLabel={t('preview.editRunImageModelLabel')}
                   >
-                    <Settings2 size={14} />
-                  </button>
-                  {showRunModelMenu && (
-                    <div className="absolute right-0 top-full z-40 mt-2 w-[300px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_40px_rgba(15,23,42,0.12)] dark:border-border-primary dark:bg-background-elevated dark:shadow-[0_18px_40px_rgba(0,0,0,0.36)]">
-                      <div className="max-h-[320px] overflow-y-auto">
-                        {runtimeImageModelOptions.map((option) => {
-                          const selected = option.value === batchRunImageModel;
-                          return (
-                            <button
-                              key={option.value}
-                              type="button"
-                              onClick={() => {
-                                setBatchRunImageModel(option.value);
-                                setShowRunModelMenu(false);
-                              }}
-                              className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                                selected
-                                  ? 'bg-[#fff7d9] text-slate-900 dark:bg-banana-500/10 dark:text-banana'
-                                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-foreground-secondary dark:hover:bg-background-hover dark:hover:text-foreground-primary'
-                              }`}
-                              title={option.label}
-                            >
-                              <span className="min-w-0 truncate">{option.label}</span>
-                              {selected && <Check size={16} className="flex-shrink-0 text-banana-600" />}
-                            </button>
-                          );
-                        })}
-                      </div>
+                    <div className="max-h-[360px] overflow-y-auto pr-1">
+                      {runtimeImageModelOptions.map((option) => {
+                        const selected = option.value === batchRunImageModel;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => {
+                              setBatchRunImageModel(option.value);
+                              setShowRunModelMenu(false);
+                            }}
+                            className={`flex w-full items-start justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm leading-6 transition-colors ${
+                              selected
+                                ? 'bg-[#fff7d9] text-slate-900 dark:bg-banana-500/10 dark:text-banana'
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-foreground-secondary dark:hover:bg-background-hover dark:hover:text-foreground-primary'
+                            }`}
+                            title={option.label}
+                            role="menuitemradio"
+                            aria-checked={selected}
+                          >
+                            <span className="min-w-0 flex-1 break-words whitespace-normal">{option.label}</span>
+                            {selected && <Check size={16} className="mt-1 flex-shrink-0 text-banana-600" />}
+                          </button>
+                        );
+                      })}
                     </div>
-                  )}
-                </div>
+                  </SlidePreviewFloatingMenu>
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  <div className="relative" ref={previewPageTypeMenuRef}>
+                  <div className="relative">
                     <button
+                      ref={previewPageTypeButtonRef}
                       type="button"
                       onClick={() => setIsPreviewPageTypeMenuOpen((prev) => !prev)}
                       data-testid="preview-page-type-select"
+                      aria-haspopup="menu"
+                      aria-expanded={isPreviewPageTypeMenuOpen}
                       className="inline-flex h-9 min-w-[136px] items-center justify-between gap-2 rounded-lg border border-[#e8d9b4] bg-[#fff9ec] px-3 py-1.5 text-sm text-slate-800 transition-colors hover:border-banana-300 focus:outline-none focus:ring-2 focus:ring-banana-400/60 dark:border-[#3c4762] dark:bg-[#1a2335] dark:text-[#f5f7ff] dark:hover:border-banana-500/50"
                     >
                       <span className="truncate">{editPageType || t('preview.pageTypePlaceholder')}</span>
@@ -2222,52 +2221,61 @@ export const SlidePreview: React.FC = () => {
                         className={`flex-shrink-0 text-slate-400 transition-transform dark:text-[#9eaccf] ${isPreviewPageTypeMenuOpen ? 'rotate-180' : ''}`}
                       />
                     </button>
-                    {isPreviewPageTypeMenuOpen && (
-                      <div className="absolute right-0 top-[calc(100%+8px)] z-30 max-h-72 min-w-full overflow-y-auto rounded-xl border border-[#eadfbf] bg-white p-2 shadow-[0_16px_40px_rgba(15,23,42,0.14)] dark:border-[#36415b] dark:bg-[#101521]">
-                        {pageTypeOptions.map((option) => {
-                          const isActive = (editPageType || '标准图文页') === option;
-                          return (
-                            <button
-                              key={option}
-                              type="button"
-                              onClick={() => {
-                                const nextDescription = syncDescriptionPageTypeForCurrentMode(option, editDescription);
-                                const nextStyleGuideBindings = syncStyleGuideBindingsForPageType(option, editStyleGuideBindings);
-                                setEditPageType(option);
-                                if (nextDescription !== editDescription) {
-                                  setEditDescription(nextDescription);
-                                }
-                                if (nextStyleGuideBindings !== editStyleGuideBindings) {
-                                  setEditStyleGuideBindings(nextStyleGuideBindings);
-                                }
-                                persistCurrentPageDraft({ pageType: option });
-                                if (nextDescription !== editDescription) {
-                                  persistCurrentPageDraft({ description: nextDescription });
-                                }
-                                if (nextStyleGuideBindings !== editStyleGuideBindings) {
-                                  persistCurrentPageDraft({ styleGuideBindings: nextStyleGuideBindings, styleGuideManuallyEdited });
-                                }
-                                scheduleTextAutoSave({
-                                  pageType: option,
-                                  ...(nextDescription !== editDescription ? { description: nextDescription } : {}),
-                                  ...(nextStyleGuideBindings !== editStyleGuideBindings ? { styleGuideBindings: nextStyleGuideBindings } : {}),
-                                });
-                                setIsPreviewPageTypeMenuOpen(false);
-                              }}
-                              className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                                isActive
-                                  ? 'bg-banana-50 text-banana-700 dark:bg-banana-500/15 dark:text-banana-300'
-                                  : 'text-slate-700 hover:bg-[#f7edd2] dark:text-[#e2e8f0] dark:hover:bg-[#232f47]'
-                              }`}
-                            >
-                              <span className="truncate">{option}</span>
-                              {isActive ? <Check size={16} className="flex-shrink-0 text-banana-500" /> : null}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
+                  <SlidePreviewFloatingMenu
+                    anchorRef={previewPageTypeButtonRef}
+                    isOpen={isPreviewPageTypeMenuOpen}
+                    onClose={() => setIsPreviewPageTypeMenuOpen(false)}
+                    width={240}
+                    maxHeight={288}
+                    ariaLabel={t('preview.pageTypePlaceholder')}
+                  >
+                    <div className="max-h-72 overflow-y-auto pr-1">
+                      {pageTypeOptions.map((option) => {
+                        const isActive = (editPageType || '标准图文页') === option;
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => {
+                              const nextDescription = syncDescriptionPageTypeForCurrentMode(option, editDescription);
+                              const nextStyleGuideBindings = syncStyleGuideBindingsForPageType(option, editStyleGuideBindings);
+                              setEditPageType(option);
+                              if (nextDescription !== editDescription) {
+                                setEditDescription(nextDescription);
+                              }
+                              if (nextStyleGuideBindings !== editStyleGuideBindings) {
+                                setEditStyleGuideBindings(nextStyleGuideBindings);
+                              }
+                              persistCurrentPageDraft({ pageType: option });
+                              if (nextDescription !== editDescription) {
+                                persistCurrentPageDraft({ description: nextDescription });
+                              }
+                              if (nextStyleGuideBindings !== editStyleGuideBindings) {
+                                persistCurrentPageDraft({ styleGuideBindings: nextStyleGuideBindings, styleGuideManuallyEdited });
+                              }
+                              scheduleTextAutoSave({
+                                pageType: option,
+                                ...(nextDescription !== editDescription ? { description: nextDescription } : {}),
+                                ...(nextStyleGuideBindings !== editStyleGuideBindings ? { styleGuideBindings: nextStyleGuideBindings } : {}),
+                              });
+                              setIsPreviewPageTypeMenuOpen(false);
+                            }}
+                            className={`flex w-full items-start justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm leading-6 transition-colors ${
+                              isActive
+                                ? 'bg-banana-50 text-banana-700 dark:bg-banana-500/15 dark:text-banana-300'
+                                : 'text-slate-700 hover:bg-[#f7edd2] dark:text-[#e2e8f0] dark:hover:bg-[#232f47]'
+                            }`}
+                            role="menuitemradio"
+                            aria-checked={isActive}
+                          >
+                            <span className="min-w-0 flex-1 break-words whitespace-normal">{option}</span>
+                            {isActive ? <Check size={16} className="mt-1 flex-shrink-0 text-banana-500" /> : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </SlidePreviewFloatingMenu>
                   <div className="inline-flex items-center rounded-lg border border-[#e8d9b4] bg-[#fff9ec] p-1 dark:border-[#3c4762] dark:bg-[#1a2335]">
                     <button
                       type="button"
