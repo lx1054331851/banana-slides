@@ -128,14 +128,16 @@ function SettingsFieldLabelWithTooltip({
   tooltip: string;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="group relative inline-flex items-center gap-1.5">
       <span>{label}</span>
       <span
         className="inline-flex cursor-help text-gray-400 transition-colors hover:text-banana-600 dark:text-foreground-tertiary dark:hover:text-banana"
-        title={tooltip}
         aria-label={`${label}说明：${tooltip}`}
       >
         <HelpCircle size={14} />
+      </span>
+      <span className="pointer-events-none absolute left-full top-1/2 z-20 ml-2 hidden w-64 -translate-y-1/2 rounded-md bg-gray-900 px-3 py-2 text-xs font-normal leading-5 text-white shadow-lg group-hover:block dark:bg-black">
+        {tooltip}
       </span>
     </span>
   );
