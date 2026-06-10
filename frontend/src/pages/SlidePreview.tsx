@@ -1165,6 +1165,7 @@ export const SlidePreview: React.FC = () => {
         setProjectDefaultImageChannel(channelSelection.channel || preferredChannel?.id || '');
         setProjectDefaultImageModel(normalizedModel);
         setBatchRunImageModel(buildRuntimeImageModelValue(channelSelection.channel || preferredChannel?.id || '', normalizedModel));
+        setEditRunImageModel(buildRuntimeImageModelValue(channelSelection.channel || preferredChannel?.id || '', normalizedModel));
         setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
         setDescriptionRequirementsDraft(currentProject.description_requirements || '');
         lastProjectId.current = currentProject.id || null;
