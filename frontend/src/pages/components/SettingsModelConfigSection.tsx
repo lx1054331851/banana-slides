@@ -314,7 +314,7 @@ function SettingsImageModelGroup({
         </p>
       </div>
       {showGptImageControls && (
-        <div className="grid gap-3 pl-3 border-l-2 border-sky-300 dark:border-sky-700 md:grid-cols-2">
+        <div className="grid gap-3 pl-3 border-l-2 border-sky-300 dark:border-sky-700 md:grid-cols-2 xl:grid-cols-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
               {t('settings.fields.gptImageBackground')}
@@ -375,7 +375,11 @@ function SettingsImageModelGroup({
             value={formData.gpt_image_output_compression}
             onChange={(e) => handleFieldChange('gpt_image_output_compression', Number(e.target.value))}
           />
-          <p className={`text-sm text-gray-500 dark:text-foreground-tertiary ${showGptCompression ? 'md:col-span-2' : 'md:col-span-2 opacity-70'}`}>
+          <p
+            className={`text-sm text-gray-500 dark:text-foreground-tertiary ${
+              showGptCompression ? 'md:col-span-2 xl:col-span-4' : 'md:col-span-2 xl:col-span-4 opacity-70'
+            }`}
+          >
             {t('settings.fields.gptImageOutputCompressionDesc')}
           </p>
         </div>
