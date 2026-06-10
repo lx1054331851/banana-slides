@@ -117,6 +117,25 @@ function getImageResolutionFieldCopy(
   };
 }
 
+// Return user-facing labels for image resolution options without changing stored values.
+function getImageResolutionOptionLabel(
+  schema: 'default' | 'gpt-image-2' | 'gemini-image',
+  resolution: string,
+  t: SettingsTranslator,
+): string {
+  if (schema !== 'gpt-image-2') {
+    return resolution;
+  }
+
+  const gptImage2ResolutionLabels: Record<string, string> = {
+    '1K': t('settings.fields.gptImageResolution1K'),
+    '2K': t('settings.fields.gptImageResolution2K'),
+    '4K': t('settings.fields.gptImageResolution4K'),
+  };
+
+  return gptImage2ResolutionLabels[resolution] || resolution;
+}
+
 // Render the dedicated image model configuration block with model-family-aware controls.
 function SettingsImageModelGroup({
   item,
@@ -208,7 +227,9 @@ function SettingsImageModelGroup({
           className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
         >
           {visibleImageResolutions.map((resolution) => (
-            <option key={resolution} value={resolution}>{resolution}</option>
+            <option key={resolution} value={resolution}>
+              {getImageResolutionOptionLabel(schema, resolution, t)}
+            </option>
           ))}
         </select>
         <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
