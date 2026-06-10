@@ -1542,6 +1542,21 @@ class AIService:
             
             logger.debug(f"Calling image provider for generation with {len(ref_images)} reference images...")
             logger.debug(f"Enable image reasoning/thinking: {self.enable_image_reasoning}, budget: {self._get_image_thinking_budget()}")
+            route = getattr(self.routing_bundle, "image", None) if self.routing_bundle else None
+            if route:
+                logger.info(
+                    "[Image Route] provider=%s channel=%s source=%s model=%s azure_endpoint=%s azure_api_version=%s source_trace=%s refs=%s aspect_ratio=%s resolution=%s",
+                    route.provider,
+                    route.channel,
+                    route.source,
+                    route.model,
+                    route.azure_endpoint or "",
+                    route.azure_api_version or "",
+                    route.source_trace,
+                    len(ref_images),
+                    aspect_ratio,
+                    resolution,
+                )
             
             # 使用 image_provider 生成图片
             # 根据 enable_image_reasoning 配置控制图像生成的思考模式
