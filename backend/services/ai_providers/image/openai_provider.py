@@ -177,6 +177,7 @@ class OpenAIImageProvider(ImageProvider):
         strict_params: bool = None,
         channel: str = None,
         source_trace: Optional[Sequence[str]] = None,
+        model_capability: Optional[Dict[str, Any]] = None,
     ):
         cfg = get_config()
         azure_endpoint = (azure_endpoint or "").strip() or None
@@ -198,6 +199,7 @@ class OpenAIImageProvider(ImageProvider):
         self.timeout = cfg.OPENAI_TIMEOUT
         self.channel = str(channel or "").strip()
         self.source_trace = list(source_trace or [])
+        self.model_capability = dict(model_capability or {})
 
         self.endpoint_mode = self._normalize_enum(
             endpoint_mode if endpoint_mode is not None else cfg.IMAGE_OPENAI_ENDPOINT_MODE,
@@ -298,8 +300,17 @@ class OpenAIImageProvider(ImageProvider):
         return m.startswith("gemini-2.5") or m == "nano-banana"
 
     def _is_gpt_image_2(self, model: str) -> bool:
+        if str(self.model_capability.get("schema") or "").strip() == "gpt-image-2":
+            return True
         normalized = (model or "").strip().lower()
         return normalized == "gpt-image-2" or normalized.startswith("gpt-image-2-")
+
+    def _get_resolution_family(self, model: str) -> str:
+        """Return explicit resolution family from model capability metadata when present."""
+        family = str(self.model_capability.get("resolution_family") or "").strip().lower()
+        if family:
+            return family
+        return str(model or "").strip().lower()
 
     def _validate_aspect_ratio(self, aspect_ratio: str, strict: bool):
         if strict and not re.fullmatch(r"\d+:\d+", str(aspect_ratio or "").strip()):
@@ -423,9 +434,10 @@ class OpenAIImageProvider(ImageProvider):
             "response_format": self.response_format,
             "aspect_ratio": aspect_ratio,
         }
+        resolution_family = self._get_resolution_family(model)
 
         # gemini-3* / nano-banana-pro*: size uses 1K/2K/4K directly
-        if self._is_gemini3_or_nano_banana_pro(model):
+        if resolution_family.startswith("gemini-3.1-flash-image-preview") or resolution_family.startswith("gemini-3-pro-image-preview") or self._is_gemini3_or_nano_banana_pro(model):
             if strict and resolution_upper not in self._VALID_RESOLUTIONS:
                 raise ValueError(
                     f"Model {model} only allows resolution in {sorted(self._VALID_RESOLUTIONS)}, got {resolution}"
@@ -434,7 +446,7 @@ class OpenAIImageProvider(ImageProvider):
             return params
 
         # gemini-2.5* / nano-banana: only 1K and fixed pixel size map
-        if self._is_gemini25_or_nano_banana(model):
+        if resolution_family.startswith("gemini-2.5-flash-image") or resolution_family == "gemini-base" or self._is_gemini25_or_nano_banana(model):
             if strict and resolution_upper != "1K":
                 raise ValueError(f"Model {model} only supports resolution=1K, got {resolution}")
             mapped = self._GEMINI_25_SIZE_MAP.get(aspect_ratio)

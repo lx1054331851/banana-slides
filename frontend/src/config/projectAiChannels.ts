@@ -231,6 +231,28 @@ export type ImageModelConfigMode =
   | 'openai-images'
   | 'openai-compat-google-chat';
 
+export type ImageModelSchema =
+  | 'default'
+  | 'gpt-image-2'
+  | 'gemini-image';
+
+// Return the explicit schema for the selected channel/model pair when available.
+export const getImageModelSchema = (
+  channelId: string,
+  model: string,
+  providerProfiles: ProviderProfileSummary[],
+): ImageModelSchema => {
+  const channel = getImageChannelOptionById(channelId, providerProfiles);
+  const explicitSchema = String(channel?.model_capabilities?.[String(model || '').trim()]?.schema || '').trim();
+  if (explicitSchema === 'gpt-image-2' || explicitSchema === 'gemini-image') {
+    return explicitSchema;
+  }
+  const mode = getImageModelConfigMode(channelId, model, providerProfiles);
+  if (mode === 'openai-images') return 'gpt-image-2';
+  if (mode === 'openai-compat-google-chat') return 'gemini-image';
+  return 'default';
+};
+
 // Return the config mode for the selected channel/model pair.
 export const getImageModelConfigMode = (
   channelId: string,

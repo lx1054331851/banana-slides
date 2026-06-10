@@ -40,6 +40,7 @@
     },
     "model_capabilities": {
       "gpt-image-2": {
+        "schema": "gpt-image-2",
         "request_mode": "openai-images",
         "resolution_family": "gpt-image-2"
       }
@@ -82,33 +83,40 @@
     },
     "model_capabilities": {
       "gpt-image-2-low": {
+        "schema": "gpt-image-2",
         "request_mode": "openai-images",
         "resolution_family": "gpt-image-2"
       },
       "gpt-image-2-medium": {
+        "schema": "gpt-image-2",
         "request_mode": "openai-images",
         "resolution_family": "gpt-image-2"
       },
       "gpt-image-2-high": {
+        "schema": "gpt-image-2",
         "request_mode": "openai-images",
         "resolution_family": "gpt-image-2"
       },
       "gemini-2.5-flash-image": {
+        "schema": "gemini-image",
         "request_mode": "openai-compat-google-chat",
         "resolution_family": "gemini-2.5-flash-image",
         "aspect_ratio_family": "gemini-base"
       },
       "gemini-2.5-flash-image-preview": {
+        "schema": "gemini-image",
         "request_mode": "openai-compat-google-chat",
         "resolution_family": "gemini-2.5-flash-image",
         "aspect_ratio_family": "gemini-base"
       },
       "gemini-3-pro-image-preview": {
+        "schema": "gemini-image",
         "request_mode": "openai-compat-google-chat",
         "resolution_family": "gemini-3-pro-image-preview",
         "aspect_ratio_family": "gemini-base"
       },
       "gemini-3.1-flash-image-preview": {
+        "schema": "gemini-image",
         "request_mode": "openai-compat-google-chat",
         "resolution_family": "gemini-3.1-flash-image-preview",
         "aspect_ratio_family": "gemini-3.1-flash-image-preview"
@@ -135,6 +143,7 @@
     },
     "model_capabilities": {
       "gpt-image-2": {
+        "schema": "gpt-image-2",
         "request_mode": "openai-images",
         "resolution_family": "gpt-image-2"
       }

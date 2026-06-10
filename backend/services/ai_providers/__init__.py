@@ -563,6 +563,7 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
                 strict_params=opts.get("strict_params"),
                 channel=route.channel,
                 source_trace=route.source_trace,
+                model_capability=(route.metadata or {}).get("model_capability"),
             )
         if route.provider == 'lazyllm':
             return LazyLLMImageProvider(
@@ -619,4 +620,3 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
         # gemini (default)
         logger.info("Image provider: Gemini, model=%s", model)
         return GenAIImageProvider(api_key=config['api_key'], api_base=config['api_base'], model=model)
-
