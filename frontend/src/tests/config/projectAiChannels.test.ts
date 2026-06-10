@@ -7,13 +7,13 @@ import {
 } from '@/config/projectAiChannels';
 
 describe('projectAiChannels image model labels', () => {
-  it('clarifies that gpt-image-2 quality suffixes are not resolution presets', () => {
-    expect(formatImageModelDisplayName('gpt-image-2-low')).toContain('不等于低分辨率');
-    expect(formatImageModelDisplayName('gpt-image-2-medium')).toContain('不等于 2K');
-    expect(formatImageModelDisplayName('gpt-image-2-high')).toContain('不等于 4K');
+  it('keeps gpt-image-2 quality suffix labels plain', () => {
+    expect(formatImageModelDisplayName('gpt-image-2-low')).toBe('gpt-image-2-low');
+    expect(formatImageModelDisplayName('gpt-image-2-medium')).toBe('gpt-image-2-medium');
+    expect(formatImageModelDisplayName('gpt-image-2-high')).toBe('gpt-image-2-high');
   });
 
-  it('includes the clarification in channel display labels', () => {
+  it('keeps channel display labels plain', () => {
     const label = getImageModelDisplayLabel('147ai', 'gpt-image-2-high', [
       {
         id: '147ai',
@@ -24,7 +24,7 @@ describe('projectAiChannels image model labels', () => {
       },
     ] as any);
 
-    expect(label).toBe('147AI -> gpt-image-2-high（高质量档，不等于 4K）');
+    expect(label).toBe('147AI -> gpt-image-2-high');
   });
 
   it('only exposes image channels from explicit provider profiles', () => {

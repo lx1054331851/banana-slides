@@ -202,17 +202,7 @@ export const getSupportedResolutionsForChannelModel = (
 };
 
 export const formatImageModelDisplayName = (model: string): string => {
-  const trimmedModel = String(model || '').trim();
-  if (trimmedModel === 'gpt-image-2-low') {
-    return `${trimmedModel}（低质量档，不等于低分辨率）`;
-  }
-  if (trimmedModel === 'gpt-image-2-medium') {
-    return `${trimmedModel}（中质量档，不等于 2K）`;
-  }
-  if (trimmedModel === 'gpt-image-2-high') {
-    return `${trimmedModel}（高质量档，不等于 4K）`;
-  }
-  return trimmedModel;
+  return String(model || '').trim();
 };
 
 export const getImageModelDisplayLabel = (
