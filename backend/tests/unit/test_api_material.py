@@ -37,7 +37,7 @@ class TestMaterialUpload:
     @patch('controllers.material_controller._generate_image_caption')
     def test_upload_material_with_caption(self, mock_caption, client):
         """Upload with generate_caption=true should include AI caption"""
-        mock_caption.return_value = '一张红色方块图片'
+        mock_caption.return_value = ('一张红色方块图片', None)
         img_bytes = _create_test_image()
         response = client.post(
             '/api/materials/upload?generate_caption=true',
@@ -46,13 +46,15 @@ class TestMaterialUpload:
         )
         data = assert_success_response(response, 201)
         assert data['data']['caption'] == '一张红色方块图片'
+        assert data['data']['caption_status'] == 'generated'
+        assert data['data']['caption_error_code'] is None
         assert 'url' in data['data']
         mock_caption.assert_called_once()
 
     @patch('controllers.material_controller._generate_image_caption')
     def test_upload_material_caption_failure_still_succeeds(self, mock_caption, client):
         """Caption failure should return empty string, upload still succeeds"""
-        mock_caption.return_value = ''
+        mock_caption.return_value = ('', 'generation_failed')
         img_bytes = _create_test_image()
         response = client.post(
             '/api/materials/upload?generate_caption=true',
@@ -61,7 +63,24 @@ class TestMaterialUpload:
         )
         data = assert_success_response(response, 201)
         assert data['data']['caption'] == ''
+        assert data['data']['caption_status'] == 'fallback_filename'
+        assert data['data']['caption_error_code'] == 'generation_failed'
         assert 'url' in data['data']
+
+    @patch('controllers.material_controller._generate_image_caption')
+    def test_upload_material_caption_invalid_api_key_exposes_error_code(self, mock_caption, client):
+        """Invalid API key should be surfaced as a stable caption error code."""
+        mock_caption.return_value = ('', 'invalid_api_key')
+        img_bytes = _create_test_image()
+        response = client.post(
+            '/api/materials/upload?generate_caption=true',
+            data={'file': (img_bytes, 'test.png')},
+            content_type='multipart/form-data'
+        )
+        data = assert_success_response(response, 201)
+        assert data['data']['caption'] == ''
+        assert data['data']['caption_status'] == 'fallback_filename'
+        assert data['data']['caption_error_code'] == 'invalid_api_key'
 
     @patch('controllers.material_controller._generate_image_caption')
     def test_upload_material_caption_false_param(self, mock_caption, client):

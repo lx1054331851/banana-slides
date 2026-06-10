@@ -96,7 +96,8 @@ const imagePasteI18n = {
       uploadFailed: '图片上传失败',
       partialSuccess: '{{success}} 张上传成功，{{failed}} 张失败',
       unsupportedType: '不支持的文件类型：{{types}}',
-      captionFailed: '图片描述识别失败，已使用文件名替代',
+      captionFailed: '图片描述生成失败，已使用文件名替代',
+      captionInvalidApiKey: '图片描述生成失败：当前图片识别 API Key 无效，已使用文件名替代',
     }
   },
   en: {
@@ -106,7 +107,8 @@ const imagePasteI18n = {
       uploadFailed: 'Image upload failed',
       partialSuccess: '{{success}} uploaded, {{failed}} failed',
       unsupportedType: 'Unsupported file type: {{types}}',
-      captionFailed: 'Image caption recognition failed, using filename instead',
+      captionFailed: 'Image caption generation failed, using filename instead',
+      captionInvalidApiKey: 'Image caption generation failed: the current image caption API key is invalid, using filename instead',
     }
   }
 };
@@ -199,10 +201,11 @@ export const useImagePaste = ({
           if (!realUrl) throw new Error('No URL in response');
 
           // Track whether caption generation was requested but failed
-          const captionFailed = generateCaption && !response?.data?.caption;
+          const captionFailed = generateCaption && response?.data?.caption_status === 'fallback_filename';
+          const captionErrorCode = response?.data?.caption_error_code ?? null;
 
           setContentRef.current(prev => prev.replace(markdown, `![${caption}](${realUrl})`));
-          return { success: true, captionFailed };
+          return { success: true, captionFailed, captionErrorCode };
         } catch {
           setContentRef.current(prev => prev.replace(markdown + '\n', '').replace(markdown, ''));
           return { success: false };
@@ -240,7 +243,13 @@ export const useImagePaste = ({
       r => r.status === 'fulfilled' && r.value.captionFailed
     ).length;
     if (captionFailedCount > 0) {
-      showToast({ message: t('imagePaste.captionFailed'), type: 'warning' });
+      const hasInvalidApiKey = results.some(
+        r => r.status === 'fulfilled' && r.value.captionErrorCode === 'invalid_api_key'
+      );
+      showToast({
+        message: hasInvalidApiKey ? t('imagePaste.captionInvalidApiKey') : t('imagePaste.captionFailed'),
+        type: 'warning'
+      });
     }
   }, [projectId, generateCaption, warnUnsupportedTypes, showToast, t]);
 
