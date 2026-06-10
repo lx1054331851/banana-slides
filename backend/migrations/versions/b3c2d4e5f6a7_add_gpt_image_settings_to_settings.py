@@ -18,6 +18,7 @@ depends_on = None
 
 def upgrade() -> None:
     op.add_column('settings', sa.Column('gpt_image_background', sa.String(length=20), nullable=True))
+    op.add_column('settings', sa.Column('gpt_image_size', sa.String(length=32), nullable=True))
     op.add_column('settings', sa.Column('gpt_image_output_format', sa.String(length=20), nullable=True))
     op.add_column('settings', sa.Column('gpt_image_output_compression', sa.Integer(), nullable=True))
     op.add_column('settings', sa.Column('gpt_image_quality', sa.String(length=20), nullable=True))
@@ -27,4 +28,5 @@ def downgrade() -> None:
     op.drop_column('settings', 'gpt_image_quality')
     op.drop_column('settings', 'gpt_image_output_compression')
     op.drop_column('settings', 'gpt_image_output_format')
+    op.drop_column('settings', 'gpt_image_size')
     op.drop_column('settings', 'gpt_image_background')

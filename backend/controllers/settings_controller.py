@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -187,6 +188,7 @@ def temporary_settings_override(settings_override: dict):
 
         for settings_key, config_key in [
             ("gpt_image_background", "GPT_IMAGE_BACKGROUND"),
+            ("gpt_image_size", "GPT_IMAGE_SIZE"),
             ("gpt_image_output_format", "GPT_IMAGE_OUTPUT_FORMAT"),
             ("gpt_image_output_compression", "GPT_IMAGE_OUTPUT_COMPRESSION"),
             ("gpt_image_quality", "GPT_IMAGE_QUALITY"),
@@ -400,6 +402,23 @@ def update_settings():
                 return bad_request("gpt_image_background must be 'auto', 'transparent', or 'opaque'")
             settings.gpt_image_background = background or None
 
+        if "gpt_image_size" in data:
+            gpt_image_size = (data["gpt_image_size"] or "").strip().lower()
+            if gpt_image_size:
+                match = re.fullmatch(r"(\d{2,4})x(\d{2,4})", gpt_image_size)
+                if not match:
+                    return bad_request("gpt_image_size must be formatted like '1536x1024'")
+                width = int(match.group(1))
+                height = int(match.group(2))
+                if width > 3840 or height > 3840:
+                    return bad_request("gpt_image_size edges must be <= 3840")
+                if width % 16 != 0 or height % 16 != 0:
+                    return bad_request("gpt_image_size width and height must be multiples of 16")
+                ratio = max(width, height) / max(1, min(width, height))
+                if ratio > 3:
+                    return bad_request("gpt_image_size aspect ratio must be between 1:3 and 3:1")
+            settings.gpt_image_size = gpt_image_size or None
+
         if "gpt_image_output_format" in data:
             output_format = (data["gpt_image_output_format"] or "").strip().lower()
             if output_format and output_format not in ("png", "jpeg", "webp"):
@@ -513,6 +532,7 @@ def reset_settings():
         settings.image_caption_model_source = None
         settings.openai_image_api_protocol = None
         settings.gpt_image_background = None
+        settings.gpt_image_size = None
         settings.gpt_image_output_format = None
         settings.gpt_image_output_compression = None
         settings.gpt_image_quality = None
@@ -899,6 +919,7 @@ def _sync_settings_to_config(settings: Settings):
 
     for settings_key, config_key in [
         ('gpt_image_background', 'GPT_IMAGE_BACKGROUND'),
+        ('gpt_image_size', 'GPT_IMAGE_SIZE'),
         ('gpt_image_output_format', 'GPT_IMAGE_OUTPUT_FORMAT'),
         ('gpt_image_output_compression', 'GPT_IMAGE_OUTPUT_COMPRESSION'),
         ('gpt_image_quality', 'GPT_IMAGE_QUALITY'),

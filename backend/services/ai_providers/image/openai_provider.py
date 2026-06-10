@@ -179,6 +179,7 @@ class OpenAIImageProvider(ImageProvider):
         source_trace: Optional[Sequence[str]] = None,
         model_capability: Optional[Dict[str, Any]] = None,
         gpt_image_background: Optional[str] = None,
+        gpt_image_size: Optional[str] = None,
         gpt_image_output_format: Optional[str] = None,
         gpt_image_output_compression: Optional[int] = None,
         gpt_image_quality: Optional[str] = None,
@@ -205,6 +206,7 @@ class OpenAIImageProvider(ImageProvider):
         self.source_trace = list(source_trace or [])
         self.model_capability = dict(model_capability or {})
         self.gpt_image_background = str(gpt_image_background or "").strip().lower() or "auto"
+        self.gpt_image_size = str(gpt_image_size or "").strip().lower() or ""
         self.gpt_image_output_format = str(gpt_image_output_format or "").strip().lower() or "png"
         self.gpt_image_output_compression = self._normalize_compression_value(gpt_image_output_compression)
         self.gpt_image_quality = str(gpt_image_quality or "").strip().lower() or "auto"
@@ -438,6 +440,12 @@ class OpenAIImageProvider(ImageProvider):
             return self.gpt_image_quality
         return self._select_gpt_image_2_quality(resolution)
 
+    def _get_gpt_image_2_size(self, aspect_ratio: str, resolution: str, strict: bool) -> str:
+        """Return explicit GPT Image 2 size when configured, otherwise derive it from aspect ratio and tier."""
+        if self.gpt_image_size:
+            return self.gpt_image_size
+        return self._compute_gpt_image_2_size(aspect_ratio, resolution, strict)
+
     def _build_image_api_params(self, model: str, aspect_ratio: str, resolution: str, strict: bool) -> Dict[str, Any]:
         self._validate_aspect_ratio(aspect_ratio, strict)
         resolution_upper = (resolution or "").upper()
@@ -449,7 +457,7 @@ class OpenAIImageProvider(ImageProvider):
         if self._is_gpt_image_2(model):
             params: Dict[str, Any] = {
                 "response_format": self.response_format,
-                "size": self._compute_gpt_image_2_size(aspect_ratio, resolution_upper, strict),
+                "size": self._get_gpt_image_2_size(aspect_ratio, resolution_upper, strict),
                 "quality": self._get_gpt_image_2_quality(resolution_upper),
             }
             if self.gpt_image_background in {"transparent", "opaque"}:

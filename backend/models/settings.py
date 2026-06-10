@@ -75,6 +75,7 @@ class Settings(db.Model):
     # OpenAI image API protocol: auto (default), images (force images.generate), chat (force chat.completions)
     openai_image_api_protocol = db.Column(db.String(10), nullable=True)
     gpt_image_background = db.Column(db.String(20), nullable=True)
+    gpt_image_size = db.Column(db.String(32), nullable=True)
     gpt_image_output_format = db.Column(db.String(20), nullable=True)
     gpt_image_output_compression = db.Column(db.Integer, nullable=True)
     gpt_image_quality = db.Column(db.String(20), nullable=True)
@@ -171,6 +172,7 @@ class Settings(db.Model):
             'azure_openai_api_version': self._val('azure_openai_api_version', d),
             'openai_image_api_protocol': self._val('openai_image_api_protocol', d) or 'auto',
             'gpt_image_background': self._val('gpt_image_background', d) or 'auto',
+            'gpt_image_size': self._val('gpt_image_size', d) or '1536x1024',
             'gpt_image_output_format': self._val('gpt_image_output_format', d) or 'png',
             'gpt_image_output_compression': self._val('gpt_image_output_compression', d) or 100,
             'gpt_image_quality': self._val('gpt_image_quality', d) or 'auto',
@@ -287,6 +289,7 @@ class Settings(db.Model):
             'image_caption_azure_openai_endpoint': getattr(Config, 'IMAGE_CAPTION_AZURE_OPENAI_ENDPOINT', None),
             'image_caption_azure_openai_api_version': getattr(Config, 'IMAGE_CAPTION_AZURE_OPENAI_API_VERSION', None),
             'gpt_image_background': getattr(Config, 'GPT_IMAGE_BACKGROUND', None),
+            'gpt_image_size': getattr(Config, 'GPT_IMAGE_SIZE', None),
             'gpt_image_output_format': getattr(Config, 'GPT_IMAGE_OUTPUT_FORMAT', None),
             'gpt_image_output_compression': getattr(Config, 'GPT_IMAGE_OUTPUT_COMPRESSION', None),
             'gpt_image_quality': getattr(Config, 'GPT_IMAGE_QUALITY', None),

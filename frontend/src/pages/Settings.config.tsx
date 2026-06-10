@@ -126,10 +126,37 @@ export const initialFormData = {
   image_caption_azure_openai_endpoint: '',
   image_caption_azure_openai_api_version: '2024-10-21',
   openai_image_api_protocol: 'auto',
+  gpt_image_size: '1536x1024',
   gpt_image_background: 'auto',
   gpt_image_output_format: 'png',
   gpt_image_output_compression: 100,
   gpt_image_quality: 'auto',
+};
+
+const GPT_IMAGE_SIZE_TO_RESOLUTION: Record<string, string> = {
+  '1024x1024': '1K',
+  '1536x1024': '1K',
+  '1024x1536': '1K',
+  '2048x2048': '2K',
+  '2048x1152': '2K',
+  '1152x2048': '2K',
+  '3840x2160': '4K',
+  '2160x3840': '4K',
+  '2880x2880': '4K',
+};
+
+// Convert a GPT Image 2 real size into the legacy resolution tier used elsewhere in the app.
+export const getGptImageResolutionFromSize = (size?: string): string => {
+  const normalized = String(size || '').trim();
+  return GPT_IMAGE_SIZE_TO_RESOLUTION[normalized] || '1K';
+};
+
+// Choose a stable default GPT Image 2 size from a legacy resolution tier.
+export const getDefaultGptImageSizeFromResolution = (resolution?: string): string => {
+  const normalized = String(resolution || '').trim().toUpperCase();
+  if (normalized === '4K') return '3840x2160';
+  if (normalized === '2K') return '2048x1152';
+  return '1536x1024';
 };
 
 export const isLazyllmVendor = (vendor: string) =>
@@ -227,6 +254,7 @@ export const formDataFromSettings = (data: SettingsType): typeof initialFormData
   image_caption_azure_openai_endpoint: data.image_caption_azure_openai_endpoint || '',
   image_caption_azure_openai_api_version: data.image_caption_azure_openai_api_version || '2024-10-21',
   openai_image_api_protocol: data.openai_image_api_protocol || 'auto',
+  gpt_image_size: data.gpt_image_size || getDefaultGptImageSizeFromResolution(data.image_resolution),
   gpt_image_background: data.gpt_image_background || 'auto',
   gpt_image_output_format: data.gpt_image_output_format || 'png',
   gpt_image_output_compression: data.gpt_image_output_compression ?? 100,

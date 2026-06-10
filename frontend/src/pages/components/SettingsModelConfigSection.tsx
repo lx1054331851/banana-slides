@@ -15,6 +15,7 @@ import {
   API_KEY_PROVIDERS,
   GLOBAL_PROVIDER_SOURCES,
   getImageModelSelectOptions,
+  getGptImageResolutionFromSize,
   initialFormData,
   isLazyllmVendor,
   LAZYLLM_SOURCES,
@@ -101,8 +102,8 @@ function getImageResolutionFieldCopy(
 ): { label: string; description: string } {
   if (schema === 'gpt-image-2') {
     return {
-      label: t('settings.fields.gptImageResolutionLabel'),
-      description: t('settings.fields.gptImageResolutionDesc'),
+      label: t('settings.fields.gptImageSizeLabel'),
+      description: t('settings.fields.gptImageSizeDesc'),
     };
   }
   if (schema === 'gemini-image') {
@@ -117,24 +118,17 @@ function getImageResolutionFieldCopy(
   };
 }
 
-// Return user-facing labels for image resolution options without changing stored values.
-function getImageResolutionOptionLabel(
-  schema: 'default' | 'gpt-image-2' | 'gemini-image',
-  resolution: string,
-  t: SettingsTranslator,
-): string {
-  if (schema !== 'gpt-image-2') {
-    return resolution;
-  }
-
-  const gptImage2ResolutionLabels: Record<string, string> = {
-    '1K': t('settings.fields.gptImageResolution1K'),
-    '2K': t('settings.fields.gptImageResolution2K'),
-    '4K': t('settings.fields.gptImageResolution4K'),
-  };
-
-  return gptImage2ResolutionLabels[resolution] || resolution;
-}
+const GPT_IMAGE_SIZE_OPTIONS = [
+  { value: '1024x1024', labelKey: 'settings.fields.gptImageSizeSquare1K' },
+  { value: '1536x1024', labelKey: 'settings.fields.gptImageSizeLandscape1K' },
+  { value: '1024x1536', labelKey: 'settings.fields.gptImageSizePortrait1K' },
+  { value: '2048x2048', labelKey: 'settings.fields.gptImageSizeSquare2K' },
+  { value: '2048x1152', labelKey: 'settings.fields.gptImageSizeLandscape2K' },
+  { value: '1152x2048', labelKey: 'settings.fields.gptImageSizePortrait2K' },
+  { value: '3840x2160', labelKey: 'settings.fields.gptImageSizeLandscape4K' },
+  { value: '2160x3840', labelKey: 'settings.fields.gptImageSizePortrait4K' },
+  { value: '2880x2880', labelKey: 'settings.fields.gptImageSizeSquare4K' },
+] as const;
 
 // Render the dedicated image model configuration block with model-family-aware controls.
 function SettingsImageModelGroup({
@@ -221,17 +215,32 @@ function SettingsImageModelGroup({
         <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
           {resolutionFieldCopy.label}
         </label>
-        <select
-          value={visibleImageResolutions.includes(formData.image_resolution) ? formData.image_resolution : (visibleImageResolutions[0] || formData.image_resolution)}
-          onChange={(e) => handleFieldChange('image_resolution', e.target.value)}
-          className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
-        >
-          {visibleImageResolutions.map((resolution) => (
-            <option key={resolution} value={resolution}>
-              {getImageResolutionOptionLabel(schema, resolution, t)}
-            </option>
-          ))}
-        </select>
+        {showGptImageControls ? (
+          <select
+            value={formData.gpt_image_size}
+            onChange={(e) => {
+              handleFieldChange('gpt_image_size', e.target.value);
+              handleFieldChange('image_resolution', getGptImageResolutionFromSize(e.target.value));
+            }}
+            className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
+          >
+            {GPT_IMAGE_SIZE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {t(option.labelKey)}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <select
+            value={visibleImageResolutions.includes(formData.image_resolution) ? formData.image_resolution : (visibleImageResolutions[0] || formData.image_resolution)}
+            onChange={(e) => handleFieldChange('image_resolution', e.target.value)}
+            className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
+          >
+            {visibleImageResolutions.map((resolution) => (
+              <option key={resolution} value={resolution}>{resolution}</option>
+            ))}
+          </select>
+        )}
         <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
           {resolutionFieldCopy.description}
         </p>

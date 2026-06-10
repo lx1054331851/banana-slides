@@ -28,6 +28,7 @@ import {
   SETTINGS_SECTION_IDS,
   GlobalVendorKeyInput,
   formDataFromSettings,
+  getDefaultGptImageSizeFromResolution,
   initialFormData,
   isLazyllmVendor,
   type FieldConfig,
@@ -537,6 +538,9 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
         image_model_source: channel?.source || (channel?.provider || 'gemini'),
         image_model: nextModel,
         image_resolution: nextResolution,
+        gpt_image_size: nextModel.startsWith('gpt-image-2')
+          ? (prev.gpt_image_size || getDefaultGptImageSizeFromResolution(nextResolution))
+          : prev.gpt_image_size,
       };
     });
   };
@@ -557,6 +561,9 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       image_resolution: resolutionOptions.includes(prev.image_resolution)
         ? prev.image_resolution
         : (resolutionOptions[0] || prev.image_resolution),
+      gpt_image_size: model.startsWith('gpt-image-2')
+        ? (prev.gpt_image_size || getDefaultGptImageSizeFromResolution(resolutionOptions[0]))
+        : prev.gpt_image_size,
     }));
   };
 
@@ -589,6 +596,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       if (formData.mineru_token) testSettings.mineru_token = formData.mineru_token;
       if (formData.baidu_api_key) testSettings.baidu_api_key = formData.baidu_api_key;
       if (formData.image_resolution) testSettings.image_resolution = formData.image_resolution;
+      if (formData.gpt_image_size) testSettings.gpt_image_size = formData.gpt_image_size;
       if (formData.gpt_image_background) testSettings.gpt_image_background = formData.gpt_image_background;
       if (formData.gpt_image_output_format) testSettings.gpt_image_output_format = formData.gpt_image_output_format;
       if (formData.gpt_image_output_compression !== undefined) {

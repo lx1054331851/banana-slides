@@ -324,6 +324,7 @@ export interface Settings {
   azure_openai_api_version?: string;
   // OpenAI image API protocol
   openai_image_api_protocol?: string;
+  gpt_image_size?: string;
   gpt_image_background?: string;
   gpt_image_output_format?: string;
   gpt_image_output_compression?: number;

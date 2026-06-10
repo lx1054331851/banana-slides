@@ -43,6 +43,7 @@ def _get_gpt_image_settings() -> Dict[str, Any]:
     """Return GPT Image 2 specific settings resolved through the standard config chain."""
     return {
         'gpt_image_background': _resolve_setting('GPT_IMAGE_BACKGROUND', 'auto'),
+        'gpt_image_size': _resolve_setting('GPT_IMAGE_SIZE'),
         'gpt_image_output_format': _resolve_setting('GPT_IMAGE_OUTPUT_FORMAT', 'png'),
         'gpt_image_output_compression': _resolve_setting('GPT_IMAGE_OUTPUT_COMPRESSION', '100'),
         'gpt_image_quality': _resolve_setting('GPT_IMAGE_QUALITY', 'auto'),
@@ -576,6 +577,7 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
                 source_trace=route.source_trace,
                 model_capability=(route.metadata or {}).get("model_capability"),
                 gpt_image_background=gpt_image_settings['gpt_image_background'],
+                gpt_image_size=gpt_image_settings['gpt_image_size'],
                 gpt_image_output_format=gpt_image_settings['gpt_image_output_format'],
                 gpt_image_output_compression=gpt_image_settings['gpt_image_output_compression'],
                 gpt_image_quality=gpt_image_settings['gpt_image_quality'],
@@ -618,6 +620,7 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
             azure_endpoint=config.get('azure_endpoint'),
             azure_api_version=config.get('azure_api_version'),
             gpt_image_background=gpt_image_settings['gpt_image_background'],
+            gpt_image_size=gpt_image_settings['gpt_image_size'],
             gpt_image_output_format=gpt_image_settings['gpt_image_output_format'],
             gpt_image_output_compression=gpt_image_settings['gpt_image_output_compression'],
             gpt_image_quality=gpt_image_settings['gpt_image_quality'],
