@@ -178,6 +178,10 @@ class OpenAIImageProvider(ImageProvider):
         channel: str = None,
         source_trace: Optional[Sequence[str]] = None,
         model_capability: Optional[Dict[str, Any]] = None,
+        gpt_image_background: Optional[str] = None,
+        gpt_image_output_format: Optional[str] = None,
+        gpt_image_output_compression: Optional[int] = None,
+        gpt_image_quality: Optional[str] = None,
     ):
         cfg = get_config()
         azure_endpoint = (azure_endpoint or "").strip() or None
@@ -200,6 +204,10 @@ class OpenAIImageProvider(ImageProvider):
         self.channel = str(channel or "").strip()
         self.source_trace = list(source_trace or [])
         self.model_capability = dict(model_capability or {})
+        self.gpt_image_background = str(gpt_image_background or "").strip().lower() or "auto"
+        self.gpt_image_output_format = str(gpt_image_output_format or "").strip().lower() or "png"
+        self.gpt_image_output_compression = self._normalize_compression_value(gpt_image_output_compression)
+        self.gpt_image_quality = str(gpt_image_quality or "").strip().lower() or "auto"
 
         self.endpoint_mode = self._normalize_enum(
             endpoint_mode if endpoint_mode is not None else cfg.IMAGE_OPENAI_ENDPOINT_MODE,
@@ -252,6 +260,15 @@ class OpenAIImageProvider(ImageProvider):
         if text in {"0", "false", "no", "n", "off", ""}:
             return False
         return bool(raw_value)
+
+    @staticmethod
+    def _normalize_compression_value(raw_value: Any) -> int:
+        """Normalize GPT Image 2 compression into a safe 0-100 integer."""
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError):
+            return 100
+        return max(0, min(100, value))
 
     def _build_extra_body(self, aspect_ratio: str, resolution: str) -> dict:
         resolution_upper = resolution.upper()
@@ -415,7 +432,13 @@ class OpenAIImageProvider(ImageProvider):
             return "medium"
         return "low"
 
-    def _build_image_api_params(self, model: str, aspect_ratio: str, resolution: str, strict: bool) -> Dict[str, str]:
+    def _get_gpt_image_2_quality(self, resolution: str) -> str:
+        """Return explicit GPT Image 2 quality when configured, otherwise fall back to resolution mapping."""
+        if self.gpt_image_quality in {"low", "medium", "high"}:
+            return self.gpt_image_quality
+        return self._select_gpt_image_2_quality(resolution)
+
+    def _build_image_api_params(self, model: str, aspect_ratio: str, resolution: str, strict: bool) -> Dict[str, Any]:
         self._validate_aspect_ratio(aspect_ratio, strict)
         resolution_upper = (resolution or "").upper()
         if strict and resolution_upper not in self._VALID_RESOLUTIONS:
@@ -424,11 +447,18 @@ class OpenAIImageProvider(ImageProvider):
             )
 
         if self._is_gpt_image_2(model):
-            return {
+            params: Dict[str, Any] = {
                 "response_format": self.response_format,
                 "size": self._compute_gpt_image_2_size(aspect_ratio, resolution_upper, strict),
-                "quality": self._select_gpt_image_2_quality(resolution_upper),
+                "quality": self._get_gpt_image_2_quality(resolution_upper),
             }
+            if self.gpt_image_background in {"transparent", "opaque"}:
+                params["background"] = self.gpt_image_background
+            if self.gpt_image_output_format in {"png", "jpeg", "webp"}:
+                params["output_format"] = self.gpt_image_output_format
+            if self.gpt_image_output_format in {"jpeg", "webp"}:
+                params["output_compression"] = self.gpt_image_output_compression
+            return params
 
         params: Dict[str, str] = {
             "response_format": self.response_format,
@@ -616,11 +646,17 @@ class OpenAIImageProvider(ImageProvider):
                     payload_summary["size"] = json_payload.get("size")
                     payload_summary["quality"] = json_payload.get("quality")
                     payload_summary["aspect_ratio"] = json_payload.get("aspect_ratio")
+                    payload_summary["background"] = json_payload.get("background")
+                    payload_summary["output_format"] = json_payload.get("output_format")
+                    payload_summary["output_compression"] = json_payload.get("output_compression")
                 else:
                     payload_summary["form_keys"] = sorted(form_data.keys()) if isinstance(form_data, dict) else []
                     payload_summary["size"] = form_data.get("size") if isinstance(form_data, dict) else None
                     payload_summary["quality"] = form_data.get("quality") if isinstance(form_data, dict) else None
                     payload_summary["aspect_ratio"] = form_data.get("aspect_ratio") if isinstance(form_data, dict) else None
+                    payload_summary["background"] = form_data.get("background") if isinstance(form_data, dict) else None
+                    payload_summary["output_format"] = form_data.get("output_format") if isinstance(form_data, dict) else None
+                    payload_summary["output_compression"] = form_data.get("output_compression") if isinstance(form_data, dict) else None
                     payload_summary["file_count"] = len(files or [])
                 logger.info("OpenAI image endpoint request: %s", payload_summary)
                 audit_logger.info("openai_endpoint_request %s", payload_summary)

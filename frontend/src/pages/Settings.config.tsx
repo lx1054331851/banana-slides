@@ -126,6 +126,10 @@ export const initialFormData = {
   image_caption_azure_openai_endpoint: '',
   image_caption_azure_openai_api_version: '2024-10-21',
   openai_image_api_protocol: 'auto',
+  gpt_image_background: 'auto',
+  gpt_image_output_format: 'png',
+  gpt_image_output_compression: 100,
+  gpt_image_quality: 'auto',
 };
 
 export const isLazyllmVendor = (vendor: string) =>
@@ -223,4 +227,8 @@ export const formDataFromSettings = (data: SettingsType): typeof initialFormData
   image_caption_azure_openai_endpoint: data.image_caption_azure_openai_endpoint || '',
   image_caption_azure_openai_api_version: data.image_caption_azure_openai_api_version || '2024-10-21',
   openai_image_api_protocol: data.openai_image_api_protocol || 'auto',
+  gpt_image_background: data.gpt_image_background || 'auto',
+  gpt_image_output_format: data.gpt_image_output_format || 'png',
+  gpt_image_output_compression: data.gpt_image_output_compression ?? 100,
+  gpt_image_quality: data.gpt_image_quality || 'auto',
 });

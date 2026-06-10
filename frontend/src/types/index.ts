@@ -324,6 +324,10 @@ export interface Settings {
   azure_openai_api_version?: string;
   // OpenAI image API protocol
   openai_image_api_protocol?: string;
+  gpt_image_background?: string;
+  gpt_image_output_format?: string;
+  gpt_image_output_compression?: number;
+  gpt_image_quality?: string;
   // OpenAI Codex OAuth
   openai_oauth_connected: boolean;
   openai_oauth_account_id?: string;

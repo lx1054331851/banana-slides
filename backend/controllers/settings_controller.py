@@ -185,6 +185,20 @@ def temporary_settings_override(settings_override: dict):
             original_values["OPENAI_IMAGE_API_PROTOCOL"] = current_app.config.get("OPENAI_IMAGE_API_PROTOCOL")
             current_app.config["OPENAI_IMAGE_API_PROTOCOL"] = settings_override["openai_image_api_protocol"]
 
+        for settings_key, config_key in [
+            ("gpt_image_background", "GPT_IMAGE_BACKGROUND"),
+            ("gpt_image_output_format", "GPT_IMAGE_OUTPUT_FORMAT"),
+            ("gpt_image_output_compression", "GPT_IMAGE_OUTPUT_COMPRESSION"),
+            ("gpt_image_quality", "GPT_IMAGE_QUALITY"),
+        ]:
+            if settings_key in settings_override:
+                original_values[config_key] = current_app.config.get(config_key)
+                val = settings_override[settings_key]
+                if val is not None and val != "":
+                    current_app.config[config_key] = val
+                else:
+                    current_app.config.pop(config_key, None)
+
         yield
 
     finally:
@@ -380,6 +394,34 @@ def update_settings():
                 return bad_request("openai_image_api_protocol must be 'auto', 'images', or 'chat'")
             settings.openai_image_api_protocol = protocol if protocol != "auto" else None
 
+        if "gpt_image_background" in data:
+            background = (data["gpt_image_background"] or "").strip().lower()
+            if background and background not in ("auto", "transparent", "opaque"):
+                return bad_request("gpt_image_background must be 'auto', 'transparent', or 'opaque'")
+            settings.gpt_image_background = background or None
+
+        if "gpt_image_output_format" in data:
+            output_format = (data["gpt_image_output_format"] or "").strip().lower()
+            if output_format and output_format not in ("png", "jpeg", "webp"):
+                return bad_request("gpt_image_output_format must be 'png', 'jpeg', or 'webp'")
+            settings.gpt_image_output_format = output_format or None
+
+        if "gpt_image_output_compression" in data:
+            compression = data["gpt_image_output_compression"]
+            if compression in (None, ""):
+                settings.gpt_image_output_compression = None
+            else:
+                compression = int(compression)
+                if compression < 0 or compression > 100:
+                    return bad_request("gpt_image_output_compression must be between 0 and 100")
+                settings.gpt_image_output_compression = compression
+
+        if "gpt_image_quality" in data:
+            quality = (data["gpt_image_quality"] or "").strip().lower()
+            if quality and quality not in ("auto", "low", "medium", "high"):
+                return bad_request("gpt_image_quality must be 'auto', 'low', 'medium', or 'high'")
+            settings.gpt_image_quality = quality or None
+
         if "image_caption_model_source" in data:
             settings.image_caption_model_source = _normalize_provider_value(data["image_caption_model_source"]) or None
 
@@ -470,6 +512,10 @@ def reset_settings():
         settings.image_model_source = None
         settings.image_caption_model_source = None
         settings.openai_image_api_protocol = None
+        settings.gpt_image_background = None
+        settings.gpt_image_output_format = None
+        settings.gpt_image_output_compression = None
+        settings.gpt_image_quality = None
         settings.lazyllm_api_keys = None
         for model_type in ('text', 'image', 'image_caption'):
             setattr(settings, f'{model_type}_api_key', None)
@@ -850,6 +896,22 @@ def _sync_settings_to_config(settings: Settings):
         if config_key in current_app.config:
             ai_config_changed = True
         current_app.config.pop(config_key, None)
+
+    for settings_key, config_key in [
+        ('gpt_image_background', 'GPT_IMAGE_BACKGROUND'),
+        ('gpt_image_output_format', 'GPT_IMAGE_OUTPUT_FORMAT'),
+        ('gpt_image_output_compression', 'GPT_IMAGE_OUTPUT_COMPRESSION'),
+        ('gpt_image_quality', 'GPT_IMAGE_QUALITY'),
+    ]:
+        val = getattr(settings, settings_key)
+        if val is not None:
+            if current_app.config.get(config_key) != val:
+                ai_config_changed = True
+            current_app.config[config_key] = val
+        else:
+            if config_key in current_app.config:
+                ai_config_changed = True
+            current_app.config.pop(config_key, None)
 
     # Sync LazyLLM vendor API keys to environment variables
     # (lazyllm_env.py reads from os.environ via {SOURCE}_API_KEY)

@@ -1773,6 +1773,10 @@ export interface TestSettingsOverride {
   text_thinking_budget?: number;
   enable_image_reasoning?: boolean;
   image_thinking_budget?: number;
+  gpt_image_background?: string;
+  gpt_image_output_format?: string;
+  gpt_image_output_compression?: number;
+  gpt_image_quality?: string;
 }
 
 export const getProviderProfiles = async (): Promise<ApiResponse<{ profiles: ProviderProfileSummary[] }>> => {

@@ -589,6 +589,12 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       if (formData.mineru_token) testSettings.mineru_token = formData.mineru_token;
       if (formData.baidu_api_key) testSettings.baidu_api_key = formData.baidu_api_key;
       if (formData.image_resolution) testSettings.image_resolution = formData.image_resolution;
+      if (formData.gpt_image_background) testSettings.gpt_image_background = formData.gpt_image_background;
+      if (formData.gpt_image_output_format) testSettings.gpt_image_output_format = formData.gpt_image_output_format;
+      if (formData.gpt_image_output_compression !== undefined) {
+        testSettings.gpt_image_output_compression = formData.gpt_image_output_compression;
+      }
+      if (formData.gpt_image_quality) testSettings.gpt_image_quality = formData.gpt_image_quality;
 
       // Per-model provider source overrides (always send, even empty, to clear saved values)
       testSettings.text_model_source = formData.text_model_source || '';

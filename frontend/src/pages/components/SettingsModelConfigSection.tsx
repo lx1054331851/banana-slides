@@ -202,6 +202,9 @@ function SettingsImageModelGroup({
   const resolutionFieldCopy = getImageResolutionFieldCopy(schema, t);
   const showOpenAIProtocol = configMode === 'openai-images';
   const showCompatHint = configMode === 'openai-compat-google-chat';
+  const showGptImageControls = schema === 'gpt-image-2';
+  const showGptCompression = showGptImageControls && ['jpeg', 'webp'].includes(formData.gpt_image_output_format);
+  const showGeminiReasoningControls = schema === 'gemini-image';
 
   return (
     <div className="pb-6 border-b border-gray-200 dark:border-border-primary last:border-b-0 last:pb-0 space-y-3">
@@ -262,6 +265,101 @@ function SettingsImageModelGroup({
           {resolutionFieldCopy.description}
         </p>
       </div>
+      {showGptImageControls && (
+        <div className="grid gap-3 pl-3 border-l-2 border-sky-300 dark:border-sky-700 md:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+              {t('settings.fields.gptImageBackground')}
+            </label>
+            <select
+              value={formData.gpt_image_background}
+              onChange={(e) => handleFieldChange('gpt_image_background', e.target.value)}
+              className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
+            >
+              <option value="auto">{t('settings.fields.gptImageBackgroundAuto')}</option>
+              <option value="transparent">{t('settings.fields.gptImageBackgroundTransparent')}</option>
+              <option value="opaque">{t('settings.fields.gptImageBackgroundOpaque')}</option>
+            </select>
+            <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
+              {t('settings.fields.gptImageBackgroundDesc')}
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+              {t('settings.fields.gptImageOutputFormat')}
+            </label>
+            <select
+              value={formData.gpt_image_output_format}
+              onChange={(e) => handleFieldChange('gpt_image_output_format', e.target.value)}
+              className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
+            >
+              <option value="png">PNG</option>
+              <option value="jpeg">JPEG</option>
+              <option value="webp">WebP</option>
+            </select>
+            <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
+              {t('settings.fields.gptImageOutputFormatDesc')}
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+              {t('settings.fields.gptImageQuality')}
+            </label>
+            <select
+              value={formData.gpt_image_quality}
+              onChange={(e) => handleFieldChange('gpt_image_quality', e.target.value)}
+              className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
+            >
+              <option value="auto">{t('settings.fields.gptImageQualityAuto')}</option>
+              <option value="low">{t('settings.fields.gptImageQualityLow')}</option>
+              <option value="medium">{t('settings.fields.gptImageQualityMedium')}</option>
+              <option value="high">{t('settings.fields.gptImageQualityHigh')}</option>
+            </select>
+            <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
+              {t('settings.fields.gptImageQualityDesc')}
+            </p>
+          </div>
+          <Input
+            label={t('settings.fields.gptImageOutputCompression')}
+            type="number"
+            min={0}
+            max={100}
+            value={formData.gpt_image_output_compression}
+            onChange={(e) => handleFieldChange('gpt_image_output_compression', Number(e.target.value))}
+          />
+          <p className={`text-sm text-gray-500 dark:text-foreground-tertiary ${showGptCompression ? 'md:col-span-2' : 'md:col-span-2 opacity-70'}`}>
+            {t('settings.fields.gptImageOutputCompressionDesc')}
+          </p>
+        </div>
+      )}
+      {showGeminiReasoningControls && (
+        <div className="grid gap-3 pl-3 border-l-2 border-emerald-300 dark:border-emerald-700 md:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
+              {t('settings.fields.enableImageReasoning')}
+            </label>
+            <select
+              value={formData.enable_image_reasoning ? 'enabled' : 'disabled'}
+              onChange={(e) => handleFieldChange('enable_image_reasoning', e.target.value === 'enabled')}
+              className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
+            >
+              <option value="disabled">Off</option>
+              <option value="enabled">On</option>
+            </select>
+            <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
+              {t('settings.fields.enableImageReasoningDesc')}
+            </p>
+          </div>
+          <Input
+            label={t('settings.fields.imageThinkingBudget')}
+            type="number"
+            min={1}
+            max={8192}
+            value={formData.image_thinking_budget}
+            onChange={(e) => handleFieldChange('image_thinking_budget', Number(e.target.value))}
+          />
+        </div>
+      )}
       {showOpenAIProtocol && (
         <div className="pl-3 border-l-2 border-banana-300 dark:border-banana-600">
           <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">

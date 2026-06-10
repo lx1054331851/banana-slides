@@ -39,6 +39,16 @@ LAZYLLM_VENDORS = {'qwen', 'doubao', 'deepseek', 'glm', 'siliconflow', 'sensenov
 AZURE_OPENAI_SOURCES = {'azure-openai', 'azure'}
 
 
+def _get_gpt_image_settings() -> Dict[str, Any]:
+    """Return GPT Image 2 specific settings resolved through the standard config chain."""
+    return {
+        'gpt_image_background': _resolve_setting('GPT_IMAGE_BACKGROUND', 'auto'),
+        'gpt_image_output_format': _resolve_setting('GPT_IMAGE_OUTPUT_FORMAT', 'png'),
+        'gpt_image_output_compression': _resolve_setting('GPT_IMAGE_OUTPUT_COMPRESSION', '100'),
+        'gpt_image_quality': _resolve_setting('GPT_IMAGE_QUALITY', 'auto'),
+    }
+
+
 def _resolve_profile_source_config(model_type: str, source: str) -> Dict[str, Any]:
     """Resolve ``profile:*`` source into a provider config for the requested model type."""
     prefix = model_type.upper()
@@ -549,6 +559,7 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
         effective_model = route.model or model
         if route.provider == 'openai':
             opts = route.adapter_options or {}
+            gpt_image_settings = _get_gpt_image_settings()
             return OpenAIImageProvider(
                 api_key=route.api_key or "",
                 api_base=route.api_base,
@@ -564,6 +575,10 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
                 channel=route.channel,
                 source_trace=route.source_trace,
                 model_capability=(route.metadata or {}).get("model_capability"),
+                gpt_image_background=gpt_image_settings['gpt_image_background'],
+                gpt_image_output_format=gpt_image_settings['gpt_image_output_format'],
+                gpt_image_output_compression=gpt_image_settings['gpt_image_output_compression'],
+                gpt_image_quality=gpt_image_settings['gpt_image_quality'],
             )
         if route.provider == 'lazyllm':
             return LazyLLMImageProvider(
@@ -595,12 +610,17 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
     elif fmt == 'openai':
         logger.info("Image provider: OpenAI, model=%s", model)
         logger.warning("OpenAI format only supports 1K resolution, 4K is not available")
+        gpt_image_settings = _get_gpt_image_settings()
         return OpenAIImageProvider(
             api_key=config['api_key'],
             api_base=config['api_base'],
             model=model,
             azure_endpoint=config.get('azure_endpoint'),
             azure_api_version=config.get('azure_api_version'),
+            gpt_image_background=gpt_image_settings['gpt_image_background'],
+            gpt_image_output_format=gpt_image_settings['gpt_image_output_format'],
+            gpt_image_output_compression=gpt_image_settings['gpt_image_output_compression'],
+            gpt_image_quality=gpt_image_settings['gpt_image_quality'],
         )
     elif fmt == 'vertex':
         logger.info("Image provider: Vertex AI, model=%s, project=%s", model, config['project_id'])
