@@ -263,7 +263,6 @@ function SettingsImageModelGroup({
   const configMode = getImageModelConfigMode(resolvedImageChannel, currentModelValue, providerProfiles);
   const schema = getImageModelSchema(resolvedImageChannel, currentModelValue, providerProfiles);
   const resolutionFieldCopy = getImageResolutionFieldCopy(schema, t);
-  const showOpenAIProtocol = configMode === 'openai-images';
   const showCompatHint = configMode === 'openai-compat-google-chat';
   const showGptImageControls = schema === 'gpt-image-2';
   const showGeminiReasoningControls = schema === 'gemini-image';
@@ -432,25 +431,6 @@ function SettingsImageModelGroup({
             value={formData.image_thinking_budget}
             onChange={(e) => handleFieldChange('image_thinking_budget', Number(e.target.value))}
           />
-        </div>
-      )}
-      {showOpenAIProtocol && (
-        <div className="pl-3 border-l-2 border-banana-300 dark:border-banana-600">
-          <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-            {t('settings.fields.imageApiProtocol')}
-          </label>
-          <select
-            value={formData.openai_image_api_protocol}
-            onChange={(e) => handleFieldChange('openai_image_api_protocol', e.target.value)}
-            className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
-          >
-            <option value="auto">{t('settings.fields.imageApiProtocolAuto')}</option>
-            <option value="images">{t('settings.fields.imageApiProtocolImages')}</option>
-            <option value="chat">{t('settings.fields.imageApiProtocolChat')}</option>
-          </select>
-          <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
-            {t('settings.fields.imageApiProtocolDesc')}
-          </p>
         </div>
       )}
       {showCompatHint && (
