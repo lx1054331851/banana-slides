@@ -201,6 +201,45 @@ export const getSupportedResolutionsForChannelModel = (
   return [...fallbackResolutions];
 };
 
+// Return whether the model uses OpenAI-compatible chat + google image config on this channel.
+const isOpenAICompatGoogleChatModel = (
+  channel: ImageChannelOption | undefined,
+  model: string,
+): boolean => {
+  const normalizedModel = String(model || '').trim().toLowerCase();
+  if (!channel || channel.provider !== 'openai') return false;
+  if (String(channel.adapter || '').trim() !== 'openai_image_compat') return false;
+  return normalizedModel.startsWith('gemini-');
+};
+
+// Return whether the model uses the native OpenAI images API parameter family.
+const isOpenAIImagesModel = (channel: ImageChannelOption | undefined, model: string): boolean => {
+  const normalizedModel = String(model || '').trim().toLowerCase();
+  if (!channel || channel.provider !== 'openai') return false;
+  return normalizedModel === 'gpt-image-2' || normalizedModel.startsWith('gpt-image-2-');
+};
+
+export type ImageModelConfigMode =
+  | 'default'
+  | 'openai-images'
+  | 'openai-compat-google-chat';
+
+// Return the config mode for the selected channel/model pair.
+export const getImageModelConfigMode = (
+  channelId: string,
+  model: string,
+  providerProfiles: ProviderProfileSummary[],
+): ImageModelConfigMode => {
+  const channel = getImageChannelOptionById(channelId, providerProfiles);
+  if (isOpenAICompatGoogleChatModel(channel, model)) {
+    return 'openai-compat-google-chat';
+  }
+  if (isOpenAIImagesModel(channel, model)) {
+    return 'openai-images';
+  }
+  return 'default';
+};
+
 export const formatImageModelDisplayName = (model: string): string => {
   return String(model || '').trim();
 };

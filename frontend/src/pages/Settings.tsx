@@ -10,17 +10,15 @@ import * as api from '@/api/endpoints';
 import type { ProviderProfileSummary } from '@/api/endpoints';
 import { OUTPUT_LANGUAGE_OPTIONS } from '@/api/endpoints';
 import type { Settings as SettingsType } from '@/types';
-import { getImageSourceForModel } from '@/config/projectAiDefaults';
 import {
   getImageChannelOptionById,
-  getImageChannelOptions,
   getSelectableImageModelsForChannel,
   getSourceForImageChannel,
   getSupportedResolutionsForChannelModel,
-  normalizeImageChannel,
 } from '@/config/projectAiChannels';
 import { getSupportedResolutionsForModel } from '@/config/projectAiDefaults';
 import { SettingsOpenAIOAuthSection } from './components/SettingsOpenAIOAuthSection';
+import { SettingsModelConfigSection } from './components/SettingsModelConfigSection';
 import { useSettingsOpenAIOAuth } from './hooks/useSettingsOpenAIOAuth';
 
 import {
@@ -30,7 +28,6 @@ import {
   SETTINGS_SECTION_IDS,
   GlobalVendorKeyInput,
   formDataFromSettings,
-  getImageModelSelectOptions,
   initialFormData,
   isLazyllmVendor,
   type FieldConfig,
@@ -820,329 +817,6 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
     );
   };
 
-  // 模型配置项定义：每种模型类型的 key、source key、api key/base key、标签等
-  const modelConfigItems = [
-    {
-      modelKey: 'text_model' as keyof typeof initialFormData,
-      sourceKey: 'text_model_source' as keyof typeof initialFormData,
-      apiKeyKey: 'text_api_key' as keyof typeof initialFormData,
-      apiBaseKey: 'text_api_base_url' as keyof typeof initialFormData,
-      apiKeyLengthKey: 'text_api_key_length' as keyof SettingsType,
-      label: t('settings.fields.textModel'),
-      placeholder: t('settings.fields.textModelPlaceholder'),
-      description: t('settings.fields.textModelDesc'),
-      sourceLabel: t('settings.fields.textModelSource'),
-    },
-    {
-      modelKey: 'image_model' as keyof typeof initialFormData,
-      sourceKey: 'image_model_source' as keyof typeof initialFormData,
-      apiKeyKey: 'image_api_key' as keyof typeof initialFormData,
-      apiBaseKey: 'image_api_base_url' as keyof typeof initialFormData,
-      apiKeyLengthKey: 'image_api_key_length' as keyof SettingsType,
-      label: t('settings.fields.imageModel'),
-      placeholder: t('settings.fields.imageModelPlaceholder'),
-      description: t('settings.fields.imageModelDesc'),
-      sourceLabel: t('settings.fields.imageModelSource'),
-      usePresetModelSelect: true,
-    },
-    {
-      modelKey: 'image_caption_model' as keyof typeof initialFormData,
-      sourceKey: 'image_caption_model_source' as keyof typeof initialFormData,
-      apiKeyKey: 'image_caption_api_key' as keyof typeof initialFormData,
-      apiBaseKey: 'image_caption_api_base_url' as keyof typeof initialFormData,
-      apiKeyLengthKey: 'image_caption_api_key_length' as keyof SettingsType,
-      label: t('settings.fields.imageCaptionModel'),
-      placeholder: t('settings.fields.imageCaptionModelPlaceholder'),
-      description: t('settings.fields.imageCaptionModelDesc'),
-      sourceLabel: t('settings.fields.imageCaptionModelSource'),
-    },
-  ];
-  const profileSourceOptions = providerProfiles.map((p) => ({
-    value: `profile:${p.id}`,
-    label: `Profile: ${p.id} (${String(p.provider || '').toUpperCase()})`,
-  }));
-
-  // 渲染单个模型配置组（模型名 + 提供商选择 + 条件凭证）
-  const renderModelConfigGroup = (item: typeof modelConfigItems[0]) => {
-    const sourceValue = formData[item.sourceKey] as string;
-    const currentModelValue = String(formData[item.modelKey] || '');
-    const isImageModelGroup = item.usePresetModelSelect === true;
-    const isApiKeyProvider = API_KEY_PROVIDERS.has(sourceValue);
-    const isAzureOpenAI = sourceValue === 'azure-openai';
-    const isLazyllm = sourceValue && isLazyllmVendor(sourceValue);
-    const matchedImageChannel = isImageModelGroup
-      ? getImageChannelOptions(providerProfiles).find((channel) => channel.source === sourceValue)
-      : undefined;
-    const resolvedImageProvider = isImageModelGroup
-      ? (matchedImageChannel?.provider || sourceValue || 'gemini')
-      : '';
-    const resolvedImageChannel = isImageModelGroup
-      ? normalizeImageChannel(
-        matchedImageChannel?.id || '',
-        resolvedImageProvider,
-        providerProfiles,
-      )
-      : '';
-    const selectableImageModels = isImageModelGroup
-      ? getSelectableImageModelsForChannel(resolvedImageChannel, providerProfiles)
-      : [];
-    const channelSelectOptions = isImageModelGroup
-      ? (getImageChannelOptions(providerProfiles).length > 0
-        ? getImageChannelOptions(providerProfiles)
-        : [{ id: '', label: '默认通道' }])
-      : [];
-    const visibleImageResolutions = isImageModelGroup
-      ? getSupportedResolutionsForChannelModel(
-        resolvedImageChannel,
-        currentModelValue,
-        providerProfiles,
-        getSupportedResolutionsForModel(currentModelValue),
-      )
-      : [];
-    const fallbackImageModelOptions = isImageModelGroup
-      ? getImageModelSelectOptions(currentModelValue)
-        .filter((option) => getImageSourceForModel(option.value, resolvedImageProvider) === resolvedImageProvider)
-        .filter((option, index, list) => list.findIndex((item) => item.value === option.value) === index)
-      : [];
-    const capabilityKey = item.sourceKey === 'text_model_source'
-      ? 'text'
-      : (item.sourceKey === 'image_caption_model_source' ? 'image_caption' : 'image');
-    const modelProviderSources = [
-      ...GLOBAL_PROVIDER_SOURCES,
-      ...profileSourceOptions.filter((option) => {
-        const profileId = option.value.replace(/^profile:/, '');
-        const profile = providerProfiles.find((p) => String(p.id) === profileId);
-        const capabilities = Array.isArray(profile?.capabilities) ? profile.capabilities : [];
-        return capabilities.includes(capabilityKey);
-      }),
-    ];
-    // 'openai' in source dropdown means OpenAI format (API key provider), not lazyllm openai vendor
-    // lazyllm openai vendor is handled separately
-
-    return (
-      <div key={item.modelKey} className="pb-6 border-b border-gray-200 dark:border-border-primary last:border-b-0 last:pb-0 space-y-3">
-        {/* 模型名称 */}
-        {!isImageModelGroup && (
-          <Input
-            label={item.label}
-            type="text"
-            placeholder={item.placeholder}
-            value={formData[item.modelKey] as string}
-            onChange={(e) => handleFieldChange(item.modelKey, e.target.value)}
-          />
-        )}
-        {isImageModelGroup && (
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-                图片模型渠道
-              </label>
-              <select
-                value={resolvedImageChannel}
-                onChange={(e) => handleImageChannelChange(e.target.value)}
-                className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
-              >
-                {channelSelectOptions.map((channel) => (
-                  <option key={channel.id} value={channel.id}>
-                    {channel.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-                {item.label}
-              </label>
-              <select
-                value={currentModelValue}
-                onChange={(e) => handleImageModelChange(e.target.value, resolvedImageChannel)}
-                className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
-              >
-                <option value="">{item.placeholder}</option>
-                {(selectableImageModels.length > 0 ? selectableImageModels : fallbackImageModelOptions).map((option) => (
-                  <option
-                    key={('model' in option ? `${option.source}:${option.model}` : option.value)}
-                    value={('model' in option ? option.model : option.value)}
-                  >
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-        {item.description && (
-          <p className="-mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">{item.description}</p>
-        )}
-
-        {/* 提供商选择 */}
-        {!isImageModelGroup && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-            {item.sourceLabel}
-          </label>
-          <select
-            value={sourceValue}
-            onChange={(e) => handleFieldChange(item.sourceKey, e.target.value)}
-            className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
-          >
-            <option value="">{t('settings.fields.modelProviderPlaceholder')}</option>
-            {modelProviderSources.map((option) => (
-              <option
-                key={option.value}
-                value={option.value}
-                disabled={option.value === 'codex' && !settings?.openai_oauth_connected}
-              >
-                {option.label}{option.value === 'codex' && !settings?.openai_oauth_connected ? ` (${t('settings.openaiOAuth.disconnected')})` : ''}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
-            {t('settings.fields.modelProviderDesc')}
-          </p>
-        </div>
-        )}
-
-        {isImageModelGroup && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-              图像清晰度
-            </label>
-            <select
-              value={visibleImageResolutions.includes(formData.image_resolution) ? formData.image_resolution : (visibleImageResolutions[0] || formData.image_resolution)}
-              onChange={(e) => handleFieldChange('image_resolution', e.target.value)}
-              className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
-            >
-              {visibleImageResolutions.map((resolution) => (
-                <option key={resolution} value={resolution}>{resolution}</option>
-              ))}
-            </select>
-            <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
-              按当前渠道与模型动态收敛可选清晰度。
-            </p>
-          </div>
-        )}
-
-        {/* Gemini/OpenAI 提供商：显示 API Base URL + API Key */}
-        {isApiKeyProvider && !isAzureOpenAI && (
-          <div className="space-y-3 pl-3 border-l-2 border-banana-300 dark:border-banana-600">
-            <Input
-              label={t('settings.fields.perModelApiBaseUrl')}
-              type="text"
-              placeholder={t('settings.fields.perModelApiBaseUrlPlaceholder')}
-              value={formData[item.apiBaseKey] as string}
-              onChange={(e) => handleFieldChange(item.apiBaseKey, e.target.value)}
-            />
-            <div>
-              <Input
-                label={t('settings.fields.perModelApiKey')}
-                type="password"
-                placeholder={
-                  settings && (settings[item.apiKeyLengthKey] as number) > 0
-                    ? t('settings.fields.perModelApiKeySet', { length: settings[item.apiKeyLengthKey] as number })
-                    : t('settings.fields.perModelApiKeyPlaceholder')
-                }
-                value={formData[item.apiKeyKey] as string}
-                onChange={(e) => handleFieldChange(item.apiKeyKey, e.target.value)}
-              />
-              <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
-                {t('settings.fields.perModelApiKeyDesc')}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {isAzureOpenAI && (
-          <div className="space-y-3 pl-3 border-l-2 border-banana-300 dark:border-banana-600">
-            <Input
-              label={t('settings.fields.perModelAzureEndpoint')}
-              type="text"
-              placeholder={t('settings.fields.perModelAzureEndpointPlaceholder')}
-              value={formData[`${String(item.modelKey).replace('_model', '')}_azure_openai_endpoint` as keyof typeof initialFormData] as string}
-              onChange={(e) => handleFieldChange(`${String(item.modelKey).replace('_model', '')}_azure_openai_endpoint`, e.target.value)}
-            />
-            <Input
-              label={t('settings.fields.perModelAzureApiVersion')}
-              type="text"
-              placeholder={t('settings.fields.perModelAzureApiVersionPlaceholder')}
-              value={formData[`${String(item.modelKey).replace('_model', '')}_azure_openai_api_version` as keyof typeof initialFormData] as string}
-              onChange={(e) => handleFieldChange(`${String(item.modelKey).replace('_model', '')}_azure_openai_api_version`, e.target.value)}
-            />
-            <div>
-              <Input
-                label={t('settings.fields.perModelApiKey')}
-                type="password"
-                placeholder={
-                  settings && (settings[item.apiKeyLengthKey] as number) > 0
-                    ? t('settings.fields.perModelApiKeySet', { length: settings[item.apiKeyLengthKey] as number })
-                    : t('settings.fields.perModelApiKeyPlaceholder')
-                }
-                value={formData[item.apiKeyKey] as string}
-                onChange={(e) => handleFieldChange(item.apiKeyKey, e.target.value)}
-              />
-              <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
-                {t('settings.fields.perModelApiKeyDesc')}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Image API Protocol: for image model when effective provider is openai */}
-        {item.sourceKey === 'image_model_source' && (
-          sourceValue === 'openai'
-          || sourceValue === 'azure-openai'
-          || (!sourceValue && (formData.ai_provider_format === 'openai' || formData.ai_provider_format === 'azure-openai'))
-        ) && (
-          <div className="pl-3 border-l-2 border-banana-300 dark:border-banana-600">
-            <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-              {t('settings.fields.imageApiProtocol')}
-            </label>
-            <select
-              value={formData.openai_image_api_protocol}
-              onChange={(e) => handleFieldChange('openai_image_api_protocol', e.target.value)}
-              className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
-            >
-              <option value="auto">{t('settings.fields.imageApiProtocolAuto')}</option>
-              <option value="images">{t('settings.fields.imageApiProtocolImages')}</option>
-              <option value="chat">{t('settings.fields.imageApiProtocolChat')}</option>
-            </select>
-            <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
-              {t('settings.fields.imageApiProtocolDesc')}
-            </p>
-          </div>
-        )}
-
-        {/* LazyLLM 厂商：显示厂商 API Key */}
-        {isLazyllm && (() => {
-          const vendorLabel = LAZYLLM_SOURCES.find(s => s.value === sourceValue)?.label || sourceValue.toUpperCase();
-          const keyLength = settings?.lazyllm_api_keys_info?.[sourceValue] || 0;
-          const placeholder = keyLength > 0
-            ? t('settings.fields.vendorApiKeySet', { length: keyLength })
-            : t('settings.fields.vendorApiKeyPlaceholder', { vendor: vendorLabel });
-          return (
-            <div className="pl-3 border-l-2 border-amber-300 dark:border-amber-600">
-              <Input
-                label={t('settings.fields.vendorApiKey', { vendor: vendorLabel })}
-                type="password"
-                placeholder={placeholder}
-                value={formData.lazyllm_api_keys[sourceValue] || ''}
-                onChange={(e) => {
-                  setFormData(prev => ({
-                    ...prev,
-                    lazyllm_api_keys: { ...prev.lazyllm_api_keys, [sourceValue]: e.target.value }
-                  }));
-                }}
-              />
-              <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
-                {t('settings.fields.vendorApiKeyDesc')}
-              </p>
-            </div>
-          );
-        })()}
-      </div>
-    );
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -1312,9 +986,16 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
             title: t('settings.sections.modelConfig'),
             icon: <FileText size={20} />,
             children: (
-              <div className="space-y-4">
-                {modelConfigItems.map(renderModelConfigGroup)}
-              </div>
+              <SettingsModelConfigSection
+                formData={formData}
+                providerProfiles={providerProfiles}
+                settings={settings}
+                t={t}
+                handleFieldChange={handleFieldChange}
+                handleImageChannelChange={handleImageChannelChange}
+                handleImageModelChange={handleImageModelChange}
+                setFormData={setFormData}
+              />
             ),
           })}
 

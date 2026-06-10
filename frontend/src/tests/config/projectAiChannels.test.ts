@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatImageModelDisplayName,
   getImageChannelOptions,
+  getImageModelConfigMode,
   getImageModelDisplayLabel,
 } from '@/config/projectAiChannels';
 
@@ -20,6 +21,7 @@ describe('projectAiChannels image model labels', () => {
         channel: '147ai',
         label: '147AI',
         provider: 'openai',
+        adapter: 'openai_image_compat',
         capabilities: ['image'],
       },
     ] as any);
@@ -52,5 +54,22 @@ describe('projectAiChannels image model labels', () => {
         source: 'profile:147ai',
       }),
     ]);
+  });
+
+  it('separates gpt-image-2 and gemini-compatible config modes on the same channel', () => {
+    const profiles = [
+      {
+        id: '147ai',
+        channel: '147ai',
+        label: '147AI',
+        provider: 'openai',
+        adapter: 'openai_image_compat',
+        capabilities: ['image'],
+      },
+    ] as any;
+
+    expect(getImageModelConfigMode('147ai', 'gpt-image-2-high', profiles)).toBe('openai-images');
+    expect(getImageModelConfigMode('147ai', 'gemini-3.1-flash-image-preview', profiles)).toBe('openai-compat-google-chat');
+    expect(getImageModelConfigMode('147ai', 'gemini-2.5-flash-image', profiles)).toBe('openai-compat-google-chat');
   });
 });
