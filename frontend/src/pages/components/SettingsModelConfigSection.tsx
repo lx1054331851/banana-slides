@@ -119,29 +119,29 @@ function getImageResolutionFieldCopy(
 }
 
 const GPT_IMAGE_SIZE_OPTIONS = [
-  { value: '1024x1024', labelKey: 'settings.fields.gptImageSizeSquare1K' },
-  { value: '1536x1024', labelKey: 'settings.fields.gptImageSizeLandscape1K' },
-  { value: '1024x1536', labelKey: 'settings.fields.gptImageSizePortrait1K' },
-  { value: '1536x1152', labelKey: 'settings.fields.gptImageSizeLandscape43_1K' },
-  { value: '1152x1536', labelKey: 'settings.fields.gptImageSizePortrait34_1K' },
-  { value: '1440x1152', labelKey: 'settings.fields.gptImageSizeLandscape54_1K' },
-  { value: '1152x1440', labelKey: 'settings.fields.gptImageSizePortrait45_1K' },
-  { value: '1536x864', labelKey: 'settings.fields.gptImageSizeLandscape169_1K' },
-  { value: '864x1536', labelKey: 'settings.fields.gptImageSizePortrait916_1K' },
-  { value: '1680x720', labelKey: 'settings.fields.gptImageSizeLandscape219_1K' },
-  { value: '2048x2048', labelKey: 'settings.fields.gptImageSizeSquare2K' },
-  { value: '2016x1344', labelKey: 'settings.fields.gptImageSizeLandscape32_2K' },
-  { value: '1344x2016', labelKey: 'settings.fields.gptImageSizePortrait23_2K' },
-  { value: '2048x1536', labelKey: 'settings.fields.gptImageSizeLandscape43_2K' },
-  { value: '1536x2048', labelKey: 'settings.fields.gptImageSizePortrait34_2K' },
-  { value: '1920x1536', labelKey: 'settings.fields.gptImageSizeLandscape54_2K' },
-  { value: '1536x1920', labelKey: 'settings.fields.gptImageSizePortrait45_2K' },
-  { value: '2048x1152', labelKey: 'settings.fields.gptImageSizeLandscape2K' },
-  { value: '1152x2048', labelKey: 'settings.fields.gptImageSizePortrait2K' },
-  { value: '2352x1008', labelKey: 'settings.fields.gptImageSizeLandscape219_2K' },
-  { value: '3840x2160', labelKey: 'settings.fields.gptImageSizeLandscape4K' },
-  { value: '2160x3840', labelKey: 'settings.fields.gptImageSizePortrait4K' },
-  { value: '2880x2880', labelKey: 'settings.fields.gptImageSizeSquare4K' },
+  { value: '1024x1024', labelKey: 'settings.fields.gptImageSizeSquare1K', group: 'square' },
+  { value: '1536x1024', labelKey: 'settings.fields.gptImageSizeLandscape1K', group: 'landscape' },
+  { value: '1024x1536', labelKey: 'settings.fields.gptImageSizePortrait1K', group: 'portrait' },
+  { value: '1536x1152', labelKey: 'settings.fields.gptImageSizeLandscape43_1K', group: 'landscape' },
+  { value: '1152x1536', labelKey: 'settings.fields.gptImageSizePortrait34_1K', group: 'portrait' },
+  { value: '1440x1152', labelKey: 'settings.fields.gptImageSizeLandscape54_1K', group: 'landscape' },
+  { value: '1152x1440', labelKey: 'settings.fields.gptImageSizePortrait45_1K', group: 'portrait' },
+  { value: '1536x864', labelKey: 'settings.fields.gptImageSizeLandscape169_1K', group: 'landscape' },
+  { value: '864x1536', labelKey: 'settings.fields.gptImageSizePortrait916_1K', group: 'portrait' },
+  { value: '1680x720', labelKey: 'settings.fields.gptImageSizeLandscape219_1K', group: 'landscape' },
+  { value: '2048x2048', labelKey: 'settings.fields.gptImageSizeSquare2K', group: 'square' },
+  { value: '2016x1344', labelKey: 'settings.fields.gptImageSizeLandscape32_2K', group: 'landscape' },
+  { value: '1344x2016', labelKey: 'settings.fields.gptImageSizePortrait23_2K', group: 'portrait' },
+  { value: '2048x1536', labelKey: 'settings.fields.gptImageSizeLandscape43_2K', group: 'landscape' },
+  { value: '1536x2048', labelKey: 'settings.fields.gptImageSizePortrait34_2K', group: 'portrait' },
+  { value: '1920x1536', labelKey: 'settings.fields.gptImageSizeLandscape54_2K', group: 'landscape' },
+  { value: '1536x1920', labelKey: 'settings.fields.gptImageSizePortrait45_2K', group: 'portrait' },
+  { value: '2048x1152', labelKey: 'settings.fields.gptImageSizeLandscape2K', group: 'landscape' },
+  { value: '1152x2048', labelKey: 'settings.fields.gptImageSizePortrait2K', group: 'portrait' },
+  { value: '2352x1008', labelKey: 'settings.fields.gptImageSizeLandscape219_2K', group: 'landscape' },
+  { value: '3840x2160', labelKey: 'settings.fields.gptImageSizeLandscape4K', group: 'landscape' },
+  { value: '2160x3840', labelKey: 'settings.fields.gptImageSizePortrait4K', group: 'portrait' },
+  { value: '2880x2880', labelKey: 'settings.fields.gptImageSizeSquare4K', group: 'square' },
 ] as const;
 
 // Render a compact button group for real GPT Image 2 sizes.
@@ -154,25 +154,52 @@ function GptImageSizeOptions({
   onChange: (size: string) => void;
   t: SettingsTranslator;
 }) {
+  const groupedOptions = [
+    {
+      key: 'square',
+      title: t('settings.fields.gptImageGroupSquare'),
+      options: GPT_IMAGE_SIZE_OPTIONS.filter((option) => option.group === 'square'),
+    },
+    {
+      key: 'landscape',
+      title: t('settings.fields.gptImageGroupLandscape'),
+      options: GPT_IMAGE_SIZE_OPTIONS.filter((option) => option.group === 'landscape'),
+    },
+    {
+      key: 'portrait',
+      title: t('settings.fields.gptImageGroupPortrait'),
+      options: GPT_IMAGE_SIZE_OPTIONS.filter((option) => option.group === 'portrait'),
+    },
+  ];
+
   return (
-    <div className="grid gap-1 sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
-      {GPT_IMAGE_SIZE_OPTIONS.map((option) => {
-        const active = option.value === value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => onChange(option.value)}
-            className={`rounded-md border px-2 py-1.5 text-left transition-all ${
-              active
-                ? 'border-banana-500 bg-banana-50 text-banana-900 shadow-sm dark:border-banana-400 dark:bg-banana-500/10 dark:text-banana-100'
-                : 'border-gray-200 bg-white text-gray-700 hover:border-banana-300 hover:bg-banana-50/50 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/60 dark:hover:bg-background-hover'
-            }`}
-          >
-            <div className="text-[12px] font-medium leading-snug">{t(option.labelKey)}</div>
-          </button>
-        );
-      })}
+    <div className="space-y-3">
+      {groupedOptions.map((group) => (
+        <div key={group.key} className="space-y-1.5">
+          <div className="text-xs font-semibold tracking-wide text-gray-500 dark:text-foreground-tertiary">
+            {group.title}
+          </div>
+          <div className="grid gap-1 sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
+            {group.options.map((option) => {
+              const active = option.value === value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onChange(option.value)}
+                  className={`rounded-md border px-2 py-1.5 text-left transition-all ${
+                    active
+                      ? 'border-banana-500 bg-banana-50 text-banana-900 shadow-sm dark:border-banana-400 dark:bg-banana-500/10 dark:text-banana-100'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-banana-300 hover:bg-banana-50/50 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/60 dark:hover:bg-background-hover'
+                  }`}
+                >
+                  <div className="text-[12px] font-medium leading-snug">{t(option.labelKey)}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
