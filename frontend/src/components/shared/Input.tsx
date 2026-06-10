@@ -2,10 +2,11 @@ import React from 'react';
 import { cn } from '@/utils';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
+  label?: React.ReactNode;
   error?: string;
 }
 
+// Render a shared text input with an optional custom label node and error state.
 export const Input: React.FC<InputProps> = ({
   label,
   error,
@@ -36,4 +37,3 @@ export const Input: React.FC<InputProps> = ({
     </div>
   );
 };
-

@@ -1,4 +1,5 @@
 import React from 'react';
+import { HelpCircle } from 'lucide-react';
 
 import { Input } from '@/components/shared';
 import { getSupportedResolutionsForModel } from '@/config/projectAiDefaults';
@@ -116,6 +117,28 @@ function getImageResolutionFieldCopy(
     label: t('settings.fields.imageResolutionGenericLabel'),
     description: t('settings.fields.imageResolutionGenericDesc'),
   };
+}
+
+// Render a compact label with a hover tooltip icon for inline field help text.
+function SettingsFieldLabelWithTooltip({
+  label,
+  tooltip,
+}: {
+  label: string;
+  tooltip: string;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span>{label}</span>
+      <span
+        className="inline-flex cursor-help text-gray-400 transition-colors hover:text-banana-600 dark:text-foreground-tertiary dark:hover:text-banana"
+        title={tooltip}
+        aria-label={`${label}说明：${tooltip}`}
+      >
+        <HelpCircle size={14} />
+      </span>
+    </span>
+  );
 }
 
 const GPT_IMAGE_SIZE_OPTIONS = [
@@ -241,7 +264,6 @@ function SettingsImageModelGroup({
   const showOpenAIProtocol = configMode === 'openai-images';
   const showCompatHint = configMode === 'openai-compat-google-chat';
   const showGptImageControls = schema === 'gpt-image-2';
-  const showGptCompression = showGptImageControls && ['jpeg', 'webp'].includes(formData.gpt_image_output_format);
   const showGeminiReasoningControls = schema === 'gemini-image';
 
   return (
@@ -317,7 +339,10 @@ function SettingsImageModelGroup({
         <div className="grid gap-3 pl-3 border-l-2 border-sky-300 dark:border-sky-700 md:grid-cols-2 xl:grid-cols-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-              {t('settings.fields.gptImageBackground')}
+              <SettingsFieldLabelWithTooltip
+                label={t('settings.fields.gptImageBackground')}
+                tooltip={t('settings.fields.gptImageBackgroundDesc')}
+              />
             </label>
             <select
               value={formData.gpt_image_background}
@@ -328,13 +353,13 @@ function SettingsImageModelGroup({
               <option value="transparent">{t('settings.fields.gptImageBackgroundTransparent')}</option>
               <option value="opaque">{t('settings.fields.gptImageBackgroundOpaque')}</option>
             </select>
-            <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
-              {t('settings.fields.gptImageBackgroundDesc')}
-            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-              {t('settings.fields.gptImageOutputFormat')}
+              <SettingsFieldLabelWithTooltip
+                label={t('settings.fields.gptImageOutputFormat')}
+                tooltip={t('settings.fields.gptImageOutputFormatDesc')}
+              />
             </label>
             <select
               value={formData.gpt_image_output_format}
@@ -345,13 +370,13 @@ function SettingsImageModelGroup({
               <option value="jpeg">JPEG</option>
               <option value="webp">WebP</option>
             </select>
-            <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
-              {t('settings.fields.gptImageOutputFormatDesc')}
-            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-              {t('settings.fields.gptImageQuality')}
+              <SettingsFieldLabelWithTooltip
+                label={t('settings.fields.gptImageQuality')}
+                tooltip={t('settings.fields.gptImageQualityDesc')}
+              />
             </label>
             <select
               value={formData.gpt_image_quality}
@@ -363,25 +388,20 @@ function SettingsImageModelGroup({
               <option value="medium">{t('settings.fields.gptImageQualityMedium')}</option>
               <option value="high">{t('settings.fields.gptImageQualityHigh')}</option>
             </select>
-            <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
-              {t('settings.fields.gptImageQualityDesc')}
-            </p>
           </div>
           <Input
-            label={t('settings.fields.gptImageOutputCompression')}
+            label={(
+              <SettingsFieldLabelWithTooltip
+                label={t('settings.fields.gptImageOutputCompression')}
+                tooltip={t('settings.fields.gptImageOutputCompressionDesc')}
+              />
+            )}
             type="number"
             min={0}
             max={100}
             value={formData.gpt_image_output_compression}
             onChange={(e) => handleFieldChange('gpt_image_output_compression', Number(e.target.value))}
           />
-          <p
-            className={`text-sm text-gray-500 dark:text-foreground-tertiary ${
-              showGptCompression ? 'md:col-span-2 xl:col-span-4' : 'md:col-span-2 xl:col-span-4 opacity-70'
-            }`}
-          >
-            {t('settings.fields.gptImageOutputCompressionDesc')}
-          </p>
         </div>
       )}
       {showGeminiReasoningControls && (
