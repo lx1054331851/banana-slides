@@ -53,6 +53,11 @@ export interface OverrideRoute {
   source?: string;
   model?: string;
   resolution?: string;
+  gpt_image_size?: string;
+  gpt_image_background?: string;
+  gpt_image_output_format?: string;
+  gpt_image_output_compression?: number;
+  gpt_image_quality?: string;
   api_base_url?: string;
   api_key?: string;
   adapter?: string;

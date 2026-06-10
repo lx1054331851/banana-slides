@@ -30,6 +30,7 @@ export { ImportMarkdownModal } from './ImportMarkdownModal';
 export { ProjectResourcesList } from './ProjectResourcesList';
 export { HelpModal } from './HelpModal';
 export { ProjectSettingsModal } from './ProjectSettingsModal';
+export { ProjectImageDefaultsSection } from './ProjectImageDefaultsSection';
 export { ExportTasksPanel } from './ExportTasksPanel';
 export { AccessCodeGuard } from './AccessCodeGuard';
 export { TextStyleSelector } from './TextStyleSelector';

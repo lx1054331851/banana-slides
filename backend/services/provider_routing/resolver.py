@@ -104,6 +104,30 @@ def _extract_project_generation_defaults(project: Any) -> Dict[str, Any]:
         return {}
 
 
+def _pick_gpt_image_settings(
+    role: str,
+    override: Dict[str, Any],
+    project_defaults: Dict[str, Any],
+) -> Dict[str, Any]:
+    if role != "image":
+        return {}
+    keys = (
+        "gpt_image_size",
+        "gpt_image_background",
+        "gpt_image_output_format",
+        "gpt_image_output_compression",
+        "gpt_image_quality",
+    )
+    project_image_defaults = project_defaults.get("image") or {}
+    result: Dict[str, Any] = {}
+    for key in keys:
+        if isinstance(override, dict) and override.get(key) is not None:
+            result[key] = override.get(key)
+        elif isinstance(project_image_defaults, dict) and project_image_defaults.get(key) is not None:
+            result[key] = project_image_defaults.get(key)
+    return result
+
+
 def _pick_source(role: str, override: Dict[str, Any], project_defaults: Dict[str, Any], traces: list[str]) -> str:
     override_channel = str((override or {}).get("channel") or "").strip()
     if override_channel:
@@ -345,9 +369,14 @@ def resolve_provider_route(
     traces: list[str] = []
     source = _pick_source(role, override, project_defaults, traces)
     model = _pick_model(role, override, project_defaults, traces)
+    gpt_image_settings = _pick_gpt_image_settings(role, override, project_defaults)
 
     if source.startswith("profile:"):
-        return _resolve_route_from_profile(role, source, model, override, traces)
+        route = _resolve_route_from_profile(role, source, model, override, traces)
+        if gpt_image_settings:
+            route.metadata.update(gpt_image_settings)
+            route = _apply_adapter_and_finalize(route)
+        return route
 
     if source in {"vertex"}:
         # Keep vertex compatibility path by mapping it to gemini route metadata.
@@ -390,6 +419,7 @@ def resolve_provider_route(
                 adapter=(override or {}).get("adapter") or get_default_adapter_name(),
                 adapter_options=(override or {}).get("adapter_options") or {},
                 source_trace=traces,
+                metadata=dict(gpt_image_settings),
             )
         else:
             creds = _resolve_gemini_credentials(role, override, traces)
@@ -404,6 +434,7 @@ def resolve_provider_route(
                 adapter=(override or {}).get("adapter") or get_default_adapter_name(),
                 adapter_options=(override or {}).get("adapter_options") or {},
                 source_trace=traces,
+                metadata=dict(gpt_image_settings),
             )
         return _apply_adapter_and_finalize(route)
 

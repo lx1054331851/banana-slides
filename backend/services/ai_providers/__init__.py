@@ -562,6 +562,18 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
         if route.provider == 'openai':
             opts = route.adapter_options or {}
             gpt_image_settings = _get_gpt_image_settings()
+            route_gpt_image_settings = {
+                key: (route.metadata or {}).get(key)
+                for key in (
+                    'gpt_image_background',
+                    'gpt_image_size',
+                    'gpt_image_output_format',
+                    'gpt_image_output_compression',
+                    'gpt_image_quality',
+                )
+                if (route.metadata or {}).get(key) is not None
+            }
+            gpt_image_settings.update(route_gpt_image_settings)
             return OpenAIImageProvider(
                 api_key=route.api_key or "",
                 api_base=route.api_base,

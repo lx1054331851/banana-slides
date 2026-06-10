@@ -17,6 +17,10 @@ import {
   normalizeImageChannel,
   normalizeImageProvider,
 } from '@/config/projectAiChannels';
+import {
+  getDefaultGptImageSizeFromResolution,
+  getGptImageResolutionFromSize,
+} from '../Settings.config';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -30,6 +34,11 @@ type UseSlidePreviewProjectSettingsParams = {
   projectDefaultImageChannel: string;
   projectDefaultImageModel: string;
   projectDefaultImageResolution: string;
+  projectDefaultGptImageSize: string;
+  projectDefaultGptImageBackground: string;
+  projectDefaultGptImageOutputFormat: string;
+  projectDefaultGptImageOutputCompression: number;
+  projectDefaultGptImageQuality: string;
   providerProfiles: ProviderProfileSummary[];
   exportExtractorMethod: ExportExtractorMethod;
   exportInpaintMethod: ExportInpaintMethod;
@@ -56,6 +65,11 @@ export const useSlidePreviewProjectSettings = ({
   projectDefaultImageChannel,
   projectDefaultImageModel,
   projectDefaultImageResolution,
+  projectDefaultGptImageSize,
+  projectDefaultGptImageBackground,
+  projectDefaultGptImageOutputFormat,
+  projectDefaultGptImageOutputCompression,
+  projectDefaultGptImageQuality,
   providerProfiles,
   exportExtractorMethod,
   exportInpaintMethod,
@@ -153,13 +167,21 @@ export const useSlidePreviewProjectSettings = ({
         projectDefaultImageResolution,
         normalizedModel
       );
-      const imageDefaults: Record<string, string> = {
+      const imageDefaults: Record<string, string | number> = {
         provider: normalizedProvider,
         channel: normalizedChannel,
         source: normalizedSource,
         model: normalizedModel,
         resolution: normalizedResolution,
       };
+      if (normalizedModel.startsWith('gpt-image-2')) {
+        imageDefaults.gpt_image_size = projectDefaultGptImageSize || getDefaultGptImageSizeFromResolution(normalizedResolution);
+        imageDefaults.gpt_image_background = projectDefaultGptImageBackground || 'auto';
+        imageDefaults.gpt_image_output_format = projectDefaultGptImageOutputFormat || 'png';
+        imageDefaults.gpt_image_output_compression = projectDefaultGptImageOutputCompression ?? 100;
+        imageDefaults.gpt_image_quality = projectDefaultGptImageQuality || 'auto';
+        imageDefaults.resolution = getGptImageResolutionFromSize(String(imageDefaults.gpt_image_size));
+      }
       const generationDefaults: GenerationOverride = { image: imageDefaults };
       await updateProject(projectId, { generation_defaults: generationDefaults });
       await syncProject(projectId);
@@ -178,6 +200,11 @@ export const useSlidePreviewProjectSettings = ({
     projectDefaultImageChannel,
     projectDefaultImageModel,
     projectDefaultImageResolution,
+    projectDefaultGptImageSize,
+    projectDefaultGptImageBackground,
+    projectDefaultGptImageOutputFormat,
+    projectDefaultGptImageOutputCompression,
+    projectDefaultGptImageQuality,
     providerProfiles,
     projectId,
     show,

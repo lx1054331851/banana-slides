@@ -78,11 +78,21 @@ type SlidePreviewDialogsProps = {
   projectDefaultImageChannel: string;
   projectDefaultImageModel: string;
   projectDefaultImageResolution: string;
+  projectDefaultGptImageSize: string;
+  projectDefaultGptImageBackground: string;
+  projectDefaultGptImageOutputFormat: string;
+  projectDefaultGptImageOutputCompression: number;
+  projectDefaultGptImageQuality: string;
   providerProfiles: ProviderProfileSummary[];
   setProjectDefaultImageProvider: (value: string) => void;
   setProjectDefaultImageChannel: (value: string) => void;
   setProjectDefaultImageModel: (value: string) => void;
   setProjectDefaultImageResolution: (value: string) => void;
+  setProjectDefaultGptImageSize: (value: string) => void;
+  setProjectDefaultGptImageBackground: (value: string) => void;
+  setProjectDefaultGptImageOutputFormat: (value: string) => void;
+  setProjectDefaultGptImageOutputCompression: (value: number) => void;
+  setProjectDefaultGptImageQuality: (value: string) => void;
   handleSaveGenerationDefaults: (...args: any[]) => void;
   isSavingGenerationDefaults: boolean;
   isHistoryModalOpen: boolean;
@@ -185,11 +195,21 @@ export const SlidePreviewDialogs: React.FC<SlidePreviewDialogsProps> = ({
   projectDefaultImageChannel,
   projectDefaultImageModel,
   projectDefaultImageResolution,
+  projectDefaultGptImageSize,
+  projectDefaultGptImageBackground,
+  projectDefaultGptImageOutputFormat,
+  projectDefaultGptImageOutputCompression,
+  projectDefaultGptImageQuality,
   providerProfiles,
   setProjectDefaultImageProvider,
   setProjectDefaultImageChannel,
   setProjectDefaultImageModel,
   setProjectDefaultImageResolution,
+  setProjectDefaultGptImageSize,
+  setProjectDefaultGptImageBackground,
+  setProjectDefaultGptImageOutputFormat,
+  setProjectDefaultGptImageOutputCompression,
+  setProjectDefaultGptImageQuality,
   handleSaveGenerationDefaults,
   isSavingGenerationDefaults,
   isHistoryModalOpen,
@@ -308,11 +328,21 @@ export const SlidePreviewDialogs: React.FC<SlidePreviewDialogsProps> = ({
             generationDefaultImageChannel={projectDefaultImageChannel}
             generationDefaultImageModel={projectDefaultImageModel}
             generationDefaultImageResolution={projectDefaultImageResolution}
+            generationDefaultGptImageSize={projectDefaultGptImageSize}
+            generationDefaultGptImageBackground={projectDefaultGptImageBackground}
+            generationDefaultGptImageOutputFormat={projectDefaultGptImageOutputFormat}
+            generationDefaultGptImageOutputCompression={projectDefaultGptImageOutputCompression}
+            generationDefaultGptImageQuality={projectDefaultGptImageQuality}
             providerProfiles={providerProfiles}
             onGenerationDefaultImageProviderChange={setProjectDefaultImageProvider}
             onGenerationDefaultImageChannelChange={setProjectDefaultImageChannel}
             onGenerationDefaultImageModelChange={setProjectDefaultImageModel}
             onGenerationDefaultImageResolutionChange={setProjectDefaultImageResolution}
+            onGenerationDefaultGptImageSizeChange={setProjectDefaultGptImageSize}
+            onGenerationDefaultGptImageBackgroundChange={setProjectDefaultGptImageBackground}
+            onGenerationDefaultGptImageOutputFormatChange={setProjectDefaultGptImageOutputFormat}
+            onGenerationDefaultGptImageOutputCompressionChange={setProjectDefaultGptImageOutputCompression}
+            onGenerationDefaultGptImageQualityChange={setProjectDefaultGptImageQuality}
             onSaveGenerationDefaults={handleSaveGenerationDefaults}
             isSavingGenerationDefaults={isSavingGenerationDefaults}
           />

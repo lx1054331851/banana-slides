@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, FileText, Download, Sparkles, AlertTriangle, HelpCircle, Image as ImageIcon, Plus } from 'lucide-react';
-import { Button, Textarea, Input, Select } from '@/components/shared';
+import { Button, Textarea, Input } from '@/components/shared';
+import { ProjectImageDefaultsSection } from './ProjectImageDefaultsSection';
 import { useT } from '@/hooks/useT';
 import type { ProviderProfileSummary } from '@/types';
 import type { ExportExtractorMethod, ExportInpaintMethod } from '@/types';
@@ -13,11 +14,15 @@ import {
   type ProjectSupportedImageModel,
 } from '@/config/projectAiDefaults';
 import {
+  getGptImageResolutionFromSize,
+} from '@/pages/Settings.config';
+import {
   getImageChannelOptionById,
   getImageChannelOptions,
   getSupportedResolutionsForChannelModel,
   getSelectableImageModelsForChannel,
   normalizeImageChannel,
+  getImageModelSchema,
 } from '@/config/projectAiChannels';
 import {
   DndContext,
@@ -167,11 +172,21 @@ interface ProjectSettingsModalProps {
   generationDefaultImageChannel?: string;
   generationDefaultImageModel?: string;
   generationDefaultImageResolution?: string;
+  generationDefaultGptImageSize?: string;
+  generationDefaultGptImageBackground?: string;
+  generationDefaultGptImageOutputFormat?: string;
+  generationDefaultGptImageOutputCompression?: number;
+  generationDefaultGptImageQuality?: string;
   providerProfiles?: ProviderProfileSummary[];
   onGenerationDefaultImageProviderChange?: (value: string) => void;
   onGenerationDefaultImageChannelChange?: (value: string) => void;
   onGenerationDefaultImageModelChange?: (value: string) => void;
   onGenerationDefaultImageResolutionChange?: (value: string) => void;
+  onGenerationDefaultGptImageSizeChange?: (value: string) => void;
+  onGenerationDefaultGptImageBackgroundChange?: (value: string) => void;
+  onGenerationDefaultGptImageOutputFormatChange?: (value: string) => void;
+  onGenerationDefaultGptImageOutputCompressionChange?: (value: number) => void;
+  onGenerationDefaultGptImageQualityChange?: (value: string) => void;
   onSaveGenerationDefaults?: () => void;
   isSavingGenerationDefaults?: boolean;
   descriptionGenerationMode?: 'streaming' | 'parallel';
@@ -308,11 +323,21 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   generationDefaultImageChannel = '',
   generationDefaultImageModel = '',
   generationDefaultImageResolution = PROJECT_DEFAULT_IMAGE_RESOLUTION,
+  generationDefaultGptImageSize = '1536x1024',
+  generationDefaultGptImageBackground = 'auto',
+  generationDefaultGptImageOutputFormat = 'png',
+  generationDefaultGptImageOutputCompression = 100,
+  generationDefaultGptImageQuality = 'auto',
   providerProfiles = [],
   onGenerationDefaultImageProviderChange,
   onGenerationDefaultImageChannelChange,
   onGenerationDefaultImageModelChange,
   onGenerationDefaultImageResolutionChange,
+  onGenerationDefaultGptImageSizeChange,
+  onGenerationDefaultGptImageBackgroundChange,
+  onGenerationDefaultGptImageOutputFormatChange,
+  onGenerationDefaultGptImageOutputCompressionChange,
+  onGenerationDefaultGptImageQualityChange,
   onSaveGenerationDefaults,
   isSavingGenerationDefaults = false,
   descriptionGenerationMode = 'streaming',
@@ -383,7 +408,6 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
       : (visibleResolutionOptions[0] || PROJECT_DEFAULT_IMAGE_RESOLUTION)),
     [generationDefaultImageResolution, visibleResolutionOptions]
   );
-
   useEffect(() => {
     if (generationDefaultImageModel !== selectedImageModel) {
       onGenerationDefaultImageModelChange?.(selectedImageModel);
@@ -586,91 +610,58 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                   )}
                 </div>
 
-                <div className="pb-6 border-b border-gray-200 dark:border-border-primary space-y-4">
-                  <div>
-                    <h4 className="text-base font-semibold text-gray-900 dark:text-foreground-primary mb-2">AI 生成默认（项目级）</h4>
-                    <p className="text-sm text-gray-600 dark:text-foreground-tertiary">
-                      配置当前项目默认的图片生成来源/模型/清晰度（可在预览页临时覆盖）。
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(320px,1.35fr)_minmax(0,1fr)]">
-                    <div className="w-full">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-                        Channel
-                      </label>
-                      <Select
-                        value={selectedImageChannel}
-                        onChange={(value) => {
-                          const nextChannel = value;
-                          const nextChannelOption = getImageChannelOptionById(nextChannel, providerProfiles);
-                          if (nextChannelOption?.provider) {
-                            onGenerationDefaultImageProviderChange?.(nextChannelOption.provider);
-                          }
-                          onGenerationDefaultImageChannelChange?.(nextChannel);
-                          const nextModels = getSelectableImageModelsForChannel(nextChannel, providerProfiles);
-                          if (nextModels.length > 0) {
-                            onGenerationDefaultImageModelChange?.(nextModels[0].model);
-                          }
-                        }}
-                        options={availableImageChannels.map((channel) => ({
-                          value: channel.id,
-                          label: channel.label,
-                        }))}
-                      />
-                    </div>
-                    <div className="w-full">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-                        图片模型
-                      </label>
-                      <Select
-                        value={selectedImageModel}
-                        className="min-w-0"
-                        menuClassName="max-w-[min(80vw,40rem)]"
-                        onChange={(value) => {
-                          const nextModel = value;
-                          onGenerationDefaultImageModelChange?.(nextModel);
-                        }}
-                        options={selectableImageModels.map((item) => ({
-                          value: item.model,
-                          label: item.model,
-                        }))}
-                      />
-                    </div>
-                    <div className="w-full">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
-                        图像清晰度
-                      </label>
-                      <Select
-                        value={selectedImageResolution}
-                        onChange={(value) => onGenerationDefaultImageResolutionChange?.(value)}
-                        options={visibleResolutionOptions.map((resolution) => ({
-                          value: resolution,
-                          label: resolution,
-                        }))}
-                      />
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
-                    当前支持的生图渠道为 `viviai`、`gs88`、`147ai`。更高的清晰度会生成更详细的图像，但需要更长时间。
-                  </p>
-                  {availableImageChannels.find((channel) => channel.id === selectedImageChannel)?.config_note && (
-                    <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
-                      当前渠道状态：
-                      {availableImageChannels.find((channel) => channel.id === selectedImageChannel)?.config_note}
-                    </p>
-                  )}
-                  {onSaveGenerationDefaults && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={onSaveGenerationDefaults}
-                      disabled={isSavingGenerationDefaults}
-                      className="w-full sm:w-auto"
-                    >
-                      {isSavingGenerationDefaults ? t('shared.saving') : '保存 AI 默认'}
-                    </Button>
-                  )}
-                </div>
+                <ProjectImageDefaultsSection
+                  providerProfiles={providerProfiles}
+                  selectedImageChannel={selectedImageChannel}
+                  availableImageChannels={availableImageChannels}
+                  selectedImageModel={selectedImageModel}
+                  selectableImageModels={selectableImageModels}
+                  selectedImageResolution={selectedImageResolution}
+                  visibleResolutionOptions={visibleResolutionOptions}
+                  gptImageSize={generationDefaultGptImageSize}
+                  gptImageBackground={generationDefaultGptImageBackground}
+                  gptImageOutputFormat={generationDefaultGptImageOutputFormat}
+                  gptImageOutputCompression={generationDefaultGptImageOutputCompression}
+                  gptImageQuality={generationDefaultGptImageQuality}
+                  onChannelChange={(value) => {
+                    const nextChannel = value;
+                    const nextChannelOption = getImageChannelOptionById(nextChannel, providerProfiles);
+                    if (nextChannelOption?.provider) {
+                      onGenerationDefaultImageProviderChange?.(nextChannelOption.provider);
+                    }
+                    onGenerationDefaultImageChannelChange?.(nextChannel);
+                    const nextModels = getSelectableImageModelsForChannel(nextChannel, providerProfiles);
+                    if (nextModels.length > 0) {
+                      onGenerationDefaultImageModelChange?.(nextModels[0].model);
+                    }
+                  }}
+                  onModelChange={(value) => {
+                    onGenerationDefaultImageModelChange?.(value);
+                    const nextSchema = getImageModelSchema(selectedImageChannel, value, providerProfiles);
+                    if (nextSchema !== 'gpt-image-2') {
+                      onGenerationDefaultImageResolutionChange?.(
+                        getSupportedResolutionsForChannelModel(
+                          selectedImageChannel,
+                          value,
+                          providerProfiles,
+                          getSupportedResolutionsForModel(value),
+                        )[0] || PROJECT_DEFAULT_IMAGE_RESOLUTION,
+                      );
+                    }
+                  }}
+                  onResolutionChange={(value) => onGenerationDefaultImageResolutionChange?.(value)}
+                  onGptImageSizeChange={(value) => {
+                    onGenerationDefaultGptImageSizeChange?.(value);
+                    onGenerationDefaultImageResolutionChange?.(getGptImageResolutionFromSize(value));
+                  }}
+                  onGptImageBackgroundChange={onGenerationDefaultGptImageBackgroundChange || (() => {})}
+                  onGptImageOutputFormatChange={onGenerationDefaultGptImageOutputFormatChange || (() => {})}
+                  onGptImageOutputCompressionChange={onGenerationDefaultGptImageOutputCompressionChange || (() => {})}
+                  onGptImageQualityChange={onGenerationDefaultGptImageQualityChange || (() => {})}
+                  onSave={onSaveGenerationDefaults}
+                  isSaving={isSavingGenerationDefaults}
+                  saveLabel={t('shared.saving') === 'Saving...' ? 'Save AI Defaults' : '保存 AI 默认'}
+                />
 
                 <div
                   className="bg-gray-50 dark:bg-background-primary rounded-lg p-6 space-y-4"
