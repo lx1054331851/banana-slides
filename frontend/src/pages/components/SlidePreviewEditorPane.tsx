@@ -99,10 +99,11 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
   onUploadFiles,
   onPageAiPaste,
 }) => {
+  // Keep renovation-mode floating menus visible on desktop instead of clipping them inside the editor pane.
   return (
     <section
       data-testid="preview-editor-pane"
-      className={`min-h-0 min-w-0 ${isEditorPaneHidden ? 'pointer-events-none opacity-0' : ''} ${isMobileView ? 'overflow-visible' : (useRenovationPreviewForm ? 'overflow-x-visible overflow-y-hidden' : 'overflow-x-visible overflow-y-auto overscroll-contain')}`}
+      className={`min-h-0 min-w-0 ${isEditorPaneHidden ? 'pointer-events-none opacity-0' : ''} ${isMobileView ? 'overflow-visible' : (useRenovationPreviewForm ? 'overflow-visible' : 'overflow-x-visible overflow-y-auto overscroll-contain')}`}
       aria-hidden={isEditorPaneHidden}
     >
       <div
