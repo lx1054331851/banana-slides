@@ -65,11 +65,42 @@ describe('projectAiChannels image model labels', () => {
         provider: 'openai',
         adapter: 'openai_image_compat',
         capabilities: ['image'],
+        model_capabilities: {
+          'gpt-image-2-high': {
+            request_mode: 'openai-images',
+          },
+          'gemini-3.1-flash-image-preview': {
+            request_mode: 'openai-compat-google-chat',
+          },
+          'gemini-2.5-flash-image': {
+            request_mode: 'openai-compat-google-chat',
+          },
+        },
       },
     ] as any;
 
     expect(getImageModelConfigMode('147ai', 'gpt-image-2-high', profiles)).toBe('openai-images');
     expect(getImageModelConfigMode('147ai', 'gemini-3.1-flash-image-preview', profiles)).toBe('openai-compat-google-chat');
     expect(getImageModelConfigMode('147ai', 'gemini-2.5-flash-image', profiles)).toBe('openai-compat-google-chat');
+  });
+
+  it('prefers explicit model capabilities over fallback prefix heuristics', () => {
+    const profiles = [
+      {
+        id: 'custom-openai',
+        channel: 'custom-openai',
+        label: 'Custom OpenAI',
+        provider: 'openai',
+        adapter: 'openai_image_compat',
+        capabilities: ['image'],
+        model_capabilities: {
+          'gemini-3.1-flash-image-preview': {
+            request_mode: 'openai-images',
+          },
+        },
+      },
+    ] as any;
+
+    expect(getImageModelConfigMode('custom-openai', 'gemini-3.1-flash-image-preview', profiles)).toBe('openai-images');
   });
 });

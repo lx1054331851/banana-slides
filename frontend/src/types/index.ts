@@ -84,6 +84,7 @@ export interface ProviderProfileSummary {
   models?: string[];
   supported_resolutions?: Record<string, string[]>;
   model_defaults?: Record<string, any>;
+  model_capabilities?: Record<string, Record<string, any>>;
 }
 
 export interface ImageChannelOption {
@@ -102,6 +103,7 @@ export interface ImageChannelOption {
   models?: string[];
   supported_resolutions?: Record<string, string[]>;
   model_defaults?: Record<string, any>;
+  model_capabilities?: Record<string, Record<string, any>>;
   adapter_options?: Record<string, any>;
   is_profile?: boolean;
 }

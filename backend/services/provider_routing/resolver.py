@@ -283,6 +283,13 @@ def _resolve_route_from_profile(
     adapter = (override or {}).get("adapter") or profile.get("adapter") or get_default_adapter_name()
     adapter_options = dict(profile.get("adapter_options") or {})
     adapter_options.update((override or {}).get("adapter_options") or {})
+    model_capabilities = profile.get("model_capabilities") or {}
+    model_capability = {}
+    if isinstance(model_capabilities, dict):
+        for capability_model, capability_value in model_capabilities.items():
+            if str(capability_model).strip().lower() == str(model or "").strip().lower() and isinstance(capability_value, dict):
+                model_capability = dict(capability_value)
+                break
 
     if provider == "openai" and azure_endpoint and not azure_api_version and strict:
         raise ValueError(f"Profile '{profile_id}' is missing Azure API version")
@@ -300,6 +307,7 @@ def _resolve_route_from_profile(
         adapter=adapter,
         adapter_options=adapter_options,
         source_trace=traces + [f"profile:{profile_id}"],
+        metadata={"model_capability": model_capability} if model_capability else {},
     )
     return _apply_adapter_and_finalize(route)
 

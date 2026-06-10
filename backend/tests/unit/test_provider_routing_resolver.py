@@ -183,6 +183,47 @@ def test_profile_adapter_options_parse_string_booleans(monkeypatch):
     assert route.adapter_options["strict_params"] is False
 
 
+def test_profile_model_capability_is_attached_to_route_metadata(monkeypatch):
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("PROVIDER_ROUTING_STRICT", "true")
+    monkeypatch.setenv("IMAGE_API_KEY", "profile-image-key")
+    monkeypatch.setenv(
+        "PROVIDER_PROFILES_JSON",
+        json.dumps(
+            [
+                {
+                    "id": "openai_img",
+                    "provider": "openai",
+                    "api_base": "https://relay.example.com/v1",
+                    "api_key_env": "IMAGE_API_KEY",
+                    "adapter": "openai_image_compat",
+                    "capabilities": ["image"],
+                    "models": ["gpt-image-2-high", "gemini-3.1-flash-image-preview"],
+                    "model_capabilities": {
+                        "gpt-image-2-high": {
+                            "request_mode": "openai-images",
+                            "resolution_family": "gpt-image-2",
+                        },
+                        "gemini-3.1-flash-image-preview": {
+                            "request_mode": "openai-compat-google-chat",
+                            "resolution_family": "gemini-3.1-flash-image-preview",
+                            "aspect_ratio_family": "gemini-3.1-flash-image-preview",
+                        },
+                    },
+                }
+            ]
+        ),
+    )
+
+    route = resolve_provider_route(
+        "image",
+        generation_override={"image": {"source": "profile:openai_img", "model": "gemini-3.1-flash-image-preview"}},
+    )
+
+    assert route.metadata["model_capability"]["request_mode"] == "openai-compat-google-chat"
+    assert route.metadata["model_capability"]["aspect_ratio_family"] == "gemini-3.1-flash-image-preview"
+
+
 def test_profile_capability_mismatch_raises_when_strict(monkeypatch):
     _clear_env(monkeypatch)
     monkeypatch.setenv("PROVIDER_ROUTING_STRICT", "true")

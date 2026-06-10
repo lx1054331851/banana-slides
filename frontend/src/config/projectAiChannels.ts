@@ -27,6 +27,7 @@ export const toImageChannelOption = (profile: ProviderProfileSummary): ImageChan
   capabilities: profile.capabilities || [],
   models: profile.models || [],
   model_defaults: profile.model_defaults || {},
+  model_capabilities: profile.model_capabilities || {},
   supported_resolutions: profile.supported_resolutions || {},
   adapter_options: profile.adapter_options || {},
   enabled: profile.enabled,
@@ -208,6 +209,9 @@ const isOpenAICompatGoogleChatModel = (
 ): boolean => {
   const normalizedModel = String(model || '').trim().toLowerCase();
   if (!channel || channel.provider !== 'openai') return false;
+  const explicitMode = channel.model_capabilities?.[String(model || '').trim()]?.request_mode;
+  if (explicitMode === 'openai-compat-google-chat') return true;
+  if (explicitMode) return false;
   if (String(channel.adapter || '').trim() !== 'openai_image_compat') return false;
   return normalizedModel.startsWith('gemini-');
 };
@@ -216,6 +220,9 @@ const isOpenAICompatGoogleChatModel = (
 const isOpenAIImagesModel = (channel: ImageChannelOption | undefined, model: string): boolean => {
   const normalizedModel = String(model || '').trim().toLowerCase();
   if (!channel || channel.provider !== 'openai') return false;
+  const explicitMode = channel.model_capabilities?.[String(model || '').trim()]?.request_mode;
+  if (explicitMode === 'openai-images') return true;
+  if (explicitMode) return false;
   return normalizedModel === 'gpt-image-2' || normalizedModel.startsWith('gpt-image-2-');
 };
 
