@@ -35,7 +35,6 @@ describe('SlidePreviewFloatingMenu', () => {
         anchorRef={ref}
         isOpen={true}
         onClose={vi.fn()}
-        width={420}
         ariaLabel="模型菜单"
       >
         <div>菜单内容</div>
@@ -55,7 +54,6 @@ describe('SlidePreviewFloatingMenu', () => {
         anchorRef={ref}
         isOpen={true}
         onClose={vi.fn()}
-        width={420}
         ariaLabel="模型菜单"
       >
         <button type="button" className="menu-item-label">
@@ -66,6 +64,26 @@ describe('SlidePreviewFloatingMenu', () => {
 
     const label = screen.getByText('VIVIAI -> gemini-3.1-flash-image-preview-very-long-model-name');
     expect(label.className).not.toContain('truncate');
+  });
+
+  it('uses adaptive width instead of a fixed inline width', () => {
+    const { ref } = createAnchorRef();
+
+    render(
+      <SlidePreviewFloatingMenu
+        anchorRef={ref}
+        isOpen={true}
+        onClose={vi.fn()}
+        ariaLabel="模型菜单"
+      >
+        <div>菜单内容</div>
+      </SlidePreviewFloatingMenu>
+    );
+
+    const menu = screen.getByRole('menu', { name: '模型菜单' });
+    expect(menu.style.minWidth).toBe('80px');
+    expect(menu.style.width).toBe('');
+    expect(menu.style.maxWidth).toBe('min(480px, calc(100vw - 24px))');
   });
 
   it('closes when clicking outside the menu and anchor', () => {
@@ -79,7 +97,6 @@ describe('SlidePreviewFloatingMenu', () => {
           anchorRef={ref}
           isOpen={true}
           onClose={onClose}
-          width={420}
           ariaLabel="模型菜单"
         >
           <div>菜单内容</div>

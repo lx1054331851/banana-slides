@@ -2173,8 +2173,8 @@ export const SlidePreview: React.FC = () => {
                     anchorRef={runModelButtonRef}
                     isOpen={showRunModelMenu}
                     onClose={() => setShowRunModelMenu(false)}
-                    width={420}
                     maxHeight={360}
+                    maxWidth="min(640px, calc(100vw - 24px))"
                     ariaLabel={t('preview.editRunImageModelLabel')}
                   >
                     <div className="max-h-[360px] overflow-y-auto pr-1">
@@ -2226,7 +2226,6 @@ export const SlidePreview: React.FC = () => {
                     anchorRef={previewPageTypeButtonRef}
                     isOpen={isPreviewPageTypeMenuOpen}
                     onClose={() => setIsPreviewPageTypeMenuOpen(false)}
-                    width={240}
                     maxHeight={288}
                     ariaLabel={t('preview.pageTypePlaceholder')}
                   >

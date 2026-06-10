@@ -5,7 +5,8 @@ type SlidePreviewFloatingMenuProps = {
   anchorRef: React.RefObject<HTMLElement | null>;
   isOpen: boolean;
   onClose: () => void;
-  width: number;
+  width?: number;
+  maxWidth?: string;
   maxHeight?: number;
   align?: 'left' | 'right';
   ariaLabel: string;
@@ -14,7 +15,9 @@ type SlidePreviewFloatingMenuProps = {
 
 type FloatingMenuPosition = {
   top: number;
-  left: number;
+  left?: number;
+  right?: number;
+  minWidth: number;
   openUpward: boolean;
 };
 
@@ -23,7 +26,7 @@ type FloatingMenuPosition = {
  */
 function resolveFloatingMenuPosition(
   anchor: HTMLElement,
-  width: number,
+  width: number | undefined,
   maxHeight: number,
   align: 'left' | 'right',
 ): FloatingMenuPosition {
@@ -33,19 +36,40 @@ function resolveFloatingMenuPosition(
   const horizontalPadding = 12;
   const verticalPadding = 12;
   const gap = 8;
-  const idealLeft = align === 'right' ? rect.right - width : rect.left;
-  const left = Math.min(
-    Math.max(horizontalPadding, idealLeft),
-    Math.max(horizontalPadding, viewportWidth - width - horizontalPadding),
-  );
   const spaceAbove = Math.max(0, rect.top - verticalPadding);
   const spaceBelow = Math.max(0, viewportHeight - rect.bottom - verticalPadding);
   const openUpward = spaceAbove >= maxHeight || spaceAbove > spaceBelow;
+  const minWidth = Math.max(0, rect.width);
+
+  const basePosition = {
+    top: openUpward ? rect.top - gap : rect.bottom + gap,
+    minWidth,
+    openUpward,
+  };
+
+  if (typeof width === 'number') {
+    const idealLeft = align === 'right' ? rect.right - width : rect.left;
+    const left = Math.min(
+      Math.max(horizontalPadding, idealLeft),
+      Math.max(horizontalPadding, viewportWidth - width - horizontalPadding),
+    );
+
+    return {
+      ...basePosition,
+      left,
+    };
+  }
+
+  if (align === 'right') {
+    return {
+      ...basePosition,
+      right: Math.max(horizontalPadding, viewportWidth - rect.right),
+    };
+  }
 
   return {
-    top: openUpward ? rect.top - gap : rect.bottom + gap,
-    left,
-    openUpward,
+    ...basePosition,
+    left: Math.max(horizontalPadding, rect.left),
   };
 }
 
@@ -57,6 +81,7 @@ export const SlidePreviewFloatingMenu: React.FC<SlidePreviewFloatingMenuProps> =
   isOpen,
   onClose,
   width,
+  maxWidth = 'min(480px, calc(100vw - 24px))',
   maxHeight = 320,
   align = 'right',
   ariaLabel,
@@ -117,7 +142,10 @@ export const SlidePreviewFloatingMenu: React.FC<SlidePreviewFloatingMenuProps> =
       style={{
         top: position.top,
         left: position.left,
+        right: position.right,
         width,
+        minWidth: position.minWidth,
+        maxWidth,
         maxHeight,
         transform: position.openUpward ? 'translateY(-100%)' : undefined,
       }}
