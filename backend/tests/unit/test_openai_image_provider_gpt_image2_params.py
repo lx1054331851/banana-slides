@@ -1,8 +1,10 @@
 """gpt-image-2 parameter compatibility tests for OpenAIImageProvider."""
 
 import pytest
+from PIL import Image
 
 from services.ai_providers.image.openai_provider import OpenAIImageProvider
+from services.ai_providers.image.openai_provider import ImageApiRequestError
 
 
 def _provider(monkeypatch, strict_params=True):
@@ -60,3 +62,35 @@ def test_azure_image_endpoint_uses_deployment_route(monkeypatch):
         "https://example-resource.openai.azure.com/openai/deployments/gpt-image-2/images/generations"
         "?api-version=2025-04-01-preview"
     ]
+
+
+def test_image_edits_json_fallback_uses_images_array(monkeypatch):
+    provider = _provider(monkeypatch, strict_params=True)
+
+    captured_payload = {}
+
+    def fake_post(endpoint_kind, *, json_payload=None, form_data=None, files=None):
+        if form_data is not None:
+            raise ImageApiRequestError(
+                "multipart rejected",
+                status_code=400,
+                response_text="Duplicate parameter: 'image'",
+                url="https://example.com/edits",
+            )
+        captured_payload.update(json_payload or {})
+        return {"data": [{"b64_json": provider._encode_image_to_base64(Image.new("RGB", (2, 2), "white"))}]}
+
+    monkeypatch.setattr(provider, "_post_image_api", fake_post)
+
+    result = provider._call_via_image_api_edits(
+        "edit prompt",
+        [Image.new("RGB", (2, 2), "black"), Image.new("RGB", (2, 2), "white")],
+        "1:1",
+        "1K",
+    )
+
+    assert result.size == (2, 2)
+    assert "images" in captured_payload
+    assert isinstance(captured_payload["images"], list)
+    assert len(captured_payload["images"]) == 2
+    assert "image" not in captured_payload

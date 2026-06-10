@@ -730,7 +730,7 @@ class OpenAIImageProvider(ImageProvider):
                 json_payload: Dict[str, Any] = {
                     "model": self.model,
                     "prompt": prompt,
-                    "image": image_data_urls,
+                    "images": image_data_urls,
                     **params,
                 }
                 response_payload = self._post_image_api("edits", json_payload=json_payload)
