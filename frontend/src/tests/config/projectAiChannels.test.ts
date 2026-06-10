@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatImageModelDisplayName,
+  getImageChannelOptions,
   getImageModelDisplayLabel,
 } from '@/config/projectAiChannels';
 
@@ -24,5 +25,32 @@ describe('projectAiChannels image model labels', () => {
     ] as any);
 
     expect(label).toBe('147AI -> gpt-image-2-high（高质量档，不等于 4K）');
+  });
+
+  it('only exposes image channels from explicit provider profiles', () => {
+    const channels = getImageChannelOptions([
+      {
+        id: '147ai',
+        channel: '147ai',
+        label: '147AI',
+        provider: 'openai',
+        capabilities: ['image'],
+      },
+      {
+        id: 'text-only-profile',
+        channel: 'text-only-profile',
+        label: 'Text Only',
+        provider: 'openai',
+        capabilities: ['text'],
+      },
+    ] as any);
+
+    expect(channels).toEqual([
+      expect.objectContaining({
+        id: '147ai',
+        label: '147AI',
+        source: 'profile:147ai',
+      }),
+    ]);
   });
 });

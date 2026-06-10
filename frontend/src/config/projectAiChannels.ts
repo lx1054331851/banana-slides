@@ -1,7 +1,7 @@
 import type {
-  ImageChannelOption,
   OverrideRoute,
   ProviderProfileSummary,
+  ImageChannelOption,
 } from '@/types';
 import {
   PROJECT_DEFAULT_IMAGE_MODEL,
@@ -15,16 +15,6 @@ export const IMAGE_PROVIDER_OPTIONS = [
   { value: 'gemini', label: 'Gemini' },
   { value: 'openai', label: 'OpenAI' },
 ] as const;
-
-export const BUILTIN_IMAGE_CHANNELS: ImageChannelOption[] = [];
-
-let runtimeBuiltinImageChannels: ImageChannelOption[] = [...BUILTIN_IMAGE_CHANNELS];
-
-export const setRuntimeBuiltinImageChannels = (channels?: ImageChannelOption[]) => {
-  runtimeBuiltinImageChannels = Array.isArray(channels) && channels.length > 0
-    ? channels
-    : [...BUILTIN_IMAGE_CHANNELS];
-};
 
 export const toImageChannelOption = (profile: ProviderProfileSummary): ImageChannelOption => ({
   id: String(profile.channel || profile.id),
@@ -48,12 +38,11 @@ export const toImageChannelOption = (profile: ProviderProfileSummary): ImageChan
 
 export const getImageChannelOptions = (
   providerProfiles: ProviderProfileSummary[],
-): ImageChannelOption[] => [
-  ...runtimeBuiltinImageChannels,
-  ...providerProfiles
+): ImageChannelOption[] => (
+  providerProfiles
     .filter((profile) => (profile.capabilities || []).includes('image'))
-    .map(toImageChannelOption),
-];
+    .map(toImageChannelOption)
+);
 
 export const getPreferredImageChannel = (
   providerProfiles: ProviderProfileSummary[],

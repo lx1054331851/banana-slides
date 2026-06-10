@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { formDataFromSettings } from '@/pages/Settings.config';
 
 const {
   mockNavigate,
@@ -86,5 +87,25 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('button', { name: /模型配置|Model Configuration/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /服务测试|Service Test/i })).toBeInTheDocument();
     expect(screen.getByTestId('global-api-config-section')).toBeInTheDocument();
+  });
+
+  it('does not infer image model source from the image model name', () => {
+    const formData = formDataFromSettings({
+      ai_provider_format: 'gemini',
+      image_model: 'gpt-image-2-high',
+      image_model_source: '',
+      image_resolution: '2K',
+      max_description_workers: 5,
+      max_image_workers: 8,
+      output_language: 'zh',
+      description_generation_mode: 'parallel',
+      enable_text_reasoning: false,
+      text_thinking_budget: 1024,
+      enable_image_reasoning: false,
+      image_thinking_budget: 1024,
+      lazyllm_api_keys: {},
+    } as any);
+
+    expect(formData.image_model_source).toBe('');
   });
 });

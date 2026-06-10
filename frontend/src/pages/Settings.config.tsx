@@ -1,7 +1,7 @@
 import React from 'react';
 import { Input } from '@/components/shared';
 import type { OutputLanguage } from '@/api/endpoints';
-import { PROJECT_IMAGE_MODEL_CATALOG, getImageSourceForModel } from '@/config/projectAiDefaults';
+import { PROJECT_IMAGE_MODEL_CATALOG } from '@/config/projectAiDefaults';
 import type { useT } from '@/hooks/useT';
 import type { Settings as SettingsType } from '@/types';
 
@@ -207,7 +207,7 @@ export const formDataFromSettings = (data: SettingsType): typeof initialFormData
   image_thinking_budget: data.image_thinking_budget || 1024,
   baidu_api_key: '',
   text_model_source: normalizeProviderValue(data.text_model_source || ''),
-  image_model_source: normalizeProviderValue(data.image_model_source || getImageSourceForModel(data.image_model || '', '')),
+  image_model_source: normalizeProviderValue(data.image_model_source || ''),
   image_caption_model_source: normalizeProviderValue(data.image_caption_model_source || ''),
   lazyllm_api_keys: {},
   text_api_key: '',

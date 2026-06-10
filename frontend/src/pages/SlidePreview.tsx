@@ -136,7 +136,6 @@ import {
   getSelectableImageModelsForChannel,
   getSourceForImageChannel,
   getPreferredImageChannel,
-  setRuntimeBuiltinImageChannels,
 } from '@/config/projectAiChannels';
 
 type TextSaveOverrides = {
@@ -1112,11 +1111,9 @@ export const SlidePreview: React.FC = () => {
       try {
         const response = await getProviderProfiles();
         setProviderProfiles(response.data?.profiles || []);
-        setRuntimeBuiltinImageChannels(response.data?.builtin_channels || []);
       } catch (error) {
         console.warn('Failed to load provider profiles:', error);
         setProviderProfiles([]);
-        setRuntimeBuiltinImageChannels([]);
       }
     };
     void loadProviderProfiles();

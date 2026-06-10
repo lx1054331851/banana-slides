@@ -30,44 +30,6 @@ settings_bp = Blueprint(
 )
 
 
-def _build_builtin_image_channels():
-    azure_endpoint = (
-        current_app.config.get("IMAGE_AZURE_OPENAI_ENDPOINT")
-        or current_app.config.get("AZURE_OPENAI_ENDPOINT")
-        or ""
-    ).strip()
-    azure_api_key = (
-        current_app.config.get("IMAGE_API_KEY")
-        or current_app.config.get("AZURE_OPENAI_API_KEY")
-        or current_app.config.get("OPENAI_API_KEY")
-        or ""
-    ).strip()
-    configured = bool(azure_endpoint and azure_api_key)
-    config_status = "configured" if configured else ("partial" if azure_endpoint or azure_api_key else "missing")
-    config_note = ""
-    if config_status == "partial":
-        if not azure_endpoint:
-            config_note = "缺少 Azure OpenAI endpoint"
-        elif not azure_api_key:
-            config_note = "缺少 Azure OpenAI API Key"
-    return [
-        {
-            "id": "azure-openai",
-            "provider": "openai",
-            "label": "Azure OpenAI",
-            "kind": "cloud",
-            "source": "azure-openai",
-            "enabled": True,
-            "configured": configured,
-            "config_status": config_status,
-            "config_note": config_note,
-            "models": ["gpt-image-2"],
-            "supported_resolutions": {"gpt-image-2": ["1K", "2K", "4K"]},
-            "model_defaults": {"image": "gpt-image-2"},
-        }
-    ]
-
-
 def _normalize_provider_value(value: str | None) -> str | None:
     normalized = (value or "").strip().lower()
     if not normalized:
@@ -618,8 +580,7 @@ def list_provider_profiles():
     """GET /api/settings/provider-profiles - list routing profiles (redacted)."""
     try:
         profiles = list_provider_profiles_redacted()
-        builtins = _build_builtin_image_channels()
-        return success_response({"profiles": profiles, "builtin_channels": builtins})
+        return success_response({"profiles": profiles})
     except Exception as e:
         logger.error(f"Error listing provider profiles: {e}")
         return error_response("GET_PROVIDER_PROFILES_ERROR", str(e), 500)

@@ -18,7 +18,6 @@ import {
   getSourceForImageChannel,
   getSupportedResolutionsForChannelModel,
   normalizeImageChannel,
-  setRuntimeBuiltinImageChannels,
 } from '@/config/projectAiChannels';
 import { getSupportedResolutionsForModel } from '@/config/projectAiDefaults';
 import { SettingsOpenAIOAuthSection } from './components/SettingsOpenAIOAuthSection';
@@ -367,7 +366,6 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
         setFormData(formDataFromSettings(settingsResp.data));
         sessionStorage.setItem('banana-settings', JSON.stringify(settingsResp.data));
       }
-      setRuntimeBuiltinImageChannels(profilesResp?.data?.builtin_channels || []);
       setProviderProfiles(profilesResp?.data?.profiles || []);
     } catch (error: any) {
       console.error('加载设置失败:', error);

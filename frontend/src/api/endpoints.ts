@@ -1773,8 +1773,8 @@ export interface TestSettingsOverride {
   image_thinking_budget?: number;
 }
 
-export const getProviderProfiles = async (): Promise<ApiResponse<{ profiles: ProviderProfileSummary[]; builtin_channels?: ImageChannelOption[] }>> => {
-  const response = await apiClient.get<ApiResponse<{ profiles: ProviderProfileSummary[]; builtin_channels?: ImageChannelOption[] }>>(
+export const getProviderProfiles = async (): Promise<ApiResponse<{ profiles: ProviderProfileSummary[] }>> => {
+  const response = await apiClient.get<ApiResponse<{ profiles: ProviderProfileSummary[] }>>(
     '/api/settings/provider-profiles'
   );
   return response.data;
