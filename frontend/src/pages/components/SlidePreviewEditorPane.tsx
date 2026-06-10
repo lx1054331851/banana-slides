@@ -177,7 +177,6 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
               sendLabel={t('preview.generateImage')}
               modelValue={editRunImageModel}
               modelOptions={editRunImageModelOptions}
-              showModelPickerControl={false}
               isSubmitting={isPageAiSubmitting}
               isRegionSelectionActive={isRegionSelectionMode}
               pendingRegionCommentValue={pendingRegionCommentValue}

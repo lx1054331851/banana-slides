@@ -67,6 +67,12 @@ describe('PageAiWorkbench', () => {
     expect(sendButton).toBeEnabled()
   })
 
+  it('shows model picker control by default', () => {
+    render(<PageAiWorkbench {...baseProps} />)
+
+    expect(screen.getByLabelText('model')).toBeInTheDocument()
+  })
+
   it('does not submit on Enter', () => {
     const onSend = vi.fn()
     render(<PageAiWorkbench {...baseProps} onSend={onSend} />)
