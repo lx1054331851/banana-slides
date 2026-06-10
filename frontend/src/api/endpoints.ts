@@ -1177,6 +1177,8 @@ export interface Material {
   url: string;
   relative_path: string;
   caption?: string | null;
+  caption_status?: 'generated' | 'fallback_filename';
+  caption_error_code?: 'invalid_api_key' | 'generation_failed' | null;
   created_at: string;
   // 可选的附加信息：用于展示友好名称
   prompt?: string;
@@ -1224,7 +1226,7 @@ export const uploadMaterial = async (
   file: File,
   projectId: string | null | undefined,
   generateCaption?: boolean
-): Promise<ApiResponse<Material & { caption?: string }>> => {
+): Promise<ApiResponse<Material>> => {
   const formData = new FormData();
   formData.append('file', file);
 
@@ -1241,7 +1243,7 @@ export const uploadMaterial = async (
     url += (url.includes('?') ? '&' : '?') + 'generate_caption=true';
   }
 
-  const response = await apiClient.post<ApiResponse<Material & { caption?: string }>>(url, formData);
+  const response = await apiClient.post<ApiResponse<Material>>(url, formData);
   return response.data;
 };
 
@@ -1255,7 +1257,7 @@ export const uploadMaterials = async (
   files: File[],
   projectId: string | null | undefined,
   generateCaption?: boolean
-): Promise<ApiResponse<{ materials: Array<Material & { caption?: string }>; count: number }>> => {
+): Promise<ApiResponse<{ materials: Material[]; count: number }>> => {
   const formData = new FormData();
   files.forEach((file) => {
     formData.append('files', file);
@@ -1272,7 +1274,7 @@ export const uploadMaterials = async (
     url += (url.includes('?') ? '&' : '?') + 'generate_caption=true';
   }
 
-  const response = await apiClient.post<ApiResponse<{ materials: Array<Material & { caption?: string }>; count: number }>>(url, formData);
+  const response = await apiClient.post<ApiResponse<{ materials: Material[]; count: number }>>(url, formData);
   return response.data;
 };
 

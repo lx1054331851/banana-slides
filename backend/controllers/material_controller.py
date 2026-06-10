@@ -50,10 +50,18 @@ PIL_FORMAT_EXTENSIONS = {
 }
 
 
-def _generate_image_caption(filepath: str) -> str:
-    """Generate AI caption for an uploaded image. Returns empty string on failure."""
+def _classify_caption_error(error: Exception) -> str:
+    """Map caption generation failures to a stable error code for the frontend."""
+    message = str(error).upper()
+    if 'INVALID_API_KEY' in message:
+        return 'invalid_api_key'
+    return 'generation_failed'
+
+
+def _generate_image_caption(filepath: str) -> tuple[str, str | None]:
+    """Generate AI caption for an uploaded image. Returns (caption, error_code)."""
     if filepath.lower().endswith('.svg'):
-        return ""
+        return "", None
     try:
         output_lang = current_app.config.get('OUTPUT_LANGUAGE', 'zh')
         if output_lang == 'en':
@@ -65,15 +73,15 @@ def _generate_image_caption(filepath: str) -> str:
         routing_bundle = resolve_routing_bundle(project=None, generation_override=None)
         provider = get_caption_provider(model=caption_model, route=routing_bundle.image_caption)
         if hasattr(provider, 'generate_with_image'):
-            return (provider.generate_with_image(prompt=prompt, image_path=filepath, thinking_budget=0) or "").strip()
+            return (provider.generate_with_image(prompt=prompt, image_path=filepath, thinking_budget=0) or "").strip(), None
         if hasattr(provider, 'generate_text_with_images'):
             return (
                 provider.generate_text_with_images(prompt=prompt, images=[filepath], thinking_budget=0) or ""
-            ).strip()
-        return ""
+            ).strip(), None
+        return "", None
     except Exception as e:
         logger.warning(f"Failed to generate caption for {filepath}: {e}")
-        return ""
+        return "", _classify_caption_error(e)
 
 
 def _build_material_query(filter_project_id: str):
@@ -139,10 +147,12 @@ def _handle_material_upload(default_project_id: Optional[str] = None):
             result = material.to_dict()
             if generate_caption and file_service:
                 filepath = file_service.get_absolute_path(material.relative_path)
-                caption = _generate_image_caption(filepath)
+                caption, caption_error_code = _generate_image_caption(filepath)
                 material.caption = caption
                 db.session.commit()
                 result['caption'] = caption
+                result['caption_status'] = 'generated' if caption else 'fallback_filename'
+                result['caption_error_code'] = caption_error_code
             saved_materials.append(result)
 
         if len(saved_materials) == 1:
@@ -840,7 +850,7 @@ def get_material_caption(material_id):
     try:
         file_service = FileService(current_app.config['UPLOAD_FOLDER'])
         filepath = file_service.get_absolute_path(material.relative_path)
-        caption = _generate_image_caption(filepath)
+        caption, _caption_error_code = _generate_image_caption(filepath)
         material.caption = caption
         db.session.commit()
         return success_response({'caption': caption})
@@ -864,7 +874,7 @@ def get_material_by_url():
         if material.caption is None:
             file_service = FileService(current_app.config['UPLOAD_FOLDER'])
             filepath = file_service.get_absolute_path(material.relative_path)
-            material.caption = _generate_image_caption(filepath)
+            material.caption, _caption_error_code = _generate_image_caption(filepath)
             db.session.commit()
         return success_response(material.to_dict())
     except Exception as e:

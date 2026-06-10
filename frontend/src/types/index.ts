@@ -161,6 +161,8 @@ export interface Material {
   url: string;
   relative_path: string;
   caption?: string | null;
+  caption_status?: 'generated' | 'fallback_filename';
+  caption_error_code?: 'invalid_api_key' | 'generation_failed' | null;
   created_at: string;
   prompt?: string;
   original_filename?: string;
