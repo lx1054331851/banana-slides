@@ -155,7 +155,7 @@ function GptImageSizeOptions({
   t: SettingsTranslator;
 }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+    <div className="grid gap-1.5 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
       {GPT_IMAGE_SIZE_OPTIONS.map((option) => {
         const active = option.value === value;
         return (
@@ -163,13 +163,13 @@ function GptImageSizeOptions({
             key={option.value}
             type="button"
             onClick={() => onChange(option.value)}
-            className={`rounded-xl border px-3 py-2.5 text-left transition-all ${
+            className={`rounded-lg border px-2.5 py-2 text-left transition-all ${
               active
                 ? 'border-banana-500 bg-banana-50 text-banana-900 shadow-sm dark:border-banana-400 dark:bg-banana-500/10 dark:text-banana-100'
                 : 'border-gray-200 bg-white text-gray-700 hover:border-banana-300 hover:bg-banana-50/50 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/60 dark:hover:bg-background-hover'
             }`}
           >
-            <div className="text-sm font-medium leading-snug">{t(option.labelKey)}</div>
+            <div className="text-[13px] font-medium leading-snug">{t(option.labelKey)}</div>
           </button>
         );
       })}
