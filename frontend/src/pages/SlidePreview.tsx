@@ -941,6 +941,14 @@ export const SlidePreview: React.FC = () => {
     show,
     t,
   });
+  const { handlePaste: handlePageAiPaste } = useImagePaste({
+    projectId,
+    setContent: (updater) => {
+      setEditPrompt((prev) => updater(prev));
+    },
+    showToast: show,
+    insertAtCursor: (markdown) => pageAiTextareaRef.current?.insertAtCursor(markdown),
+  });
 
   const syncRegionCommentsIntoPrompt = useCallback((references: PageAiUploadedReference[]) => {
     const regionComments = references
@@ -2894,6 +2902,7 @@ export const SlidePreview: React.FC = () => {
                         setIsMaterialSelectorOpen(true);
                       } : undefined}
                       onUploadFiles={handleFileUpload}
+                      onPageAiPaste={handlePageAiPaste}
                     />
                   </div>
                 </div>

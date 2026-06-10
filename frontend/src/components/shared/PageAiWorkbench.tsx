@@ -89,6 +89,7 @@ interface PageAiWorkbenchProps {
   onRemoveReference: (referenceId: string) => void;
   onOpenMaterialSelector?: () => void;
   onUploadFiles: (files: File[]) => void;
+  onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
   cardless?: boolean;
 }
 
@@ -136,6 +137,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   onRemoveReference,
   onOpenMaterialSelector,
   onUploadFiles,
+  onPaste,
   cardless = false,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -370,6 +372,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
               ref={inputRef}
               value={inputValue}
               onChange={onInputChange}
+              onPaste={onPaste}
               onFiles={onUploadFiles}
               resizable={false}
               placeholder={inputPlaceholder}

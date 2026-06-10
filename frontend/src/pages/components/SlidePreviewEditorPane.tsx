@@ -52,6 +52,7 @@ type SlidePreviewEditorPaneProps = {
   onRemoveReference: (...args: any[]) => void;
   onOpenMaterialSelector?: () => void;
   onUploadFiles: (...args: any[]) => void;
+  onPageAiPaste: (e: React.ClipboardEvent<HTMLDivElement>) => void;
 };
 
 export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
@@ -96,6 +97,7 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
   onRemoveReference,
   onOpenMaterialSelector,
   onUploadFiles,
+  onPageAiPaste,
 }) => {
   return (
     <section
@@ -171,6 +173,7 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
               inputValue={editPrompt}
               inputRef={pageAiTextareaRef}
               slashActions={pageAiSlashActions}
+              onPaste={onPageAiPaste}
               sendLabel={t('preview.generateImage')}
               modelValue={editRunImageModel}
               modelOptions={editRunImageModelOptions}
