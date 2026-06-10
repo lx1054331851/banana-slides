@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Key, Image, Zap, Save, RotateCcw, Globe, FileText, Brain, HelpCircle, Link2, RefreshCw, CheckCircle, ArrowUp, Info } from 'lucide-react';
+import { Key, Zap, Save, RotateCcw, Globe, FileText, Brain, HelpCircle, Link2, RefreshCw, CheckCircle, ArrowUp, Info } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 import { appVersion } from '@/utils/appVersion';
 
@@ -196,12 +196,6 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
           link: 'https://mineru.net/apiManage/token',
         },
       ],
-    },
-    {
-      id: 'image-config',
-      title: t('settings.sections.imageConfig'),
-      icon: <Image size={20} />,
-      fields: [],
     },
     {
       id: 'performance-config',
