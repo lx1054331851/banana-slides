@@ -117,55 +117,6 @@ function getImageResolutionFieldCopy(
   };
 }
 
-// Render a compact schema-specific capability summary to make model differences explicit.
-function SettingsImageSchemaSummary({
-  schema,
-  configMode,
-  t,
-}: {
-  schema: 'default' | 'gpt-image-2' | 'gemini-image';
-  configMode: 'default' | 'openai-images' | 'openai-compat-google-chat';
-  t: SettingsTranslator;
-}) {
-  if (schema === 'gpt-image-2') {
-    return (
-      <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4 dark:border-sky-900/40 dark:bg-sky-950/20">
-        <div className="mb-2 text-sm font-medium text-sky-900 dark:text-sky-200">
-          {t('settings.fields.gptImagePanelTitle')}
-        </div>
-        <p className="text-sm text-sky-800 dark:text-sky-300">
-          {t('settings.fields.gptImagePanelDesc')}
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2 text-xs text-sky-900 dark:text-sky-200">
-          <span className="rounded-full bg-white/80 px-2.5 py-1 dark:bg-sky-900/30">schema=gpt-image-2</span>
-          <span className="rounded-full bg-white/80 px-2.5 py-1 dark:bg-sky-900/30">mode={configMode}</span>
-          <span className="rounded-full bg-white/80 px-2.5 py-1 dark:bg-sky-900/30">size / quality</span>
-          <span className="rounded-full bg-white/80 px-2.5 py-1 dark:bg-sky-900/30">background / format</span>
-        </div>
-      </div>
-    );
-  }
-  if (schema === 'gemini-image') {
-    return (
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-        <div className="mb-2 text-sm font-medium text-emerald-900 dark:text-emerald-200">
-          {t('settings.fields.geminiImagePanelTitle')}
-        </div>
-        <p className="text-sm text-emerald-800 dark:text-emerald-300">
-          {t('settings.fields.geminiImagePanelDesc')}
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2 text-xs text-emerald-900 dark:text-emerald-200">
-          <span className="rounded-full bg-white/80 px-2.5 py-1 dark:bg-emerald-900/30">schema=gemini-image</span>
-          <span className="rounded-full bg-white/80 px-2.5 py-1 dark:bg-emerald-900/30">mode={configMode}</span>
-          <span className="rounded-full bg-white/80 px-2.5 py-1 dark:bg-emerald-900/30">aspect_ratio / image_size</span>
-          <span className="rounded-full bg-white/80 px-2.5 py-1 dark:bg-emerald-900/30">thinking / delivery</span>
-        </div>
-      </div>
-    );
-  }
-  return null;
-}
-
 // Render the dedicated image model configuration block with model-family-aware controls.
 function SettingsImageModelGroup({
   item,
@@ -247,7 +198,6 @@ function SettingsImageModelGroup({
         </div>
       </div>
       <p className="-mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">{item.description}</p>
-      <SettingsImageSchemaSummary schema={schema} configMode={configMode} t={t} />
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
           {resolutionFieldCopy.label}

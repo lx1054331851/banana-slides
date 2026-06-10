@@ -159,11 +159,10 @@ describe('SettingsPage', () => {
 
     render(<SettingsPage />);
 
-    expect(await screen.findByText(/GPT Image 2 配置|GPT Image 2 Settings/)).toBeInTheDocument();
+    expect(await screen.findByText(/背景模式|Background/)).toBeInTheDocument();
     expect(screen.getByText(/背景模式|Background/)).toBeInTheDocument();
     expect(screen.getByText(/输出格式|Output Format/)).toBeInTheDocument();
     expect(screen.getByText(/质量档位|Quality/)).toBeInTheDocument();
-    expect(screen.queryByText(/Gemini \/ Nano Banana 配置|Gemini \/ Nano Banana Settings/)).not.toBeInTheDocument();
 
     mockGetProviderProfiles.mockResolvedValueOnce({
       data: {
@@ -215,7 +214,6 @@ describe('SettingsPage', () => {
     cleanup();
     render(<SettingsPage />);
 
-    expect(await screen.findByText(/Gemini \/ Nano Banana 配置|Gemini \/ Nano Banana Settings/)).toBeInTheDocument();
     expect(screen.queryByText(/背景模式|Background/)).not.toBeInTheDocument();
     expect(screen.queryByText(/输出格式|Output Format/)).not.toBeInTheDocument();
   });
