@@ -130,6 +130,40 @@ const GPT_IMAGE_SIZE_OPTIONS = [
   { value: '2880x2880', labelKey: 'settings.fields.gptImageSizeSquare4K' },
 ] as const;
 
+// Render a compact button group for real GPT Image 2 sizes.
+function GptImageSizeOptions({
+  value,
+  onChange,
+  t,
+}: {
+  value: string;
+  onChange: (size: string) => void;
+  t: SettingsTranslator;
+}) {
+  return (
+    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+      {GPT_IMAGE_SIZE_OPTIONS.map((option) => {
+        const active = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            className={`rounded-xl border px-4 py-3 text-left transition-all ${
+              active
+                ? 'border-banana-500 bg-banana-50 text-banana-900 shadow-sm dark:border-banana-400 dark:bg-banana-500/10 dark:text-banana-100'
+                : 'border-gray-200 bg-white text-gray-700 hover:border-banana-300 hover:bg-banana-50/50 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/60 dark:hover:bg-background-hover'
+            }`}
+          >
+            <div className="text-sm font-medium">{t(option.labelKey)}</div>
+            <div className="mt-1 text-xs opacity-70">{option.value}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // Render the dedicated image model configuration block with model-family-aware controls.
 function SettingsImageModelGroup({
   item,
@@ -216,20 +250,14 @@ function SettingsImageModelGroup({
           {resolutionFieldCopy.label}
         </label>
         {showGptImageControls ? (
-          <select
+          <GptImageSizeOptions
             value={formData.gpt_image_size}
-            onChange={(e) => {
-              handleFieldChange('gpt_image_size', e.target.value);
-              handleFieldChange('image_resolution', getGptImageResolutionFromSize(e.target.value));
+            onChange={(nextSize) => {
+              handleFieldChange('gpt_image_size', nextSize);
+              handleFieldChange('image_resolution', getGptImageResolutionFromSize(nextSize));
             }}
-            className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
-          >
-            {GPT_IMAGE_SIZE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {t(option.labelKey)}
-              </option>
-            ))}
-          </select>
+            t={t}
+          />
         ) : (
           <select
             value={visibleImageResolutions.includes(formData.image_resolution) ? formData.image_resolution : (visibleImageResolutions[0] || formData.image_resolution)}
