@@ -6,7 +6,10 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from flask import current_app
+try:
+    from flask import current_app
+except ModuleNotFoundError:  # pragma: no cover - exercised in lightweight test environments
+    current_app = None
 
 
 def _get_setting(key: str, default: Optional[str] = None) -> Optional[str]:

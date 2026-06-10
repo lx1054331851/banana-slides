@@ -23,7 +23,6 @@ from typing import Any, Dict, Optional
 from .text import TextProvider, GenAITextProvider, OpenAITextProvider, AnthropicTextProvider, LazyLLMTextProvider, CodexTextProvider
 from .image import ImageProvider, GenAIImageProvider, OpenAIImageProvider, AnthropicImageProvider, LazyLLMImageProvider, CodexImageProvider
 from services.provider_routing.types import ResolvedProviderRoute
-from services.provider_routing.profiles import get_profile
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +51,8 @@ def _get_gpt_image_settings() -> Dict[str, Any]:
 
 def _resolve_profile_source_config(model_type: str, source: str) -> Dict[str, Any]:
     """Resolve ``profile:*`` source into a provider config for the requested model type."""
+    from services.provider_routing.profiles import get_profile
+
     prefix = model_type.upper()
     profile_id = source.split(":", 1)[1].strip()
     profile = get_profile(profile_id)
