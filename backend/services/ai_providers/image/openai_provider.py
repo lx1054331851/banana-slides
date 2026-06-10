@@ -456,10 +456,11 @@ class OpenAIImageProvider(ImageProvider):
 
         if self._is_gpt_image_2(model):
             params: Dict[str, Any] = {
-                "response_format": self.response_format,
                 "size": self._get_gpt_image_2_size(aspect_ratio, resolution_upper, strict),
                 "quality": self._get_gpt_image_2_quality(resolution_upper),
             }
+            if not self.azure_endpoint:
+                params["response_format"] = self.response_format
             if self.gpt_image_background in {"transparent", "opaque"}:
                 params["background"] = self.gpt_image_background
             if self.gpt_image_output_format in {"png", "jpeg", "webp"}:

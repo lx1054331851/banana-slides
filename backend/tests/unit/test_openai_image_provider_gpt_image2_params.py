@@ -64,6 +64,18 @@ def test_azure_image_endpoint_uses_deployment_route(monkeypatch):
     ]
 
 
+def test_azure_gpt_image2_omits_response_format(monkeypatch):
+    provider = _provider(monkeypatch, strict_params=True)
+    provider.azure_endpoint = "https://example-resource.openai.azure.com"
+    provider.azure_api_version = "2025-04-01-preview"
+
+    params = provider._build_image_api_params("gpt-image-2", "16:9", "4K", True)
+
+    assert "response_format" not in params
+    assert params["size"] == "3840x2160"
+    assert params["quality"] == "high"
+
+
 def test_image_edits_json_fallback_uses_images_array(monkeypatch):
     provider = _provider(monkeypatch, strict_params=True)
 
