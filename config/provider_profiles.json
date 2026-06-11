@@ -59,17 +59,35 @@
       "gpt-image-2-low": {
         "schema": "gpt-image-2",
         "request_mode": "openai-images",
-        "resolution_family": "gpt-image-2"
+        "resolution_family": "gpt-image-2",
+        "normalized_model": "gpt-image-2",
+        "display_label": "gpt-image-2（质量：低）",
+        "variant_label": "渠道变体：gpt-image-2-low",
+        "locked_params": {
+          "gpt_image_quality": "low"
+        }
       },
       "gpt-image-2-medium": {
         "schema": "gpt-image-2",
         "request_mode": "openai-images",
-        "resolution_family": "gpt-image-2"
+        "resolution_family": "gpt-image-2",
+        "display_label": "gpt-image-2（质量：中）",
+        "variant_label": "渠道变体：gpt-image-2-medium",
+        "normalized_model": "gpt-image-2",
+        "locked_params": {
+          "gpt_image_quality": "medium"
+        }
       },
       "gpt-image-2-high": {
         "schema": "gpt-image-2",
         "request_mode": "openai-images",
-        "resolution_family": "gpt-image-2"
+        "resolution_family": "gpt-image-2",
+        "normalized_model": "gpt-image-2",
+        "display_label": "gpt-image-2（质量：高）",
+        "variant_label": "渠道变体：gpt-image-2-high",
+        "locked_params": {
+          "gpt_image_quality": "high"
+        }
       },
       "gemini-2.5-flash-image": {
         "schema": "gemini-image",

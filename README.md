@@ -292,6 +292,34 @@ PROVIDER_ADAPTER_DEFAULT=native
 }
 ```
 
+如果第三方把“模型家族”和“固定参数”揉进了一个渠道模型名里，推荐直接在 `model_capabilities` 里声明归一化信息，而不是继续在前端猜命名。当前支持的扩展字段有：
+
+- `normalized_model`：归一化后的模型家族，例如 `gpt-image-2`
+- `display_label`：设置页展示名，例如 `gpt-image-2（质量：高）`
+- `variant_label`：渠道变体提示，例如 `渠道变体：openai-image-v2-ultra`
+- `locked_params`：由渠道模型固定、前端应禁改的参数，目前支持 `gpt_image_quality`
+
+示例：
+
+```json
+{
+  "model_capabilities": {
+    "openai-image-v2-ultra": {
+      "schema": "gpt-image-2",
+      "request_mode": "openai-images",
+      "normalized_model": "gpt-image-2",
+      "display_label": "gpt-image-2（质量：高）",
+      "variant_label": "渠道变体：openai-image-v2-ultra",
+      "locked_params": {
+        "gpt_image_quality": "high"
+      }
+    }
+  }
+}
+```
+
+后端会对这些字段做最小规范化（去首尾空格、`gpt_image_quality` 统一成小写），前端优先读取这套 metadata；只有没声明时，才退回到内置命名兜底。
+
 项目级默认（保存在 `presentation_meta._ai_generation_defaults_v1`，无需 DB 迁移）：
 
 ```json

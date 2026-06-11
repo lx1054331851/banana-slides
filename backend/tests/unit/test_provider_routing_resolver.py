@@ -3,7 +3,7 @@ import json
 import pytest
 
 from services.ai_providers import _get_model_type_provider_config
-from services.provider_routing import resolve_provider_route, resolve_routing_bundle
+from services.provider_routing import list_provider_profiles_redacted, resolve_provider_route, resolve_routing_bundle
 
 
 def _clear_env(monkeypatch):
@@ -222,6 +222,62 @@ def test_profile_model_capability_is_attached_to_route_metadata(monkeypatch):
 
     assert route.metadata["model_capability"]["request_mode"] == "openai-compat-google-chat"
     assert route.metadata["model_capability"]["aspect_ratio_family"] == "gemini-3.1-flash-image-preview"
+
+
+def test_profile_model_capability_normalizes_variant_metadata(monkeypatch):
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("PROVIDER_ROUTING_STRICT", "true")
+    monkeypatch.setenv("IMAGE_API_KEY", "profile-image-key")
+    monkeypatch.setenv(
+        "PROVIDER_PROFILES_JSON",
+        json.dumps(
+            [
+                {
+                    "id": "relay_x",
+                    "provider": "openai",
+                    "api_base": "https://relay.example.com/v1",
+                    "api_key_env": "IMAGE_API_KEY",
+                    "adapter": "openai_image_compat",
+                    "capabilities": ["image"],
+                    "models": ["openai-image-v2-ultra"],
+                    "model_capabilities": {
+                        "openai-image-v2-ultra": {
+                            "schema": "gpt-image-2",
+                            "request_mode": "openai-images",
+                            "normalized_model": " gpt-image-2 ",
+                            "display_label": " gpt-image-2（质量：高） ",
+                            "variant_label": " 渠道变体：openai-image-v2-ultra ",
+                            "locked_params": {
+                                "gpt_image_quality": "HIGH"
+                            }
+                        }
+                    },
+                }
+            ]
+        ),
+    )
+
+    profiles = list_provider_profiles_redacted()
+    assert profiles[0]["model_capabilities"]["openai-image-v2-ultra"] == {
+        "schema": "gpt-image-2",
+        "request_mode": "openai-images",
+        "normalized_model": "gpt-image-2",
+        "display_label": "gpt-image-2（质量：高）",
+        "variant_label": "渠道变体：openai-image-v2-ultra",
+        "locked_params": {
+            "gpt_image_quality": "high",
+        },
+    }
+
+    route = resolve_provider_route(
+        "image",
+        generation_override={"image": {"source": "profile:relay_x", "model": "openai-image-v2-ultra"}},
+    )
+
+    assert route.metadata["model_capability"]["normalized_model"] == "gpt-image-2"
+    assert route.metadata["model_capability"]["display_label"] == "gpt-image-2（质量：高）"
+    assert route.metadata["model_capability"]["variant_label"] == "渠道变体：openai-image-v2-ultra"
+    assert route.metadata["model_capability"]["locked_params"]["gpt_image_quality"] == "high"
 
 
 def test_profile_capability_mismatch_raises_when_strict(monkeypatch):

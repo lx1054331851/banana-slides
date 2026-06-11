@@ -75,7 +75,56 @@ def _load_profiles_payload() -> List[Dict[str, Any]]:
     return payload
 
 
+def _normalize_model_capabilities(raw: Any) -> Dict[str, Dict[str, Any]]:
+    """Normalize declared model capability metadata into a stable shape for frontend/backend consumers."""
+    if not isinstance(raw, dict):
+        return {}
+
+    normalized: Dict[str, Dict[str, Any]] = {}
+    for raw_model, raw_capability in raw.items():
+        model_name = str(raw_model or "").strip()
+        if not model_name or not isinstance(raw_capability, dict):
+            continue
+
+        capability = dict(raw_capability)
+        normalized_capability: Dict[str, Any] = {}
+        for key in (
+            "schema",
+            "request_mode",
+            "resolution_family",
+            "aspect_ratio_family",
+            "normalized_model",
+            "display_label",
+            "variant_label",
+        ):
+            value = capability.get(key)
+            if value is None:
+                continue
+            text = str(value).strip()
+            if text:
+                normalized_capability[key] = text
+
+        locked_params = capability.get("locked_params")
+        if isinstance(locked_params, dict):
+            normalized_locked_params: Dict[str, Any] = {}
+            quality = str(locked_params.get("gpt_image_quality") or "").strip().lower()
+            if quality in {"low", "medium", "high"}:
+                normalized_locked_params["gpt_image_quality"] = quality
+            if normalized_locked_params:
+                normalized_capability["locked_params"] = normalized_locked_params
+
+        for key, value in capability.items():
+            if key in normalized_capability or key == "locked_params":
+                continue
+            normalized_capability[key] = value
+
+        normalized[model_name] = normalized_capability
+
+    return normalized
+
+
 def _normalize_profile(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize one provider profile payload into the internal routing format."""
     profile = dict(raw or {})
     profile_id = str(profile.get("id") or "").strip()
     channel = str(profile.get("channel") or profile_id).strip() or profile_id
@@ -114,7 +163,7 @@ def _normalize_profile(raw: Dict[str, Any]) -> Dict[str, Any]:
         "models": [str(model).strip() for model in (profile.get("models") or []) if str(model).strip()],
         "supported_resolutions": profile.get("supported_resolutions") if isinstance(profile.get("supported_resolutions"), dict) else {},
         "model_defaults": profile.get("model_defaults") if isinstance(profile.get("model_defaults"), dict) else {},
-        "model_capabilities": profile.get("model_capabilities") if isinstance(profile.get("model_capabilities"), dict) else {},
+        "model_capabilities": _normalize_model_capabilities(profile.get("model_capabilities")),
     }
 
 
