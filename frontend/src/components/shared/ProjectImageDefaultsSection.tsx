@@ -4,6 +4,7 @@ import { HelpCircle } from 'lucide-react';
 import { Input } from './Input';
 import { Select } from './Select';
 import {
+  getGptImageSizeOptionsForAspectRatio,
   getImageChannelOptionById,
   getImageModelSchema,
   type ImageModelSchema,
@@ -11,32 +12,6 @@ import {
 
 type ProviderProfileSummary = import('@/types').ProviderProfileSummary;
 type ImageChannelOption = import('@/types').ImageChannelOption;
-
-const GPT_IMAGE_SIZE_OPTIONS = [
-  { value: '1024x1024', label: '1:1', group: 'square' },
-  { value: '1536x1024', label: '3:2', group: 'landscape' },
-  { value: '1536x1152', label: '4:3', group: 'landscape' },
-  { value: '1440x1152', label: '5:4', group: 'landscape' },
-  { value: '1536x864', label: '16:9', group: 'landscape' },
-  { value: '1680x720', label: '21:9', group: 'landscape' },
-  { value: '1024x1536', label: '2:3', group: 'portrait' },
-  { value: '1152x1536', label: '3:4', group: 'portrait' },
-  { value: '1152x1440', label: '4:5', group: 'portrait' },
-  { value: '864x1536', label: '9:16', group: 'portrait' },
-  { value: '2048x2048', label: '1:1', group: 'square' },
-  { value: '2016x1344', label: '3:2', group: 'landscape' },
-  { value: '2048x1536', label: '4:3', group: 'landscape' },
-  { value: '1920x1536', label: '5:4', group: 'landscape' },
-  { value: '2048x1152', label: '16:9', group: 'landscape' },
-  { value: '2352x1008', label: '21:9', group: 'landscape' },
-  { value: '1344x2016', label: '2:3', group: 'portrait' },
-  { value: '1536x2048', label: '3:4', group: 'portrait' },
-  { value: '1536x1920', label: '4:5', group: 'portrait' },
-  { value: '1152x2048', label: '9:16', group: 'portrait' },
-  { value: '2880x2880', label: '1:1', group: 'square' },
-  { value: '3840x2160', label: '16:9', group: 'landscape' },
-  { value: '2160x3840', label: '9:16', group: 'portrait' },
-] as const;
 
 type ProjectImageDefaultsSectionProps = {
   providerProfiles: ProviderProfileSummary[];
@@ -46,6 +21,9 @@ type ProjectImageDefaultsSectionProps = {
   selectableImageModels: ReadonlyArray<{ model: string; label?: string }>;
   selectedImageResolution: string;
   visibleResolutionOptions: string[];
+  aspectRatio: string;
+  isAspectRatioCompatible: boolean;
+  compatibilityMessage?: string;
   gptImageSize: string;
   gptImageBackground: string;
   gptImageOutputFormat: string;
@@ -84,46 +62,40 @@ function TooltipLabel({ label, tooltip }: { label: string; tooltip: string }) {
 
 // Render grouped GPT Image 2 real size options for project-level defaults.
 function ProjectGptImageSizeOptions({
+  aspectRatio,
   value,
   onChange,
 }: {
+  aspectRatio: string;
   value: string;
   onChange: (value: string) => void;
 }) {
-  const groupedOptions = [
-    { key: 'square', title: '方图', options: GPT_IMAGE_SIZE_OPTIONS.filter((item) => item.group === 'square') },
-    { key: 'landscape', title: '横版', options: GPT_IMAGE_SIZE_OPTIONS.filter((item) => item.group === 'landscape') },
-    { key: 'portrait', title: '竖版', options: GPT_IMAGE_SIZE_OPTIONS.filter((item) => item.group === 'portrait') },
-  ];
+  const aspectRatioOptions = getGptImageSizeOptionsForAspectRatio(aspectRatio);
 
   return (
-    <div className="space-y-3">
-      {groupedOptions.map((group) => (
-        <div key={group.key} className="space-y-1.5">
-          <div className="text-xs font-semibold tracking-wide text-gray-500 dark:text-foreground-tertiary">
-            {group.title}
-          </div>
-          <div className="grid gap-1 sm:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
-            {group.options.map((option) => {
-              const active = option.value === value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => onChange(option.value)}
-                  className={`rounded-md border px-2 py-1.5 text-left transition-all ${
-                    active
-                      ? 'border-banana-500 bg-banana-50 text-banana-900 shadow-sm dark:border-banana-400 dark:bg-banana-500/10 dark:text-banana-100'
-                      : 'border-gray-200 bg-white text-gray-700 hover:border-banana-300 hover:bg-banana-50/50 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/60 dark:hover:bg-background-hover'
-                  }`}
-                >
-                  <div className="text-[12px] font-medium leading-snug">{option.label}</div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+    <div className="space-y-2">
+      <p className="text-xs text-gray-500 dark:text-foreground-tertiary">
+        当前页面比例为 {aspectRatio}，这里只展示该比例下可实际传给后端的尺寸。
+      </p>
+      <div className="grid gap-1 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        {aspectRatioOptions.map((option) => {
+          const active = option.value === value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className={`rounded-md border px-2 py-1.5 text-left transition-all ${
+                active
+                  ? 'border-banana-500 bg-banana-50 text-banana-900 shadow-sm dark:border-banana-400 dark:bg-banana-500/10 dark:text-banana-100'
+                  : 'border-gray-200 bg-white text-gray-700 hover:border-banana-300 hover:bg-banana-50/50 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-banana-500/60 dark:hover:bg-background-hover'
+              }`}
+            >
+              <div className="text-[12px] font-medium leading-snug">{option.value}</div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -146,6 +118,9 @@ export const ProjectImageDefaultsSection: React.FC<ProjectImageDefaultsSectionPr
   selectableImageModels,
   selectedImageResolution,
   visibleResolutionOptions,
+  aspectRatio,
+  isAspectRatioCompatible,
+  compatibilityMessage,
   gptImageSize,
   gptImageBackground,
   gptImageOutputFormat,
@@ -166,6 +141,7 @@ export const ProjectImageDefaultsSection: React.FC<ProjectImageDefaultsSectionPr
   const schema = getProjectImageSchema(selectedImageChannel, selectedImageModel, providerProfiles);
   const showGptImageControls = schema === 'gpt-image-2';
   const configNote = getImageChannelOptionById(selectedImageChannel, providerProfiles)?.config_note;
+  const showCompatibilityWarning = Boolean(compatibilityMessage) && !isAspectRatioCompatible;
 
   return (
     <div className="pb-6 border-b border-gray-200 dark:border-border-primary space-y-4">
@@ -205,13 +181,24 @@ export const ProjectImageDefaultsSection: React.FC<ProjectImageDefaultsSectionPr
           />
         </div>
       </div>
+      {showCompatibilityWarning && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-200">
+          {compatibilityMessage}
+        </div>
+      )}
       {showGptImageControls ? (
         <>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-foreground-secondary mb-2">
               图片尺寸
             </label>
-            <ProjectGptImageSizeOptions value={gptImageSize} onChange={onGptImageSizeChange} />
+            {isAspectRatioCompatible ? (
+              <ProjectGptImageSizeOptions
+                aspectRatio={aspectRatio}
+                value={gptImageSize}
+                onChange={onGptImageSizeChange}
+              />
+            ) : null}
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div className="w-full">
@@ -295,7 +282,7 @@ export const ProjectImageDefaultsSection: React.FC<ProjectImageDefaultsSectionPr
         <button
           type="button"
           onClick={onSave}
-          disabled={isSaving}
+          disabled={isSaving || !isAspectRatioCompatible}
           className="inline-flex w-full items-center justify-center rounded-lg border border-banana-500 px-4 py-2 text-sm font-medium text-banana-700 transition-colors hover:bg-banana-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-banana dark:text-banana dark:hover:bg-banana-900/20 sm:w-auto"
         >
           {isSaving ? '保存中...' : saveLabel}

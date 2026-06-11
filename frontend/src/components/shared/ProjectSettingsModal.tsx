@@ -19,6 +19,9 @@ import {
 import {
   getImageChannelOptionById,
   getImageChannelOptions,
+  getGptImageSizeOptionsForAspectRatio,
+  getSupportedAspectRatiosForChannelModel,
+  isAspectRatioSupportedForChannelModel,
   getSupportedResolutionsForChannelModel,
   getSelectableImageModelsForChannel,
   normalizeImageChannel,
@@ -206,19 +209,6 @@ interface ProjectSettingsModalProps {
 
 type SettingsTab = 'project' | 'export';
 
-const GEMINI_PRO_SUPPORTED_ASPECT_RATIOS = new Set([
-  '1:1',
-  '2:3',
-  '3:2',
-  '3:4',
-  '4:3',
-  '4:5',
-  '5:4',
-  '9:16',
-  '16:9',
-  '21:9',
-]);
-
 const FALLBACK_DESCRIPTION_FIELDS = ['视觉元素', '视觉焦点', '排版布局', '演讲者备注'];
 
 const SortableFieldPill: React.FC<{
@@ -387,12 +377,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
     () => new Set(presetDescriptionFields.length > 0 ? presetDescriptionFields : FALLBACK_DESCRIPTION_FIELDS),
     [presetDescriptionFields]
   );
-  const visibleAspectRatioOptions = useMemo(() => {
-    if (selectedImageModel !== 'gemini-3-pro-image-preview') {
-      return ASPECT_RATIO_OPTIONS;
-    }
-    return ASPECT_RATIO_OPTIONS.filter((opt) => GEMINI_PRO_SUPPORTED_ASPECT_RATIOS.has(opt.value));
-  }, [selectedImageModel]);
+  const visibleAspectRatioOptions = ASPECT_RATIO_OPTIONS;
   const visibleResolutionOptions = useMemo(
     () => getSupportedResolutionsForChannelModel(
       selectedImageChannel,
@@ -402,6 +387,23 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
     ),
     [providerProfiles, selectedImageChannel, selectedImageModel]
   );
+  const supportedAspectRatiosForCurrentModel = useMemo(
+    () => getSupportedAspectRatiosForChannelModel(selectedImageChannel, selectedImageModel, providerProfiles),
+    [providerProfiles, selectedImageChannel, selectedImageModel]
+  );
+  const isCurrentModelAspectRatioCompatible = useMemo(
+    () => isAspectRatioSupportedForChannelModel(selectedImageChannel, selectedImageModel, aspectRatio, providerProfiles),
+    [aspectRatio, providerProfiles, selectedImageChannel, selectedImageModel]
+  );
+  const currentImageSchema = useMemo(
+    () => getImageModelSchema(selectedImageChannel, selectedImageModel, providerProfiles),
+    [providerProfiles, selectedImageChannel, selectedImageModel]
+  );
+  const aspectRatioCompatibilityMessage = useMemo(() => {
+    if (isCurrentModelAspectRatioCompatible) return '';
+    const supportedList = supportedAspectRatiosForCurrentModel.join('、');
+    return `当前页面比例 ${aspectRatio} 与模型 ${selectedImageModel} 不兼容。请先将项目画面比例切换到 ${supportedList} 之一，再保存 AI 默认。`;
+  }, [aspectRatio, isCurrentModelAspectRatioCompatible, selectedImageModel, supportedAspectRatiosForCurrentModel]);
   const selectedImageResolution = useMemo(
     () => (visibleResolutionOptions.includes(generationDefaultImageResolution)
       ? generationDefaultImageResolution
@@ -433,12 +435,22 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   }, [generationDefaultImageResolution, onGenerationDefaultImageResolutionChange, selectedImageResolution]);
 
   useEffect(() => {
-    if (!onAspectRatioChange || !aspectRatio || hasImages) return;
-    const supported = visibleAspectRatioOptions.some((opt) => opt.value === aspectRatio);
-    if (!supported) {
-      onAspectRatioChange('16:9');
-    }
-  }, [aspectRatio, hasImages, onAspectRatioChange, visibleAspectRatioOptions]);
+    if (!onGenerationDefaultGptImageSizeChange || currentImageSchema !== 'gpt-image-2' || !isCurrentModelAspectRatioCompatible) return;
+    const sizeOptions = getGptImageSizeOptionsForAspectRatio(aspectRatio);
+    if (sizeOptions.length === 0) return;
+    const currentSizeIsValid = sizeOptions.some((option) => option.value === generationDefaultGptImageSize);
+    if (currentSizeIsValid) return;
+    const nextSize = sizeOptions[0].value;
+    onGenerationDefaultGptImageSizeChange(nextSize);
+    onGenerationDefaultImageResolutionChange?.(getGptImageResolutionFromSize(nextSize));
+  }, [
+    aspectRatio,
+    currentImageSchema,
+    generationDefaultGptImageSize,
+    isCurrentModelAspectRatioCompatible,
+    onGenerationDefaultGptImageSizeChange,
+    onGenerationDefaultImageResolutionChange,
+  ]);
 
   const handleCompressFormatChange = (fmt: 'jpeg' | 'png' | 'webp') => {
     onExportCompressFormatChange?.(fmt);
@@ -579,6 +591,11 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                     <p className="text-sm text-gray-600 dark:text-foreground-tertiary">
                       {hasImages ? t('projectSettings.aspectRatioLocked') : t('projectSettings.aspectRatioDesc')}
                     </p>
+                    {!hasImages && !isCurrentModelAspectRatioCompatible && (
+                      <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                        {aspectRatioCompatibilityMessage}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {visibleAspectRatioOptions.map((opt) => (
@@ -618,6 +635,9 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                   selectableImageModels={selectableImageModels}
                   selectedImageResolution={selectedImageResolution}
                   visibleResolutionOptions={visibleResolutionOptions}
+                  aspectRatio={aspectRatio}
+                  isAspectRatioCompatible={isCurrentModelAspectRatioCompatible}
+                  compatibilityMessage={aspectRatioCompatibilityMessage}
                   gptImageSize={generationDefaultGptImageSize}
                   gptImageBackground={generationDefaultGptImageBackground}
                   gptImageOutputFormat={generationDefaultGptImageOutputFormat}

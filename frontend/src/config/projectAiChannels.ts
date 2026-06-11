@@ -3,6 +3,7 @@ import type {
   ProviderProfileSummary,
   ImageChannelOption,
 } from '@/types';
+import { ASPECT_RATIO_OPTIONS } from '@/config/aspectRatio';
 import {
   PROJECT_DEFAULT_IMAGE_MODEL,
   PROJECT_DEFAULT_IMAGE_RESOLUTION,
@@ -15,6 +16,54 @@ export const IMAGE_PROVIDER_OPTIONS = [
   { value: 'gemini', label: 'Gemini' },
   { value: 'openai', label: 'OpenAI' },
 ] as const;
+
+const BASE_MODEL_SUPPORTED_ASPECT_RATIO_SET = new Set([
+  '16:9',
+  '21:9',
+  '4:3',
+  '3:2',
+  '5:4',
+  '1:1',
+  '4:5',
+  '2:3',
+  '3:4',
+  '9:16',
+]);
+
+const GEMINI_31_EXTRA_ASPECT_RATIO_SET = new Set([
+  '8:1',
+  '4:1',
+  '1:4',
+  '1:8',
+]);
+
+const GPT_IMAGE_SIZE_OPTIONS = [
+  { value: '1024x1024', aspectRatio: '1:1' },
+  { value: '1536x1024', aspectRatio: '3:2' },
+  { value: '1536x1152', aspectRatio: '4:3' },
+  { value: '1440x1152', aspectRatio: '5:4' },
+  { value: '1536x864', aspectRatio: '16:9' },
+  { value: '1680x720', aspectRatio: '21:9' },
+  { value: '1024x1536', aspectRatio: '2:3' },
+  { value: '1152x1536', aspectRatio: '3:4' },
+  { value: '1152x1440', aspectRatio: '4:5' },
+  { value: '864x1536', aspectRatio: '9:16' },
+  { value: '2048x2048', aspectRatio: '1:1' },
+  { value: '2016x1344', aspectRatio: '3:2' },
+  { value: '2048x1536', aspectRatio: '4:3' },
+  { value: '1920x1536', aspectRatio: '5:4' },
+  { value: '2048x1152', aspectRatio: '16:9' },
+  { value: '2352x1008', aspectRatio: '21:9' },
+  { value: '1344x2016', aspectRatio: '2:3' },
+  { value: '1536x2048', aspectRatio: '3:4' },
+  { value: '1536x1920', aspectRatio: '4:5' },
+  { value: '1152x2048', aspectRatio: '9:16' },
+  { value: '2880x2880', aspectRatio: '1:1' },
+  { value: '3840x2160', aspectRatio: '16:9' },
+  { value: '2160x3840', aspectRatio: '9:16' },
+] as const;
+
+export type GptImageSizeOption = (typeof GPT_IMAGE_SIZE_OPTIONS)[number];
 
 export const toImageChannelOption = (profile: ProviderProfileSummary): ImageChannelOption => ({
   id: String(profile.channel || profile.id),
@@ -202,6 +251,11 @@ export const getSupportedResolutionsForChannelModel = (
   return [...fallbackResolutions];
 };
 
+// Return whether the model belongs to the Gemini 3.1 flash image family.
+const isGemini31FlashImageModel = (model: string): boolean => {
+  return String(model || '').trim().toLowerCase().startsWith('gemini-3.1-flash-image-preview');
+};
+
 // Return whether the model uses OpenAI-compatible chat + google image config on this channel.
 const isOpenAICompatGoogleChatModel = (
   channel: ImageChannelOption | undefined,
@@ -267,6 +321,48 @@ export const getImageModelConfigMode = (
     return 'openai-images';
   }
   return 'default';
+};
+
+// Return the page aspect ratios supported by the selected channel/model pair.
+export const getSupportedAspectRatiosForChannelModel = (
+  channelId: string,
+  model: string,
+  providerProfiles: ProviderProfileSummary[],
+): string[] => {
+  const schema = getImageModelSchema(channelId, model, providerProfiles);
+  const normalizedModel = String(model || '').trim().toLowerCase();
+  const supportedSet = new Set(BASE_MODEL_SUPPORTED_ASPECT_RATIO_SET);
+
+  if (schema === 'gpt-image-2') {
+    return ASPECT_RATIO_OPTIONS
+      .map((option) => option.value)
+      .filter((value) => supportedSet.has(value));
+  }
+
+  if (isGemini31FlashImageModel(normalizedModel)) {
+    GEMINI_31_EXTRA_ASPECT_RATIO_SET.forEach((value) => supportedSet.add(value));
+  }
+
+  return ASPECT_RATIO_OPTIONS
+    .map((option) => option.value)
+    .filter((value) => supportedSet.has(value));
+};
+
+// Return whether the current page aspect ratio is compatible with the selected model.
+export const isAspectRatioSupportedForChannelModel = (
+  channelId: string,
+  model: string,
+  aspectRatio: string,
+  providerProfiles: ProviderProfileSummary[],
+): boolean => {
+  const normalizedAspectRatio = String(aspectRatio || '').trim();
+  return getSupportedAspectRatiosForChannelModel(channelId, model, providerProfiles).includes(normalizedAspectRatio);
+};
+
+// Return GPT Image 2 real size options for one page aspect ratio.
+export const getGptImageSizeOptionsForAspectRatio = (aspectRatio: string): GptImageSizeOption[] => {
+  const normalizedAspectRatio = String(aspectRatio || '').trim();
+  return GPT_IMAGE_SIZE_OPTIONS.filter((option) => option.aspectRatio === normalizedAspectRatio);
 };
 
 export const formatImageModelDisplayName = (model: string): string => {

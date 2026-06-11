@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatImageModelDisplayName,
+  getGptImageSizeOptionsForAspectRatio,
   getImageChannelOptions,
   getImageModelConfigMode,
   getImageModelDisplayLabel,
+  getSupportedAspectRatiosForChannelModel,
 } from '@/config/projectAiChannels';
 
 describe('projectAiChannels image model labels', () => {
@@ -102,5 +104,82 @@ describe('projectAiChannels image model labels', () => {
     ] as any;
 
     expect(getImageModelConfigMode('custom-openai', 'gemini-3.1-flash-image-preview', profiles)).toBe('openai-images');
+  });
+
+  it('returns only the base aspect ratios for gpt-image-2 models', () => {
+    const profiles = [
+      {
+        id: '147ai',
+        channel: '147ai',
+        label: '147AI',
+        provider: 'openai',
+        adapter: 'openai_image_compat',
+        capabilities: ['image'],
+        model_capabilities: {
+          'gpt-image-2-high': {
+            schema: 'gpt-image-2',
+            request_mode: 'openai-images',
+          },
+        },
+      },
+    ] as any;
+
+    expect(getSupportedAspectRatiosForChannelModel('147ai', 'gpt-image-2-high', profiles)).toEqual([
+      '16:9',
+      '21:9',
+      '4:3',
+      '3:2',
+      '5:4',
+      '1:1',
+      '4:5',
+      '2:3',
+      '3:4',
+      '9:16',
+    ]);
+  });
+
+  it('exposes extra panorama ratios only for gemini-3.1 flash image models', () => {
+    const profiles = [
+      {
+        id: '147ai',
+        channel: '147ai',
+        label: '147AI',
+        provider: 'openai',
+        adapter: 'openai_image_compat',
+        capabilities: ['image'],
+        model_capabilities: {
+          'gemini-3.1-flash-image-preview': {
+            schema: 'gemini-image',
+            request_mode: 'openai-compat-google-chat',
+          },
+        },
+      },
+    ] as any;
+
+    expect(getSupportedAspectRatiosForChannelModel('147ai', 'gemini-3.1-flash-image-preview', profiles)).toEqual([
+      '8:1',
+      '4:1',
+      '16:9',
+      '21:9',
+      '4:3',
+      '3:2',
+      '5:4',
+      '1:1',
+      '1:4',
+      '1:8',
+      '4:5',
+      '2:3',
+      '3:4',
+      '9:16',
+    ]);
+  });
+
+  it('maps gpt-image-2 real size options by page aspect ratio', () => {
+    expect(getGptImageSizeOptionsForAspectRatio('16:9').map((item) => item.value)).toEqual([
+      '1536x864',
+      '2048x1152',
+      '3840x2160',
+    ]);
+    expect(getGptImageSizeOptionsForAspectRatio('8:1')).toEqual([]);
   });
 });
