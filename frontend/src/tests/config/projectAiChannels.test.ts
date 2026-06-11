@@ -29,7 +29,7 @@ describe('projectAiChannels image model labels', () => {
       },
     ] as any);
 
-    expect(label).toBe('147AI -> gpt-image-2-high');
+    expect(label).toBe('147AI -> gpt-image-2（质量：高）');
   });
 
   it('only exposes image channels from explicit provider profiles', () => {
@@ -211,6 +211,42 @@ describe('projectAiChannels image model labels', () => {
       },
       displayLabel: 'gpt-image-2（质量：高）',
       variantLabel: '渠道变体：gpt-image-2-high',
+    });
+  });
+
+  it('prefers explicit capability metadata for non-standard third-party variant names', () => {
+    const profiles = [
+      {
+        id: 'relay-x',
+        channel: 'relay-x',
+        label: 'Relay X',
+        provider: 'openai',
+        adapter: 'openai_image_compat',
+        capabilities: ['image'],
+        model_capabilities: {
+          'openai-image-v2-ultra': {
+            schema: 'gpt-image-2',
+            request_mode: 'openai-images',
+            normalized_model: 'gpt-image-2',
+            display_label: 'gpt-image-2（质量：高）',
+            variant_label: '渠道变体：openai-image-v2-ultra',
+            locked_params: {
+              gpt_image_quality: 'high',
+            },
+          },
+        },
+      },
+    ] as any;
+
+    expect(getNormalizedImageModel('relay-x', 'openai-image-v2-ultra', profiles)).toEqual({
+      modelFamily: 'gpt-image-2',
+      providerModelId: 'openai-image-v2-ultra',
+      schema: 'gpt-image-2',
+      lockedParams: {
+        gptImageQuality: 'high',
+      },
+      displayLabel: 'gpt-image-2（质量：高）',
+      variantLabel: '渠道变体：openai-image-v2-ultra',
     });
   });
 });

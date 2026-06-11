@@ -120,15 +120,21 @@ describe('SettingsPage', () => {
             provider: 'openai',
             adapter: 'openai_image_compat',
             capabilities: ['image'],
-            models: ['gpt-image-2-high', 'gemini-3.1-flash-image-preview'],
+            models: ['openai-image-v2-ultra', 'gemini-3.1-flash-image-preview'],
             supported_resolutions: {
-              'gpt-image-2-high': ['1K', '2K', '4K'],
+              'openai-image-v2-ultra': ['1K', '2K', '4K'],
               'gemini-3.1-flash-image-preview': ['0.5K', '1K', '2K', '4K'],
             },
             model_capabilities: {
-              'gpt-image-2-high': {
+              'openai-image-v2-ultra': {
                 schema: 'gpt-image-2',
                 request_mode: 'openai-images',
+                normalized_model: 'gpt-image-2',
+                display_label: 'gpt-image-2（质量：高）',
+                variant_label: '渠道变体：openai-image-v2-ultra',
+                locked_params: {
+                  gpt_image_quality: 'high',
+                },
               },
               'gemini-3.1-flash-image-preview': {
                 schema: 'gemini-image',
@@ -142,7 +148,7 @@ describe('SettingsPage', () => {
     mockGetSettings.mockResolvedValueOnce({
       data: {
         ai_provider_format: 'gemini',
-        image_model: 'gpt-image-2-high',
+        image_model: 'openai-image-v2-ultra',
         image_model_source: 'profile:147ai',
         image_resolution: '2K',
         max_description_workers: 5,
@@ -160,8 +166,8 @@ describe('SettingsPage', () => {
     render(<SettingsPage />);
 
     expect(await screen.findByText(/背景模式|Background/)).toBeInTheDocument();
-    expect(screen.getByText('渠道变体：gpt-image-2-high')).toBeInTheDocument();
-    expect(screen.getByText('质量档位由渠道模型 gpt-image-2-high 固定为高。')).toBeInTheDocument();
+    expect(screen.getByText('渠道变体：openai-image-v2-ultra')).toBeInTheDocument();
+    expect(screen.getByText('质量档位由渠道模型 openai-image-v2-ultra 固定为高。')).toBeInTheDocument();
     expect(screen.getByText(/背景模式|Background/)).toBeInTheDocument();
     expect(screen.getByText(/输出格式|Output Format/)).toBeInTheDocument();
     expect(screen.getAllByText(/质量档位|Quality/).length).toBeGreaterThan(0);
@@ -176,15 +182,21 @@ describe('SettingsPage', () => {
             provider: 'openai',
             adapter: 'openai_image_compat',
             capabilities: ['image'],
-            models: ['gpt-image-2-high', 'gemini-3.1-flash-image-preview'],
+            models: ['openai-image-v2-ultra', 'gemini-3.1-flash-image-preview'],
             supported_resolutions: {
-              'gpt-image-2-high': ['1K', '2K', '4K'],
+              'openai-image-v2-ultra': ['1K', '2K', '4K'],
               'gemini-3.1-flash-image-preview': ['0.5K', '1K', '2K', '4K'],
             },
             model_capabilities: {
-              'gpt-image-2-high': {
+              'openai-image-v2-ultra': {
                 schema: 'gpt-image-2',
                 request_mode: 'openai-images',
+                normalized_model: 'gpt-image-2',
+                display_label: 'gpt-image-2（质量：高）',
+                variant_label: '渠道变体：openai-image-v2-ultra',
+                locked_params: {
+                  gpt_image_quality: 'high',
+                },
               },
               'gemini-3.1-flash-image-preview': {
                 schema: 'gemini-image',

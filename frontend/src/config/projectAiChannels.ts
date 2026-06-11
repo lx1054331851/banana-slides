@@ -75,6 +75,16 @@ export type NormalizedImageModel = {
   displayLabel: string;
   variantLabel?: string;
 };
+type ImageModelCapability = {
+  schema?: ImageModelSchema | string;
+  request_mode?: string;
+  normalized_model?: string;
+  display_label?: string;
+  variant_label?: string;
+  locked_params?: {
+    gpt_image_quality?: 'low' | 'medium' | 'high' | string;
+  };
+};
 
 const GPT_IMAGE_QUALITY_LABELS: Record<NonNullable<LockedImageModelParams['gptImageQuality']>, string> = {
   low: '低',
@@ -131,6 +141,17 @@ export const getImageChannelOptionById = (
 ): ImageChannelOption | undefined => (
   getImageChannelOptions(providerProfiles).find((channel) => channel.id === channelId)
 );
+
+// Return the explicit capability metadata for one channel/model pair when the profile declares it.
+const getImageModelCapability = (
+  channelId: string,
+  model: string,
+  providerProfiles: ProviderProfileSummary[],
+): ImageModelCapability => {
+  const channel = getImageChannelOptionById(channelId, providerProfiles);
+  const capability = channel?.model_capabilities?.[String(model || '').trim()];
+  return capability && typeof capability === 'object' ? capability as ImageModelCapability : {};
+};
 
 export const getImageChannelsForProvider = (
   provider: string,
@@ -321,7 +342,8 @@ export const getImageModelSchema = (
   providerProfiles: ProviderProfileSummary[],
 ): ImageModelSchema => {
   const channel = getImageChannelOptionById(channelId, providerProfiles);
-  const explicitSchema = String(channel?.model_capabilities?.[String(model || '').trim()]?.schema || '').trim();
+  const capability = getImageModelCapability(channelId, model, providerProfiles);
+  const explicitSchema = String(capability.schema || '').trim();
   if (explicitSchema === 'gpt-image-2' || explicitSchema === 'gemini-image') {
     return explicitSchema;
   }
@@ -400,6 +422,20 @@ const getLockedGptImageQuality = (
   return match[1].toLowerCase() as LockedImageModelParams['gptImageQuality'];
 };
 
+// Return normalized locked params derived from capability metadata first, then local naming fallbacks.
+const getLockedImageModelParams = (
+  capability: ImageModelCapability,
+  model: string,
+  schema: ImageModelSchema,
+): LockedImageModelParams => {
+  const explicitQuality = String(capability.locked_params?.gpt_image_quality || '').trim().toLowerCase();
+  if (explicitQuality === 'low' || explicitQuality === 'medium' || explicitQuality === 'high') {
+    return { gptImageQuality: explicitQuality };
+  }
+  const fallbackQuality = getLockedGptImageQuality(model, schema);
+  return fallbackQuality ? { gptImageQuality: fallbackQuality } : {};
+};
+
 // Return a normalized model descriptor that separates family, provider variant, and locked params.
 export const getNormalizedImageModel = (
   channelId: string,
@@ -407,25 +443,34 @@ export const getNormalizedImageModel = (
   providerProfiles: ProviderProfileSummary[],
 ): NormalizedImageModel => {
   const providerModelId = String(model || '').trim();
+  const capability = getImageModelCapability(channelId, providerModelId, providerProfiles);
   const explicitSchema = getImageModelSchema(channelId, providerModelId, providerProfiles);
   const schema = explicitSchema === 'default' && /^gpt-image-2(?:-(low|medium|high))?$/i.test(providerModelId)
     ? 'gpt-image-2'
     : explicitSchema;
-  const lockedQuality = getLockedGptImageQuality(providerModelId, schema);
-  const modelFamily = schema === 'gpt-image-2'
-    ? 'gpt-image-2'
-    : providerModelId;
-  const displayLabel = lockedQuality
-    ? `${modelFamily}（质量：${GPT_IMAGE_QUALITY_LABELS[lockedQuality]}）`
-    : providerModelId;
+  const lockedParams = getLockedImageModelParams(capability, providerModelId, schema);
+  const lockedQuality = lockedParams.gptImageQuality;
+  const modelFamily = String(capability.normalized_model || '').trim() || (
+    schema === 'gpt-image-2'
+      ? 'gpt-image-2'
+      : providerModelId
+  );
+  const displayLabel = String(capability.display_label || '').trim() || (
+    lockedQuality
+      ? `${modelFamily}（质量：${GPT_IMAGE_QUALITY_LABELS[lockedQuality]}）`
+      : providerModelId
+  );
+  const variantLabel = String(capability.variant_label || '').trim() || (
+    providerModelId !== modelFamily ? `渠道变体：${providerModelId}` : undefined
+  );
 
   return {
     modelFamily,
     providerModelId,
     schema,
-    lockedParams: lockedQuality ? { gptImageQuality: lockedQuality } : {},
+    lockedParams,
     displayLabel,
-    variantLabel: providerModelId !== modelFamily ? `渠道变体：${providerModelId}` : undefined,
+    variantLabel,
   };
 };
 
@@ -439,8 +484,8 @@ export const getImageModelDisplayLabel = (
   providerProfiles: ProviderProfileSummary[],
 ): string => {
   const channel = getImageChannelOptionById(channelId, providerProfiles);
-  const trimmedModel = String(model || '').trim();
-  const normalizedModelLabel = formatImageModelDisplayName(trimmedModel);
+  const normalizedModelLabel = getNormalizedImageModel(channelId, model, providerProfiles).displayLabel
+    || formatImageModelDisplayName(model);
   if (!channel?.label) return normalizedModelLabel;
   return `${channel.label} -> ${normalizedModelLabel}`;
 };
