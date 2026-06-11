@@ -160,9 +160,11 @@ describe('SettingsPage', () => {
     render(<SettingsPage />);
 
     expect(await screen.findByText(/背景模式|Background/)).toBeInTheDocument();
+    expect(screen.getByText('渠道变体：gpt-image-2-high')).toBeInTheDocument();
+    expect(screen.getByText('质量档位由渠道模型 gpt-image-2-high 固定为高。')).toBeInTheDocument();
     expect(screen.getByText(/背景模式|Background/)).toBeInTheDocument();
     expect(screen.getByText(/输出格式|Output Format/)).toBeInTheDocument();
-    expect(screen.getByText(/质量档位|Quality/)).toBeInTheDocument();
+    expect(screen.getAllByText(/质量档位|Quality/).length).toBeGreaterThan(0);
 
     mockGetProviderProfiles.mockResolvedValueOnce({
       data: {

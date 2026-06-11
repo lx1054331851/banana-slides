@@ -134,6 +134,7 @@ import {
   deriveImageChannelSelection,
   getImageChannelOptions,
   getImageModelDisplayLabel,
+  getNormalizedImageModel,
   getSelectableImageModelsForChannel,
   getSourceForImageChannel,
   getPreferredImageChannel,
@@ -1172,6 +1173,7 @@ export const SlidePreview: React.FC = () => {
         const normalizedModel = normalizeProjectDefaultImageModel(imageDefaults.model);
         const channelSelection = deriveImageChannelSelection(imageDefaults, providerProfiles);
         const preferredChannel = getPreferredImageChannel(providerProfiles, channelSelection.provider);
+        const lockedGptImageQuality = getNormalizedImageModel(channelSelection.channel || preferredChannel?.id || '', normalizedModel, providerProfiles).lockedParams.gptImageQuality;
         setProjectDefaultImageProvider(channelSelection.provider);
         setProjectDefaultImageChannel(channelSelection.channel || preferredChannel?.id || '');
         setProjectDefaultImageModel(normalizedModel);
@@ -1182,7 +1184,7 @@ export const SlidePreview: React.FC = () => {
         setProjectDefaultGptImageBackground(imageDefaults.gpt_image_background || 'auto');
         setProjectDefaultGptImageOutputFormat(imageDefaults.gpt_image_output_format || 'png');
         setProjectDefaultGptImageOutputCompression(imageDefaults.gpt_image_output_compression ?? 100);
-        setProjectDefaultGptImageQuality(imageDefaults.gpt_image_quality || 'auto');
+        setProjectDefaultGptImageQuality(lockedGptImageQuality || imageDefaults.gpt_image_quality || 'auto');
         setDescriptionRequirementsDraft(currentProject.description_requirements || '');
         lastProjectId.current = currentProject.id || null;
         isEditingRequirements.current = false;
@@ -1208,6 +1210,7 @@ export const SlidePreview: React.FC = () => {
         const normalizedModel = normalizeProjectDefaultImageModel(imageDefaults.model);
         const channelSelection = deriveImageChannelSelection(imageDefaults, providerProfiles);
         const preferredChannel = getPreferredImageChannel(providerProfiles, channelSelection.provider);
+        const lockedGptImageQuality = getNormalizedImageModel(channelSelection.channel || preferredChannel?.id || '', normalizedModel, providerProfiles).lockedParams.gptImageQuality;
         setProjectDefaultImageProvider(channelSelection.provider);
         setProjectDefaultImageChannel(channelSelection.channel || preferredChannel?.id || '');
         setProjectDefaultImageModel(normalizedModel);
@@ -1217,7 +1220,7 @@ export const SlidePreview: React.FC = () => {
         setProjectDefaultGptImageBackground(imageDefaults.gpt_image_background || 'auto');
         setProjectDefaultGptImageOutputFormat(imageDefaults.gpt_image_output_format || 'png');
         setProjectDefaultGptImageOutputCompression(imageDefaults.gpt_image_output_compression ?? 100);
-        setProjectDefaultGptImageQuality(imageDefaults.gpt_image_quality || 'auto');
+        setProjectDefaultGptImageQuality(lockedGptImageQuality || imageDefaults.gpt_image_quality || 'auto');
         setDescriptionRequirementsDraft(currentProject.description_requirements || '');
       }
       // 如果用户正在编辑，则不更新本地状态

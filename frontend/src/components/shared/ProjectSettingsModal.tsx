@@ -26,6 +26,7 @@ import {
   getSelectableImageModelsForChannel,
   normalizeImageChannel,
   getImageModelSchema,
+  getNormalizedImageModel,
 } from '@/config/projectAiChannels';
 import {
   DndContext,
@@ -652,11 +653,20 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                     onGenerationDefaultImageChannelChange?.(nextChannel);
                     const nextModels = getSelectableImageModelsForChannel(nextChannel, providerProfiles);
                     if (nextModels.length > 0) {
-                      onGenerationDefaultImageModelChange?.(nextModels[0].model);
+                      const nextModel = nextModels[0].model;
+                      const lockedGptImageQuality = getNormalizedImageModel(nextChannel, nextModel, providerProfiles).lockedParams.gptImageQuality;
+                      onGenerationDefaultImageModelChange?.(nextModel);
+                      if (lockedGptImageQuality) {
+                        onGenerationDefaultGptImageQualityChange?.(lockedGptImageQuality);
+                      }
                     }
                   }}
                   onModelChange={(value) => {
+                    const lockedGptImageQuality = getNormalizedImageModel(selectedImageChannel, value, providerProfiles).lockedParams.gptImageQuality;
                     onGenerationDefaultImageModelChange?.(value);
+                    if (lockedGptImageQuality) {
+                      onGenerationDefaultGptImageQualityChange?.(lockedGptImageQuality);
+                    }
                     const nextSchema = getImageModelSchema(selectedImageChannel, value, providerProfiles);
                     if (nextSchema !== 'gpt-image-2') {
                       onGenerationDefaultImageResolutionChange?.(

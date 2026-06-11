@@ -51,6 +51,8 @@ describe('ProjectImageDefaultsSection', () => {
   it('shows only the gpt-image-2 sizes compatible with the current page aspect ratio', () => {
     render(<ProjectImageDefaultsSection {...baseProps} />);
 
+    expect(screen.getByText('渠道变体：gpt-image-2-high')).toBeInTheDocument();
+    expect(screen.getByText('质量档位由渠道模型 gpt-image-2-high 固定为高。')).toBeInTheDocument();
     expect(screen.getByText('1536x864')).toBeInTheDocument();
     expect(screen.getByText('2048x1152')).toBeInTheDocument();
     expect(screen.getByText('3840x2160')).toBeInTheDocument();

@@ -7,6 +7,7 @@ import {
   getGptImageSizeOptionsForAspectRatio,
   getImageChannelOptionById,
   getImageModelSchema,
+  getNormalizedImageModel,
   type ImageModelSchema,
 } from '@/config/projectAiChannels';
 
@@ -139,6 +140,9 @@ export const ProjectImageDefaultsSection: React.FC<ProjectImageDefaultsSectionPr
   saveLabel,
 }) => {
   const schema = getProjectImageSchema(selectedImageChannel, selectedImageModel, providerProfiles);
+  const normalizedModel = getNormalizedImageModel(selectedImageChannel, selectedImageModel, providerProfiles);
+  const lockedGptImageQuality = normalizedModel.lockedParams.gptImageQuality;
+  const resolvedGptImageQuality = lockedGptImageQuality || gptImageQuality;
   const showGptImageControls = schema === 'gpt-image-2';
   const configNote = getImageChannelOptionById(selectedImageChannel, providerProfiles)?.config_note;
   const showCompatibilityWarning = Boolean(compatibilityMessage) && !isAspectRatioCompatible;
@@ -179,6 +183,11 @@ export const ProjectImageDefaultsSection: React.FC<ProjectImageDefaultsSectionPr
               label: item.label || item.model,
             }))}
           />
+          {normalizedModel.variantLabel && (
+            <p className="mt-1 text-xs text-gray-500 dark:text-foreground-tertiary">
+              {normalizedModel.variantLabel}
+            </p>
+          )}
         </div>
       </div>
       {showCompatibilityWarning && (
@@ -234,15 +243,21 @@ export const ProjectImageDefaultsSection: React.FC<ProjectImageDefaultsSectionPr
                 <TooltipLabel label="质量档位" tooltip="优先使用显式质量档位，不再只由分辨率自动映射。" />
               </label>
               <Select
-                value={gptImageQuality}
+                value={resolvedGptImageQuality}
                 onChange={onGptImageQualityChange}
+                disabled={Boolean(lockedGptImageQuality)}
                 options={[
                   { value: 'auto', label: '自动' },
-                  { value: 'low', label: '低' },
-                  { value: 'medium', label: '中' },
-                  { value: 'high', label: '高' },
+                  { value: 'low', label: lockedGptImageQuality === 'low' ? '低（渠道锁定）' : '低' },
+                  { value: 'medium', label: lockedGptImageQuality === 'medium' ? '中（渠道锁定）' : '中' },
+                  { value: 'high', label: lockedGptImageQuality === 'high' ? '高（渠道锁定）' : '高' },
                 ]}
               />
+              {lockedGptImageQuality && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-foreground-tertiary">
+                  质量档位由渠道模型 {normalizedModel.providerModelId} 固定为{resolvedGptImageQuality === 'low' ? '低' : (resolvedGptImageQuality === 'medium' ? '中' : '高')}。
+                </p>
+              )}
             </div>
             <Input
               label={<TooltipLabel label="输出压缩率" tooltip="仅在 JPEG / WebP 下生效，0 为最强压缩，100 为最高质量。" />}

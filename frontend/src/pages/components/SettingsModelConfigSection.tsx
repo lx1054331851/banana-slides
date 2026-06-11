@@ -7,6 +7,7 @@ import {
   getImageChannelOptions,
   getImageModelConfigMode,
   getImageModelSchema,
+  getNormalizedImageModel,
   getSelectableImageModelsForChannel,
   getSupportedResolutionsForChannelModel,
 } from '@/config/projectAiChannels';
@@ -262,6 +263,9 @@ function SettingsImageModelGroup({
     .filter((option, index, list) => list.findIndex((candidate) => candidate.value === option.value) === index);
   const configMode = getImageModelConfigMode(resolvedImageChannel, currentModelValue, providerProfiles);
   const schema = getImageModelSchema(resolvedImageChannel, currentModelValue, providerProfiles);
+  const normalizedImageModel = getNormalizedImageModel(resolvedImageChannel, currentModelValue, providerProfiles);
+  const lockedGptImageQuality = normalizedImageModel.lockedParams.gptImageQuality;
+  const resolvedGptImageQuality = lockedGptImageQuality || formData.gpt_image_quality;
   const resolutionFieldCopy = getImageResolutionFieldCopy(schema, t);
   const showCompatHint = configMode === 'openai-compat-google-chat';
   const showGptImageControls = schema === 'gpt-image-2';
@@ -305,6 +309,11 @@ function SettingsImageModelGroup({
               </option>
             ))}
           </select>
+          {normalizedImageModel.variantLabel && (
+            <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
+              {normalizedImageModel.variantLabel}
+            </p>
+          )}
         </div>
       </div>
       <p className="-mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">{item.description}</p>
@@ -380,15 +389,21 @@ function SettingsImageModelGroup({
               />
             </label>
             <select
-              value={formData.gpt_image_quality}
+              value={resolvedGptImageQuality}
+              disabled={Boolean(lockedGptImageQuality)}
               onChange={(e) => handleFieldChange('gpt_image_quality', e.target.value)}
               className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
             >
               <option value="auto">{t('settings.fields.gptImageQualityAuto')}</option>
-              <option value="low">{t('settings.fields.gptImageQualityLow')}</option>
-              <option value="medium">{t('settings.fields.gptImageQualityMedium')}</option>
-              <option value="high">{t('settings.fields.gptImageQualityHigh')}</option>
+              <option value="low">{lockedGptImageQuality === 'low' ? `${t('settings.fields.gptImageQualityLow')}（渠道锁定）` : t('settings.fields.gptImageQualityLow')}</option>
+              <option value="medium">{lockedGptImageQuality === 'medium' ? `${t('settings.fields.gptImageQualityMedium')}（渠道锁定）` : t('settings.fields.gptImageQualityMedium')}</option>
+              <option value="high">{lockedGptImageQuality === 'high' ? `${t('settings.fields.gptImageQualityHigh')}（渠道锁定）` : t('settings.fields.gptImageQualityHigh')}</option>
             </select>
+            {lockedGptImageQuality && (
+              <p className="mt-1 text-sm text-gray-500 dark:text-foreground-tertiary">
+                质量档位由渠道模型 {normalizedImageModel.providerModelId} 固定为{resolvedGptImageQuality === 'low' ? '低' : (resolvedGptImageQuality === 'medium' ? '中' : '高')}。
+              </p>
+            )}
           </div>
           <Input
             label={(

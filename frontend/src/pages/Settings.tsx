@@ -12,6 +12,7 @@ import { OUTPUT_LANGUAGE_OPTIONS } from '@/api/endpoints';
 import type { Settings as SettingsType } from '@/types';
 import {
   getImageChannelOptionById,
+  getNormalizedImageModel,
   getSelectableImageModelsForChannel,
   getSourceForImageChannel,
   getSupportedResolutionsForChannelModel,
@@ -346,6 +347,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
     </section>
   );
 
+  // Load settings and normalize any model-locked image params before rendering the form.
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -353,12 +355,18 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
         api.getSettings(),
         api.getProviderProfiles().catch(() => ({ data: { profiles: [] } } as any)),
       ]);
+      const nextProviderProfiles = profilesResp?.data?.profiles || [];
       if (settingsResp.data) {
+        const nextFormData = formDataFromSettings(settingsResp.data);
+        const lockedGptImageQuality = getNormalizedImageModel('', nextFormData.image_model, nextProviderProfiles).lockedParams.gptImageQuality;
         setSettings(settingsResp.data);
-        setFormData(formDataFromSettings(settingsResp.data));
+        setFormData({
+          ...nextFormData,
+          gpt_image_quality: lockedGptImageQuality || nextFormData.gpt_image_quality,
+        });
         sessionStorage.setItem('banana-settings', JSON.stringify(settingsResp.data));
       }
-      setProviderProfiles(profilesResp?.data?.profiles || []);
+      setProviderProfiles(nextProviderProfiles);
     } catch (error: any) {
       console.error('加载设置失败:', error);
       show({
@@ -518,6 +526,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       const selectableModels = getSelectableImageModelsForChannel(channelId, providerProfiles);
       const keepsCurrentModel = selectableModels.some((item) => item.model === prev.image_model);
       const nextModel = keepsCurrentModel ? prev.image_model : fallbackModel;
+      const lockedGptImageQuality = getNormalizedImageModel(channelId, nextModel, providerProfiles).lockedParams.gptImageQuality;
       const resolutionOptions = getSupportedResolutionsForChannelModel(
         channelId,
         nextModel,
@@ -532,6 +541,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
         image_model_source: channel?.source || (channel?.provider || 'gemini'),
         image_model: nextModel,
         image_resolution: nextResolution,
+        gpt_image_quality: lockedGptImageQuality || prev.gpt_image_quality,
         gpt_image_size: nextModel.startsWith('gpt-image-2')
           ? (prev.gpt_image_size || getDefaultGptImageSizeFromResolution(nextResolution))
           : prev.gpt_image_size,
@@ -542,6 +552,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
   // Keep image resolution within the selected model/channel capability set.
   const handleImageModelChange = (model: string, channelId: string) => {
     const source = getSourceForImageChannel(channelId, providerProfiles) || getImageSourceForModel(model, 'gemini');
+    const lockedGptImageQuality = getNormalizedImageModel(channelId, model, providerProfiles).lockedParams.gptImageQuality;
     const resolutionOptions = getSupportedResolutionsForChannelModel(
       channelId,
       model,
@@ -552,6 +563,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
       ...prev,
       image_model: model,
       image_model_source: source,
+      gpt_image_quality: lockedGptImageQuality || prev.gpt_image_quality,
       image_resolution: resolutionOptions.includes(prev.image_resolution)
         ? prev.image_resolution
         : (resolutionOptions[0] || prev.image_resolution),

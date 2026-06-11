@@ -4,6 +4,7 @@ import {
   formatImageModelDisplayName,
   getGptImageSizeOptionsForAspectRatio,
   getImageChannelOptions,
+  getNormalizedImageModel,
   getImageModelConfigMode,
   getImageModelDisplayLabel,
   getSupportedAspectRatiosForChannelModel,
@@ -181,5 +182,35 @@ describe('projectAiChannels image model labels', () => {
       '3840x2160',
     ]);
     expect(getGptImageSizeOptionsForAspectRatio('8:1')).toEqual([]);
+  });
+
+  it('normalizes third-party gpt-image-2 variants into family plus locked params', () => {
+    const profiles = [
+      {
+        id: '147ai',
+        channel: '147ai',
+        label: '147AI',
+        provider: 'openai',
+        adapter: 'openai_image_compat',
+        capabilities: ['image'],
+        model_capabilities: {
+          'gpt-image-2-high': {
+            schema: 'gpt-image-2',
+            request_mode: 'openai-images',
+          },
+        },
+      },
+    ] as any;
+
+    expect(getNormalizedImageModel('147ai', 'gpt-image-2-high', profiles)).toEqual({
+      modelFamily: 'gpt-image-2',
+      providerModelId: 'gpt-image-2-high',
+      schema: 'gpt-image-2',
+      lockedParams: {
+        gptImageQuality: 'high',
+      },
+      displayLabel: 'gpt-image-2（质量：高）',
+      variantLabel: '渠道变体：gpt-image-2-high',
+    });
   });
 });

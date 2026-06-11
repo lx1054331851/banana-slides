@@ -64,6 +64,23 @@ const GPT_IMAGE_SIZE_OPTIONS = [
 ] as const;
 
 export type GptImageSizeOption = (typeof GPT_IMAGE_SIZE_OPTIONS)[number];
+export type LockedImageModelParams = {
+  gptImageQuality?: 'low' | 'medium' | 'high';
+};
+export type NormalizedImageModel = {
+  modelFamily: string;
+  providerModelId: string;
+  schema: ImageModelSchema;
+  lockedParams: LockedImageModelParams;
+  displayLabel: string;
+  variantLabel?: string;
+};
+
+const GPT_IMAGE_QUALITY_LABELS: Record<NonNullable<LockedImageModelParams['gptImageQuality']>, string> = {
+  low: '低',
+  medium: '中',
+  high: '高',
+};
 
 export const toImageChannelOption = (profile: ProviderProfileSummary): ImageChannelOption => ({
   id: String(profile.channel || profile.id),
@@ -212,6 +229,7 @@ export const getSourceForImageChannel = (
   return matched?.source || '';
 };
 
+// Return selectable image models with channel-aware normalized display labels.
 export const getSelectableImageModelsForChannel = (
   channelId: string,
   providerProfiles: ProviderProfileSummary[],
@@ -226,11 +244,17 @@ export const getSelectableImageModelsForChannel = (
   );
   return channel.models.map((model) => {
     const known = knownModelMap.get(model);
-    if (known) return known;
+    const normalizedModel = getNormalizedImageModel(channelId, model, providerProfiles);
+    if (known) {
+      return {
+        ...known,
+        label: normalizedModel.displayLabel || known.label,
+      };
+    }
     return {
       source: channel.provider as 'gemini' | 'openai',
       model,
-      label: `${channel.label} · ${model}`,
+      label: normalizedModel.displayLabel || `${channel.label} · ${model}`,
       resolutions: ['1K'],
     };
   });
@@ -363,6 +387,46 @@ export const isAspectRatioSupportedForChannelModel = (
 export const getGptImageSizeOptionsForAspectRatio = (aspectRatio: string): GptImageSizeOption[] => {
   const normalizedAspectRatio = String(aspectRatio || '').trim();
   return GPT_IMAGE_SIZE_OPTIONS.filter((option) => option.aspectRatio === normalizedAspectRatio);
+};
+
+// Return the locked GPT Image 2 quality encoded by a provider model variant when present.
+const getLockedGptImageQuality = (
+  model: string,
+  schema: ImageModelSchema,
+): LockedImageModelParams['gptImageQuality'] => {
+  if (schema !== 'gpt-image-2') return undefined;
+  const match = /^gpt-image-2-(low|medium|high)$/i.exec(String(model || '').trim());
+  if (!match) return undefined;
+  return match[1].toLowerCase() as LockedImageModelParams['gptImageQuality'];
+};
+
+// Return a normalized model descriptor that separates family, provider variant, and locked params.
+export const getNormalizedImageModel = (
+  channelId: string,
+  model: string,
+  providerProfiles: ProviderProfileSummary[],
+): NormalizedImageModel => {
+  const providerModelId = String(model || '').trim();
+  const explicitSchema = getImageModelSchema(channelId, providerModelId, providerProfiles);
+  const schema = explicitSchema === 'default' && /^gpt-image-2(?:-(low|medium|high))?$/i.test(providerModelId)
+    ? 'gpt-image-2'
+    : explicitSchema;
+  const lockedQuality = getLockedGptImageQuality(providerModelId, schema);
+  const modelFamily = schema === 'gpt-image-2'
+    ? 'gpt-image-2'
+    : providerModelId;
+  const displayLabel = lockedQuality
+    ? `${modelFamily}（质量：${GPT_IMAGE_QUALITY_LABELS[lockedQuality]}）`
+    : providerModelId;
+
+  return {
+    modelFamily,
+    providerModelId,
+    schema,
+    lockedParams: lockedQuality ? { gptImageQuality: lockedQuality } : {},
+    displayLabel,
+    variantLabel: providerModelId !== modelFamily ? `渠道变体：${providerModelId}` : undefined,
+  };
 };
 
 export const formatImageModelDisplayName = (model: string): string => {

@@ -14,8 +14,10 @@ interface SelectProps {
   placeholder?: string;
   className?: string;
   menuClassName?: string;
+  disabled?: boolean;
 }
 
+// Render a lightweight custom select with optional whole-control disabling.
 export const Select: React.FC<SelectProps> = ({
   value,
   options,
@@ -23,6 +25,7 @@ export const Select: React.FC<SelectProps> = ({
   placeholder = '请选择',
   className = '',
   menuClassName = '',
+  disabled = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -59,8 +62,9 @@ export const Select: React.FC<SelectProps> = ({
       <button
         ref={triggerRef}
         type="button"
+        disabled={disabled}
         onClick={() => setIsOpen((open) => !open)}
-        className="flex h-10 w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-4 text-left text-gray-900 focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary"
+        className={`flex h-10 w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-4 text-left text-gray-900 focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent dark:border-border-primary dark:bg-background-secondary dark:text-foreground-primary ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
       >
         <span className="truncate">{selected?.label || placeholder}</span>
         <ChevronDown
