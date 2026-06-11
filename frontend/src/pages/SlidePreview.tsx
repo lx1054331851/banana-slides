@@ -28,6 +28,7 @@ import {
   getDescriptionExtraFields,
   serializeExtraFields,
   areStringRecordsEqual,
+  shouldSyncProjectGenerationDefaults,
   formatJsonForEditor,
   toCanonicalRenovationJsonText,
   toLocalizedRenovationJsonText,
@@ -465,6 +466,8 @@ export const SlidePreview: React.FC = () => {
   }, [selectedIndex, canQuickEditOutlineInPreview]);
   const isEditingTemplateStyle = useRef(false); // 跟踪用户是否正在编辑风格描述
   const lastProjectId = useRef<string | null>(null); // 跟踪上一次的项目ID
+  const hasUnsavedGenerationDefaults = useRef(false);
+  const clearUnsavedGenerationDefaultsRef = useRef<(() => void) | null>(null);
   const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
   // 素材生成模态开关（模块本身可复用，这里只是示例入口）
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
@@ -515,6 +518,61 @@ export const SlidePreview: React.FC = () => {
   const [providerProfiles, setProviderProfiles] = useState<ProviderProfileSummary[]>([]);
   const [batchRunImageModel, setBatchRunImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
   const [editRunImageModel, setEditRunImageModel] = useState<string>(PROJECT_DEFAULT_IMAGE_MODEL);
+  const markGenerationDefaultsDirty = useCallback(() => {
+    hasUnsavedGenerationDefaults.current = true;
+  }, []);
+
+  const clearUnsavedGenerationDefaults = useCallback(() => {
+    hasUnsavedGenerationDefaults.current = false;
+  }, []);
+
+  clearUnsavedGenerationDefaultsRef.current = clearUnsavedGenerationDefaults;
+
+  const handleProjectDefaultImageProviderChange = useCallback((value: string) => {
+    markGenerationDefaultsDirty();
+    setProjectDefaultImageProvider(value);
+  }, [markGenerationDefaultsDirty]);
+
+  const handleProjectDefaultImageChannelChange = useCallback((value: string) => {
+    markGenerationDefaultsDirty();
+    setProjectDefaultImageChannel(value);
+  }, [markGenerationDefaultsDirty]);
+
+  const handleProjectDefaultImageModelChange = useCallback((value: string) => {
+    markGenerationDefaultsDirty();
+    setProjectDefaultImageModel(value);
+  }, [markGenerationDefaultsDirty]);
+
+  const handleProjectDefaultImageResolutionChange = useCallback((value: string) => {
+    markGenerationDefaultsDirty();
+    setProjectDefaultImageResolution(value);
+  }, [markGenerationDefaultsDirty]);
+
+  const handleProjectDefaultGptImageSizeChange = useCallback((value: string) => {
+    markGenerationDefaultsDirty();
+    setProjectDefaultGptImageSize(value);
+  }, [markGenerationDefaultsDirty]);
+
+  const handleProjectDefaultGptImageBackgroundChange = useCallback((value: string) => {
+    markGenerationDefaultsDirty();
+    setProjectDefaultGptImageBackground(value);
+  }, [markGenerationDefaultsDirty]);
+
+  const handleProjectDefaultGptImageOutputFormatChange = useCallback((value: string) => {
+    markGenerationDefaultsDirty();
+    setProjectDefaultGptImageOutputFormat(value);
+  }, [markGenerationDefaultsDirty]);
+
+  const handleProjectDefaultGptImageOutputCompressionChange = useCallback((value: number) => {
+    markGenerationDefaultsDirty();
+    setProjectDefaultGptImageOutputCompression(value);
+  }, [markGenerationDefaultsDirty]);
+
+  const handleProjectDefaultGptImageQualityChange = useCallback((value: string) => {
+    markGenerationDefaultsDirty();
+    setProjectDefaultGptImageQuality(value);
+  }, [markGenerationDefaultsDirty]);
+
   const normalizedProjectImageModel = useMemo(
     () => normalizeProjectDefaultImageModel(projectDefaultImageModel),
     [projectDefaultImageModel]
@@ -922,6 +980,7 @@ export const SlidePreview: React.FC = () => {
     aspectRatio,
     isEditingRequirementsRef: isEditingRequirements,
     isEditingTemplateStyleRef: isEditingTemplateStyle,
+    clearUnsavedGenerationDefaultsRef,
     syncProject,
     show,
     t,
@@ -1185,6 +1244,7 @@ export const SlidePreview: React.FC = () => {
         setProjectDefaultGptImageOutputFormat(imageDefaults.gpt_image_output_format || 'png');
         setProjectDefaultGptImageOutputCompression(imageDefaults.gpt_image_output_compression ?? 100);
         setProjectDefaultGptImageQuality(lockedGptImageQuality || imageDefaults.gpt_image_quality || 'auto');
+        clearUnsavedGenerationDefaults();
         setDescriptionRequirementsDraft(currentProject.description_requirements || '');
         lastProjectId.current = currentProject.id || null;
         isEditingRequirements.current = false;
@@ -1206,26 +1266,29 @@ export const SlidePreview: React.FC = () => {
         setExportCompressFormat((currentProject.export_compress_format as 'jpeg' | 'png' | 'webp') || 'jpeg');
         setExportCompressQuality(currentProject.export_compress_quality || 92);
         setExportCompressPngQuantizeEnabled(currentProject.export_compress_png_quantize_enabled || false);
-        const imageDefaults = currentProject.generation_defaults?.image || {};
-        const normalizedModel = normalizeProjectDefaultImageModel(imageDefaults.model);
-        const channelSelection = deriveImageChannelSelection(imageDefaults, providerProfiles);
-        const preferredChannel = getPreferredImageChannel(providerProfiles, channelSelection.provider);
-        const lockedGptImageQuality = getNormalizedImageModel(channelSelection.channel || preferredChannel?.id || '', normalizedModel, providerProfiles).lockedParams.gptImageQuality;
-        setProjectDefaultImageProvider(channelSelection.provider);
-        setProjectDefaultImageChannel(channelSelection.channel || preferredChannel?.id || '');
-        setProjectDefaultImageModel(normalizedModel);
-        setBatchRunImageModel(buildRuntimeImageModelValue(channelSelection.channel || preferredChannel?.id || '', normalizedModel));
-        setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
-        setProjectDefaultGptImageSize(imageDefaults.gpt_image_size || getDefaultGptImageSizeFromResolution(imageDefaults.resolution));
-        setProjectDefaultGptImageBackground(imageDefaults.gpt_image_background || 'auto');
-        setProjectDefaultGptImageOutputFormat(imageDefaults.gpt_image_output_format || 'png');
-        setProjectDefaultGptImageOutputCompression(imageDefaults.gpt_image_output_compression ?? 100);
-        setProjectDefaultGptImageQuality(lockedGptImageQuality || imageDefaults.gpt_image_quality || 'auto');
+        if (shouldSyncProjectGenerationDefaults(false, hasUnsavedGenerationDefaults.current)) {
+          const imageDefaults = currentProject.generation_defaults?.image || {};
+          const normalizedModel = normalizeProjectDefaultImageModel(imageDefaults.model);
+          const channelSelection = deriveImageChannelSelection(imageDefaults, providerProfiles);
+          const preferredChannel = getPreferredImageChannel(providerProfiles, channelSelection.provider);
+          const lockedGptImageQuality = getNormalizedImageModel(channelSelection.channel || preferredChannel?.id || '', normalizedModel, providerProfiles).lockedParams.gptImageQuality;
+          setProjectDefaultImageProvider(channelSelection.provider);
+          setProjectDefaultImageChannel(channelSelection.channel || preferredChannel?.id || '');
+          setProjectDefaultImageModel(normalizedModel);
+          setBatchRunImageModel(buildRuntimeImageModelValue(channelSelection.channel || preferredChannel?.id || '', normalizedModel));
+          setProjectDefaultImageResolution(normalizeProjectDefaultImageResolution(imageDefaults.resolution, normalizedModel));
+          setProjectDefaultGptImageSize(imageDefaults.gpt_image_size || getDefaultGptImageSizeFromResolution(imageDefaults.resolution));
+          setProjectDefaultGptImageBackground(imageDefaults.gpt_image_background || 'auto');
+          setProjectDefaultGptImageOutputFormat(imageDefaults.gpt_image_output_format || 'png');
+          setProjectDefaultGptImageOutputCompression(imageDefaults.gpt_image_output_compression ?? 100);
+          setProjectDefaultGptImageQuality(lockedGptImageQuality || imageDefaults.gpt_image_quality || 'auto');
+          clearUnsavedGenerationDefaults();
+        }
         setDescriptionRequirementsDraft(currentProject.description_requirements || '');
       }
       // 如果用户正在编辑，则不更新本地状态
     }
-  }, [currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.description_requirements, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality, currentProject?.export_compress_png_quantize_enabled, currentProject?.generation_defaults, providerProfiles]);
+  }, [clearUnsavedGenerationDefaults, currentProject?.id, currentProject?.extra_requirements, currentProject?.template_style, currentProject?.description_requirements, currentProject?.image_aspect_ratio, currentProject?.export_extractor_method, currentProject?.export_inpaint_method, currentProject?.export_allow_partial, currentProject?.export_compress_enabled, currentProject?.export_compress_format, currentProject?.export_compress_quality, currentProject?.export_compress_png_quantize_enabled, currentProject?.generation_defaults, providerProfiles]);
 
   const handleBatchGenerate = useCallback(async (pageIds?: string[]) => {
     try {
@@ -3103,15 +3166,15 @@ export const SlidePreview: React.FC = () => {
         projectDefaultGptImageOutputCompression={projectDefaultGptImageOutputCompression}
         projectDefaultGptImageQuality={projectDefaultGptImageQuality}
         providerProfiles={providerProfiles}
-        setProjectDefaultImageProvider={setProjectDefaultImageProvider}
-        setProjectDefaultImageChannel={setProjectDefaultImageChannel}
-        setProjectDefaultImageModel={setProjectDefaultImageModel}
-        setProjectDefaultImageResolution={setProjectDefaultImageResolution}
-        setProjectDefaultGptImageSize={setProjectDefaultGptImageSize}
-        setProjectDefaultGptImageBackground={setProjectDefaultGptImageBackground}
-        setProjectDefaultGptImageOutputFormat={setProjectDefaultGptImageOutputFormat}
-        setProjectDefaultGptImageOutputCompression={setProjectDefaultGptImageOutputCompression}
-        setProjectDefaultGptImageQuality={setProjectDefaultGptImageQuality}
+        setProjectDefaultImageProvider={handleProjectDefaultImageProviderChange}
+        setProjectDefaultImageChannel={handleProjectDefaultImageChannelChange}
+        setProjectDefaultImageModel={handleProjectDefaultImageModelChange}
+        setProjectDefaultImageResolution={handleProjectDefaultImageResolutionChange}
+        setProjectDefaultGptImageSize={handleProjectDefaultGptImageSizeChange}
+        setProjectDefaultGptImageBackground={handleProjectDefaultGptImageBackgroundChange}
+        setProjectDefaultGptImageOutputFormat={handleProjectDefaultGptImageOutputFormatChange}
+        setProjectDefaultGptImageOutputCompression={handleProjectDefaultGptImageOutputCompressionChange}
+        setProjectDefaultGptImageQuality={handleProjectDefaultGptImageQualityChange}
         handleSaveGenerationDefaults={handleSaveGenerationDefaults}
         isSavingGenerationDefaults={isSavingGenerationDefaults}
         isHistoryModalOpen={isHistoryModalOpen}
