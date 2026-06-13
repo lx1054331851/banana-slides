@@ -174,3 +174,46 @@ def test_azure_image_edits_uses_image_array_field_for_multiple_files(monkeypatch
     assert result.size == (2, 2)
     assert captured["endpoint_kind"] == "edits"
     assert [file_entry[0] for file_entry in captured["files"]] == ["image[]", "image[]"]
+
+
+def test_azure_image_api_bypasses_proxy_env(monkeypatch):
+    provider = _provider(monkeypatch, strict_params=True)
+    provider.azure_endpoint = "https://example-resource.openai.azure.com"
+    provider.azure_api_version = "2025-04-01-preview"
+
+    captured = {"trust_env": None}
+
+    class _FakeResponse:
+        ok = True
+        status_code = 200
+        headers = {"Content-Type": "application/json"}
+
+        @staticmethod
+        def json():
+            return {"data": [{"b64_json": provider._encode_image_to_base64(Image.new("RGB", (2, 2), "white"))}]}
+
+    class _FakeSession:
+        def __init__(self):
+            self.trust_env = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, *_args, **_kwargs):
+            captured["trust_env"] = self.trust_env
+            return _FakeResponse()
+
+    monkeypatch.setattr("services.ai_providers.image.openai_provider.requests.Session", _FakeSession)
+
+    result = provider._call_via_image_api_edits(
+        "edit prompt",
+        [Image.new("RGB", (2, 2), "black")],
+        "1:1",
+        "1K",
+    )
+
+    assert result.size == (2, 2)
+    assert captured["trust_env"] is False

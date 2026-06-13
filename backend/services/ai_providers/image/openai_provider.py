@@ -670,10 +670,14 @@ class OpenAIImageProvider(ImageProvider):
                     payload_summary["file_fields"] = [item[0] for item in (files or [])]
                 logger.info("OpenAI image endpoint request: %s", payload_summary)
                 audit_logger.info("openai_endpoint_request %s", payload_summary)
-                if json_payload is not None:
-                    response = requests.post(url, headers=headers, json=json_payload, timeout=self.timeout)
-                else:
-                    response = requests.post(url, headers=headers, data=form_data, files=files, timeout=self.timeout)
+                with requests.Session() as session:
+                    # Azure image calls should not inherit proxy env from unrelated background tasks.
+                    if self.azure_endpoint:
+                        session.trust_env = False
+                    if json_payload is not None:
+                        response = session.post(url, headers=headers, json=json_payload, timeout=self.timeout)
+                    else:
+                        response = session.post(url, headers=headers, data=form_data, files=files, timeout=self.timeout)
             except Exception as e:
                 raise ImageApiRequestError(f"Request failed for endpoint={url}: {type(e).__name__}: {e}", url=url) from e
 
@@ -724,9 +728,12 @@ class OpenAIImageProvider(ImageProvider):
 
             image_url = item.get("url")
             if image_url:
-                response = requests.get(image_url, timeout=self.timeout, stream=True)
-                response.raise_for_status()
-                image = Image.open(BytesIO(response.content))
+                with requests.Session() as session:
+                    if self.azure_endpoint:
+                        session.trust_env = False
+                    response = session.get(image_url, timeout=self.timeout, stream=True)
+                    response.raise_for_status()
+                    image = Image.open(BytesIO(response.content))
                 image.load()
                 return image
 
