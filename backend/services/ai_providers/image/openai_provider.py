@@ -769,10 +769,14 @@ class OpenAIImageProvider(ImageProvider):
             **params,
         }
         files: List[Tuple[str, Tuple[str, bytes, str]]] = []
+        file_field_name = "image"
+        if self.azure_endpoint and len(ref_images[:6]) > 1:
+            # Azure's preview edits endpoint expects array syntax for multi-image multipart uploads.
+            file_field_name = "image[]"
         for idx, ref_img in enumerate(ref_images[:6]):
             files.append(
                 (
-                    "image",
+                    file_field_name,
                     (f"ref_{idx}.jpg", self._encode_image_to_bytes(ref_img), "image/jpeg"),
                 )
             )

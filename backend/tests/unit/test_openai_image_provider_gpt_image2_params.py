@@ -149,3 +149,30 @@ def test_azure_image_edits_json_fallback_retries_with_object_images(monkeypatch)
     assert payloads[1]["images"][0] == {
         "image_url": payloads[0]["images"][0],
     }
+
+
+def test_azure_image_edits_uses_image_array_field_for_multiple_files(monkeypatch):
+    provider = _provider(monkeypatch, strict_params=True)
+    provider.azure_endpoint = "https://example-resource.openai.azure.com"
+    provider.azure_api_version = "2025-04-01-preview"
+
+    captured = {}
+
+    def fake_post(endpoint_kind, *, json_payload=None, form_data=None, files=None):
+        captured["endpoint_kind"] = endpoint_kind
+        captured["form_data"] = form_data
+        captured["files"] = files
+        return {"data": [{"b64_json": provider._encode_image_to_base64(Image.new("RGB", (2, 2), "white"))}]}
+
+    monkeypatch.setattr(provider, "_post_image_api", fake_post)
+
+    result = provider._call_via_image_api_edits(
+        "edit prompt",
+        [Image.new("RGB", (2, 2), "black"), Image.new("RGB", (2, 2), "white")],
+        "1:1",
+        "1K",
+    )
+
+    assert result.size == (2, 2)
+    assert captured["endpoint_kind"] == "edits"
+    assert [file_entry[0] for file_entry in captured["files"]] == ["image[]", "image[]"]
