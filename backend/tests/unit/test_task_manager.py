@@ -147,6 +147,71 @@ def test_generate_single_page_image_task_releases_session_before_ai_call(app, mo
         assert page.cached_image_path.endswith('.jpg')
 
 
+def test_generate_single_page_image_task_retries_failed_generation(app):
+    with app.app_context():
+        project = Project(creation_type='idea', status='DRAFT')
+        db.session.add(project)
+        db.session.flush()
+
+        page = Page(project_id=project.id, order_index=0, status='DRAFT')
+        page.set_outline_content({'title': '首页'})
+        page.set_description_content({'text': '封面描述'})
+        db.session.add(page)
+
+        task = Task(project_id=project.id, task_type='GENERATE_PAGE_IMAGE', status='PENDING')
+        db.session.add(task)
+        db.session.commit()
+
+        task_id = task.id
+        page_id = page.id
+        project_id = project.id
+
+    ai_service = MagicMock()
+    ai_service.extract_image_urls_from_markdown.return_value = []
+    ai_service.generate_image_prompt.return_value = 'prompt'
+
+    attempts = {'count': 0}
+
+    def generate_image(*_args, **_kwargs):
+        attempts['count'] += 1
+        if attempts['count'] < 3:
+            raise RuntimeError(f'upstream failed #{attempts["count"]}')
+        return Image.new('RGB', (1920, 1080), color='blue')
+
+    ai_service.generate_image.side_effect = generate_image
+
+    file_service = MagicMock()
+    file_service.get_template_path.return_value = None
+    file_service.save_generated_image.side_effect = (
+        lambda image, project_id, page_id, version_number, image_format='PNG':
+        f'{project_id}/pages/{page_id}_v{version_number}.png'
+    )
+    file_service.save_cached_image.side_effect = (
+        lambda image, project_id, page_id, version_number, quality=85:
+        f'{project_id}/pages/{page_id}_v{version_number}.jpg'
+    )
+
+    generate_single_page_image_task(
+        task_id=task_id,
+        project_id=project_id,
+        page_id=page_id,
+        ai_service=ai_service,
+        file_service=file_service,
+        outline=[{'title': '首页'}],
+        use_template=False,
+        app=app,
+    )
+
+    with app.app_context():
+        task = db.session.get(Task, task_id)
+        page = db.session.get(Page, page_id)
+
+        assert attempts['count'] == 3
+        assert task.status == 'COMPLETED'
+        assert task.get_progress() == {'total': 1, 'completed': 1, 'failed': 0}
+        assert page.status == 'COMPLETED'
+
+
 def test_edit_page_image_task_prefers_image_edit_mode_for_reference_only_updates(app):
     with app.app_context():
         project = Project(creation_type='idea', status='DRAFT')

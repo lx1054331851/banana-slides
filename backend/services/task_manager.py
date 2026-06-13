@@ -59,6 +59,15 @@ from services.export_helpers import maybe_compress_export_images
 logger = logging.getLogger(__name__)
 audit_logger = logging.getLogger("image_audit")
 
+_IMAGE_GENERATION_MAX_ATTEMPTS = 3
+_IMAGE_RETRY_PROGRESS_KEYS = (
+    "retry_attempt",
+    "retry_max_attempts",
+    "retry_page_id",
+    "retry_notice",
+    "last_error",
+)
+
 
 class ResourceLimiter:
     """Thread-safe concurrency limiter for a shared external resource."""
@@ -198,6 +207,99 @@ def _get_image_route_metadata(ai_service) -> Dict[str, str]:
 def _log_image_audit_event(event: str, **fields: Any) -> None:
     parts = [f"{key}={fields[key]!r}" for key in sorted(fields)]
     audit_logger.info("%s %s", event, " ".join(parts))
+
+
+def _append_progress_message(progress: Dict[str, Any], message: str, *, limit: int = 6) -> None:
+    messages = list(progress.get("messages") or [])
+    if not messages or messages[-1] != message:
+        messages.append(message)
+    progress["messages"] = messages[-limit:]
+
+
+def _clear_image_retry_progress(progress: Optional[Dict[str, Any]], *, page_id: Optional[str] = None) -> Dict[str, Any]:
+    cleaned = dict(progress or {})
+    if page_id is not None and cleaned.get("retry_page_id") not in {None, page_id}:
+        return cleaned
+    for key in _IMAGE_RETRY_PROGRESS_KEYS:
+        cleaned.pop(key, None)
+    if str(cleaned.get("current_step") or "").startswith("图片生成失败，正在自动重试"):
+        cleaned.pop("current_step", None)
+    return cleaned
+
+
+def _update_image_retry_progress(
+    task_id: str,
+    *,
+    page_id: str,
+    next_attempt: int,
+    max_attempts: int,
+    retry_notice: str,
+    error: Exception,
+) -> None:
+    task = Task.query.get(task_id)
+    if not task:
+        return
+    progress = task.get_progress() or {}
+    progress["retry_attempt"] = next_attempt
+    progress["retry_max_attempts"] = max_attempts
+    progress["retry_page_id"] = page_id
+    progress["retry_notice"] = retry_notice
+    progress["current_step"] = retry_notice
+    progress["last_error"] = str(error)
+    _append_progress_message(progress, retry_notice)
+    task.set_progress(progress)
+    db.session.commit()
+
+
+def _generate_image_with_auto_retry(
+    *,
+    task_id: str,
+    page_id: str,
+    operation: str,
+    generate_fn: Callable[[], Image.Image],
+    max_attempts: int = _IMAGE_GENERATION_MAX_ATTEMPTS,
+) -> Image.Image:
+    last_error: Optional[Exception] = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return generate_fn()
+        except Exception as exc:
+            last_error = exc
+            if attempt >= max_attempts:
+                raise
+            next_attempt = attempt + 1
+            retry_notice = f"图片生成失败，正在自动重试（第 {next_attempt}/{max_attempts} 次尝试）"
+            logger.warning(
+                "Image generation failed, retrying: task=%s page=%s operation=%s next_attempt=%s/%s error=%s",
+                task_id,
+                page_id,
+                operation,
+                next_attempt,
+                max_attempts,
+                exc,
+            )
+            _log_image_audit_event(
+                "image_task_retry",
+                task_id=task_id,
+                page_id=page_id,
+                operation=operation,
+                next_attempt=next_attempt,
+                max_attempts=max_attempts,
+                error=type(exc).__name__,
+                detail=str(exc),
+            )
+            _update_image_retry_progress(
+                task_id,
+                page_id=page_id,
+                next_attempt=next_attempt,
+                max_attempts=max_attempts,
+                retry_notice=retry_notice,
+                error=exc,
+            )
+            time.sleep(min(2 ** (attempt - 1), 4))
+    if last_error:
+        raise last_error
+    raise RuntimeError(f"Image generation failed for page {page_id}")
 
 
 def _build_resolution_mismatch_warning_message(
@@ -1012,6 +1114,11 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                 return
             
             task.status = 'PENDING'
+            task.set_progress({
+                "total": 1,
+                "completed": 0,
+                "failed": 0,
+            })
             db.session.commit()
             
             # Get pages for this project (filtered by page_ids if provided)
@@ -1169,9 +1276,17 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                             )
 
                             logger.info(f"🎨 Calling AI service to generate image for page {page_index}/{total_pages}...")
-                            image = ai_service.generate_image(
-                                prompt, page_ref_image_path, aspect_ratio, resolution,
-                                additional_ref_images=page_additional_ref_images if page_additional_ref_images else None
+                            image = _generate_image_with_auto_retry(
+                                task_id=task_id,
+                                page_id=page_id,
+                                operation="generate_batch_page",
+                                generate_fn=lambda: ai_service.generate_image(
+                                    prompt,
+                                    page_ref_image_path,
+                                    aspect_ratio,
+                                    resolution,
+                                    additional_ref_images=page_additional_ref_images if page_additional_ref_images else None,
+                                ),
                             )
                         logger.info(f"✅ Image generated successfully for page {page_index}")
 
@@ -1318,7 +1433,7 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                     # Update task progress
                     task = Task.query.get(task_id)
                     if task:
-                        progress = task.get_progress()
+                        progress = _clear_image_retry_progress(task.get_progress(), page_id=page_id)
                         progress['completed'] = completed
                         progress['failed'] = failed
                         # 第一次检测到不匹配时设置警告
@@ -1337,6 +1452,7 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
             if task:
                 task.status = 'COMPLETED'
                 task.completed_at = datetime.utcnow()
+                task.set_progress(_clear_image_retry_progress(task.get_progress()))
                 if resolution_mismatched > 0:
                     logger.warning(f"Task {task_id} has {resolution_mismatched} resolution mismatches")
                 db.session.commit()
@@ -1358,6 +1474,7 @@ def generate_images_task(task_id: str, project_id: str, ai_service, file_service
                 task.status = 'FAILED'
                 task.error_message = str(e)
                 task.completed_at = datetime.utcnow()
+                task.set_progress(_clear_image_retry_progress(task.get_progress()))
                 db.session.commit()
         finally:
             _remove_scoped_session()
@@ -1473,9 +1590,17 @@ def generate_single_page_image_task(task_id: str, project_id: str, page_id: str,
                 f"project={project_id} page={page_id}",
                 on_acquire=mark_generating,
             ):
-                image = ai_service.generate_image(
-                    prompt, ref_image_path, aspect_ratio, resolution,
-                    additional_ref_images=additional_ref_images if additional_ref_images else None
+                image = _generate_image_with_auto_retry(
+                    task_id=task_id,
+                    page_id=page_id,
+                    operation="generate_single_page",
+                    generate_fn=lambda: ai_service.generate_image(
+                        prompt,
+                        ref_image_path,
+                        aspect_ratio,
+                        resolution,
+                        additional_ref_images=additional_ref_images if additional_ref_images else None,
+                    ),
                 )
             
             if not image:
@@ -1528,7 +1653,7 @@ def generate_single_page_image_task(task_id: str, project_id: str, page_id: str,
                 task.set_progress({
                     "total": 1,
                     "completed": 1,
-                    "failed": 0
+                    "failed": 0,
                 })
                 db.session.commit()
             
@@ -1554,6 +1679,11 @@ def generate_single_page_image_task(task_id: str, project_id: str, page_id: str,
                 task.status = 'FAILED'
                 task.error_message = str(e)
                 task.completed_at = datetime.utcnow()
+                task.set_progress({
+                    "total": 1,
+                    "completed": 0,
+                    "failed": 1,
+                })
                 db.session.commit()
             
             # Update page status

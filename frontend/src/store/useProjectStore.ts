@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Project, GenerationOverride, ProjectScenario } from '@/types';
+import type { Project, GenerationOverride, ProjectScenario, Task } from '@/types';
 import * as api from '@/api/endpoints';
 import { downloadFromUrl, normalizeProject, normalizeErrorMessage } from '@/utils';
 import { devLog } from '@/utils/logger';
@@ -88,7 +88,7 @@ interface ProjectState {
   currentProject: Project | null;
   isGlobalLoading: boolean;
   activeTaskId: string | null;
-  taskProgress: { total: number; completed: number } | null;
+  taskProgress: NonNullable<Task['progress']> | null;
   error: string | null;
   // 每个页面的生成任务ID映射 (pageId -> taskId)
   pageGeneratingTasks: Record<string, string>;
@@ -1119,7 +1119,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     set({ error: null, warningMessage: null });
 
     try {
-      const response = await api.generatePageImage(currentProject.id, pageId, forceRegenerate);
+      const response = await api.generatePageImage(currentProject.id!, pageId, forceRegenerate);
       const taskId = response.data?.task_id;
 
       if (taskId) {
@@ -1324,8 +1324,8 @@ export const useProjectStore = create<ProjectState>((set, get) => {
           await get().syncProject();
         } else if (task.status === 'PENDING' || task.status === 'PROCESSING' || task.status === 'RUNNING') {
           consecutiveUnknownStatuses = 0;
-          // 检查警告消息
-          const newWarning = task.progress?.warning_message;
+          // 检查警告/重试消息
+          const newWarning = task.progress?.retry_notice || task.progress?.warning_message;
           if (newWarning && get().warningMessage !== newWarning) {
             set({ warningMessage: newWarning });
           }
