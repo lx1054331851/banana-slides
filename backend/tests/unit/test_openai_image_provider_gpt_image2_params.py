@@ -144,11 +144,9 @@ def test_azure_image_edits_json_fallback_retries_with_object_images(monkeypatch)
     )
 
     assert result.size == (2, 2)
-    assert len(payloads) == 2
-    assert isinstance(payloads[0]["images"][0], str)
-    assert payloads[1]["images"][0] == {
-        "image_url": payloads[0]["images"][0],
-    }
+    assert len(payloads) == 1
+    assert list(payloads[0]["images"][0].keys()) == ["image_url"]
+    assert payloads[0]["images"][0]["image_url"].startswith("data:image/jpeg;base64,")
 
 
 def test_azure_image_edits_uses_image_array_field_for_multiple_files(monkeypatch):

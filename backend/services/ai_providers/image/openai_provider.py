@@ -667,6 +667,7 @@ class OpenAIImageProvider(ImageProvider):
                     payload_summary["output_format"] = form_data.get("output_format") if isinstance(form_data, dict) else None
                     payload_summary["output_compression"] = form_data.get("output_compression") if isinstance(form_data, dict) else None
                     payload_summary["file_count"] = len(files or [])
+                    payload_summary["file_fields"] = [item[0] for item in (files or [])]
                 logger.info("OpenAI image endpoint request: %s", payload_summary)
                 audit_logger.info("openai_endpoint_request %s", payload_summary)
                 if json_payload is not None:
@@ -769,10 +770,7 @@ class OpenAIImageProvider(ImageProvider):
             **params,
         }
         files: List[Tuple[str, Tuple[str, bytes, str]]] = []
-        file_field_name = "image"
-        if self.azure_endpoint and len(ref_images[:6]) > 1:
-            # Azure's preview edits endpoint expects array syntax for multi-image multipart uploads.
-            file_field_name = "image[]"
+        file_field_name = "image[]" if self.azure_endpoint else "image"
         for idx, ref_img in enumerate(ref_images[:6]):
             files.append(
                 (
@@ -791,36 +789,34 @@ class OpenAIImageProvider(ImageProvider):
                     f"data:image/jpeg;base64,{self._encode_image_to_base64(img)}"
                     for img in ref_images[:6]
                 ]
-                json_payload_candidates: List[Dict[str, Any]] = [
-                    {
-                        "model": self.model,
-                        "prompt": prompt,
-                        "images": image_data_urls,
-                        **params,
-                    },
-                ]
-
-                # Azure's preview image edits endpoint expects object items inside `images`.
                 if self.azure_endpoint:
-                    json_payload_candidates.extend(
-                        [
-                            {
-                                "model": self.model,
-                                "prompt": prompt,
-                                "images": [{"image_url": image_url} for image_url in image_data_urls],
-                                **params,
-                            },
-                            {
-                                "model": self.model,
-                                "prompt": prompt,
-                                "images": [
-                                    {"type": "image_url", "image_url": image_url}
-                                    for image_url in image_data_urls
-                                ],
-                                **params,
-                            },
-                        ]
-                    )
+                    # Azure's preview image edits endpoint expects object items inside `images`.
+                    json_payload_candidates: List[Dict[str, Any]] = [
+                        {
+                            "model": self.model,
+                            "prompt": prompt,
+                            "images": [{"image_url": image_url} for image_url in image_data_urls],
+                            **params,
+                        },
+                        {
+                            "model": self.model,
+                            "prompt": prompt,
+                            "images": [
+                                {"type": "image_url", "image_url": image_url}
+                                for image_url in image_data_urls
+                            ],
+                            **params,
+                        },
+                    ]
+                else:
+                    json_payload_candidates = [
+                        {
+                            "model": self.model,
+                            "prompt": prompt,
+                            "images": image_data_urls,
+                            **params,
+                        },
+                    ]
 
                 last_error: Optional[ImageApiRequestError] = None
                 for json_payload in json_payload_candidates:
