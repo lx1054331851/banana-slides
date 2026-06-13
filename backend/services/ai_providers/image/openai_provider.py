@@ -780,17 +780,53 @@ class OpenAIImageProvider(ImageProvider):
         try:
             response_payload = self._post_image_api("edits", form_data=form_data, files=files)
         except ImageApiRequestError as e:
-            # Some proxies only support JSON for edits. Retry once with data URLs.
+            # Some proxies and Azure variants only support JSON for edits.
             text_lower = (e.response_text or "").lower()
             if e.status_code in {400, 415} or "content-type" in text_lower:
-                image_data_urls = [f"data:image/jpeg;base64,{self._encode_image_to_base64(img)}" for img in ref_images[:6]]
-                json_payload: Dict[str, Any] = {
-                    "model": self.model,
-                    "prompt": prompt,
-                    "images": image_data_urls,
-                    **params,
-                }
-                response_payload = self._post_image_api("edits", json_payload=json_payload)
+                image_data_urls = [
+                    f"data:image/jpeg;base64,{self._encode_image_to_base64(img)}"
+                    for img in ref_images[:6]
+                ]
+                json_payload_candidates: List[Dict[str, Any]] = [
+                    {
+                        "model": self.model,
+                        "prompt": prompt,
+                        "images": image_data_urls,
+                        **params,
+                    },
+                ]
+
+                # Azure's preview image edits endpoint expects object items inside `images`.
+                if self.azure_endpoint:
+                    json_payload_candidates.extend(
+                        [
+                            {
+                                "model": self.model,
+                                "prompt": prompt,
+                                "images": [{"image_url": image_url} for image_url in image_data_urls],
+                                **params,
+                            },
+                            {
+                                "model": self.model,
+                                "prompt": prompt,
+                                "images": [
+                                    {"type": "image_url", "image_url": image_url}
+                                    for image_url in image_data_urls
+                                ],
+                                **params,
+                            },
+                        ]
+                    )
+
+                last_error: Optional[ImageApiRequestError] = None
+                for json_payload in json_payload_candidates:
+                    try:
+                        response_payload = self._post_image_api("edits", json_payload=json_payload)
+                        break
+                    except ImageApiRequestError as retry_error:
+                        last_error = retry_error
+                else:
+                    raise last_error or e
             else:
                 raise
 

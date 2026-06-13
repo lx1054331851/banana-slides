@@ -106,3 +106,46 @@ def test_image_edits_json_fallback_uses_images_array(monkeypatch):
     assert isinstance(captured_payload["images"], list)
     assert len(captured_payload["images"]) == 2
     assert "image" not in captured_payload
+
+
+def test_azure_image_edits_json_fallback_retries_with_object_images(monkeypatch):
+    provider = _provider(monkeypatch, strict_params=True)
+    provider.azure_endpoint = "https://example-resource.openai.azure.com"
+    provider.azure_api_version = "2025-04-01-preview"
+
+    payloads = []
+
+    def fake_post(endpoint_kind, *, json_payload=None, form_data=None, files=None):
+        if form_data is not None:
+            raise ImageApiRequestError(
+                "multipart rejected",
+                status_code=400,
+                response_text="Invalid type for 'images[0]': expected an object, but got a string instead.",
+                url="https://example.com/edits",
+            )
+        payloads.append(json_payload or {})
+        images = (json_payload or {}).get("images") or []
+        if images and isinstance(images[0], str):
+            raise ImageApiRequestError(
+                "string images rejected",
+                status_code=400,
+                response_text="Invalid type for 'images[0]': expected an object, but got a string instead.",
+                url="https://example.com/edits",
+            )
+        return {"data": [{"b64_json": provider._encode_image_to_base64(Image.new("RGB", (2, 2), "white"))}]}
+
+    monkeypatch.setattr(provider, "_post_image_api", fake_post)
+
+    result = provider._call_via_image_api_edits(
+        "edit prompt",
+        [Image.new("RGB", (2, 2), "black"), Image.new("RGB", (2, 2), "white")],
+        "1:1",
+        "1K",
+    )
+
+    assert result.size == (2, 2)
+    assert len(payloads) == 2
+    assert isinstance(payloads[0]["images"][0], str)
+    assert payloads[1]["images"][0] == {
+        "image_url": payloads[0]["images"][0],
+    }
