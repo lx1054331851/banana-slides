@@ -937,8 +937,8 @@ export const Home: React.FC = () => {
       await initializeProject(
         activeTextMode,
         content,
-        selectedTemplate,
-        templateStyle.trim() ? templateStyle.trim() : undefined,
+        undefined,
+        undefined,
         refFileIds.length > 0 ? refFileIds : undefined,
         aspectRatio,
         projectScenario,

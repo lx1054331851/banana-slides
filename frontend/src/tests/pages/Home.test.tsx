@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Home } from '@/pages/Home';
 
 
@@ -187,5 +187,26 @@ describe('Home', () => {
 
     expect(screen.queryByAltText('蕉幻 Banana Slides Logo')).not.toBeInTheDocument();
     expect(screen.queryByText('蕉幻')).not.toBeInTheDocument();
+  });
+
+  it('submits project creation without referencing removed template state', async () => {
+    render(<Home />);
+
+    fireEvent.change(screen.getByPlaceholderText(/例如：生成一份关于 AI 发展史的演讲 PPT|e\.g\., Generate a presentation about the history of AI/i), {
+      target: { value: '测试首页创建项目' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /common\.next/i }));
+
+    await waitFor(() => {
+      expect(mockInitializeProject).toHaveBeenCalledWith(
+        'idea',
+        '测试首页创建项目',
+        undefined,
+        undefined,
+        undefined,
+        '16:9',
+        'ppt',
+      );
+    });
   });
 });
