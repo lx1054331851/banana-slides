@@ -1,6 +1,11 @@
 import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
 import type { PageAiMessage, PageAiReference, Project } from '@/types';
-import { createPageAiMessage, type PageAiContextState, type PageAiUploadedReference } from '../SlidePreview.pageAi';
+import {
+  createPageAiMessage,
+  type PageAiContextState,
+  type PageAiReferenceMeta,
+  type PageAiUploadedReference,
+} from '../SlidePreview.pageAi';
 
 type PageAiContextImages = {
   useTemplate: boolean;
@@ -12,6 +17,7 @@ type BuildPageAiPayloadResult = {
   promptText: string;
   inlineImageUrls: string[];
   uploadedReferences: PageAiUploadedReference[];
+  referenceMetas: PageAiReferenceMeta[];
 };
 
 type UseSlidePreviewPageAiSubmitParams = {
@@ -29,6 +35,7 @@ type UseSlidePreviewPageAiSubmitParams = {
       useTemplate?: boolean;
       descImageUrls?: string[];
       uploadedReferences?: PageAiUploadedReference[];
+      referenceMetas?: PageAiReferenceMeta[];
     };
     model?: string;
   }) => Promise<void>;
@@ -97,6 +104,7 @@ export const useSlidePreviewPageAiSubmit = ({
             useTemplate: false,
             descImageUrls: payload.inlineImageUrls,
             uploadedReferences: payload.uploadedReferences,
+            referenceMetas: payload.referenceMetas,
           },
           model: editRunImageModel,
         });

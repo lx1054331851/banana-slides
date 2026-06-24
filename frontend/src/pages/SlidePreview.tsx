@@ -39,6 +39,10 @@ import {
   type PendingRegionCapture,
   createUploadedReference,
 } from './SlidePreview.pageAi';
+import {
+  buildRegionInstructionLines,
+  createAnnotatedRegionImage,
+} from './pageAiRegionUtils';
 import { PreviewStatusBar } from './components/PreviewStatusBar';
 import { SlidePreviewHeader } from './components/SlidePreviewHeader';
 import { SlidePreviewSidebarShell } from './components/SlidePreviewSidebarShell';
@@ -1024,16 +1028,10 @@ export const SlidePreview: React.FC = () => {
   });
 
   const syncRegionCommentsIntoPrompt = useCallback((references: PageAiUploadedReference[]) => {
-    const regionComments = references
-      .filter((reference) => reference.sourceType === 'region' && reference.regionComment?.trim())
-      .map((reference, index) => `区域${index + 1}：${reference.regionComment?.trim()}`);
-    setEditPrompt(regionComments.join('\n'));
+    setEditPrompt(buildRegionInstructionLines(references).join('\n'));
   }, []);
 
   const clearPendingRegionCapture = useCallback(() => {
-    if (pendingRegionCapture?.previewUrl) {
-      URL.revokeObjectURL(pendingRegionCapture.previewUrl);
-    }
     setPendingRegionCapture(null);
     setPendingRegionComment('');
     setPendingRegionEscStep(0);
@@ -1048,7 +1046,7 @@ export const SlidePreview: React.FC = () => {
 
     setSelectedContextImages((prev) => {
       const nextReference = createUploadedReference(
-        pendingRegionCapture.file,
+        new File([], `region-${Date.now()}.json`, { type: 'application/octet-stream' }),
         'region',
         `框选区域 ${prev.uploadedReferences.filter((item) => item.sourceType === 'region').length + 1}`,
         {
@@ -1691,6 +1689,7 @@ export const SlidePreview: React.FC = () => {
       useTemplate: boolean;
       descImageUrls: string[];
       uploadedReferences: PageAiUploadedReference[];
+      referenceMetas?: import('./SlidePreview.pageAi').PageAiReferenceMeta[];
     };
     model?: string;
   }) => {
@@ -1703,6 +1702,17 @@ export const SlidePreview: React.FC = () => {
       await saveAllPages();
       const nextPrompt = options?.prompt ?? editPrompt;
       const nextContextImages = options?.contextImages ?? selectedContextImages;
+      const regionReferences = nextContextImages.uploadedReferences.filter((reference) => reference.sourceType === 'region');
+      let uploadedFiles = nextContextImages.uploadedReferences
+        .filter((reference) => reference.sourceType !== 'region')
+        .map((reference) => reference.file);
+      if (regionReferences.length > 0 && selectedImageUrl) {
+        const annotatedImage = await createAnnotatedRegionImage(
+          selectedImageUrl,
+          regionReferences.map((reference) => ({ regionBounds: reference.regionBounds! })),
+        );
+        uploadedFiles = [annotatedImage, ...uploadedFiles];
+      }
       const nextSelection = parseRuntimeImageModelValue(options?.model ?? editRunImageModel);
       const normalizedEditModel = normalizeProjectDefaultImageModel(nextSelection.model || projectDefaultImageModel);
       const normalizedEditResolution = normalizeProjectDefaultImageResolution(
@@ -1744,9 +1754,10 @@ export const SlidePreview: React.FC = () => {
         {
           useTemplate: nextContextImages.useTemplate,
           descImageUrls: nextContextImages.descImageUrls,
-          uploadedFiles: nextContextImages.uploadedReferences.length > 0
-            ? nextContextImages.uploadedReferences.map((reference) => reference.file)
+          uploadedFiles: uploadedFiles.length > 0
+            ? uploadedFiles
             : undefined,
+          referenceMetas: options?.contextImages?.referenceMetas,
         },
         editGenerationOverride
       );
@@ -1759,7 +1770,7 @@ export const SlidePreview: React.FC = () => {
       show({ message: errorMessage, type: 'error' });
       throw error;
     }
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultGptImageBackground, projectDefaultGptImageOutputCompression, projectDefaultGptImageOutputFormat, projectDefaultGptImageQuality, projectDefaultGptImageSize, projectDefaultImageChannel, projectDefaultImageModel, projectDefaultImageProvider, projectDefaultImageResolution, providerProfiles, normalizedProjectImageSource, handleSaveOutlineAndDescription, saveAllPages, show, t]);
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultGptImageBackground, projectDefaultGptImageOutputCompression, projectDefaultGptImageOutputFormat, projectDefaultGptImageQuality, projectDefaultGptImageSize, projectDefaultImageChannel, projectDefaultImageModel, projectDefaultImageProvider, projectDefaultImageResolution, providerProfiles, normalizedProjectImageSource, handleSaveOutlineAndDescription, saveAllPages, selectedImageUrl, show, t]);
 
   const handleGenerateCurrentPage = useCallback(async () => {
     const preferredPageId = selectedPageIdRef.current;

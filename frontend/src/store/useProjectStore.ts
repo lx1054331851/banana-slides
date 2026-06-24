@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Project, GenerationOverride, ProjectScenario, Task } from '@/types';
 import * as api from '@/api/endpoints';
+import type { PageAiReferenceMeta } from '@/pages/SlidePreview.pageAi';
 import { downloadFromUrl, normalizeProject, normalizeErrorMessage } from '@/utils';
 import { devLog } from '@/utils/logger';
 import { getT } from '@/utils/i18nHelper';
@@ -137,6 +138,7 @@ interface ProjectState {
       useTemplate?: boolean;
       descImageUrls?: string[];
       uploadedFiles?: File[];
+      referenceMetas?: PageAiReferenceMeta[];
     },
     generationOverride?: GenerationOverride
   ) => Promise<void>;

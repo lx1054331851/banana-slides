@@ -65,66 +65,22 @@ export const useSlidePreviewRegionSelection = ({
         return;
       }
 
-      const naturalWidth = img.naturalWidth;
-      const naturalHeight = img.naturalHeight;
       const displayWidth = img.clientWidth;
       const displayHeight = img.clientHeight;
+      if (!displayWidth || !displayHeight) return;
 
-      if (!naturalWidth || !naturalHeight || !displayWidth || !displayHeight) return;
-
-      const scaleX = naturalWidth / displayWidth;
-      const scaleY = naturalHeight / displayHeight;
-
-      const sx = left * scaleX;
-      const sy = top * scaleY;
-      const sWidth = width * scaleX;
-      const sHeight = height * scaleY;
-
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(sWidth));
-      canvas.height = Math.max(1, Math.round(sHeight));
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      try {
-        ctx.drawImage(
-          img,
-          sx,
-          sy,
-          sWidth,
-          sHeight,
-          0,
-          0,
-          canvas.width,
-          canvas.height
-        );
-
-        canvas.toBlob((blob) => {
-          if (!blob) return;
-          const file = new File([blob], `crop-${Date.now()}.png`, { type: 'image/png' });
-          const previewUrl = URL.createObjectURL(file);
-          setPendingRegionCapture({
-            file,
-            previewUrl,
-            regionBounds: {
-              leftRatio: left / displayWidth,
-              topRatio: top / displayHeight,
-              widthRatio: width / displayWidth,
-              heightRatio: height / displayHeight,
-            },
-          });
-          show({
-            message: t('slidePreview.regionCropSuccess'),
-            type: 'success',
-          });
-        }, 'image/png');
-      } catch (e: any) {
-        console.error('裁剪选中区域失败（可能是跨域图片导致 canvas 被污染）:', e);
-        show({
-          message: t('slidePreview.regionCropFailed'),
-          type: 'error',
-        });
-      }
+      setPendingRegionCapture({
+        regionBounds: {
+          leftRatio: left / displayWidth,
+          topRatio: top / displayHeight,
+          widthRatio: width / displayWidth,
+          heightRatio: height / displayHeight,
+        },
+      });
+      show({
+        message: t('slidePreview.regionCropSuccess'),
+        type: 'success',
+      });
     } finally {
       setSelectionRect(null);
     }

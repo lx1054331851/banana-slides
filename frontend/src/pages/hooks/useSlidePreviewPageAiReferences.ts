@@ -9,7 +9,12 @@ import {
   removeMarkdownImageByUrl,
   stripMarkdownImages,
 } from '../SlidePreview.utils';
-import { createUploadedReference, type PageAiUploadedReference } from '../SlidePreview.pageAi';
+import {
+  createUploadedReference,
+  type PageAiReferenceMeta,
+  type PageAiUploadedReference,
+} from '../SlidePreview.pageAi';
+import { buildReferenceMetas, buildRegionInstructionLines } from '../pageAiRegionUtils';
 
 type PageAiContextImages = {
   useTemplate: boolean;
@@ -149,10 +154,7 @@ export const useSlidePreviewPageAiReferences = ({
         setEditPrompt((current) => removeMarkdownImageByUrl(current, target.markdownUrl!));
       }
       if (target?.sourceType === 'region') {
-        const nextRegionLines = nextUploadedReferences
-          .filter((reference) => reference.sourceType === 'region' && reference.regionComment?.trim())
-          .map((reference, index) => `区域${index + 1}：${reference.regionComment?.trim()}`);
-        setEditPrompt(nextRegionLines.join('\n'));
+        setEditPrompt(buildRegionInstructionLines(nextUploadedReferences).join('\n'));
       }
       return {
         ...prev,
@@ -204,6 +206,7 @@ export const useSlidePreviewPageAiReferences = ({
       promptText: stripMarkdownImages(editPrompt),
       inlineImageUrls,
       uploadedReferences: selectedContextImages.uploadedReferences,
+      referenceMetas: buildReferenceMetas(selectedContextImages.uploadedReferences) as PageAiReferenceMeta[],
     };
   }, [editPrompt, extractImageUrlsFromDescription, selectedContextImages.uploadedReferences]);
 

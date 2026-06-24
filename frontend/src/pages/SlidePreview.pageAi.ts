@@ -16,9 +16,16 @@ export type PageAiUploadedReference = {
 };
 
 export type PendingRegionCapture = {
-  file: File;
-  previewUrl: string;
   regionBounds: PageAiRegionBounds;
+};
+
+export type PageAiReferenceMeta = {
+  clientId: string;
+  sourceType: PageAiUploadedReference['sourceType'];
+  label: string;
+  regionBounds?: PageAiRegionBounds;
+  regionComment?: string;
+  regionIndex?: number;
 };
 
 export type PageAiContextState = {

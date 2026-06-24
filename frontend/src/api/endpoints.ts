@@ -12,6 +12,7 @@ import type {
 } from '@/types';
 import type { Settings } from '../types/index';
 import type { PromptTemplate } from '../types/index';
+import type { PageAiReferenceMeta } from '../pages/SlidePreview.pageAi';
 
 const IMAGE_OPERATION_TIMEOUT_MS = 300000; // 5 minutes
 
@@ -590,6 +591,7 @@ export const editPageImage = async (
     useTemplate?: boolean;
     descImageUrls?: string[];
     uploadedFiles?: File[];
+    referenceMetas?: PageAiReferenceMeta[];
   },
   generationOverride?: GenerationOverride
 ): Promise<ApiResponse> => {
@@ -600,6 +602,9 @@ export const editPageImage = async (
     formData.append('use_template', String(contextImages.useTemplate || false));
     if (contextImages.descImageUrls && contextImages.descImageUrls.length > 0) {
       formData.append('desc_image_urls', JSON.stringify(contextImages.descImageUrls));
+    }
+    if (contextImages.referenceMetas && contextImages.referenceMetas.length > 0) {
+      formData.append('reference_metas', JSON.stringify(contextImages.referenceMetas));
     }
     // 添加上传的文件
     contextImages.uploadedFiles.forEach((file) => {
@@ -624,6 +629,7 @@ export const editPageImage = async (
         context_images: {
           use_template: contextImages?.useTemplate || false,
           desc_image_urls: contextImages?.descImageUrls || [],
+          reference_metas: contextImages?.referenceMetas || [],
         },
         ...(generationOverride ? { generation_override: generationOverride } : {}),
       },

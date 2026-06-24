@@ -756,6 +756,7 @@ def edit_page_image(project_id, page_id):
     - edit_instruction: text field
     - use_template: text field (true/false)
     - desc_image_urls: JSON array string
+    - reference_metas: JSON array string
     - context_images: file uploads (multiple files with key "context_images")
     """
     try:
@@ -800,6 +801,11 @@ def edit_page_image(project_id, page_id):
                     data['generation_override'] = json.loads(data['generation_override'])
                 except Exception:
                     data['generation_override'] = {}
+            if 'reference_metas' in data and data['reference_metas']:
+                try:
+                    data['reference_metas'] = json.loads(data['reference_metas'])
+                except Exception:
+                    data['reference_metas'] = []
 
         edit_instruction = normalize_user_text(data.get('edit_instruction'))
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
@@ -856,6 +862,11 @@ def edit_page_image(project_id, page_id):
         
         # 1. Add template image if requested
         context_images = data.get('context_images', {})
+        reference_metas = []
+        if isinstance(context_images, dict):
+            reference_metas = context_images.get('reference_metas', []) or []
+        elif isinstance(data.get('reference_metas'), list):
+            reference_metas = data.get('reference_metas') or []
         template_path = None
         if isinstance(context_images, dict):
             raw_use_template = context_images.get('use_template', False)
@@ -1005,7 +1016,8 @@ def edit_page_image(project_id, page_id):
             outline=outline,
             use_template=use_template,
             extra_requirements=combined_requirements if combined_requirements.strip() else None,
-            language=language
+            language=language,
+            reference_metas=reference_metas,
         )
         
         # Return task_id immediately

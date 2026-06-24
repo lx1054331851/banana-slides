@@ -1704,7 +1704,8 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                          outline: Optional[List[Dict]] = None,
                          use_template: bool = False,
                          extra_requirements: Optional[str] = None,
-                         language: str = 'zh'):
+                         language: str = 'zh',
+                         reference_metas: Optional[List[Dict[str, Any]]] = None):
     """
     Background task for editing a page image
     
@@ -1746,6 +1747,26 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                 merged_edit_refs: List[str] = []
                 if additional_ref_images:
                     merged_edit_refs.extend(additional_ref_images)
+                region_meta_count = sum(
+                    1 for meta in (reference_metas or [])
+                    if isinstance(meta, dict) and meta.get('sourceType') == 'region'
+                )
+                reference_image_notes: List[str] = []
+                if merged_edit_refs:
+                    if region_meta_count > 0:
+                        reference_image_notes.append(
+                            "这是在原始页面图上叠加了区域编号标注的参考图，请严格按照图中的“区域1/区域2/...”定位修改位置。"
+                        )
+                    remaining_meta = [
+                        meta for meta in (reference_metas or [])
+                        if isinstance(meta, dict) and meta.get('sourceType') != 'region'
+                    ]
+                    for idx, _ in enumerate(merged_edit_refs[1:] if region_meta_count > 0 else merged_edit_refs):
+                        meta = remaining_meta[idx] if idx < len(remaining_meta) else None
+                        label = str((meta or {}).get('label') or '').strip()
+                        reference_image_notes.append(
+                            f"这是用户补充的插图或参考素材{f'（{label}）' if label else ''}，仅在修改要求明确提到对应图片时使用。"
+                        )
                 effective_edit_instruction = edit_instruction_text or (
                     "Please update the current PPT page image using the attached references."
                     if str(language or '').lower().startswith('en')
@@ -1756,6 +1777,7 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                 prompt_text = get_image_edit_prompt(
                     edit_instruction=effective_edit_instruction,
                     reference_image_count=1 + len(merged_edit_refs),
+                    reference_image_notes=reference_image_notes,
                 )
                 route_meta = _get_image_route_metadata(ai_service)
                 _log_image_audit_event(
