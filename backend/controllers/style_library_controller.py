@@ -70,10 +70,20 @@ def _normalize_preview_images_payload(payload, allowed_keys=None):
         payload = {}
     if not isinstance(payload, dict):
         raise ValueError("preview_images must be an object")
-    normalized_keys = [str(key) for key in (allowed_keys or payload.keys()) if isinstance(key, str) and str(key).strip()]
-    normalized = {}
-    for key in normalized_keys:
-        normalized[key] = str(payload.get(key) or '').strip()
+    allowed_preview_keys = {
+        str(key).strip()
+        for key in (allowed_keys or payload.keys())
+        if isinstance(key, str) and str(key).strip()
+    }
+    normalized = {key: '' for key in allowed_preview_keys}
+
+    for raw_key, raw_value in payload.items():
+        if not isinstance(raw_key, str):
+            continue
+        resolved_key = _resolve_allowed_preview_key(raw_key, allowed_preview_keys)
+        if resolved_key not in allowed_preview_keys:
+            continue
+        normalized[resolved_key] = str(raw_value or '').strip()
     return normalized
 
 

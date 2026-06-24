@@ -52,6 +52,35 @@ def test_create_style_preset_with_preview_images(client, app):
     assert not (preset_dir / "ending.png").exists()
 
 
+def test_create_style_preset_maps_legacy_preview_keys_to_dynamic_slots(client, app):
+    cover_url = _create_source_preview(app, "proj_legacy", "rec_legacy", "cover.png")
+    toc_url = _create_source_preview(app, "proj_legacy", "rec_legacy", "toc.png")
+    detail_url = _create_source_preview(app, "proj_legacy", "rec_legacy", "detail.png")
+    ending_url = _create_source_preview(app, "proj_legacy", "rec_legacy", "ending.png")
+
+    response = client.post('/api/style-presets', json={
+        'name': 'Legacy key preset',
+        'style_json': '{"design_system_spec":{"slide_templates":{"cover_page":{"page_type":"封面页"},"toc_page":{"page_type":"目录页"},"content_page":{"page_type":"内容页"},"closing_page":{"page_type":"结尾页"}}}}',
+        'preview_images': {
+            'cover_url': cover_url,
+            'catalog_url': toc_url,
+            'detail_text_split_url': detail_url,
+            'closing_url': ending_url,
+        }
+    })
+
+    assert response.status_code == 201
+    payload = response.get_json()
+    assert payload['success'] is True
+    data = payload['data']
+    preview_images = data.get('preview_images') or {}
+
+    for key in ('cover_page_url', 'toc_page_url', 'content_page_url', 'closing_page_url'):
+        image_url = preview_images.get(key, '')
+        assert image_url.startswith(f"/files/style-presets/{data['id']}/")
+        assert image_url.endswith('.webp') or image_url.endswith('.jpg')
+
+
 def test_create_style_preset_rejects_invalid_preview_source(client):
     response = client.post('/api/style-presets', json={
         'name': 'Invalid source preset',
