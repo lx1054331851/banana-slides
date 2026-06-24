@@ -86,12 +86,6 @@ type ImageModelCapability = {
   };
 };
 
-const GPT_IMAGE_QUALITY_LABELS: Record<NonNullable<LockedImageModelParams['gptImageQuality']>, string> = {
-  low: '低',
-  medium: '中',
-  high: '高',
-};
-
 export const toImageChannelOption = (profile: ProviderProfileSummary): ImageChannelOption => ({
   id: String(profile.channel || profile.id),
   provider: String(profile.provider || ''),
@@ -436,6 +430,16 @@ const getLockedImageModelParams = (
   return fallbackQuality ? { gptImageQuality: fallbackQuality } : {};
 };
 
+// Return a stable gpt-image-2 label that preserves the raw provider model variant.
+const getGptImageDisplayLabel = (
+  providerModelId: string,
+  lockedQuality: LockedImageModelParams['gptImageQuality'],
+): string => (
+  lockedQuality
+    ? providerModelId
+    : providerModelId
+);
+
 // Return a normalized model descriptor that separates family, provider variant, and locked params.
 export const getNormalizedImageModel = (
   channelId: string,
@@ -455,11 +459,9 @@ export const getNormalizedImageModel = (
       ? 'gpt-image-2'
       : providerModelId
   );
-  const displayLabel = String(capability.display_label || '').trim() || (
-    lockedQuality
-      ? `${modelFamily}（质量：${GPT_IMAGE_QUALITY_LABELS[lockedQuality]}）`
-      : providerModelId
-  );
+  const displayLabel = schema === 'gpt-image-2'
+    ? getGptImageDisplayLabel(providerModelId, lockedQuality)
+    : String(capability.display_label || '').trim() || providerModelId;
   const variantLabel = String(capability.variant_label || '').trim() || (
     providerModelId !== modelFamily ? `渠道变体：${providerModelId}` : undefined
   );

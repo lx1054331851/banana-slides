@@ -50,6 +50,7 @@ type UseSlidePreviewProjectSettingsParams = {
   aspectRatio: string;
   isEditingRequirementsRef: MutableRefObject<boolean>;
   isEditingTemplateStyleRef: MutableRefObject<boolean>;
+  clearUnsavedGenerationDefaultsRef?: MutableRefObject<(() => void) | null>;
   syncProject: (projectId?: string) => Promise<unknown>;
   show: (options: { message: string; type?: ToastType | string; duration?: number }) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -81,6 +82,7 @@ export const useSlidePreviewProjectSettings = ({
   aspectRatio,
   isEditingRequirementsRef,
   isEditingTemplateStyleRef,
+  clearUnsavedGenerationDefaultsRef,
   syncProject,
   show,
   t,
@@ -184,6 +186,7 @@ export const useSlidePreviewProjectSettings = ({
       }
       const generationDefaults: GenerationOverride = { image: imageDefaults };
       await updateProject(projectId, { generation_defaults: generationDefaults });
+      clearUnsavedGenerationDefaultsRef?.current?.();
       await syncProject(projectId);
       show({ message: '项目 AI 默认已保存', type: 'success' });
     } catch (error: any) {
@@ -207,6 +210,7 @@ export const useSlidePreviewProjectSettings = ({
     projectDefaultGptImageQuality,
     providerProfiles,
     projectId,
+    clearUnsavedGenerationDefaultsRef,
     show,
     syncProject,
     t,

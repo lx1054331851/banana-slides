@@ -29,7 +29,7 @@ describe('projectAiChannels image model labels', () => {
       },
     ] as any);
 
-    expect(label).toBe('147AI -> gpt-image-2（质量：高）');
+    expect(label).toBe('147AI -> gpt-image-2-high');
   });
 
   it('only exposes image channels from explicit provider profiles', () => {
@@ -209,7 +209,7 @@ describe('projectAiChannels image model labels', () => {
       lockedParams: {
         gptImageQuality: 'high',
       },
-      displayLabel: 'gpt-image-2（质量：高）',
+      displayLabel: 'gpt-image-2-high',
       variantLabel: '渠道变体：gpt-image-2-high',
     });
   });
@@ -228,7 +228,7 @@ describe('projectAiChannels image model labels', () => {
             schema: 'gpt-image-2',
             request_mode: 'openai-images',
             normalized_model: 'gpt-image-2',
-            display_label: 'gpt-image-2（质量：高）',
+            display_label: 'gpt-image-2-high',
             variant_label: '渠道变体：openai-image-v2-ultra',
             locked_params: {
               gpt_image_quality: 'high',
@@ -245,7 +245,7 @@ describe('projectAiChannels image model labels', () => {
       lockedParams: {
         gptImageQuality: 'high',
       },
-      displayLabel: 'gpt-image-2（质量：高）',
+      displayLabel: 'openai-image-v2-ultra',
       variantLabel: '渠道变体：openai-image-v2-ultra',
     });
   });

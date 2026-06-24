@@ -168,6 +168,12 @@ export const areStringRecordsEqual = (left: Record<string, string>, right: Recor
   return leftKeys.every((key) => (left[key] || '').trim() === (right[key] || '').trim());
 };
 
+// Return whether project generation defaults should be resynced from server state.
+export const shouldSyncProjectGenerationDefaults = (
+  isNewProject: boolean,
+  hasUnsavedLocalChanges: boolean,
+): boolean => isNewProject || !hasUnsavedLocalChanges;
+
 export const formatJsonForEditor = (text: string, indent = 4): string => {
   const raw = (text || '').trim();
   if (!raw) return text || '';
