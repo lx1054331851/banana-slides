@@ -85,6 +85,8 @@ banana_slides.egg-info/
 # Codex runtime artifacts
 .codex-run/
 backend/.codex-run/
+config/.codex/
+config/.codex/**
 
 # Local logs
 frontend.log
