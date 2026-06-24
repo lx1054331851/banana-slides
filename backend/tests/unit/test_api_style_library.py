@@ -229,3 +229,22 @@ def test_regenerate_single_preset_preview_rejects_invalid_preview_key(client):
     assert response.status_code == 400
     payload = response.get_json()
     assert payload['success'] is False
+
+
+@patch('controllers.style_library_controller.task_manager.submit_task')
+@patch('controllers.style_library_controller.resolve_routing_bundle')
+def test_regenerate_single_preset_preview_accepts_legacy_preview_key_alias(mock_resolve_routing_bundle, mock_submit_task, client):
+    mock_resolve_routing_bundle.return_value = object()
+    create_resp = client.post('/api/style-presets', json={
+        'name': 'Preset for legacy key alias',
+        'style_json': '{"design_system_spec":{"slide_templates":{"cover_page":{"page_type":"封面页"}}}}',
+    })
+    assert create_resp.status_code == 201
+    preset_id = create_resp.get_json()['data']['id']
+
+    response = client.post(f'/api/style-presets/{preset_id}/preview-images/cover_url/regenerate', json={})
+
+    assert response.status_code == 202
+    payload = response.get_json()
+    assert payload['success'] is True
+    assert payload['data']['progress']['preview_key'] == 'cover_page_url'

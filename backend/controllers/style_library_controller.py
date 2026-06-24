@@ -156,6 +156,39 @@ def _validate_preview_key(preview_key: str) -> str:
     return normalized
 
 
+_LEGACY_PREVIEW_KEY_ALIASES = {
+    'cover_url': 'cover_page_url',
+    'toc_url': 'toc_page_url',
+    'catalog_url': 'toc_page_url',
+    'section_header_url': 'section_header_page_url',
+    'agenda_timeline_url': 'agenda_timeline_page_url',
+    'detail_url': 'content_page_url',
+    'detail_text_split_url': 'content_page_url',
+    'content_url': 'content_page_url',
+    'bullet_keypoints_url': 'bullet_keypoints_page_url',
+    'comparison_url': 'comparison_page_url',
+    'process_flow_url': 'process_flow_page_url',
+    'framework_matrix_url': 'framework_matrix_page_url',
+    'detail_chart_url': 'data_page_url',
+    'data_url': 'data_page_url',
+    'case_showcase_url': 'case_showcase_page_url',
+    'closing_url': 'closing_page_url',
+    'ending_url': 'closing_page_url',
+}
+
+
+def _resolve_allowed_preview_key(preview_key: str, allowed_preview_keys: set[str]) -> str:
+    normalized_preview_key = _validate_preview_key(preview_key)
+    if normalized_preview_key in allowed_preview_keys:
+        return normalized_preview_key
+
+    aliased_preview_key = _LEGACY_PREVIEW_KEY_ALIASES.get(normalized_preview_key, '')
+    if aliased_preview_key in allowed_preview_keys:
+        return aliased_preview_key
+
+    return normalized_preview_key
+
+
 def _recover_stale_style_task(task: Task) -> None:
     if task.status not in _RUNNING_TASK_STATUSES or task.completed_at is not None:
         return
@@ -315,7 +348,7 @@ def regenerate_style_preset_preview_image(preset_id: str, preview_key: str):
             return not_found('StylePreset')
 
         allowed_preview_keys = set(_get_preview_image_keys_from_style_json(preset.style_json))
-        normalized_preview_key = _validate_preview_key(preview_key)
+        normalized_preview_key = _resolve_allowed_preview_key(preview_key, allowed_preview_keys)
         if normalized_preview_key not in allowed_preview_keys:
             return bad_request(f"preview_key must be one of {', '.join(sorted(allowed_preview_keys))}")
         data = request.get_json(silent=True) or {}

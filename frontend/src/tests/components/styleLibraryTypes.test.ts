@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getPreviewOrder, humanizePreviewKey } from '@/components/style-library/types';
+import { getPreviewOrder, humanizePreviewKey, normalizePreviewKey } from '@/components/style-library/types';
 
 describe('style-library preview labels and ordering', () => {
   it('maps English page labels to Chinese labels', () => {
@@ -21,5 +21,12 @@ describe('style-library preview labels and ordering', () => {
       ['case_showcase_url', '案例展示'],
       ['closing_url', '结尾'],
     ]);
+  });
+
+  it('normalizes dynamic page template preview keys', () => {
+    expect(normalizePreviewKey('cover_page_url')).toBe('cover_page_url');
+    expect(normalizePreviewKey('toc_page_url')).toBe('toc_page_url');
+    expect(normalizePreviewKey('content_page_url')).toBe('content_page_url');
+    expect(normalizePreviewKey('closing_page_url')).toBe('closing_page_url');
   });
 });
