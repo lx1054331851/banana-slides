@@ -58,6 +58,20 @@ def test_image_openai_uses_global_azure_when_no_image_specific_override(monkeypa
     assert config["api_key"] == "azure-key"
     assert config["azure_endpoint"] == "https://example.cognitiveservices.azure.com"
     assert config["azure_api_version"] == "2024-10-21"
+    assert config["api_base"] is None
+
+
+def test_image_openai_does_not_fallback_to_global_openai_base(monkeypatch):
+    _clear_relevant_env(monkeypatch)
+    monkeypatch.setenv("IMAGE_MODEL_SOURCE", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    monkeypatch.setenv("OPENAI_API_BASE", "https://global-openai.example/v1")
+
+    config = _get_model_type_provider_config("image")
+
+    assert config["format"] == "openai"
+    assert config["api_key"] == "openai-key"
+    assert config["api_base"] is None
 
 
 def test_image_azure_openai_source_requires_azure_endpoint(monkeypatch):

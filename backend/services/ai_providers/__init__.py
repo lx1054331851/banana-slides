@@ -333,7 +333,10 @@ def _get_model_type_provider_config(model_type: str) -> Dict[str, Any]:
         model_azure_endpoint = _resolve_setting(f'{prefix}_AZURE_OPENAI_ENDPOINT')
         model_azure_api_version = _resolve_setting(f'{prefix}_AZURE_OPENAI_API_VERSION')
 
-        api_base = model_api_base or _resolve_setting('OPENAI_API_BASE', 'https://aihubmix.com/v1')
+        if model_type == 'image':
+            api_base = model_api_base or None
+        else:
+            api_base = model_api_base or _resolve_setting('OPENAI_API_BASE', 'https://aihubmix.com/v1')
         force_azure = source_lower in AZURE_OPENAI_SOURCES
 
         # If model-specific API credentials/base are configured, don't implicitly inherit

@@ -41,13 +41,27 @@ def test_request_override_has_highest_priority(monkeypatch):
 
     route = resolve_provider_route(
         "image",
-        generation_override={"image": {"source": "openai", "model": "gpt-image-1"}},
+        generation_override={"image": {"source": "openai", "model": "gpt-image-1", "api_base_url": "https://image.test/v1"}},
     )
 
     assert route.provider == "openai"
     assert route.model == "gpt-image-1"
     assert route.api_key == "openai-key"
-    assert route.api_base == "https://api.test/v1"
+    assert route.api_base == "https://image.test/v1"
+
+
+def test_image_route_does_not_fallback_to_global_openai_base(monkeypatch):
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("AI_PROVIDER_FORMAT", "openai")
+    monkeypatch.setenv("IMAGE_MODEL_SOURCE", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    monkeypatch.setenv("OPENAI_API_BASE", "https://global-openai.example/v1")
+
+    route = resolve_provider_route("image")
+
+    assert route.provider == "openai"
+    assert route.api_key == "openai-key"
+    assert route.api_base is None
 
 
 def test_project_defaults_override_settings(monkeypatch):

@@ -261,6 +261,28 @@ class Settings(db.Model):
             api_base = Config.GOOGLE_API_BASE or None
             api_key = Config.GOOGLE_API_KEY or None
 
+        image_provider = (getattr(Config, 'IMAGE_MODEL_SOURCE', '') or '').lower()
+        if image_provider in {'openai', 'azure-openai', 'azure'}:
+            image_api_base = Config.IMAGE_API_BASE or None
+            image_api_key = Config.IMAGE_API_KEY or Config.AZURE_OPENAI_API_KEY or Config.OPENAI_API_KEY or None
+        elif image_provider == 'gemini':
+            image_api_base = Config.IMAGE_API_BASE or Config.GOOGLE_API_BASE or None
+            image_api_key = Config.IMAGE_API_KEY or Config.GOOGLE_API_KEY or None
+        else:
+            image_api_base = Config.IMAGE_API_BASE or None
+            image_api_key = Config.IMAGE_API_KEY or None
+
+        image_caption_provider = (getattr(Config, 'IMAGE_CAPTION_MODEL_SOURCE', '') or '').lower()
+        if image_caption_provider in {'openai', 'azure-openai', 'azure'}:
+            image_caption_api_base = Config.IMAGE_CAPTION_API_BASE or None
+            image_caption_api_key = Config.IMAGE_CAPTION_API_KEY or Config.AZURE_OPENAI_API_KEY or Config.OPENAI_API_KEY or None
+        elif image_caption_provider == 'gemini':
+            image_caption_api_base = Config.IMAGE_CAPTION_API_BASE or Config.GOOGLE_API_BASE or None
+            image_caption_api_key = Config.IMAGE_CAPTION_API_KEY or Config.GOOGLE_API_KEY or None
+        else:
+            image_caption_api_base = Config.IMAGE_CAPTION_API_BASE or None
+            image_caption_api_key = Config.IMAGE_CAPTION_API_KEY or None
+
         return {
             'ai_provider_format': Config.AI_PROVIDER_FORMAT,
             'api_base_url': api_base,
@@ -284,8 +306,12 @@ class Settings(db.Model):
             'azure_openai_api_version': Config.AZURE_OPENAI_API_VERSION or None,
             'text_azure_openai_endpoint': getattr(Config, 'TEXT_AZURE_OPENAI_ENDPOINT', None),
             'text_azure_openai_api_version': getattr(Config, 'TEXT_AZURE_OPENAI_API_VERSION', None),
+            'image_api_key': image_api_key,
+            'image_api_base_url': image_api_base,
             'image_azure_openai_endpoint': getattr(Config, 'IMAGE_AZURE_OPENAI_ENDPOINT', None),
             'image_azure_openai_api_version': getattr(Config, 'IMAGE_AZURE_OPENAI_API_VERSION', None),
+            'image_caption_api_key': image_caption_api_key,
+            'image_caption_api_base_url': image_caption_api_base,
             'image_caption_azure_openai_endpoint': getattr(Config, 'IMAGE_CAPTION_AZURE_OPENAI_ENDPOINT', None),
             'image_caption_azure_openai_api_version': getattr(Config, 'IMAGE_CAPTION_AZURE_OPENAI_API_VERSION', None),
             'gpt_image_background': getattr(Config, 'GPT_IMAGE_BACKGROUND', None),

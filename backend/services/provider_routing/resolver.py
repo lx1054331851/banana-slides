@@ -203,7 +203,10 @@ def _resolve_openai_credentials(
     source_name = _normalize_model_source(selected_source or (override or {}).get("source"))
     force_azure = role == "image" and (source_name in {"azure-openai", "azure"} or model_name == "gpt-image-2")
 
-    api_base = (override_api_base or model_api_base or _resolve_setting("OPENAI_API_BASE", "https://aihubmix.com/v1"))
+    if role == "image":
+        api_base = override_api_base or model_api_base or None
+    else:
+        api_base = (override_api_base or model_api_base or _resolve_setting("OPENAI_API_BASE", "https://aihubmix.com/v1"))
 
     if force_azure:
         azure_endpoint = model_azure_endpoint or _resolve_setting("AZURE_OPENAI_ENDPOINT")
