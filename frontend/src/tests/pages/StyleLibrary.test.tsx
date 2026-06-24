@@ -13,9 +13,11 @@ const {
   mockListStylePresetTasks,
   mockStartStylePresetGeneration,
   mockRegenerateStylePresetPreviewImage,
+  mockCreateStylePreset,
 } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockCreateStyleTemplate: vi.fn(async () => ({ data: null })),
+  mockCreateStylePreset: vi.fn(async () => ({ data: { id: 'created-preset' } })),
   mockListStyleTemplates: vi.fn(async () => ({
     data: {
       templates: [
@@ -67,6 +69,7 @@ vi.mock('@/api/endpoints', () => ({
   uploadPresetTemplate: vi.fn(async () => ({ data: null })),
   deleteStyleTemplate: mockDeleteStyleTemplate,
   deleteStylePreset: mockDeleteStylePreset,
+  createStylePreset: mockCreateStylePreset,
   deleteStylePresetTask: vi.fn(async () => ({ data: {} })),
   deletePresetTemplate: vi.fn(async () => ({ data: {} })),
   listStylePresetTasks: mockListStylePresetTasks,
@@ -403,6 +406,29 @@ describe('StyleLibrary page', () => {
       expect(viewer).toHaveTextContent('"preset": 1');
       expect(viewer.textContent).toContain(String.fromCharCode(10));
     });
+  });
+
+  it('blocks manual preset save when style_json only contains one slide template slot', async () => {
+    render(<StyleLibrary />);
+
+    fireEvent.click((await screen.findAllByRole('button', { name: '新建模板' }))[0]);
+    await waitFor(() => {
+      expect(screen.getByTestId('style-library-create-preset-drawer')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /高级选项：手动创建/i }));
+    fireEvent.change(screen.getByPlaceholderText('模版名称（可选）'), {
+      target: { value: 'Single Slot Preset' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('请输入 style_json'), {
+      target: { value: '{"design_system_spec":{"slide_templates":{"cover_page":{"page_type":"封面页"}}}}' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存手动模版' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/只识别到 1 个 slide_templates 页型槽位/)).toBeInTheDocument();
+    });
+    expect(mockCreateStylePreset).not.toHaveBeenCalled();
   });
 
   it('allows clearing failed preset task cards', async () => {

@@ -40,6 +40,18 @@ function writeDismissedFailedTaskIds(taskIds: Iterable<string>) {
   window.localStorage.setItem(DISMISSED_FAILED_TASKS_STORAGE_KEY, JSON.stringify(Array.from(new Set(taskIds))));
 }
 
+function countSlideTemplateSlots(styleJsonText: string): number {
+  try {
+    const parsed = JSON.parse(styleJsonText);
+    const slideTemplates = parsed?.design_system_spec?.slide_templates;
+    return slideTemplates && typeof slideTemplates === 'object' && !Array.isArray(slideTemplates)
+      ? Object.values(slideTemplates).filter((item) => item && typeof item === 'object').length
+      : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templates, scenario, refreshKey = 0 }) => {
   const { show, ToastContainer } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
@@ -260,6 +272,14 @@ export const JsonPresetWorkspace: React.FC<JsonPresetWorkspaceProps> = ({ templa
   const handleManualCreate = useCallback(async ({ name, styleJson }: { name: string; styleJson: string }) => {
     setIsManualCreating(true);
     try {
+      const slideTemplateSlots = countSlideTemplateSlots(styleJson);
+      if (slideTemplateSlots === 1) {
+        show({
+          message: '当前 style_json 只识别到 1 个 slide_templates 页型槽位，保存后只会有 1 张预览图；请补充更多页型后再保存',
+          type: 'error',
+        });
+        return;
+      }
       await createStylePreset({ name: name || undefined, style_json: styleJson });
       show({ message: 'JSON 文本模版已保存', type: 'success' });
       await loadPresets();
