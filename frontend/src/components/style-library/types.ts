@@ -38,17 +38,29 @@ export interface JsonPresetWorkspaceProps {
 
 const PREVIEW_SLOT_ORDER = [
   'cover_url',
+  'cover_page_url',
   'catalog_url',
+  'toc_page_url',
   'section_header_url',
+  'section_header_page_url',
   'agenda_timeline_url',
+  'agenda_timeline_page_url',
   'detail_text_split_url',
+  'content_page_url',
   'bullet_keypoints_url',
+  'bullet_keypoints_page_url',
   'comparison_url',
+  'comparison_page_url',
   'process_flow_url',
+  'process_flow_page_url',
   'framework_matrix_url',
+  'framework_matrix_page_url',
   'detail_chart_url',
+  'data_page_url',
   'case_showcase_url',
+  'case_showcase_page_url',
   'closing_url',
+  'closing_page_url',
 ] as const;
 
 const PREVIEW_LABEL_MAP: Record<string, string> = {

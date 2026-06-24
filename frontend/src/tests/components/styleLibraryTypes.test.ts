@@ -23,6 +23,20 @@ describe('style-library preview labels and ordering', () => {
     ]);
   });
 
+  it('returns dynamic page template preview cards in PPT page order', () => {
+    expect(getPreviewOrder({
+      closing_page_url: '/closing.webp',
+      cover_page_url: '/cover.webp',
+      case_showcase_page_url: '/case.webp',
+      toc_page_url: '/toc.webp',
+    })).toEqual([
+      ['cover_page_url', '封面'],
+      ['toc_page_url', '目录'],
+      ['case_showcase_page_url', '案例展示'],
+      ['closing_page_url', '结尾'],
+    ]);
+  });
+
   it('normalizes dynamic page template preview keys', () => {
     expect(normalizePreviewKey('cover_page_url')).toBe('cover_page_url');
     expect(normalizePreviewKey('toc_page_url')).toBe('toc_page_url');
