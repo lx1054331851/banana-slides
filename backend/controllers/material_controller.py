@@ -351,6 +351,10 @@ def generate_material_image(project_id):
                 except Exception:
                     data['generation_override'] = {}
 
+        generation_override = data.get('generation_override') or {}
+        if generation_override and not isinstance(generation_override, dict):
+            return bad_request("generation_override must be an object")
+
         aspect_ratio = (data.get('aspect_ratio') or '').strip() or None
         if aspect_ratio:
             try:
@@ -358,7 +362,11 @@ def generate_material_image(project_id):
             except ValueError as e:
                 return bad_request(str(e))
 
-            image_model = current_app.config.get('IMAGE_MODEL', '')
+            routing_bundle = resolve_routing_bundle(
+                project=project,
+                generation_override=generation_override,
+            )
+            image_model = routing_bundle.image.model or current_app.config.get('IMAGE_MODEL', '')
             allowed_ratios = get_supported_aspect_ratios_for_model(image_model)
             if aspect_ratio not in allowed_ratios:
                 return bad_request(
@@ -368,10 +376,6 @@ def generate_material_image(project_id):
 
         if not prompt:
             return bad_request("prompt is required")
-
-        generation_override = data.get('generation_override') or {}
-        if generation_override and not isinstance(generation_override, dict):
-            return bad_request("generation_override must be an object")
 
         # 处理project_id：对于全局素材，使用'global'作为Task的project_id
         # Task模型要求project_id不能为null，但Material可以

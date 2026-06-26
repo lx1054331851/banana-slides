@@ -207,6 +207,41 @@ class TestMaterialUpload:
 
 
 @pytest.mark.unit
+class TestGenerateMaterialImage:
+    @patch('controllers.material_controller.resolve_routing_bundle')
+    @patch('controllers.material_controller.get_ai_service')
+    @patch('controllers.material_controller.task_manager.submit_task')
+    def test_generate_material_uses_effective_image_model_for_aspect_ratio_validation(
+        self,
+        mock_submit_task,
+        mock_get_ai_service,
+        mock_resolve_routing_bundle,
+        client,
+        sample_project,
+    ):
+        mock_resolve_routing_bundle.return_value = type('Bundle', (), {
+            'text': type('Route', (), {'model': 'gemini-3-flash-preview', 'provider': 'gemini', 'channel': 'gemini'})(),
+            'image': type('Route', (), {'model': 'gpt-image-2', 'provider': 'openai', 'channel': 'openai'})(),
+            'image_caption': type('Route', (), {'model': 'gemini-3-flash-preview', 'provider': 'gemini', 'channel': 'gemini'})(),
+        })()
+        mock_get_ai_service.return_value = object()
+
+        response = client.post(
+            f"/api/projects/{sample_project['project_id']}/materials/generate",
+            json={
+                'prompt': 'test prompt',
+                'aspect_ratio': '16:9',
+            },
+        )
+
+        data = assert_success_response(response, 202)
+        assert data['data']['status'] == 'PENDING'
+        mock_resolve_routing_bundle.assert_called()
+        mock_get_ai_service.assert_called_once()
+        mock_submit_task.assert_called_once()
+
+
+@pytest.mark.unit
 class TestGenerateImageCaption:
     """Unit tests for _generate_image_caption function"""
 

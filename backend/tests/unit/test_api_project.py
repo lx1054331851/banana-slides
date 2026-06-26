@@ -55,6 +55,22 @@ class TestProjectCreate:
         
         assert response.status_code in [400, 422]
 
+    @patch('controllers.project_controller.resolve_routing_bundle')
+    def test_create_project_uses_effective_image_model_for_aspect_ratio_validation(self, mock_resolve_routing_bundle, client):
+        mock_resolve_routing_bundle.return_value = type('Bundle', (), {
+            'image': type('Route', (), {'model': 'gpt-image-2'})()
+        })()
+
+        response = client.post('/api/projects', json={
+            'creation_type': 'idea',
+            'idea_prompt': '测试PPT生成',
+            'image_aspect_ratio': '16:9',
+        })
+
+        data = assert_success_response(response, 201)
+        assert data['data']['status'] == 'DRAFT'
+        mock_resolve_routing_bundle.assert_called_once()
+
 
 class TestProjectGet:
     """项目获取测试"""

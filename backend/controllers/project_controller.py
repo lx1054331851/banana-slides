@@ -70,6 +70,14 @@ def _validate_image_generation_override(generation_override):
     return None
 
 
+def _get_effective_image_model_for_request(project: Project | None, generation_override: dict | None = None) -> str:
+    try:
+        routing_bundle = resolve_routing_bundle(project=project, generation_override=generation_override)
+        return routing_bundle.image.model or current_app.config.get('IMAGE_MODEL', '')
+    except Exception:
+        return current_app.config.get('IMAGE_MODEL', '')
+
+
 def _merge_description_requirements(base_requirements: str | None, override_requirements: str | None) -> str | None:
     """
     Merge project-level description requirements with request-level override requirements.
@@ -183,14 +191,14 @@ def _recover_stale_generation_state(project: Project) -> None:
         db.session.commit()
 
 
-def _validate_aspect_ratio_for_current_image_model(aspect_ratio: str):
-    """Validate aspect ratio against current IMAGE_MODEL capability."""
-    image_model = current_app.config.get('IMAGE_MODEL', '')
-    if is_aspect_ratio_supported_for_model(image_model, aspect_ratio):
+def _validate_aspect_ratio_for_current_image_model(aspect_ratio: str, image_model: str | None = None):
+    """Validate aspect ratio against the effective image model capability."""
+    effective_image_model = image_model or current_app.config.get('IMAGE_MODEL', '')
+    if is_aspect_ratio_supported_for_model(effective_image_model, aspect_ratio):
         return
-    allowed = ", ".join(get_supported_aspect_ratios_for_model(image_model))
+    allowed = ", ".join(get_supported_aspect_ratios_for_model(effective_image_model))
     raise ValueError(
-        f"Aspect ratio '{aspect_ratio}' is not supported by image model '{image_model}'. "
+        f"Aspect ratio '{aspect_ratio}' is not supported by image model '{effective_image_model}'. "
         f"Allowed values: {allowed}"
     )
 
@@ -442,7 +450,8 @@ def create_project():
         if 'image_aspect_ratio' in data:
             try:
                 image_aspect_ratio = normalize_aspect_ratio(data['image_aspect_ratio'])
-                _validate_aspect_ratio_for_current_image_model(image_aspect_ratio)
+                effective_image_model = _get_effective_image_model_for_request(None, data.get('generation_override'))
+                _validate_aspect_ratio_for_current_image_model(image_aspect_ratio, effective_image_model)
             except ValueError as e:
                 return bad_request(str(e))
 
@@ -595,7 +604,8 @@ def update_project(project_id):
         if 'image_aspect_ratio' in data:
             try:
                 normalized_ratio = normalize_aspect_ratio(data['image_aspect_ratio'])
-                _validate_aspect_ratio_for_current_image_model(normalized_ratio)
+                effective_image_model = _get_effective_image_model_for_request(project, data.get('generation_override'))
+                _validate_aspect_ratio_for_current_image_model(normalized_ratio, effective_image_model)
                 project.image_aspect_ratio = normalized_ratio
             except ValueError as e:
                 return bad_request(str(e))
