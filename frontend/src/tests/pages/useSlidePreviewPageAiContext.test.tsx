@@ -240,4 +240,119 @@ describe('useSlidePreviewPageAiContext', () => {
       expect(result.current.editRunImageModel).toBe('azure-sweden::gpt-image-2')
     })
   })
+
+  it('does not persist the project default before the user changes the picker', async () => {
+    const project = createProject()
+
+    const { result } = renderHook(() => {
+      const [editPrompt, setEditPrompt] = useState('')
+      const [pageAiMessages, setPageAiMessages] = useState<PageAiMessage[]>([])
+      const [editRunImageModel, setEditRunImageModel] = useState('builtin-default')
+      const [selectedContextImages, setSelectedContextImages] = useState({
+        useTemplate: false,
+        descImageUrls: [] as string[],
+        uploadedReferences: [] as PageAiUploadedReference[],
+      })
+
+      useSlidePreviewPageAiContext({
+        currentProject: project,
+        selectedIndex: 0,
+        currentImageVersionId: null,
+        defaultModel: 'gs88::gpt-image-2-high',
+        editPrompt,
+        setEditPrompt,
+        pageAiMessages,
+        setPageAiMessages,
+        editRunImageModel,
+        setEditRunImageModel,
+        selectedContextImages,
+        setSelectedContextImages,
+      })
+
+      return { editRunImageModel }
+    })
+
+    await waitFor(() => {
+      expect(result.current.editRunImageModel).toBe('gs88::gpt-image-2-high')
+    })
+    expect(window.localStorage.getItem(`banana-page-ai-model-default:${project.id}`)).toBeNull()
+    expect(window.localStorage.getItem(`banana-page-ai-models:${project.id}`)).toBeNull()
+  })
+
+  it('uses the latest project-level selection on other pages even when they have older page cache', async () => {
+    const project: Project = {
+      ...createProject(),
+      pages: [
+        ...createProject().pages,
+        {
+          page_id: 'page-2',
+          id: 'page-2',
+          order_index: 1,
+          outline_content: {
+            title: '第二页',
+            page_type: '内容页',
+            points: [],
+          },
+          status: 'DRAFT',
+        },
+      ],
+    }
+    window.localStorage.setItem(
+      `banana-page-ai-models:${project.id}`,
+      JSON.stringify({
+        'page-2:__page_default__': 'old-page-cache::gpt-image-2-low',
+      }),
+    )
+
+    const { result, rerender } = renderHook(({ selectedIndex }) => {
+      const [editPrompt, setEditPrompt] = useState('')
+      const [pageAiMessages, setPageAiMessages] = useState<PageAiMessage[]>([])
+      const [editRunImageModel, setEditRunImageModel] = useState('gs88::gpt-image-2-high')
+      const [selectedContextImages, setSelectedContextImages] = useState({
+        useTemplate: false,
+        descImageUrls: [] as string[],
+        uploadedReferences: [] as PageAiUploadedReference[],
+      })
+
+      useSlidePreviewPageAiContext({
+        currentProject: project,
+        selectedIndex,
+        currentImageVersionId: null,
+        defaultModel: 'gs88::gpt-image-2-high',
+        editPrompt,
+        setEditPrompt,
+        pageAiMessages,
+        setPageAiMessages,
+        editRunImageModel,
+        setEditRunImageModel,
+        selectedContextImages,
+        setSelectedContextImages,
+      })
+
+      return { editRunImageModel, setEditRunImageModel }
+    }, {
+      initialProps: {
+        selectedIndex: 0,
+      },
+    })
+
+    await waitFor(() => {
+      expect(result.current.editRunImageModel).toBe('gs88::gpt-image-2-high')
+    })
+
+    act(() => {
+      result.current.setEditRunImageModel('latest-project-choice::gpt-image-2')
+    })
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem(`banana-page-ai-model-default:${project.id}`))
+        .toBe('latest-project-choice::gpt-image-2')
+    })
+
+    rerender({ selectedIndex: 1 })
+
+    await waitFor(() => {
+      expect(result.current.editRunImageModel).toBe('latest-project-choice::gpt-image-2')
+    })
+  })
 })

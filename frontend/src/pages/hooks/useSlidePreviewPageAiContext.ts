@@ -95,6 +95,8 @@ export const useSlidePreviewPageAiContext = ({
   const [pageAiContextByVersion, setPageAiContextByVersion] = useState<Record<string, PageAiContextState>>({});
   const lastHydratedContextKeyRef = useRef<string | null>(null);
   const lastHydratedStoredModelRef = useRef<string | null>(null);
+  const lastHydratedModelRef = useRef<string | null>(null);
+  const skipNextHydratedModelWriteRef = useRef(false);
   const justClearedContextKeyRef = useRef<string | null>(null);
   const [storedModelsByContextKey, setStoredModelsByContextKey] = useState<Record<string, string>>(() => (
     readStoredPageAiModels(currentProject?.id)
@@ -114,6 +116,8 @@ export const useSlidePreviewPageAiContext = ({
     setStoredProjectModel(readStoredPageAiModelDefault(nextProjectId));
     lastHydratedContextKeyRef.current = null;
     lastHydratedStoredModelRef.current = null;
+    lastHydratedModelRef.current = null;
+    skipNextHydratedModelWriteRef.current = false;
   }, [currentProject?.id]);
 
   useLayoutEffect(() => {
@@ -121,10 +125,14 @@ export const useSlidePreviewPageAiContext = ({
     const page = currentProject.pages[selectedIndex];
     const pageId = page?.id;
     if (!pageId) {
+      const nextModel = storedProjectModel || defaultModel;
       lastHydratedContextKeyRef.current = null;
+      lastHydratedStoredModelRef.current = storedProjectModel || null;
+      lastHydratedModelRef.current = nextModel;
+      skipNextHydratedModelWriteRef.current = true;
       setEditPrompt('');
       setPageAiMessages([]);
-      setEditRunImageModel(storedProjectModel || defaultModel);
+      setEditRunImageModel(nextModel);
       setSelectedContextImages({
         useTemplate: false,
         descImageUrls: [],
@@ -135,9 +143,9 @@ export const useSlidePreviewPageAiContext = ({
 
     const versionScopedKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
     const fallbackKey = buildPageAiContextStoreKey(pageId, null);
-    const storedModel = storedModelsByContextKey[versionScopedKey]
-      || storedModelsByContextKey[fallbackKey]
-      || storedProjectModel;
+    const storedModel = storedProjectModel
+      || storedModelsByContextKey[versionScopedKey]
+      || storedModelsByContextKey[fallbackKey];
     if (
       lastHydratedContextKeyRef.current === versionScopedKey
       && lastHydratedStoredModelRef.current === (storedModel || null)
@@ -147,11 +155,14 @@ export const useSlidePreviewPageAiContext = ({
     const cached = pageAiContextByVersion[versionScopedKey]
       || (currentImageVersionId ? undefined : pageAiContextByVersion[fallbackKey]);
     if (!cached) {
+      const nextModel = storedModel || defaultModel;
       lastHydratedContextKeyRef.current = versionScopedKey;
       lastHydratedStoredModelRef.current = storedModel || null;
+      lastHydratedModelRef.current = nextModel;
+      skipNextHydratedModelWriteRef.current = true;
       setEditPrompt('');
       setPageAiMessages([]);
-      setEditRunImageModel(storedModel || defaultModel);
+      setEditRunImageModel(nextModel);
       setSelectedContextImages({
         useTemplate: false,
         descImageUrls: [],
@@ -162,9 +173,11 @@ export const useSlidePreviewPageAiContext = ({
 
     lastHydratedContextKeyRef.current = versionScopedKey;
     lastHydratedStoredModelRef.current = storedModel || null;
+    lastHydratedModelRef.current = storedModel || cached.model || defaultModel;
+    skipNextHydratedModelWriteRef.current = true;
     setEditPrompt(cached.draftInput);
     setPageAiMessages(cached.messages);
-    setEditRunImageModel(storedModel || cached.model);
+    setEditRunImageModel(storedModel || cached.model || defaultModel);
     setSelectedContextImages({
       useTemplate: cached.contextImages.useTemplate,
       descImageUrls: [...cached.contextImages.descImageUrls],
@@ -257,17 +270,21 @@ export const useSlidePreviewPageAiContext = ({
     if (!pageId || !editRunImageModel) return;
 
     const contextKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
-    const existingStoredModel = storedModelsByContextKey[contextKey];
-    if (
-      existingStoredModel
-      && existingStoredModel !== editRunImageModel
-      && lastHydratedStoredModelRef.current !== existingStoredModel
-    ) {
-      // A persisted selection exists for this page/version, and the hydration
-      // effect has not applied it to local state yet. Skip writing the stale
-      // in-memory value back into storage.
+    if (lastHydratedContextKeyRef.current !== contextKey) {
       return;
     }
+    if (skipNextHydratedModelWriteRef.current) {
+      if (lastHydratedModelRef.current === editRunImageModel) {
+        skipNextHydratedModelWriteRef.current = false;
+      }
+      return;
+    }
+    if (lastHydratedModelRef.current === editRunImageModel) {
+      return;
+    }
+
+    lastHydratedModelRef.current = editRunImageModel;
+    lastHydratedStoredModelRef.current = editRunImageModel;
     setStoredModelsByContextKey((prev) => {
       if (prev[contextKey] === editRunImageModel) {
         return prev;
@@ -300,7 +317,7 @@ export const useSlidePreviewPageAiContext = ({
       }
       return editRunImageModel;
     });
-  }, [currentImageVersionId, currentProject, editRunImageModel, selectedIndex, storedModelsByContextKey]);
+  }, [currentImageVersionId, currentProject, editRunImageModel, selectedIndex]);
 
   const bindPendingPageAiContext = useCallback((
     pageId: string,
