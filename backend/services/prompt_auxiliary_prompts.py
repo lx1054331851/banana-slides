@@ -165,6 +165,33 @@ def _format_reference_files_xml(reference_files_content: Optional[List[Dict[str,
     xml_parts.append('')
     return '\n'.join(xml_parts)
 
+
+def _strengthen_region_replacement_instruction(edit_instruction: str) -> str:
+    """Make region text replacement explicit so image models do not only erase the old text."""
+    if not edit_instruction:
+        return edit_instruction
+
+    strengthened_lines = []
+    pattern = re.compile(r'^(区域\s*(\d+)\s*[：:]\s*(?:改为|改成|替换为|变为)\s*[：:]?\s*)(.+?)\s*$')
+    for line in edit_instruction.splitlines():
+        match = pattern.match(line.strip())
+        if not match:
+            strengthened_lines.append(line)
+            continue
+
+        prefix, region_index, target_text = match.groups()
+        if any(marker in line for marker in ("必须", "不要只删除", "不要留空")):
+            strengthened_lines.append(line)
+            continue
+
+        strengthened_lines.append(
+            f"{prefix}{target_text}"
+            f"（必须在区域{region_index}原位置写入准确文字“{target_text}”，不要留空，不要只删除旧内容。）"
+        )
+
+    return '\n'.join(strengthened_lines)
+
+
 def get_image_edit_prompt(
     edit_instruction: str,
     original_description: str = None,
@@ -178,16 +205,29 @@ def get_image_edit_prompt(
         f"主图：{primary_image_note or '原始需要优化的 PPT 页面图，请以这张图为主进行编辑。'}"
     ]
     notes = reference_image_notes or []
+    alias_lines = []
     for index in range(2, ref_count + 1):
         note = notes[index - 2] if index - 2 < len(notes) else None
         image_lines.append(
             f"素材{index - 1}：{note or '用户补充的参考图片，仅在修改要求明确提到对应素材时使用。'}"
         )
+        alias_lines.append(f"用户原文中的“图{index - 1}”指素材{index - 1}，不是主图。")
+
+    disambiguation = ""
+    if alias_lines:
+        disambiguation = (
+            "\n\n素材编号说明：\n"
+            "主图不参与“图1/图2”编号。\n"
+            f"{chr(10).join(alias_lines)}"
+        )
+
+    normalized_edit_instruction = _strengthen_region_replacement_instruction(edit_instruction.strip())
 
     prompt = (
         "请根据提供的主图和用户上传素材完成这张 PPT 页面图片编辑。\n"
-        f"{chr(10).join(image_lines)}\n\n"
-        f"修改要求：\n{edit_instruction.strip()}\n\n"
+        f"{chr(10).join(image_lines)}"
+        f"{disambiguation}\n\n"
+        f"修改要求：\n{normalized_edit_instruction}\n\n"
         "不要额外引入新的风格提示词、页面描述或模板设定。"
         "只依据这些图片和修改要求完成编辑，并尽量保持原页面主体结构与版式逻辑。"
     )

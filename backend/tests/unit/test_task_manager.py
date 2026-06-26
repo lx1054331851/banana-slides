@@ -337,7 +337,7 @@ def test_edit_page_image_task_uses_annotated_page_as_primary_image(app):
 
 def test_get_image_edit_prompt_uses_primary_and_material_labels():
     prompt = get_image_edit_prompt(
-        edit_instruction='区域1：删除',
+        edit_instruction='区域1：删除\n区域2：改为：中国纺织信息中心 X 恒田企业',
         reference_image_count=3,
         reference_image_notes=['中国纺织信息中心 logo', '恒田企业 logo'],
         primary_image_note='带有区域编号标注的完整 PPT 页面图，请以这张图为主进行编辑。',
@@ -346,6 +346,11 @@ def test_get_image_edit_prompt_uses_primary_and_material_labels():
     assert '主图：带有区域编号标注的完整 PPT 页面图' in prompt
     assert '素材1：中国纺织信息中心 logo' in prompt
     assert '素材2：恒田企业 logo' in prompt
+    assert '主图不参与“图1/图2”编号' in prompt
+    assert '用户原文中的“图1”指素材1，不是主图' in prompt
+    assert '用户原文中的“图2”指素材2，不是主图' in prompt
+    assert '必须在区域2原位置写入准确文字“中国纺织信息中心 X 恒田企业”' in prompt
+    assert '不要留空，不要只删除旧内容' in prompt
     assert '图片1：' not in prompt
 
 
