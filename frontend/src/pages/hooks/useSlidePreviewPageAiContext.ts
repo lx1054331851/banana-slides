@@ -48,6 +48,7 @@ const areUploadedReferencesEqual = (
 );
 
 const buildPageAiModelStorageKey = (projectId: string) => `banana-page-ai-models:${projectId}`;
+const buildPageAiModelDefaultStorageKey = (projectId: string) => `banana-page-ai-model-default:${projectId}`;
 
 const readStoredPageAiModels = (projectId?: string | null): Record<string, string> => {
   if (!projectId || typeof window === 'undefined') return {};
@@ -64,6 +65,17 @@ const readStoredPageAiModels = (projectId?: string | null): Record<string, strin
     }, {});
   } catch {
     return {};
+  }
+};
+
+const readStoredPageAiModelDefault = (projectId?: string | null): string | null => {
+  if (!projectId || typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(buildPageAiModelDefaultStorageKey(projectId));
+    const normalized = String(raw || '').trim();
+    return normalized || null;
+  } catch {
+    return null;
   }
 };
 
@@ -88,6 +100,9 @@ export const useSlidePreviewPageAiContext = ({
   const [storedModelsByContextKey, setStoredModelsByContextKey] = useState<Record<string, string>>(() => (
     readStoredPageAiModels(currentProject?.id)
   ));
+  const [storedProjectModel, setStoredProjectModel] = useState<string | null>(() => (
+    readStoredPageAiModelDefault(currentProject?.id)
+  ));
   const lastStoredProjectIdRef = useRef<string | null>(currentProject?.id || null);
 
   useEffect(() => {
@@ -97,6 +112,7 @@ export const useSlidePreviewPageAiContext = ({
     }
     lastStoredProjectIdRef.current = nextProjectId;
     setStoredModelsByContextKey(readStoredPageAiModels(nextProjectId));
+    setStoredProjectModel(readStoredPageAiModelDefault(nextProjectId));
     lastHydratedContextKeyRef.current = null;
     lastHydratedStoredModelRef.current = null;
   }, [currentProject?.id]);
@@ -109,7 +125,7 @@ export const useSlidePreviewPageAiContext = ({
       lastHydratedContextKeyRef.current = null;
       setEditPrompt('');
       setPageAiMessages([]);
-      setEditRunImageModel(defaultModel);
+      setEditRunImageModel(storedProjectModel || defaultModel);
       setSelectedContextImages({
         useTemplate: false,
         descImageUrls: [],
@@ -120,7 +136,9 @@ export const useSlidePreviewPageAiContext = ({
 
     const versionScopedKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
     const fallbackKey = buildPageAiContextStoreKey(pageId, null);
-    const storedModel = storedModelsByContextKey[versionScopedKey] || storedModelsByContextKey[fallbackKey];
+    const storedModel = storedModelsByContextKey[versionScopedKey]
+      || storedModelsByContextKey[fallbackKey]
+      || storedProjectModel;
     if (
       lastHydratedContextKeyRef.current === versionScopedKey
       && lastHydratedStoredModelRef.current === (storedModel || null)
@@ -162,6 +180,7 @@ export const useSlidePreviewPageAiContext = ({
     pageAiContextByVersion,
     selectedIndex,
     storedModelsByContextKey,
+    storedProjectModel,
   ]);
 
   useEffect(() => {
@@ -245,7 +264,11 @@ export const useSlidePreviewPageAiContext = ({
 
     const contextKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
     const existingStoredModel = storedModelsByContextKey[contextKey];
-    if (existingStoredModel && existingStoredModel !== editRunImageModel) {
+    if (
+      existingStoredModel
+      && existingStoredModel !== editRunImageModel
+      && lastHydratedStoredModelRef.current !== existingStoredModel
+    ) {
       // A persisted selection exists for this page/version, and the hydration
       // effect has not applied it to local state yet. Skip writing the stale
       // in-memory value back into storage.
@@ -268,6 +291,20 @@ export const useSlidePreviewPageAiContext = ({
         // Ignore storage write failures and keep in-memory selection.
       }
       return next;
+    });
+    setStoredProjectModel((prev) => {
+      if (prev === editRunImageModel) {
+        return prev;
+      }
+      try {
+        window.localStorage.setItem(
+          buildPageAiModelDefaultStorageKey(currentProject.id!),
+          editRunImageModel,
+        );
+      } catch {
+        // Keep the in-memory selection even if storage is unavailable.
+      }
+      return editRunImageModel;
     });
   }, [currentImageVersionId, currentProject, editRunImageModel, selectedIndex, storedModelsByContextKey]);
 

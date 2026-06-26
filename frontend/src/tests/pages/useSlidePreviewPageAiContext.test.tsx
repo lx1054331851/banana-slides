@@ -1,9 +1,10 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { useState } from 'react'
 
 import { useSlidePreviewPageAiContext } from '@/pages/hooks/useSlidePreviewPageAiContext'
-import type { Project } from '@/types'
+import type { PageAiMessage, Project } from '@/types'
+import type { PageAiUploadedReference } from '@/pages/SlidePreview.pageAi'
 
 const createProject = (): Project => ({
   project_id: 'project-1',
@@ -31,17 +32,21 @@ const createProject = (): Project => ({
 })
 
 describe('useSlidePreviewPageAiContext', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
   it('preserves user-selected page ai model when default model changes for the same page', () => {
     const project = createProject()
 
     const { result, rerender } = renderHook(({ defaultModel }) => {
       const [editPrompt, setEditPrompt] = useState('')
-      const [pageAiMessages, setPageAiMessages] = useState([])
+      const [pageAiMessages, setPageAiMessages] = useState<PageAiMessage[]>([])
       const [editRunImageModel, setEditRunImageModel] = useState(defaultModel)
       const [selectedContextImages, setSelectedContextImages] = useState({
         useTemplate: false,
         descImageUrls: [] as string[],
-        uploadedReferences: [],
+        uploadedReferences: [] as PageAiUploadedReference[],
       })
 
       const hookValue = useSlidePreviewPageAiContext({
@@ -86,12 +91,12 @@ describe('useSlidePreviewPageAiContext', () => {
 
     const { result, rerender } = renderHook(({ projectVersion }) => {
       const [editPrompt, setEditPrompt] = useState('')
-      const [pageAiMessages, setPageAiMessages] = useState([])
+      const [pageAiMessages, setPageAiMessages] = useState<PageAiMessage[]>([])
       const [editRunImageModel, setEditRunImageModel] = useState('gs88::gpt-image-2-high')
       const [selectedContextImages, setSelectedContextImages] = useState({
         useTemplate: false,
         descImageUrls: [] as string[],
-        uploadedReferences: [],
+        uploadedReferences: [] as PageAiUploadedReference[],
       })
 
       const currentProject = {
@@ -146,12 +151,12 @@ describe('useSlidePreviewPageAiContext', () => {
 
     const { result } = renderHook(() => {
       const [editPrompt, setEditPrompt] = useState('')
-      const [pageAiMessages, setPageAiMessages] = useState([])
+      const [pageAiMessages, setPageAiMessages] = useState<PageAiMessage[]>([])
       const [editRunImageModel, setEditRunImageModel] = useState('gs88::gpt-image-2-high')
       const [selectedContextImages, setSelectedContextImages] = useState({
         useTemplate: false,
         descImageUrls: [] as string[],
-        uploadedReferences: [],
+        uploadedReferences: [] as PageAiUploadedReference[],
       })
 
       useSlidePreviewPageAiContext({
@@ -172,6 +177,63 @@ describe('useSlidePreviewPageAiContext', () => {
       return {
         editRunImageModel,
       }
+    })
+
+    await waitFor(() => {
+      expect(result.current.editRunImageModel).toBe('azure-sweden::gpt-image-2')
+    })
+  })
+
+  it('uses the project default model first, then remembers the last changed model for the project', async () => {
+    const project = createProject()
+
+    const { result, rerender } = renderHook(({ defaultModel }) => {
+      const [editPrompt, setEditPrompt] = useState('')
+      const [pageAiMessages, setPageAiMessages] = useState<PageAiMessage[]>([])
+      const [editRunImageModel, setEditRunImageModel] = useState(defaultModel)
+      const [selectedContextImages, setSelectedContextImages] = useState({
+        useTemplate: false,
+        descImageUrls: [] as string[],
+        uploadedReferences: [] as PageAiUploadedReference[],
+      })
+
+      useSlidePreviewPageAiContext({
+        currentProject: project,
+        selectedIndex: 0,
+        currentImageVersionId: null,
+        defaultModel,
+        editPrompt,
+        setEditPrompt,
+        pageAiMessages,
+        setPageAiMessages,
+        editRunImageModel,
+        setEditRunImageModel,
+        selectedContextImages,
+        setSelectedContextImages,
+      })
+
+      return { editRunImageModel, setEditRunImageModel }
+    }, {
+      initialProps: {
+        defaultModel: 'gs88::gpt-image-2-high',
+      },
+    })
+
+    await waitFor(() => {
+      expect(result.current.editRunImageModel).toBe('gs88::gpt-image-2-high')
+    })
+
+    act(() => {
+      result.current.setEditRunImageModel('azure-sweden::gpt-image-2')
+    })
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem(`banana-page-ai-model-default:${project.id}`))
+        .toBe('azure-sweden::gpt-image-2')
+    })
+
+    rerender({
+      defaultModel: 'gs88::gpt-image-2-low',
     })
 
     await waitFor(() => {
