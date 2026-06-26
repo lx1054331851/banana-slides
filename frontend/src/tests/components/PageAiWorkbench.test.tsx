@@ -73,6 +73,30 @@ describe('PageAiWorkbench', () => {
     expect(screen.getByLabelText('model')).toBeInTheDocument()
   })
 
+  it('shows a clear context button only when references exist', () => {
+    const onClearReferences = vi.fn()
+    const { rerender } = render(
+      <PageAiWorkbench
+        {...baseProps}
+        hasReferences={false}
+        onClearReferences={onClearReferences}
+      />
+    )
+
+    expect(screen.queryByLabelText('清除选区和文字')).not.toBeInTheDocument()
+
+    rerender(
+      <PageAiWorkbench
+        {...baseProps}
+        hasReferences
+        onClearReferences={onClearReferences}
+      />
+    )
+
+    fireEvent.click(screen.getByLabelText('清除选区和文字'))
+    expect(onClearReferences).toHaveBeenCalledTimes(1)
+  })
+
   it('opens the model picker without crashing', () => {
     render(<PageAiWorkbench {...baseProps} />)
 

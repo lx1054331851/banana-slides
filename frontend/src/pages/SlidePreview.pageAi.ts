@@ -39,11 +39,6 @@ export type PageAiContextState = {
   };
 };
 
-export type PendingPageAiContextBinding = {
-  sourceVersionId: string | null;
-  context: PageAiContextState;
-};
-
 export type MaterialSelectorMode = 'pageAi' | 'pageAiInline' | 'description';
 
 export const createPageAiMessage = (

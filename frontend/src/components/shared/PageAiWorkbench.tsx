@@ -9,6 +9,7 @@ import {
   Layers3,
   Send,
   Settings2,
+  Trash2,
   Upload,
 } from 'lucide-react';
 import { cn } from '@/utils';
@@ -76,6 +77,7 @@ interface PageAiWorkbenchProps {
   pendingRegionPreviewUrl?: string | null;
   pendingRegionEscStep?: number;
   headerActions?: React.ReactNode;
+  hasReferences?: boolean;
   onInputChange: (value: string) => void;
   onModelChange: (value: string) => void;
   onSend: () => void;
@@ -89,6 +91,7 @@ interface PageAiWorkbenchProps {
   onReferenceClick: (reference: PageAiReference) => void;
   onRemoveReference: (referenceId: string) => void;
   onOpenMaterialSelector?: () => void;
+  onClearReferences?: () => void;
   onUploadFiles: (files: File[]) => void;
   onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
   cardless?: boolean;
@@ -124,6 +127,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   pendingRegionPreviewUrl,
   pendingRegionEscStep,
   headerActions,
+  hasReferences,
   onInputChange,
   onModelChange,
   onSend,
@@ -137,6 +141,7 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
   onReferenceClick,
   onRemoveReference,
   onOpenMaterialSelector,
+  onClearReferences,
   onUploadFiles,
   onPaste,
   cardless = false,
@@ -463,6 +468,18 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
                     <ImageIcon size={16} />
                   </button>
                 </div>
+              )}
+
+              {onClearReferences && hasReferences && (
+                <button
+                  type="button"
+                  onClick={onClearReferences}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 dark:border-border-primary dark:bg-background-secondary dark:text-foreground-secondary dark:hover:border-red-500/40 dark:hover:bg-red-950/20 dark:hover:text-red-300"
+                  title="清除选区和文字"
+                  aria-label="清除选区和文字"
+                >
+                  <Trash2 size={16} />
+                </button>
               )}
 
               {showModelPickerControl && modelControlPlacement === 'toolbar' && (

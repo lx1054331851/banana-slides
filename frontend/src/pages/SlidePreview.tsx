@@ -1085,7 +1085,7 @@ export const SlidePreview: React.FC = () => {
     }
     cancelPendingRegionCapture();
   }, [cancelPendingRegionCapture, clearSelectionPreview, pendingRegionCapture, pendingRegionEscStep, setIsRegionSelectionMode]);
-  const { pageAiContextByVersion, bindPendingPageAiContext } = useSlidePreviewPageAiContext({
+  const { pageAiContextByVersion, bindPendingPageAiContext, clearCurrentPageAiContext } = useSlidePreviewPageAiContext({
     currentProject,
     selectedIndex,
     currentImageVersionId,
@@ -1099,6 +1099,13 @@ export const SlidePreview: React.FC = () => {
     selectedContextImages,
     setSelectedContextImages,
   });
+
+  const handleClearPageAiContext = useCallback(() => {
+    setActivePreviewReferenceId(null);
+    clearPendingRegionCapture();
+    clearSelectionPreview();
+    clearCurrentPageAiContext();
+  }, [clearCurrentPageAiContext, clearPendingRegionCapture, clearSelectionPreview]);
 
   const hasImages = useMemo(
     () => currentProject?.pages?.some(p => p.generated_image_path || p.preview_image_path) ?? false,
@@ -3021,6 +3028,11 @@ export const SlidePreview: React.FC = () => {
                       pendingRegionCommentValue={pendingRegionComment}
                       pendingRegionPreviewUrl={pendingRegionCapture?.previewUrl || null}
                       pendingRegionEscStep={pendingRegionEscStep}
+                      hasPageAiContext={Boolean(
+                        editPrompt.trim()
+                        || selectedContextImages.descImageUrls.length > 0
+                        || selectedContextImages.uploadedReferences.length > 0
+                      )}
                       historyVersionsCount={historyVersionsDescending.length}
                       onEditorVerticalSplitResizeStart={handleEditorVerticalSplitResizeStart}
                       onLinkedSplitResizeStart={handleLinkedSplitResizeStart}
@@ -3043,6 +3055,7 @@ export const SlidePreview: React.FC = () => {
                       onToggleDescriptionImage={handleToggleDescriptionImage}
                       onReferenceClick={handlePreviewReferenceFocus}
                       onRemoveReference={handleRemovePageAiReference}
+                      onClearPageAiContext={handleClearPageAiContext}
                       onOpenMaterialSelector={projectId ? () => {
                         setMaterialSelectorMode('pageAi');
                         setIsMaterialSelectorOpen(true);

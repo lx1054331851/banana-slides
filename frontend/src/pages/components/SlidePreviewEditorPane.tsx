@@ -34,6 +34,7 @@ type SlidePreviewEditorPaneProps = {
   pendingRegionCommentValue: string;
   pendingRegionPreviewUrl: string | null;
   pendingRegionEscStep: number;
+  hasPageAiContext: boolean;
   historyVersionsCount: number;
   onEditorVerticalSplitResizeStart: (event: React.MouseEvent<HTMLElement>) => void;
   onLinkedSplitResizeStart: (event: React.MouseEvent<HTMLElement>) => void;
@@ -50,6 +51,7 @@ type SlidePreviewEditorPaneProps = {
   onToggleDescriptionImage: (...args: any[]) => void;
   onReferenceClick: (reference: PageAiReference) => void;
   onRemoveReference: (...args: any[]) => void;
+  onClearPageAiContext: () => void;
   onOpenMaterialSelector?: () => void;
   onUploadFiles: (...args: any[]) => void;
   onPageAiPaste: (e: React.ClipboardEvent<HTMLDivElement>) => void;
@@ -79,6 +81,7 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
   pendingRegionCommentValue,
   pendingRegionPreviewUrl,
   pendingRegionEscStep,
+  hasPageAiContext,
   historyVersionsCount,
   onEditorVerticalSplitResizeStart,
   onLinkedSplitResizeStart,
@@ -95,6 +98,7 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
   onToggleDescriptionImage,
   onReferenceClick,
   onRemoveReference,
+  onClearPageAiContext,
   onOpenMaterialSelector,
   onUploadFiles,
   onPageAiPaste,
@@ -183,6 +187,7 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
               pendingRegionCommentValue={pendingRegionCommentValue}
               pendingRegionPreviewUrl={pendingRegionPreviewUrl}
               pendingRegionEscStep={pendingRegionEscStep}
+              hasReferences={hasPageAiContext}
               headerActions={!useRenovationPreviewForm ? (
                 <div className="relative">
                   <Button
@@ -215,6 +220,7 @@ export const SlidePreviewEditorPane: React.FC<SlidePreviewEditorPaneProps> = ({
               onToggleDescriptionImage={onToggleDescriptionImage}
               onReferenceClick={onReferenceClick}
               onRemoveReference={onRemoveReference}
+              onClearReferences={onClearPageAiContext}
               onOpenMaterialSelector={onOpenMaterialSelector}
               onUploadFiles={onUploadFiles}
               cardless={useRenovationPreviewForm}

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import { buildPageAiContextStoreKey } from '../SlidePreview.utils';
 import type {
   PageAiContextState,
-  PendingPageAiContextBinding,
   PageAiUploadedReference,
 } from '../SlidePreview.pageAi';
 import type { PageAiMessage, Project } from '@/types';
@@ -94,9 +93,9 @@ export const useSlidePreviewPageAiContext = ({
   setSelectedContextImages,
 }: UseSlidePreviewPageAiContextParams) => {
   const [pageAiContextByVersion, setPageAiContextByVersion] = useState<Record<string, PageAiContextState>>({});
-  const pendingPageAiContextBindingRef = useRef<Record<string, PendingPageAiContextBinding>>({});
   const lastHydratedContextKeyRef = useRef<string | null>(null);
   const lastHydratedStoredModelRef = useRef<string | null>(null);
+  const justClearedContextKeyRef = useRef<string | null>(null);
   const [storedModelsByContextKey, setStoredModelsByContextKey] = useState<Record<string, string>>(() => (
     readStoredPageAiModels(currentProject?.id)
   ));
@@ -145,10 +144,8 @@ export const useSlidePreviewPageAiContext = ({
     ) {
       return;
     }
-    const pendingBoundContext = pendingPageAiContextBindingRef.current[pageId]?.context;
     const cached = pageAiContextByVersion[versionScopedKey]
-      || pendingBoundContext
-      || pageAiContextByVersion[fallbackKey];
+      || (currentImageVersionId ? undefined : pageAiContextByVersion[fallbackKey]);
     if (!cached) {
       lastHydratedContextKeyRef.current = versionScopedKey;
       lastHydratedStoredModelRef.current = storedModel || null;
@@ -187,38 +184,32 @@ export const useSlidePreviewPageAiContext = ({
     if (!currentProject) return;
     const page = currentProject.pages[selectedIndex];
     const pageId = page?.id;
-    if (!pageId || !currentImageVersionId) return;
-
-    const pendingBinding = pendingPageAiContextBindingRef.current[pageId];
-    if (!pendingBinding || pendingBinding.sourceVersionId === currentImageVersionId) {
-      return;
-    }
-
-    const versionScopedKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
-    setPageAiContextByVersion((prev) => ({
-      ...prev,
-      [versionScopedKey]: {
-        draftInput: pendingBinding.context.draftInput,
-        messages: [...pendingBinding.context.messages],
-        model: pendingBinding.context.model,
-        contextImages: {
-          useTemplate: pendingBinding.context.contextImages.useTemplate,
-          descImageUrls: [...pendingBinding.context.contextImages.descImageUrls],
-          uploadedReferences: [...pendingBinding.context.contextImages.uploadedReferences],
-        },
-      },
-    }));
-    delete pendingPageAiContextBindingRef.current[pageId];
-  }, [currentProject, currentImageVersionId, selectedIndex]);
-
-  useEffect(() => {
-    if (!currentProject) return;
-    const page = currentProject.pages[selectedIndex];
-    const pageId = page?.id;
     if (!pageId) return;
 
     const contextKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
+    if (justClearedContextKeyRef.current === contextKey) {
+      if (
+        !editPrompt
+        && pageAiMessages.length === 0
+        && selectedContextImages.descImageUrls.length === 0
+        && selectedContextImages.uploadedReferences.length === 0
+        && !selectedContextImages.useTemplate
+      ) {
+        justClearedContextKeyRef.current = null;
+      }
+      return;
+    }
     setPageAiContextByVersion((prev) => {
+      const isEmptyContext = (
+        !editPrompt
+        && pageAiMessages.length === 0
+        && selectedContextImages.descImageUrls.length === 0
+        && selectedContextImages.uploadedReferences.length === 0
+        && !selectedContextImages.useTemplate
+      );
+      if (isEmptyContext && !prev[contextKey]) {
+        return prev;
+      }
       const nextContext = {
         draftInput: editPrompt,
         messages: pageAiMessages,
@@ -313,14 +304,56 @@ export const useSlidePreviewPageAiContext = ({
     sourceVersionId: string | null,
     context: PageAiContextState,
   ) => {
-    pendingPageAiContextBindingRef.current[pageId] = {
-      sourceVersionId,
-      context,
-    };
+    const sourceKey = buildPageAiContextStoreKey(pageId, sourceVersionId);
+    setPageAiContextByVersion((prev) => ({
+      ...prev,
+      [sourceKey]: {
+        draftInput: context.draftInput,
+        messages: [...context.messages],
+        model: context.model,
+        contextImages: {
+          useTemplate: context.contextImages.useTemplate,
+          descImageUrls: [...context.contextImages.descImageUrls],
+          uploadedReferences: [...context.contextImages.uploadedReferences],
+        },
+      },
+    }));
   }, []);
+
+  const clearCurrentPageAiContext = useCallback(() => {
+    if (!currentProject) return;
+    const page = currentProject.pages[selectedIndex];
+    const pageId = page?.id;
+    if (!pageId) return;
+
+    const contextKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
+    setEditPrompt('');
+    setPageAiMessages([]);
+    setSelectedContextImages({
+      useTemplate: false,
+      descImageUrls: [],
+      uploadedReferences: [],
+    });
+    setPageAiContextByVersion((prev) => {
+      if (!prev[contextKey]) return prev;
+      const next = { ...prev };
+      delete next[contextKey];
+      return next;
+    });
+    justClearedContextKeyRef.current = contextKey;
+    lastHydratedContextKeyRef.current = contextKey;
+  }, [
+    currentImageVersionId,
+    currentProject,
+    selectedIndex,
+    setEditPrompt,
+    setPageAiMessages,
+    setSelectedContextImages,
+  ]);
 
   return {
     pageAiContextByVersion,
     bindPendingPageAiContext,
+    clearCurrentPageAiContext,
   };
 };
