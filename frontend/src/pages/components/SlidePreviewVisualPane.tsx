@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Maximize2, Minimize2, X } from 'lucide-react';
 import { cn } from '@/utils';
 import type { PageAiRegionBounds } from '@/types';
@@ -98,24 +98,16 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
   const [isPendingCommentShakeActive, setIsPendingCommentShakeActive] = useState(false);
 
   useEffect(() => {
-    setImageAspectRatio(null);
-    onImageResolutionChange?.(null);
+    if (!imageUrl) {
+      setImageAspectRatio(null);
+      onImageResolutionChange?.(null);
+    }
   }, [imageUrl, onImageResolutionChange]);
 
   useEffect(() => {
     if (!pendingRegionComposer) return;
     pendingCommentTextareaRef.current?.focus();
   }, [pendingRegionComposer]);
-
-  useLayoutEffect(() => {
-    const textarea = pendingCommentTextareaRef.current;
-    if (!textarea) return;
-
-    textarea.style.height = '0px';
-    const nextHeight = Math.min(textarea.scrollHeight, 72);
-    textarea.style.height = `${nextHeight}px`;
-    textarea.style.overflowY = textarea.scrollHeight > 72 ? 'auto' : 'hidden';
-  }, [pendingRegionComposer?.value]);
 
   useEffect(() => {
     if (pendingRegionComposer?.escStep !== 1) return;
@@ -226,7 +218,7 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
     const preferredLeft = leftPercent;
     const maxLeft = 100 - composerWidth - 2;
     const left = Math.min(Math.max(2, preferredLeft), Math.max(2, maxLeft));
-    const composerHeightPercent = 7.5;
+    const composerHeightPercent = 8.5;
     const gapPercent = 1.8;
     const canPlaceAbove = topPercent >= composerHeightPercent + gapPercent + 1;
     const top = canPlaceAbove
@@ -238,10 +230,6 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
       width: `${composerWidth}%`,
     } satisfies React.CSSProperties;
   }, [pendingRegionOverlay]);
-
-  const isPendingComposerMultiline = useMemo(() => {
-    return (pendingRegionComposer?.value.match(/\n/g)?.length || 0) >= 1;
-  }, [pendingRegionComposer?.value]);
 
   return (
     <section
@@ -347,10 +335,7 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                             )}
                             style={pendingComposerStyle}
                           >
-                            <div className={cn(
-                              'px-3 py-2',
-                              isPendingComposerMultiline ? 'flex flex-col gap-2' : 'flex items-start gap-2',
-                            )}>
+                            <div className="flex h-full items-start gap-2 px-3 py-2">
                               <textarea
                                 ref={pendingCommentTextareaRef}
                                 value={pendingRegionComposer.value}
@@ -369,12 +354,9 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                                 }}
                                 rows={1}
                                 placeholder=""
-                                className="min-h-[24px] max-h-[72px] flex-1 resize-none overflow-y-hidden bg-transparent py-0 text-[15px] leading-6 text-slate-800 outline-none placeholder:text-slate-300"
+                                className="h-14 flex-1 resize-none overflow-y-auto bg-transparent py-0 text-[15px] leading-6 text-slate-800 outline-none placeholder:text-slate-300"
                               />
-                              <div className={cn(
-                                'flex shrink-0 gap-2',
-                                isPendingComposerMultiline ? 'items-center justify-end' : 'items-start',
-                              )}>
+                              <div className="flex shrink-0 items-start gap-2">
                                 <button
                                   type="button"
                                   onClick={pendingRegionComposer.onCancel}
