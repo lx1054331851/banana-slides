@@ -1468,10 +1468,11 @@ export const SlidePreview: React.FC = () => {
   };
 
   const handleSwitchVersion = async (versionId: string) => {
-    if (!currentProject || !selectedPage?.id || !projectId) return;
+    const pageId = selectedPage?.id || selectedPage?.page_id;
+    if (!currentProject || !pageId || !projectId) return;
 
     try {
-      await setCurrentImageVersion(projectId, selectedPage.id, versionId);
+      await setCurrentImageVersion(projectId, pageId, versionId);
       await syncProject(projectId);
       show({ message: t('slidePreview.versionSwitched'), type: 'success' });
     } catch (error: any) {
@@ -1483,8 +1484,8 @@ export const SlidePreview: React.FC = () => {
   };
 
   const handleDeleteHistoryVersion = async (versionId: string) => {
-    if (!currentProject || !selectedPage?.id || !projectId) return;
-    const pageId = selectedPage.id;
+    const pageId = selectedPage?.id || selectedPage?.page_id;
+    if (!currentProject || !pageId || !projectId) return;
 
     const targetVersion = imageVersions.find((version) => version.version_id === versionId);
     if (!targetVersion || targetVersion.is_deleted) return;
@@ -1512,8 +1513,8 @@ export const SlidePreview: React.FC = () => {
   };
 
   const handleRestoreHistoryVersion = async (versionId: string) => {
-    if (!currentProject || !selectedPage?.id || !projectId) return;
-    const pageId = selectedPage.id;
+    const pageId = selectedPage?.id || selectedPage?.page_id;
+    if (!currentProject || !pageId || !projectId) return;
 
     try {
       await restorePageImageVersion(projectId, pageId, versionId);
