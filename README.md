@@ -73,6 +73,7 @@ npm run dev
 ### 2. 强大的素材解析能力
 - **多格式支持**：上传 PDF/Docx/MD/Txt 等文件，后台自动解析内容。
 - **智能提取**：自动识别文本中的关键点、图片链接和图表信息，为生成提供丰富素材。
+- **图片自动入库**：文档解析出的图片会随参考文件关联项目后自动进入项目素材库，后续可直接复用。
 - **风格参考**：支持上传参考图片或模板，定制 PPT 风格。
 
 
@@ -85,6 +86,8 @@ npm run dev
 
 ### 4. 开箱即用的格式导出
 - **多格式支持**：一键导出标准 **PPTX** 或 **PDF** 文件。
+- **播放设置**：导出 PPTX 前可开启页面切换动画，支持淡入淡出、翻页、平移、擦除、分割、百叶窗、棋盘、时钟等经典效果并可多选随机应用。
+- **导出文件管理**：预览页会列出服务器端已导出的文件，可直接下载或删除不再需要的文件。
 - **完美适配**：默认 16:9 比例，排版无需二次调整，直接演示。
 
 
@@ -134,7 +137,7 @@ npm run dev
 
 如果你使用 **Windows 或 macOS**，请先[安装 **Docker Desktop**](https://docs.docker.com/desktop/setup/install/windows-install/)，并确保 Docker 正在运行（Windows 可检查系统托盘图标；macOS 可检查菜单栏图标），然后按文档中的相同步骤操作。
 
-> **提示**：如果遇到问题，Windows 用户请在 Docker Desktop 设置中启用 **WSL 2 后端**（推荐）；同时确保端口 **3000** 和 **5000** 未被占用。
+> **提示**：如果遇到问题，Windows 用户请在 Docker Desktop 设置中启用 **WSL 2 后端**（推荐）；同时确保端口 **3011** 和 **5011** 未被占用。
 
 </details>
 
@@ -391,8 +394,8 @@ docker compose up -d
 
 3. **访问应用**
 
-- 前端：http://localhost:3000
-- 后端 API：http://localhost:5000
+- 前端：http://localhost:3011
+- 后端 API：http://localhost:5011
 
 4. **查看日志**
 
@@ -492,7 +495,7 @@ npm install
 
 3. **配置API地址**
 
-前端会自动连接到 `http://localhost:5000` 的后端服务。如需修改，请编辑 `src/api/client.ts`。
+前端会通过 Vite proxy 自动连接到 `BACKEND_PORT` 指定的后端服务（默认 `http://localhost:5011`）。如需修改，请在项目根目录的 `.env` 中设置 `BACKEND_PORT`。
 
 
 #### 启动后端服务
@@ -505,9 +508,9 @@ cd backend
 uv run alembic upgrade head && uv run python app.py
 ```
 
-后端服务将在 `http://localhost:5000` 启动。
+后端服务将在 `http://localhost:5011` 启动。
 
-访问 `http://localhost:5000/health` 验证服务是否正常运行。
+访问 `http://localhost:5011/health` 验证服务是否正常运行。
 
 #### 启动前端开发服务器
 
@@ -516,7 +519,7 @@ cd frontend
 npm run dev
 ```
 
-前端开发服务器将在 `http://localhost:3000` 启动。
+前端开发服务器将在 `http://localhost:3011` 启动。
 
 打开浏览器访问即可使用应用。
 
@@ -696,6 +699,10 @@ banana-slides/
 ## **🔧 常见问题**
 可见[官网文档](https://docs.bananaslides.online/zh/faq)
 
+也可以直接到 DeepWiki 提问
+<a href="https://deepwiki.com/Anionex/banana-slides"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+
+
 
 ## 🤝 贡献指南
 
@@ -729,17 +736,34 @@ banana-slides/
 
 
 <div align="center">
+<a href="中文链接">
+    <img src="./assets/huoshan.png" alt="火山引擎" width="150"/ >
+    <p>感谢<strong>火山引擎 </strong>赞助了本项目<br>
+      方舟 Agent Plan 限时2.5折订阅，<a href="https://www.volcengine.com/activity/ai618?utm_campaign=hw&utm_content=hw&utm_medium=devrel_tool_web&utm_source=OWO&utm_term=banana-slides">点击链接抢购</a></p>
+</a>
+</div>
+
+<!-- 注意，英文README使用这个版本： -->
+<!--
+<div align="center">
+<a href="英文链接">
+    <img src="./assets/byteplus.png" alt="BytePlus" width="150"/ >
+    <p> Thanks to Dola seed for sponsoring this project! Register via <a href="https://www.byteplus.com/en/product/modelark?utm_campaign=hw&utm_content=banana-slides&utm_medium=devrel_tool_web&utm_source=OWO&utm_term=banana-slides">this link</a> to get 500,000 tokens of free inference quota per model. </p>
+</a>
+</div>
+-->
+
+
+<div align="center">
 
  <br>
 
 <a href="https://api.chatfire.site/login?inviteCode=A15CD6A0"><img width="200" alt="image" src="https://github.com/user-attachments/assets/d6bd255f-ba2c-4ea3-bd90-fef292fc3397" />
 </a>
 
-
 感谢<a href="https://api.chatfire.site/login?inviteCode=A15CD6A0">AI火宝</a>对本项目的赞助
  
 </div>
-
 
 
 ## 致谢

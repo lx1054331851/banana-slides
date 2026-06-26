@@ -137,6 +137,10 @@ class FileService:
         preset_dir.mkdir(exist_ok=True, parents=True)
         return preset_dir
 
+    def get_materials_dir(self, project_id: str) -> Path:
+        """Get materials directory for project."""
+        return self._get_materials_dir(project_id)
+
     def _save_validated_image_upload(self, file, destination: Path) -> None:
         """
         Save an uploaded image only after Pillow confirms the file contents.

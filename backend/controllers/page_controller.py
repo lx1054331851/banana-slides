@@ -24,6 +24,7 @@ from services.task_manager import (
     generate_single_page_image_task,
     edit_page_image_task,
     get_renovation_page_sources,
+    get_image_prompt_field_names,
     save_image_with_version,
 )
 from datetime import datetime
@@ -707,6 +708,7 @@ def generate_page_image(project_id, page_id):
         
         # Get app instance for background task
         app = current_app._get_current_object()
+        image_prompt_field_names = get_image_prompt_field_names()
         
         # Submit background task
         task_manager.submit_task(
@@ -722,7 +724,8 @@ def generate_page_image(project_id, page_id):
             effective_resolution,
             app,
             combined_requirements if combined_requirements.strip() else None,
-            language
+            language,
+            image_prompt_field_names
         )
         
         # Return task_id immediately

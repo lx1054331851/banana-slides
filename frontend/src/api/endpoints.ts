@@ -16,6 +16,8 @@ import type { PageAiReferenceMeta } from '../pages/SlidePreview.pageAi';
 
 const IMAGE_OPERATION_TIMEOUT_MS = 300000; // 5 minutes
 
+export type { Material };
+
 // ===== 访问口令 API =====
 
 export const checkAccessCode = async (): Promise<ApiResponse<{ enabled: boolean }>> => {
@@ -1030,6 +1032,19 @@ export const listExports = async (
 };
 
 /**
+ * 删除项目已导出的文件
+ */
+export const deleteExport = async (
+  projectId: string,
+  filename: string,
+): Promise<ApiResponse<{ filename: string }>> => {
+  const response = await apiClient.delete(
+    `/api/projects/${projectId}/exports/${encodeURIComponent(filename)}`
+  );
+  return response.data;
+};
+
+/**
  * 导出为讲解视频（异步任务）
  * @param projectId 项目ID
  * @param options 导出选项
@@ -1699,8 +1714,8 @@ export const resetPromptTemplate = async (key: string): Promise<ApiResponse<Prom
 /**
  * OpenAI OAuth: get authorization URL
  */
-export const getOpenAIOAuthUrl = async (): Promise<ApiResponse<{ auth_url: string }>> => {
-  const response = await apiClient.get<ApiResponse<{ auth_url: string }>>('/api/settings/openai-oauth/authorize');
+export const getOpenAIOAuthUrl = async (): Promise<ApiResponse<{ auth_url: string; callback_server_available?: boolean }>> => {
+  const response = await apiClient.get<ApiResponse<{ auth_url: string; callback_server_available?: boolean }>>('/api/settings/openai-oauth/authorize');
   return response.data;
 };
 
@@ -1881,6 +1896,7 @@ export const getTestStatus = async (taskId: string): Promise<ApiResponse<{
   result?: any;
   error?: string;
   message?: string;
+  openai_oauth_disconnected?: boolean;
 }>> => {
   const response = await apiClient.get<ApiResponse<any>>(`/api/settings/tests/${taskId}/status`);
   return response.data;

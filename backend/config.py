@@ -60,6 +60,8 @@ def get_default_sqlite_db_path() -> str:
 def get_default_sqlalchemy_database_uri() -> str:
     return f'sqlite:///{get_default_sqlite_db_path()}'
 
+DEFAULT_FRONTEND_PORT = 3011
+DEFAULT_BACKEND_PORT = 5011
 
 # Flask配置
 class Config:
@@ -203,7 +205,7 @@ class Config:
     IMAGE_AUDIT_LOG_PATH = os.getenv('IMAGE_AUDIT_LOG_PATH', os.path.join(BASE_DIR, 'image_audit.log'))
     
     # CORS配置
-    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')
+    CORS_ORIGINS = os.getenv('CORS_ORIGINS', f'http://localhost:{DEFAULT_FRONTEND_PORT}').split(',')
     
     # 输出语言配置
     # 可选值: 'zh' (中文), 'ja' (日本語), 'en' (English), 'auto' (自动)

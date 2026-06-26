@@ -39,6 +39,7 @@ from services.task_manager import (
     generate_images_task,
     process_ppt_renovation_task,
     get_renovation_original_page_images,
+    get_image_prompt_field_names,
     _generation_logs_enabled,
 )
 from services.style_preview_service import (
@@ -1586,6 +1587,7 @@ def generate_images(project_id):
 
         # Get app instance for background task
         app = current_app._get_current_object()
+        image_prompt_field_names = get_image_prompt_field_names()
 
         # Submit background task
         task_manager.submit_task(
@@ -1607,6 +1609,7 @@ def generate_images(project_id):
             project.template_style_json or '',
             project.template_style or '',
             page_style_json_map,
+            image_prompt_field_names,
         )
         
         # Update project status

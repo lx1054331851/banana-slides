@@ -38,6 +38,7 @@ uploads/
 # IDE
 .vscode/
 .idea/
+.codex-run/
 *.swp
 *.swo
 *~
@@ -45,4 +46,3 @@ uploads/
 # OS
 .DS_Store
 Thumbs.db
-

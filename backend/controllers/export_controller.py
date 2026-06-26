@@ -6,6 +6,7 @@ import os
 import shutil
 import time
 import zipfile
+from pathlib import Path
 
 from flask import Blueprint, request, current_app
 from werkzeug.utils import secure_filename
@@ -23,25 +24,57 @@ logger = logging.getLogger(__name__)
 export_bp = Blueprint('export', __name__, url_prefix='/api/projects')
 
 
+def _parse_pptx_transition_effects():
+    enabled = request.args.get('transition_enabled', '').lower() in {'1', 'true', 'yes', 'on'}
+    if not enabled:
+        return [], None
+
+    effects = list(dict.fromkeys(
+        effect.strip()
+        for effect in request.args.get('transition_effects', '').split(',')
+        if effect.strip()
+    ))
+    valid_effects = [effect for effect in effects if effect in ExportService.PPTX_TRANSITION_EFFECTS]
+    if not valid_effects:
+        return [], "At least one valid transition effect is required"
+    return valid_effects, None
+
+
+def _resolve_exports_root(project_id):
+    upload_folder = Path(current_app.config['UPLOAD_FOLDER']).resolve()
+    exports_root = (upload_folder / project_id / 'exports').resolve()
+    try:
+        exports_root.relative_to(upload_folder)
+    except ValueError:
+        return None
+    return exports_root
+
+
 @export_bp.route('/<project_id>/exports', methods=['GET'])
 def list_exports(project_id):
     """List exported files for a project."""
     try:
-        project = Project.query.get(project_id)
+        project = db.session.get(Project, project_id)
         if not project:
             return not_found('Project')
 
-        exports_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], project_id, 'exports')
-        if not os.path.isdir(exports_dir):
+        exports_root = _resolve_exports_root(project_id)
+        if exports_root is None:
+            return bad_request('Invalid project ID')
+
+        if not exports_root.is_dir():
             return success_response(data={"files": []})
 
         files = []
-        for name in sorted(os.listdir(exports_dir)):
-            filepath = os.path.join(exports_dir, name)
-            if not os.path.isfile(filepath) or name.startswith('.') or name.startswith('_'):
+        for filepath in sorted(exports_root.iterdir(), key=lambda path: path.name):
+            name = filepath.name
+            if not filepath.is_file():
+                continue
+            # 跳过临时目录和隐藏文件
+            if name.startswith('.') or name.startswith('_'):
                 continue
 
-            stat = os.stat(filepath)
+            stat = filepath.stat()
             ext = os.path.splitext(name)[1].lower()
             file_type = {
                 '.mp4': 'video',
@@ -65,6 +98,40 @@ def list_exports(project_id):
         return success_response(data={"files": files})
     except Exception as e:
         logger.exception("Error listing exports for project %s", project_id)
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
+@export_bp.route('/<project_id>/exports/<filename>', methods=['DELETE'])
+def delete_export(project_id, filename):
+    """
+    DELETE /api/projects/{project_id}/exports/{filename} - 删除项目已导出的文件
+    """
+    try:
+        project = db.session.get(Project, project_id)
+        if not project:
+            return not_found('Project')
+
+        safe_filename = secure_filename(filename)
+        if not safe_filename or safe_filename != filename:
+            return bad_request('Invalid export filename')
+
+        exports_root = _resolve_exports_root(project_id)
+        if exports_root is None:
+            return bad_request('Invalid project ID')
+        file_path = (exports_root / safe_filename).resolve()
+
+        try:
+            file_path.relative_to(exports_root)
+        except ValueError:
+            return bad_request('Invalid export filename')
+
+        if not file_path.is_file():
+            return not_found('File')
+
+        file_path.unlink()
+        return success_response(data={"filename": safe_filename}, message="Export file deleted")
+
+    except Exception as e:
         return error_response('SERVER_ERROR', str(e), 500)
 
 
@@ -170,9 +237,18 @@ def export_pptx(project_id):
 
         output_path = os.path.join(exports_dir, filename)
 
+        transition_effects, transition_error = _parse_pptx_transition_effects()
+        if transition_error:
+            return bad_request(transition_error)
+
         # Generate PPTX file on disk (optional export-time compression)
         with maybe_compress_export_images(project, image_paths, allow_webp=False) as export_paths:
-            ExportService.create_pptx_from_images(export_paths, output_file=output_path, aspect_ratio=project.image_aspect_ratio)
+            ExportService.create_pptx_from_images(
+                export_paths,
+                output_file=output_path,
+                aspect_ratio=project.image_aspect_ratio,
+                transition_effects=transition_effects,
+            )
 
         # Build download URLs
         download_path = f"/files/{project_id}/exports/{filename}"

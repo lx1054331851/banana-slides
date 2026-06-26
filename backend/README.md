@@ -99,7 +99,7 @@ uv run alembic upgrade head
 cd backend
 uv run python app.py
 ```
-服务将在 `http://localhost:5000` 启动。
+服务将在 `http://localhost:5011` 启动。
 
 生成过程终端日志默认开启。可选环境变量：
 
@@ -286,13 +286,13 @@ class ExportService:
 ### 健康检查
 
 ```bash
-curl http://localhost:5000/health
+curl http://localhost:5011/health
 ```
 
 ### 创建项目
 
 ```bash
-curl -X POST http://localhost:5000/api/projects \
+curl -X POST http://localhost:5011/api/projects \
   -H "Content-Type: application/json" \
   -d '{"creation_type":"idea","idea_prompt":"生成环保主题ppt"}'
 ```
@@ -300,14 +300,14 @@ curl -X POST http://localhost:5000/api/projects \
 ### 上传模板
 
 ```bash
-curl -X POST http://localhost:5000/api/projects/{project_id}/template \
+curl -X POST http://localhost:5011/api/projects/{project_id}/template \
   -F "template_image=@template.png"
 ```
 
 ### 生成大纲
 
 ```bash
-curl -X POST http://localhost:5000/api/projects/{project_id}/generate/outline \
+curl -X POST http://localhost:5011/api/projects/{project_id}/generate/outline \
   -H "Content-Type: application/json" \
   -d '{"idea_prompt":"生成环保主题ppt"}'
 ```
@@ -348,4 +348,3 @@ OFL 许可证允许自由使用、修改和分发该字体。
 ## 联系方式
 
 如有问题或建议，请通过 GitHub Issues 反馈。
-
