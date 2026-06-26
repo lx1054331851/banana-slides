@@ -7,7 +7,7 @@ from services.ai_providers.image.openai_provider import OpenAIImageProvider
 from services.ai_providers.image.openai_provider import ImageApiRequestError
 
 
-def _provider(monkeypatch, strict_params=True):
+def _provider(monkeypatch, strict_params=True, channel=None):
     monkeypatch.setattr(
         "services.ai_providers.image.openai_provider.make_openai_client",
         lambda **_kwargs: object(),
@@ -17,6 +17,7 @@ def _provider(monkeypatch, strict_params=True):
         api_base="https://relay.example.com/v1",
         model="gpt-image-2",
         strict_params=strict_params,
+        channel=channel,
     )
 
 
@@ -70,6 +71,16 @@ def test_azure_gpt_image2_omits_response_format(monkeypatch):
     provider.azure_api_version = "2025-04-01-preview"
 
     params = provider._build_image_api_params("gpt-image-2", "16:9", "4K", True)
+
+    assert "response_format" not in params
+    assert params["size"] == "3840x2160"
+    assert params["quality"] == "high"
+
+
+def test_147ai_gpt_image2_omits_response_format(monkeypatch):
+    provider = _provider(monkeypatch, strict_params=True, channel="147ai")
+
+    params = provider._build_image_api_params("gpt-image-2-high", "16:9", "4K", True)
 
     assert "response_format" not in params
     assert params["size"] == "3840x2160"

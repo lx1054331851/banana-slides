@@ -446,6 +446,14 @@ class OpenAIImageProvider(ImageProvider):
             return self.gpt_image_size
         return self._compute_gpt_image_2_size(aspect_ratio, resolution, strict)
 
+    def _supports_image_api_response_format(self) -> bool:
+        """Some OpenAI-compatible image relays reject the standard response_format field."""
+        if self.azure_endpoint:
+            return False
+        if str(self.channel or "").strip().lower() == "147ai":
+            return False
+        return True
+
     def _build_image_api_params(self, model: str, aspect_ratio: str, resolution: str, strict: bool) -> Dict[str, Any]:
         self._validate_aspect_ratio(aspect_ratio, strict)
         resolution_upper = (resolution or "").upper()
@@ -459,7 +467,7 @@ class OpenAIImageProvider(ImageProvider):
                 "size": self._get_gpt_image_2_size(aspect_ratio, resolution_upper, strict),
                 "quality": self._get_gpt_image_2_quality(resolution_upper),
             }
-            if not self.azure_endpoint:
+            if self._supports_image_api_response_format():
                 params["response_format"] = self.response_format
             if self.gpt_image_background in {"transparent", "opaque"}:
                 params["background"] = self.gpt_image_background
