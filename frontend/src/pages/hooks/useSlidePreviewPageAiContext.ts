@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { buildPageAiContextStoreKey } from '../SlidePreview.utils';
 import type {
   PageAiContextState,
@@ -116,7 +116,7 @@ export const useSlidePreviewPageAiContext = ({
     lastHydratedStoredModelRef.current = null;
   }, [currentProject?.id]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!currentProject) return;
     const page = currentProject.pages[selectedIndex];
     const pageId = page?.id;
@@ -187,6 +187,9 @@ export const useSlidePreviewPageAiContext = ({
     if (!pageId) return;
 
     const contextKey = buildPageAiContextStoreKey(pageId, currentImageVersionId);
+    if (lastHydratedContextKeyRef.current !== contextKey) {
+      return;
+    }
     if (justClearedContextKeyRef.current === contextKey) {
       if (
         !editPrompt
