@@ -68,6 +68,45 @@ export const buildRegionInstructionLines = (
   .filter((reference) => reference.sourceType === 'region' && reference.regionComment?.trim())
   .map((reference, index) => `区域${index + 1}：${reference.regionComment?.trim()}`);
 
+const isArtifactLine = (line: string, references: PageAiUploadedReference[]): boolean => {
+  const normalized = line.trim();
+  if (!normalized) return true;
+  if (/^区域\d+[：:]/.test(normalized) || /^图片\d+[：:]/.test(normalized)) {
+    return true;
+  }
+  return references.some((reference) => {
+    const candidates = [
+      reference.label,
+      reference.file?.name,
+      reference.file?.name?.replace(/\.[^.]+$/, ''),
+    ].filter((item): item is string => Boolean(item && item.trim()));
+    return candidates.some((candidate) => candidate.trim() === normalized);
+  });
+};
+
+export const buildStructuredEditPrompt = (
+  editPrompt: string,
+  references: PageAiUploadedReference[],
+): string => {
+  const regionRefs = references.filter((reference) => reference.sourceType === 'region');
+  const regionLines = buildRegionInstructionLines(regionRefs);
+  const freeformLines = (editPrompt || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => !isArtifactLine(line, references) && !/^(图片\d+|区域\d+)[：:]/.test(line));
+
+  const sections: string[] = [];
+  if (regionLines.length > 0) {
+    sections.push(regionLines.join('\n'));
+  }
+  if (freeformLines.length > 0) {
+    sections.push(freeformLines.join('\n'));
+  }
+  return sections.join('\n\n').trim();
+};
+
 export const summarizeRegionInstructions = (
   references: PageAiUploadedReference[],
 ): RegionInstructionSummary => {

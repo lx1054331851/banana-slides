@@ -411,6 +411,7 @@ export const SlidePreview: React.FC = () => {
     imageRef,
     isRegionSelectionMode,
     setIsRegionSelectionMode,
+    isSelectingRegion,
     selectionRect,
     handleSelectionMouseDown,
     handleSelectionMouseMove,
@@ -2957,7 +2958,7 @@ export const SlidePreview: React.FC = () => {
                         onEsc: handlePendingRegionEsc,
                       } : null}
                       activePreviewReferenceId={activePreviewReferenceId}
-                      selectionRect={selectionRect}
+                      selectionRect={isSelectingRegion ? selectionRect : null}
                       imageVersions={imageVersions}
                       isUploadingPageImage={isUploadingPageImage}
                       onSelectionMouseDown={handleSelectionMouseDown}

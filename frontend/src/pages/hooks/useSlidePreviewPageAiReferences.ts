@@ -14,7 +14,11 @@ import {
   type PageAiReferenceMeta,
   type PageAiUploadedReference,
 } from '../SlidePreview.pageAi';
-import { buildReferenceMetas, buildRegionInstructionLines } from '../pageAiRegionUtils';
+import {
+  buildReferenceMetas,
+  buildRegionInstructionLines,
+  buildStructuredEditPrompt,
+} from '../pageAiRegionUtils';
 
 type PageAiContextImages = {
   useTemplate: boolean;
@@ -154,7 +158,7 @@ export const useSlidePreviewPageAiReferences = ({
         setEditPrompt((current) => removeMarkdownImageByUrl(current, target.markdownUrl!));
       }
       if (target?.sourceType === 'region') {
-        setEditPrompt(buildRegionInstructionLines(nextUploadedReferences).join('\n'));
+        setEditPrompt((current) => buildStructuredEditPrompt(current, nextUploadedReferences));
       }
       return {
         ...prev,
@@ -202,8 +206,9 @@ export const useSlidePreviewPageAiReferences = ({
     );
     const inlineImageUrls = extractImageUrlsFromDescription(editPrompt)
       .filter((url) => !uploadedMarkdownUrls.has(url));
+    const promptText = buildStructuredEditPrompt(stripMarkdownImages(editPrompt), selectedContextImages.uploadedReferences);
     return {
-      promptText: stripMarkdownImages(editPrompt),
+      promptText,
       inlineImageUrls,
       uploadedReferences: selectedContextImages.uploadedReferences,
       referenceMetas: buildReferenceMetas(selectedContextImages.uploadedReferences) as PageAiReferenceMeta[],
