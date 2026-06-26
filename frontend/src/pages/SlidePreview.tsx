@@ -1706,9 +1706,9 @@ export const SlidePreview: React.FC = () => {
       let uploadedFiles = nextContextImages.uploadedReferences
         .filter((reference) => reference.sourceType !== 'region')
         .map((reference) => reference.file);
-      if (regionReferences.length > 0 && selectedImageUrl) {
+      if (regionReferences.length > 0 && imageUrl) {
         const annotatedImage = await createAnnotatedRegionImage(
-          selectedImageUrl,
+          imageUrl,
           regionReferences.map((reference) => ({ regionBounds: reference.regionBounds! })),
         );
         uploadedFiles = [annotatedImage, ...uploadedFiles];
@@ -1770,7 +1770,7 @@ export const SlidePreview: React.FC = () => {
       show({ message: errorMessage, type: 'error' });
       throw error;
     }
-  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultGptImageBackground, projectDefaultGptImageOutputCompression, projectDefaultGptImageOutputFormat, projectDefaultGptImageQuality, projectDefaultGptImageSize, projectDefaultImageChannel, projectDefaultImageModel, projectDefaultImageProvider, projectDefaultImageResolution, providerProfiles, normalizedProjectImageSource, handleSaveOutlineAndDescription, saveAllPages, selectedImageUrl, show, t]);
+  }, [currentProject, selectedIndex, editPrompt, selectedContextImages, editPageImage, editRunImageModel, projectDefaultGptImageBackground, projectDefaultGptImageOutputCompression, projectDefaultGptImageOutputFormat, projectDefaultGptImageQuality, projectDefaultGptImageSize, projectDefaultImageChannel, projectDefaultImageModel, projectDefaultImageProvider, projectDefaultImageResolution, providerProfiles, normalizedProjectImageSource, handleSaveOutlineAndDescription, saveAllPages, imageUrl, show, t]);
 
   const handleGenerateCurrentPage = useCallback(async () => {
     const preferredPageId = selectedPageIdRef.current;
