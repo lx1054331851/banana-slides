@@ -397,6 +397,23 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                             </div>
                           </div>
                         )}
+                        {onDeleteVersion && imageVersions.some((version) => version.is_current) && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              const currentVersion = imageVersions.find((version) => version.is_current);
+                              if (currentVersion) {
+                                onDeleteVersion(currentVersion.version_id);
+                              }
+                            }}
+                            aria-label={t('preview.historyDelete')}
+                            title={t('preview.historyDelete')}
+                            className="absolute bottom-2 right-2 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-white text-red-500 shadow-[0_8px_20px_rgba(15,23,42,0.12)] transition-colors hover:bg-red-50 dark:border-red-900/60 dark:bg-background-secondary dark:hover:bg-background-hover"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </>
                     ) : (
                       <div className="flex h-full w-full flex-col items-center justify-center gap-4 rounded-2xl bg-[#f7f5ef] px-6 text-center dark:bg-background-secondary">
@@ -454,17 +471,6 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                             >
                               {version.version_number}
                             </button>
-                            {onDeleteVersion && (
-                              <button
-                                type="button"
-                                onClick={() => onDeleteVersion(version.version_id)}
-                                aria-label={t('preview.historyDelete')}
-                                title={t('preview.historyDelete')}
-                                className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-red-200 bg-white text-red-500 shadow-sm transition-colors hover:bg-red-50 dark:border-red-900/60 dark:bg-background-secondary"
-                              >
-                                <Trash2 size={11} />
-                              </button>
-                            )}
                           </div>
                         ))}
                     </div>
