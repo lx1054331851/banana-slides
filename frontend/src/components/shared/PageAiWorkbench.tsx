@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Crop,
+  Check,
   Image as ImageIcon,
   ImagePlus,
   Info,

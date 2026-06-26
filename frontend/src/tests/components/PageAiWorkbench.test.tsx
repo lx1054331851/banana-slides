@@ -73,6 +73,14 @@ describe('PageAiWorkbench', () => {
     expect(screen.getByLabelText('model')).toBeInTheDocument()
   })
 
+  it('opens the model picker without crashing', () => {
+    render(<PageAiWorkbench {...baseProps} />)
+
+    fireEvent.click(screen.getByLabelText('model'))
+
+    expect(screen.getByText('gpt-image-1')).toBeInTheDocument()
+  })
+
   it('does not submit on Enter', () => {
     const onSend = vi.fn()
     render(<PageAiWorkbench {...baseProps} onSend={onSend} />)
