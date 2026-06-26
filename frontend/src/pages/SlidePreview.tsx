@@ -395,6 +395,10 @@ export const SlidePreview: React.FC = () => {
     projectId,
     selectedPage: selectedPageForVersionFetch,
   });
+  const pageAiContextVersionKey = currentImageVersionId
+    || selectedPageForVersionFetch?.generated_image_path
+    || selectedPageForVersionFetch?.preview_image_path
+    || null;
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [selectedContextImages, setSelectedContextImages] = useState<{
     useTemplate: boolean;
@@ -1088,7 +1092,7 @@ export const SlidePreview: React.FC = () => {
   const { pageAiContextByVersion, bindPendingPageAiContext, clearCurrentPageAiContext } = useSlidePreviewPageAiContext({
     currentProject,
     selectedIndex,
-    currentImageVersionId,
+    currentImageVersionId: pageAiContextVersionKey,
     defaultModel: defaultRuntimeImageModelValue,
     editPrompt,
     setEditPrompt,
@@ -2112,7 +2116,7 @@ export const SlidePreview: React.FC = () => {
     runGenerateFlow,
     executePageImageGeneration,
     editRunImageModel,
-    currentImageVersionId,
+    currentImageVersionId: pageAiContextVersionKey,
     editPrompt,
     selectedContextImages,
     bindPendingPageAiContext,

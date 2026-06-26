@@ -14,6 +14,7 @@ export const useSlidePreviewHistoryVersions = ({
   const [imageVersions, setImageVersions] = useState<ImageVersion[]>([]);
   const [selectedHistoryVersionId, setSelectedHistoryVersionId] = useState<string | null>(null);
   const imageVersionsPageIdRef = useRef<string | null>(null);
+  const imageVersionsFetchKeyRef = useRef<string | null>(null);
 
   const currentImageVersionId = useMemo(
     () => imageVersions.find((version) => version.is_current)?.version_id || null,
@@ -41,9 +42,11 @@ export const useSlidePreviewHistoryVersions = ({
     let cancelled = false;
     const pageIdForVersionFetch = selectedPage.id;
     const pageChanged = imageVersionsPageIdRef.current !== pageIdForVersionFetch;
+    const imageChanged = imageVersionsFetchKeyRef.current !== selectedPageVersionFetchKey;
     imageVersionsPageIdRef.current = pageIdForVersionFetch;
+    imageVersionsFetchKeyRef.current = selectedPageVersionFetchKey;
 
-    if (pageChanged) {
+    if (pageChanged || imageChanged) {
       setImageVersions([]);
     }
 
