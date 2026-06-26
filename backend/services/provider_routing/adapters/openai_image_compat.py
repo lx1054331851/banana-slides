@@ -42,6 +42,8 @@ class OpenAIImageCompatAdapter(ProviderRouteAdapter):
         # 147AI exposes two different compatibility surfaces:
         # - gpt-image-2-* uses the normal OpenAI images endpoints
         # - gemini image models use chat/completions + extra_body.google.image_config
+        if channel == "147ai":
+            mapped["path_style"] = "plural"
         if channel == "147ai" and model.startswith("gemini-"):
             mapped.setdefault("endpoint_mode", "chat")
             mapped.setdefault("extra_body_mode", "google_image_config")

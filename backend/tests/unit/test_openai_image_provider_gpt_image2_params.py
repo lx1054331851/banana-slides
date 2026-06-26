@@ -87,6 +87,15 @@ def test_147ai_gpt_image2_omits_response_format(monkeypatch):
     assert params["quality"] == "high"
 
 
+def test_147ai_plural_path_skips_singular_image_endpoint(monkeypatch):
+    provider = _provider(monkeypatch, strict_params=True, channel="147ai")
+    provider.path_style = "plural"
+
+    urls = provider._build_endpoint_candidates("edits")
+
+    assert urls == ["https://relay.example.com/v1/images/edits"]
+
+
 def test_image_edits_json_fallback_uses_images_array(monkeypatch):
     provider = _provider(monkeypatch, strict_params=True)
 
