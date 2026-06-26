@@ -236,6 +236,9 @@ export const SlidePreview: React.FC = () => {
     return Boolean(pageGeneratingTasks[page.id]) || (!hasImage && (page.status === 'QUEUED' || page.status === 'GENERATING'));
   }, [pageGeneratingTasks]);
 
+  const selectedPageForImage = currentProject?.pages?.[selectedIndex] || null;
+  const imageUrl = getPageImageUrl(selectedPageForImage);
+
   const { addTask, pollTask: pollExportTask, tasks: exportTasks, restoreActiveTasks } = useExportTasksStore();
   const notifiedFailedExportTaskIds = useRef<Set<string>>(new Set());
   const activeExportTasks = useMemo(
@@ -2154,8 +2157,6 @@ export const SlidePreview: React.FC = () => {
       />
     );
   }
-
-  const imageUrl = getPageImageUrl(selectedPage);
 
   const hasAllImages = currentProject.pages.every(
     (p) => p.generated_image_path || p.preview_image_path
