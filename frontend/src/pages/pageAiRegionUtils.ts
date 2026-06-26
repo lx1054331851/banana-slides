@@ -62,6 +62,43 @@ const drawRoundedRect = (
   ctx.closePath();
 };
 
+const drawCornerMarks = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  strokeWidth: number,
+) => {
+  const markLength = Math.max(24, Math.round(Math.min(width, height) * 0.12));
+  const gap = Math.max(3, Math.round(strokeWidth * 0.6));
+  const lineWidth = Math.max(3, Math.round(strokeWidth * 0.8));
+
+  ctx.save();
+  ctx.strokeStyle = '#F59E0B';
+  ctx.lineWidth = lineWidth;
+  ctx.setLineDash([]);
+  ctx.lineCap = 'round';
+
+  const corners = [
+    [x, y, 1, 1],
+    [x + width, y, -1, 1],
+    [x, y + height, 1, -1],
+    [x + width, y + height, -1, -1],
+  ] as const;
+
+  corners.forEach(([cx, cy, dx, dy]) => {
+    ctx.beginPath();
+    ctx.moveTo(cx + dx * gap, cy);
+    ctx.lineTo(cx + dx * (markLength + gap), cy);
+    ctx.moveTo(cx, cy + dy * gap);
+    ctx.lineTo(cx, cy + dy * (markLength + gap));
+    ctx.stroke();
+  });
+
+  ctx.restore();
+};
+
 export const buildRegionInstructionLines = (
   references: PageAiUploadedReference[],
 ): string[] => references
@@ -167,11 +204,8 @@ export const createAnnotatedRegionImage = async (
     const label = `区域${index + 1}`;
 
     ctx.save();
-    ctx.strokeStyle = '#F59E0B';
-    ctx.lineWidth = baseStroke;
-    ctx.setLineDash([baseStroke * 2.5, baseStroke * 1.2]);
-    drawRoundedRect(ctx, x, y, width, height, radius);
-    ctx.stroke();
+    ctx.globalAlpha = 0.95;
+    drawCornerMarks(ctx, x, y, width, height, baseStroke);
     ctx.restore();
 
     const textWidth = ctx.measureText(label).width;

@@ -351,6 +351,7 @@ def test_get_image_edit_prompt_uses_primary_and_material_labels():
     assert '用户原文中的“图2”指素材2，不是主图' in prompt
     assert '必须在区域2原位置写入准确文字“中国纺织信息中心 X 恒田企业”' in prompt
     assert '不要留空，不要只删除旧内容' in prompt
+    assert '区域标记、编号、角标、框线都只是定位辅助' in prompt
     assert '图片1：' not in prompt
 
 

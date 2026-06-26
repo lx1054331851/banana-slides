@@ -228,6 +228,7 @@ def get_image_edit_prompt(
         f"{chr(10).join(image_lines)}"
         f"{disambiguation}\n\n"
         f"修改要求：\n{normalized_edit_instruction}\n\n"
+        "注意：主图上的区域标记、编号、角标、框线都只是定位辅助，不属于最终页面内容，必须全部去除。\n"
         "不要额外引入新的风格提示词、页面描述或模板设定。"
         "只依据这些图片和修改要求完成编辑，并尽量保持原页面主体结构与版式逻辑。"
     )
