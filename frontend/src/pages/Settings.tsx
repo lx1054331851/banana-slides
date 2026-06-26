@@ -58,6 +58,7 @@ const settingsI18n = {
         manualCallbackPlaceholder: "粘贴回调地址...",
         manualCallbackSubmit: "提交",
         manualCallbackSuccess: "连接成功",
+        callbackPortBusy: "检测到本机 1455 端口被占用，请登录后复制弹窗地址栏中的完整地址并粘贴到下方。",
       },
       theme: { label: "主题模式", light: "浅色", dark: "深色", system: "跟随系统" },
       language: { label: "界面语言", zh: "中文", en: "English" },
@@ -206,6 +207,7 @@ const settingsI18n = {
         manualCallbackPlaceholder: "Paste callback URL...",
         manualCallbackSubmit: "Submit",
         manualCallbackSuccess: "Connected successfully",
+        callbackPortBusy: "Port 1455 is already in use. After logging in, copy the full popup address-bar URL and paste it below.",
       },
       theme: { label: "Theme", light: "Light", dark: "Dark", system: "System" },
       language: { label: "Interface Language", zh: "中文", en: "English" },
@@ -645,6 +647,10 @@ export const Settings: React.FC = () => {
     try {
       const resp = await api.getOpenAIOAuthUrl();
       if (resp.success && resp.data?.auth_url) {
+        if (resp.data.callback_server_available === false) {
+          setManualCallbackOpen(true);
+          show({ message: t('settings.openaiOAuth.callbackPortBusy'), type: 'warning' });
+        }
         const popup = window.open(resp.data.auth_url, 'openai-oauth', 'width=600,height=700');
         const onMessage = async (event: MessageEvent) => {
           if (event.data?.type === 'openai-oauth-callback') {
@@ -652,13 +658,13 @@ export const Settings: React.FC = () => {
             setOauthConnecting(false);
             if (event.data.success) {
               const statusResp = await api.getOpenAIOAuthStatus();
-              if (statusResp.success && statusResp.data) {
-                setSettings(prev => prev ? {
-                  ...prev,
-                  openai_oauth_connected: statusResp.data!.connected,
-                  openai_oauth_account_id: statusResp.data!.account_id || undefined,
-                } : prev);
-              }
+      if (statusResp.success && statusResp.data) {
+        setSettings(prev => prev ? {
+          ...prev,
+          openai_oauth_connected: statusResp.data!.connected,
+          openai_oauth_account_id: statusResp.data!.account_id || null,
+        } : prev);
+      }
             } else {
               show({ message: t('settings.openaiOAuth.connectFailed'), type: 'error' });
             }
@@ -686,7 +692,7 @@ export const Settings: React.FC = () => {
         setSettings(prev => prev ? {
           ...prev,
           openai_oauth_connected: false,
-          openai_oauth_account_id: undefined,
+          openai_oauth_account_id: null,
         } : prev);
         show({ message: t('settings.openaiOAuth.disconnectSuccess'), type: 'success' });
       }
@@ -708,7 +714,7 @@ export const Settings: React.FC = () => {
           setSettings(prev => prev ? {
             ...prev,
             openai_oauth_connected: statusResp.data!.connected,
-            openai_oauth_account_id: statusResp.data!.account_id || undefined,
+            openai_oauth_account_id: statusResp.data!.account_id || null,
           } : prev);
         }
         show({ message: t('settings.openaiOAuth.manualCallbackSuccess'), type: 'success' });
@@ -898,6 +904,19 @@ export const Settings: React.FC = () => {
     }
   };
 
+  const markOpenAIOAuthDisconnected = () => {
+    setSettings(prev => {
+      if (!prev) return prev;
+      const next = {
+        ...prev,
+        openai_oauth_connected: false,
+        openai_oauth_account_id: null,
+      };
+      sessionStorage.setItem('banana-settings', JSON.stringify(next));
+      return next;
+    });
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -1063,14 +1082,21 @@ export const Settings: React.FC = () => {
       pollInterval = setInterval(async () => {
         try {
           const statusResponse = await api.getTestStatus(taskId);
-          const taskStatus = statusResponse.data.status;
+          const statusData = statusResponse?.data;
+          if (!statusData) {
+            throw new Error(t('settings.serviceTest.testFailed'));
+          }
+          const taskStatus = statusData.status;
 
           if (taskStatus === 'COMPLETED') {
-            const detail = formatDetail(statusResponse.data.result || {});
-            const message = statusResponse.data.message || t('settings.messages.testSuccess');
+            const detail = formatDetail(statusData.result || {});
+            const message = statusData.message || t('settings.messages.testSuccess');
             finish({ status: 'success', message, detail }, message, 'success');
           } else if (taskStatus === 'FAILED') {
-            const errorMessage = statusResponse.data.error || t('settings.serviceTest.testFailed');
+            const errorMessage = statusData.error || t('settings.serviceTest.testFailed');
+            if (statusData.openai_oauth_disconnected) {
+              markOpenAIOAuthDisconnected();
+            }
             finish({ status: 'error', message: errorMessage }, `${t('settings.serviceTest.testFailed')}: ${errorMessage}`, 'error');
           }
           // 如果是 PENDING 或 PROCESSING，继续轮询

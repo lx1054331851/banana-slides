@@ -1,6 +1,8 @@
 import { apiClient } from './client';
-import type { Project, Task, ApiResponse, CreateProjectRequest, Page } from '@/types';
+import type { Project, Task, ApiResponse, CreateProjectRequest, Page, Material } from '@/types';
 import type { Settings } from '../types/index';
+
+export type { Material };
 
 // ===== 访问口令 API =====
 
@@ -762,6 +764,19 @@ export const listExports = async (
 };
 
 /**
+ * 删除项目已导出的文件
+ */
+export const deleteExport = async (
+  projectId: string,
+  filename: string,
+): Promise<ApiResponse<{ filename: string }>> => {
+  const response = await apiClient.delete(
+    `/api/projects/${projectId}/exports/${encodeURIComponent(filename)}`
+  );
+  return response.data;
+};
+
+/**
  * 导出为讲解视频（异步任务）
  * @param projectId 项目ID
  * @param options 导出选项
@@ -904,23 +919,6 @@ export const processMaterialImage = async (
   );
   return response.data;
 };
-
-/**
- * 素材信息接口
- */
-export interface Material {
-  id: string;
-  project_id?: string | null;
-  filename: string;
-  url: string;
-  relative_path: string;
-  created_at: string;
-  // 可选的附加信息：用于展示友好名称
-  prompt?: string;
-  original_filename?: string;
-  source_filename?: string;
-  name?: string;
-}
 
 /**
  * 获取素材列表
@@ -1328,8 +1326,8 @@ export const resetSettings = async (): Promise<ApiResponse<Settings>> => {
 /**
  * OpenAI OAuth: get authorization URL
  */
-export const getOpenAIOAuthUrl = async (): Promise<ApiResponse<{ auth_url: string }>> => {
-  const response = await apiClient.get<ApiResponse<{ auth_url: string }>>('/api/settings/openai-oauth/authorize');
+export const getOpenAIOAuthUrl = async (): Promise<ApiResponse<{ auth_url: string; callback_server_available?: boolean }>> => {
+  const response = await apiClient.get<ApiResponse<{ auth_url: string; callback_server_available?: boolean }>>('/api/settings/openai-oauth/authorize');
   return response.data;
 };
 
@@ -1464,6 +1462,7 @@ export const getTestStatus = async (taskId: string): Promise<ApiResponse<{
   result?: any;
   error?: string;
   message?: string;
+  openai_oauth_disconnected?: boolean;
 }>> => {
   const response = await apiClient.get<ApiResponse<any>>(`/api/settings/tests/${taskId}/status`);
   return response.data;
