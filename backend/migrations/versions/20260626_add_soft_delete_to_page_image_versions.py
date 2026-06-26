@@ -25,7 +25,6 @@ def upgrade() -> None:
         'page_image_versions',
         sa.Column('deleted_at', sa.DateTime(), nullable=True),
     )
-    op.alter_column('page_image_versions', 'is_deleted', server_default=None)
 
 
 def downgrade() -> None:
