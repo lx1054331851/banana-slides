@@ -20,20 +20,17 @@ export const useSlidePreviewHistoryVersions = ({
     () => imageVersions.find((version) => version.is_current)?.version_id || null,
     [imageVersions]
   );
-  const hasSelectedPageImage = Boolean(
-    selectedPage?.generated_image_path || selectedPage?.preview_image_path
-  );
-
   const selectedPageVersionFetchKey = selectedPage?.id
     ? [
       selectedPage.id,
       selectedPage.generated_image_path || '',
       selectedPage.preview_image_path || '',
+      selectedPage.updated_at || '',
     ].join(':')
     : null;
 
   useEffect(() => {
-    if (!projectId || !selectedPage?.id || !selectedPageVersionFetchKey || !hasSelectedPageImage) {
+    if (!projectId || !selectedPage?.id || !selectedPageVersionFetchKey) {
       imageVersionsPageIdRef.current = null;
       setImageVersions([]);
       return;
@@ -72,7 +69,7 @@ export const useSlidePreviewHistoryVersions = ({
     return () => {
       cancelled = true;
     };
-  }, [hasSelectedPageImage, projectId, selectedPage?.id, selectedPageVersionFetchKey]);
+  }, [projectId, selectedPage?.id, selectedPageVersionFetchKey]);
 
   useEffect(() => {
     if (imageVersions.length === 0) {

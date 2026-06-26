@@ -684,6 +684,34 @@ export const setCurrentImageVersion = async (
   return response.data;
 };
 
+/**
+ * 删除页面图片历史版本（软删除）
+ */
+export const deletePageImageVersion = async (
+  projectId: string,
+  pageId: string,
+  versionId: string
+): Promise<ApiResponse<Page>> => {
+  const response = await apiClient.delete<ApiResponse<Page>>(
+    `/api/projects/${projectId}/pages/${pageId}/image-versions/${versionId}`
+  );
+  return response.data;
+};
+
+/**
+ * 恢复页面图片历史版本，并设为当前版本
+ */
+export const restorePageImageVersion = async (
+  projectId: string,
+  pageId: string,
+  versionId: string
+): Promise<ApiResponse<Page>> => {
+  const response = await apiClient.post<ApiResponse<Page>>(
+    `/api/projects/${projectId}/pages/${pageId}/image-versions/${versionId}/restore`
+  );
+  return response.data;
+};
+
 // ===== 页面操作 =====
 
 /**

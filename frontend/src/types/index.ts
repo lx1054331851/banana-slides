@@ -158,6 +158,8 @@ export interface ImageVersion {
   operation_type?: 'generate' | 'regenerate' | 'edit' | string;
   prompt_text?: string;
   is_current: boolean;
+  is_deleted: boolean;
+  deleted_at?: string | null;
   created_at?: string;
 }
 

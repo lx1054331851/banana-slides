@@ -19,6 +19,8 @@ class PageImageVersion(db.Model):
     operation_type = db.Column(db.String(32), nullable=True)  # generate / regenerate / edit
     prompt_text = db.Column(db.Text, nullable=True)  # 发送给图像模型的完整提示词
     is_current = db.Column(db.Boolean, nullable=False, default=False)  # 是否为当前使用的版本
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False)  # 软删除，保留历史供恢复
+    deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     
     # Relationships
@@ -42,6 +44,8 @@ class PageImageVersion(db.Model):
             'operation_type': self.operation_type,
             'prompt_text': self.prompt_text,
             'is_current': self.is_current,
+            'is_deleted': self.is_deleted,
+            'deleted_at': self.deleted_at.isoformat() + 'Z' if self.deleted_at and not self.deleted_at.tzinfo else self.deleted_at.isoformat() if self.deleted_at else None,
             'created_at': created_at_str,
         }
     

@@ -40,6 +40,30 @@ logger = logging.getLogger(__name__)
 page_bp = Blueprint('pages', __name__, url_prefix='/api/projects')
 
 
+def _resolve_page_status_without_image(page: Page) -> str:
+    return 'DESCRIPTION_GENERATED' if page.description_content else 'DRAFT'
+
+
+def _apply_page_current_image_version(page: Page, version: PageImageVersion | None) -> None:
+    """Keep page image pointers in sync with the chosen non-deleted version."""
+    PageImageVersion.query.filter_by(page_id=page.id).update({'is_current': False})
+
+    if version and not version.is_deleted:
+        version.is_current = True
+        page.generated_image_path = version.image_path
+
+        file_service = FileService(current_app.config['UPLOAD_FOLDER'])
+        cached_relative_path = file_service.get_cached_image_path(page.project_id, page.id, version.version_number)
+        page.cached_image_path = cached_relative_path if file_service.file_exists(cached_relative_path) else None
+        page.status = 'COMPLETED'
+    else:
+        page.generated_image_path = None
+        page.cached_image_path = None
+        page.status = _resolve_page_status_without_image(page)
+
+    page.updated_at = datetime.utcnow()
+
+
 def _validate_image_generation_override(generation_override):
     """Reject image generation requests that try to use UI routing without a concrete channel/source."""
     if not isinstance(generation_override, dict):
@@ -1135,27 +1159,84 @@ def set_current_image_version(project_id, page_id, version_id):
         
         if not version or version.page_id != page_id:
             return not_found('Image Version')
-        
-        # Mark all versions as not current
-        PageImageVersion.query.filter_by(page_id=page_id).update({'is_current': False})
 
-        # Set this version as current
-        version.is_current = True
-        page.generated_image_path = version.image_path
+        if version.is_deleted:
+            return bad_request('cannot set a deleted history version as current')
 
-        # 更新 cached_image_path，指向该版本的缓存图（如果存在）
-        file_service = FileService(current_app.config['UPLOAD_FOLDER'])
-        cached_relative_path = file_service.get_cached_image_path(project_id, page_id, version.version_number)
-        if file_service.file_exists(cached_relative_path):
-            page.cached_image_path = cached_relative_path
-        else:
-            # 缓存文件不存在，设置为 None，to_dict() 会回退到原图
-            page.cached_image_path = None
-
-        page.updated_at = datetime.utcnow()
+        _apply_page_current_image_version(page, version)
         
         db.session.commit()
         
+        return success_response(page.to_dict(include_versions=True))
+
+    except Exception as e:
+        db.session.rollback()
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
+@page_bp.route('/<project_id>/pages/<page_id>/image-versions/<version_id>', methods=['DELETE'])
+def delete_page_image_version(project_id, page_id, version_id):
+    """
+    DELETE /api/projects/{project_id}/pages/{page_id}/image-versions/{version_id}
+    Soft delete a specific image history version.
+    """
+    try:
+        page = Page.query.get(page_id)
+
+        if not page or page.project_id != project_id:
+            return not_found('Page')
+
+        version = PageImageVersion.query.get(version_id)
+
+        if not version or version.page_id != page_id:
+            return not_found('Image Version')
+
+        if version.is_deleted:
+            return success_response(page.to_dict(include_versions=True))
+
+        version.is_deleted = True
+        version.deleted_at = datetime.utcnow()
+
+        if version.is_current:
+            replacement = PageImageVersion.query.filter(
+                PageImageVersion.page_id == page_id,
+                PageImageVersion.id != version_id,
+                PageImageVersion.is_deleted.is_(False),
+            ).order_by(PageImageVersion.version_number.desc()).first()
+            _apply_page_current_image_version(page, replacement)
+        else:
+            page.updated_at = datetime.utcnow()
+
+        db.session.commit()
+        return success_response(page.to_dict(include_versions=True))
+
+    except Exception as e:
+        db.session.rollback()
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
+@page_bp.route('/<project_id>/pages/<page_id>/image-versions/<version_id>/restore', methods=['POST'])
+def restore_page_image_version(project_id, page_id, version_id):
+    """
+    POST /api/projects/{project_id}/pages/{page_id}/image-versions/{version_id}/restore
+    Restore a deleted history version and make it current.
+    """
+    try:
+        page = Page.query.get(page_id)
+
+        if not page or page.project_id != project_id:
+            return not_found('Page')
+
+        version = PageImageVersion.query.get(version_id)
+
+        if not version or version.page_id != page_id:
+            return not_found('Image Version')
+
+        version.is_deleted = False
+        version.deleted_at = None
+        _apply_page_current_image_version(page, version)
+
+        db.session.commit()
         return success_response(page.to_dict(include_versions=True))
 
     except Exception as e:

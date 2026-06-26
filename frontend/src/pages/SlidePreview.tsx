@@ -103,11 +103,13 @@ import { getPageImageUrl } from '@/api/client';
 import { useImagePaste } from '@/hooks/useImagePaste';
 import {
   setCurrentImageVersion,
+  deletePageImageVersion,
   getSettings,
   getProviderProfiles,
   refineDescriptions,
   addPage,
   getTaskStatus,
+  restorePageImageVersion,
   updateSettings,
 } from '@/api/endpoints';
 import type {
@@ -1480,6 +1482,51 @@ export const SlidePreview: React.FC = () => {
     }
   };
 
+  const handleDeleteHistoryVersion = async (versionId: string) => {
+    if (!currentProject || !selectedPage?.id || !projectId) return;
+    const pageId = selectedPage.id;
+
+    const targetVersion = imageVersions.find((version) => version.version_id === versionId);
+    if (!targetVersion || targetVersion.is_deleted) return;
+
+    const message = targetVersion.is_current
+      ? t('preview.historyDeleteConfirmCurrent')
+      : t('preview.historyDeleteConfirmNormal');
+
+    confirm(
+      message,
+      async () => {
+        try {
+          await deletePageImageVersion(projectId, pageId, versionId);
+          await syncProject(projectId);
+          show({ message: t('preview.historyDeleteSuccess'), type: 'success' });
+        } catch (error: any) {
+          show({
+            message: t('preview.historyDeleteFailed', { error: error.message || t('slidePreview.unknownError') }),
+            type: 'error',
+          });
+        }
+      },
+      { title: t('preview.historyDeleteConfirmTitle'), variant: 'warning' }
+    );
+  };
+
+  const handleRestoreHistoryVersion = async (versionId: string) => {
+    if (!currentProject || !selectedPage?.id || !projectId) return;
+    const pageId = selectedPage.id;
+
+    try {
+      await restorePageImageVersion(projectId, pageId, versionId);
+      await syncProject(projectId);
+      show({ message: t('preview.historyRestoreSuccess'), type: 'success' });
+    } catch (error: any) {
+      show({
+        message: t('preview.historyRestoreFailed', { error: error.message || t('slidePreview.unknownError') }),
+        type: 'error',
+      });
+    }
+  };
+
   // 从描述内容中提取图片URL
   const extractImageUrlsFromDescription = (descriptionContent: DescriptionContent | string | undefined): string[] => {
     const text = typeof descriptionContent === 'string'
@@ -2088,6 +2135,7 @@ export const SlidePreview: React.FC = () => {
   }, [clearSelectionPreview, isRegionSelectionMode, pendingRegionCapture, setIsRegionSelectionMode]);
 
   const historyVersionsDescending = [...imageVersions].sort((a, b) => b.version_number - a.version_number);
+  const activeImageVersions = imageVersions.filter((version) => !version.is_deleted);
   const selectedHistoryVersion = historyVersionsDescending.find(
     (version) => version.version_id === selectedHistoryVersionId
   ) || historyVersionsDescending[0] || null;
@@ -2986,7 +3034,7 @@ export const SlidePreview: React.FC = () => {
                       } : null}
                       activePreviewReferenceId={activePreviewReferenceId}
                       selectionRect={isSelectingRegion ? selectionRect : null}
-                      imageVersions={imageVersions}
+                      imageVersions={activeImageVersions}
                       isUploadingPageImage={isUploadingPageImage}
                       onSelectionMouseDown={handleSelectionMouseDown}
                       onSelectionMouseMove={handleSelectionMouseMove}
@@ -2994,6 +3042,7 @@ export const SlidePreview: React.FC = () => {
                       onFloatingFullscreenButtonMouseDown={handleFloatingFullscreenButtonMouseDown}
                       onFloatingFullscreenButtonClick={handleFloatingFullscreenButtonClick}
                       onSwitchVersion={(versionId) => void handleSwitchVersion(versionId)}
+                      onDeleteVersion={(versionId) => void handleDeleteHistoryVersion(versionId)}
                       onUploadPageImage={handleUploadPageImage}
                       onImageResolutionChange={setSelectedImageResolution}
                     />
@@ -3230,6 +3279,8 @@ export const SlidePreview: React.FC = () => {
         copiedHistoryVersionId={copiedHistoryVersionId}
         setSelectedHistoryVersionId={setSelectedHistoryVersionId}
         handleSwitchVersion={handleSwitchVersion}
+        handleDeleteHistoryVersion={handleDeleteHistoryVersion}
+        handleRestoreHistoryVersion={handleRestoreHistoryVersion}
         handleCopyHistoryPrompt={handleCopyHistoryPrompt}
         getHistoryOperationLabel={getHistoryOperationLabel}
         formatImageVersionTimestamp={formatImageVersionTimestamp}

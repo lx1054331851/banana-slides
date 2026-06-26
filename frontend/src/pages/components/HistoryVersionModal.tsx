@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Clock3, Copy } from 'lucide-react';
+import { Check, Clock3, Copy, RotateCcw, Trash2 } from 'lucide-react';
 import { getImageUrl } from '@/api/client';
 import { Button, Modal } from '@/components/shared';
 import type { ImageVersion } from '@/types';
@@ -14,6 +14,8 @@ type HistoryVersionModalProps = {
   t: (key: string, options?: Record<string, unknown>) => string;
   onSelectHistoryVersion: (versionId: string) => void;
   onSwitchVersion: (versionId: string) => void;
+  onDeleteHistoryVersion: (versionId: string) => void;
+  onRestoreHistoryVersion: (versionId: string) => void;
   onCopyHistoryPrompt: () => void;
   getHistoryOperationLabel: (version: ImageVersion) => string;
   formatImageVersionTimestamp: (createdAt?: string) => string;
@@ -29,6 +31,8 @@ export const HistoryVersionModal: React.FC<HistoryVersionModalProps> = ({
   t,
   onSelectHistoryVersion,
   onSwitchVersion,
+  onDeleteHistoryVersion,
+  onRestoreHistoryVersion,
   onCopyHistoryPrompt,
   getHistoryOperationLabel,
   formatImageVersionTimestamp,
@@ -79,11 +83,18 @@ export const HistoryVersionModal: React.FC<HistoryVersionModalProps> = ({
                       <div className="text-sm font-semibold text-slate-800 dark:text-foreground-primary">
                         {t('preview.version')} {version.version_number}
                       </div>
-                      {version.is_current && (
-                        <span className="rounded-full bg-banana-500 px-2 py-0.5 text-xs font-semibold text-black">
-                          {t('preview.current')}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {version.is_deleted && (
+                          <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                            {t('preview.historyDeleted')}
+                          </span>
+                        )}
+                        {version.is_current && (
+                          <span className="rounded-full bg-banana-500 px-2 py-0.5 text-xs font-semibold text-black">
+                            {t('preview.current')}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-foreground-tertiary">
                       <span className="rounded-full bg-slate-100 px-2 py-1 dark:bg-background-hover">
@@ -114,6 +125,11 @@ export const HistoryVersionModal: React.FC<HistoryVersionModalProps> = ({
                       <Clock3 size={12} />
                       {t('preview.historyCreatedAt')}：{formatImageVersionTimestamp(selectedHistoryVersion.created_at)}
                     </span>
+                    {selectedHistoryVersion.is_deleted && (
+                      <span className="rounded-full bg-red-100 px-2 py-1 font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                        {t('preview.historyDeleted')}
+                      </span>
+                    )}
                     {selectedHistoryVersion.is_current && (
                       <span className="rounded-full bg-banana-500 px-2 py-1 font-semibold text-black">
                         {t('preview.current')}
@@ -122,15 +138,42 @@ export const HistoryVersionModal: React.FC<HistoryVersionModalProps> = ({
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {!selectedHistoryVersion.is_current && (
+                  {selectedHistoryVersion.is_deleted
+                    ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          icon={<RotateCcw size={15} />}
+                          onClick={() => onRestoreHistoryVersion(selectedHistoryVersion.version_id)}
+                          className="h-9 rounded-xl"
+                        >
+                          {t('preview.historyRestore')}
+                        </Button>
+                      )
+                    : !selectedHistoryVersion.is_current
+                      ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => onSwitchVersion(selectedHistoryVersion.version_id)}
+                            className="h-9 rounded-xl"
+                          >
+                            {t('preview.historySwitchToVersion')}
+                          </Button>
+                        )
+                      : null}
+                  {!selectedHistoryVersion.is_deleted && (
                     <Button
                       type="button"
-                      variant="secondary"
+                      variant="ghost"
                       size="sm"
-                      onClick={() => onSwitchVersion(selectedHistoryVersion.version_id)}
-                      className="h-9 rounded-xl"
+                      icon={<Trash2 size={15} />}
+                      onClick={() => onDeleteHistoryVersion(selectedHistoryVersion.version_id)}
+                      className="h-9 rounded-xl border border-red-200 bg-red-50 px-3 text-red-700 hover:bg-red-100 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50"
                     >
-                      {t('preview.historySwitchToVersion')}
+                      {t('preview.historyDelete')}
                     </Button>
                   )}
                   {selectedHistoryVersion.prompt_text && (

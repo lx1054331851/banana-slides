@@ -103,6 +103,8 @@ type SlidePreviewDialogsProps = {
   copiedHistoryVersionId: string | null;
   setSelectedHistoryVersionId: (value: string) => void;
   handleSwitchVersion: (versionId: string) => Promise<void> | void;
+  handleDeleteHistoryVersion: (versionId: string) => Promise<void> | void;
+  handleRestoreHistoryVersion: (versionId: string) => Promise<void> | void;
   handleCopyHistoryPrompt: (...args: any[]) => Promise<void> | void;
   getHistoryOperationLabel: (...args: any[]) => string;
   formatImageVersionTimestamp: (...args: any[]) => string;
@@ -220,6 +222,8 @@ export const SlidePreviewDialogs: React.FC<SlidePreviewDialogsProps> = ({
   copiedHistoryVersionId,
   setSelectedHistoryVersionId,
   handleSwitchVersion,
+  handleDeleteHistoryVersion,
+  handleRestoreHistoryVersion,
   handleCopyHistoryPrompt,
   getHistoryOperationLabel,
   formatImageVersionTimestamp,
@@ -359,6 +363,8 @@ export const SlidePreviewDialogs: React.FC<SlidePreviewDialogsProps> = ({
         t={t}
         onSelectHistoryVersion={setSelectedHistoryVersionId}
         onSwitchVersion={(versionId) => void handleSwitchVersion(versionId)}
+        onDeleteHistoryVersion={(versionId) => void handleDeleteHistoryVersion(versionId)}
+        onRestoreHistoryVersion={(versionId) => void handleRestoreHistoryVersion(versionId)}
         onCopyHistoryPrompt={() => void handleCopyHistoryPrompt()}
         getHistoryOperationLabel={getHistoryOperationLabel}
         formatImageVersionTimestamp={formatImageVersionTimestamp}

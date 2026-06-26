@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Maximize2, Minimize2, X } from 'lucide-react';
+import { Check, Maximize2, Minimize2, Trash2, X } from 'lucide-react';
 import { cn } from '@/utils';
 import type { PageAiRegionBounds } from '@/types';
 
@@ -7,6 +7,7 @@ type ImageVersionItem = {
   version_id: string;
   version_number: number;
   is_current: boolean;
+  is_deleted: boolean;
 };
 
 type SelectionRect = {
@@ -59,6 +60,7 @@ type SlidePreviewVisualPaneProps = {
   onFloatingFullscreenButtonMouseDown: React.MouseEventHandler<HTMLButtonElement>;
   onFloatingFullscreenButtonClick: React.MouseEventHandler<HTMLButtonElement>;
   onSwitchVersion: (versionId: string) => void;
+  onDeleteVersion?: (versionId: string) => void;
   onUploadPageImage?: (file: File) => void | Promise<void>;
   onImageResolutionChange?: (size: { width: number; height: number } | null) => void;
 };
@@ -87,6 +89,7 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
   onFloatingFullscreenButtonMouseDown,
   onFloatingFullscreenButtonClick,
   onSwitchVersion,
+  onDeleteVersion,
   onUploadPageImage,
   onImageResolutionChange,
 }) => {
@@ -424,7 +427,7 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                     )}
                   </div>
                 </div>
-                {selectedPageHasImage && imageVersions.length > 1 && !isFullscreen && (
+                {selectedPageHasImage && imageVersions.length > 0 && !isFullscreen && (
                   <div className="flex w-full flex-col items-center gap-2 px-2 pb-1">
                     <div className="text-xs font-medium tracking-[0.18em] text-[#9f8b5b] dark:text-foreground-tertiary">
                       {t('preview.historyVersions')} ({imageVersions.length})
@@ -432,22 +435,37 @@ export const SlidePreviewVisualPane: React.FC<SlidePreviewVisualPaneProps> = ({
                     <div className="flex flex-wrap items-center justify-center gap-2">
                       {[...imageVersions]
                         .sort((a, b) => a.version_number - b.version_number)
-                        .map((version, index) => (
-                          <button
+                        .map((version) => (
+                          <div
                             key={version.version_id}
-                            type="button"
-                            onClick={() => onSwitchVersion(version.version_id)}
-                            aria-pressed={version.is_current}
-                            aria-label={`${t('preview.version')} ${index + 1}${version.is_current ? `，${t('preview.current')}` : ''}`}
-                            title={`${t('preview.version')} ${index + 1}${version.is_current ? ` (${t('preview.current')})` : ''}`}
-                            className={`inline-flex h-10 w-10 items-center justify-center rounded-full border text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 ${
-                              version.is_current
-                                ? 'border-banana-500 bg-banana-500 text-white shadow-[0_10px_24px_rgba(245,181,0,0.28)]'
-                                : 'border-[#d8caa6] bg-white text-[#6f5f3d] hover:border-banana-400 hover:text-banana-600 dark:border-border-primary dark:bg-background-primary dark:text-foreground-primary'
-                              }`}
+                            className="relative"
                           >
-                            {index + 1}
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => onSwitchVersion(version.version_id)}
+                              aria-pressed={version.is_current}
+                              aria-label={`${t('preview.version')} ${version.version_number}${version.is_current ? `，${t('preview.current')}` : ''}`}
+                              title={`${t('preview.version')} ${version.version_number}${version.is_current ? ` (${t('preview.current')})` : ''}`}
+                              className={`inline-flex h-10 w-10 items-center justify-center rounded-full border text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-banana-300 ${
+                                version.is_current
+                                  ? 'border-banana-500 bg-banana-500 text-white shadow-[0_10px_24px_rgba(245,181,0,0.28)]'
+                                  : 'border-[#d8caa6] bg-white text-[#6f5f3d] hover:border-banana-400 hover:text-banana-600 dark:border-border-primary dark:bg-background-primary dark:text-foreground-primary'
+                              }`}
+                            >
+                              {version.version_number}
+                            </button>
+                            {onDeleteVersion && (
+                              <button
+                                type="button"
+                                onClick={() => onDeleteVersion(version.version_id)}
+                                aria-label={t('preview.historyDelete')}
+                                title={t('preview.historyDelete')}
+                                className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-red-200 bg-white text-red-500 shadow-sm transition-colors hover:bg-red-50 dark:border-red-900/60 dark:bg-background-secondary"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            )}
+                          </div>
                         ))}
                     </div>
                   </div>
