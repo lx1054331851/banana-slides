@@ -21,7 +21,7 @@ export type PendingRegionCapture = {
 
 export type PageAiReferenceMeta = {
   clientId: string;
-  sourceType: PageAiUploadedReference['sourceType'];
+  sourceType: PageAiUploadedReference['sourceType'] | 'annotated-page';
   label: string;
   regionBounds?: PageAiRegionBounds;
   regionComment?: string;

@@ -1705,7 +1705,8 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                          use_template: bool = False,
                          extra_requirements: Optional[str] = None,
                          language: str = 'zh',
-                         reference_metas: Optional[List[Dict[str, Any]]] = None):
+                         reference_metas: Optional[List[Dict[str, Any]]] = None,
+                         annotated_primary_image_path: Optional[str] = None):
     """
     Background task for editing a page image
     
@@ -1743,29 +1744,27 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
             operation_type = 'edit'
 
             try:
-                current_image_path = file_service.get_absolute_path(current_image_rel_path)
+                current_image_path = annotated_primary_image_path or file_service.get_absolute_path(current_image_rel_path)
                 merged_edit_refs: List[str] = []
                 if additional_ref_images:
                     merged_edit_refs.extend(additional_ref_images)
-                region_meta_count = sum(
-                    1 for meta in (reference_metas or [])
-                    if isinstance(meta, dict) and meta.get('sourceType') == 'region'
+                has_annotated_primary = bool(annotated_primary_image_path)
+                upload_reference_metas = [
+                    meta for meta in (reference_metas or [])
+                    if isinstance(meta, dict) and meta.get('sourceType') in ('upload', 'material')
+                ]
+                primary_image_note = (
+                    "带有区域编号标注的完整 PPT 页面图，请以这张图为主进行编辑，并严格按照图中的“区域1/区域2/...”定位修改位置。"
+                    if has_annotated_primary
+                    else None
                 )
                 reference_image_notes: List[str] = []
                 if merged_edit_refs:
-                    if region_meta_count > 0:
-                        reference_image_notes.append(
-                            "这是在原始页面图上叠加了区域编号标注的参考图，请严格按照图中的“区域1/区域2/...”定位修改位置。"
-                        )
-                    remaining_meta = [
-                        meta for meta in (reference_metas or [])
-                        if isinstance(meta, dict) and meta.get('sourceType') != 'region'
-                    ]
-                    for idx, _ in enumerate(merged_edit_refs[1:] if region_meta_count > 0 else merged_edit_refs):
-                        meta = remaining_meta[idx] if idx < len(remaining_meta) else None
+                    for idx, _ in enumerate(merged_edit_refs):
+                        meta = upload_reference_metas[idx] if idx < len(upload_reference_metas) else None
                         label = str((meta or {}).get('label') or '').strip()
                         reference_image_notes.append(
-                            f"这是用户补充的插图或参考素材{f'（{label}）' if label else ''}，仅在修改要求明确提到对应图片时使用。"
+                            f"用户上传素材{f'（{label}）' if label else ''}，仅在修改要求明确提到对应素材时使用。"
                         )
                 effective_edit_instruction = edit_instruction_text or (
                     "Please update the current PPT page image using the attached references."
@@ -1778,6 +1777,7 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                     edit_instruction=effective_edit_instruction,
                     reference_image_count=1 + len(merged_edit_refs),
                     reference_image_notes=reference_image_notes,
+                    primary_image_note=primary_image_note,
                 )
                 route_meta = _get_image_route_metadata(ai_service)
                 _log_image_audit_event(

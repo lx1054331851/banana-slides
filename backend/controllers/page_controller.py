@@ -903,6 +903,7 @@ def edit_page_image(project_id, page_id):
         
         # 3. Save and add uploaded files to a persistent location
         temp_dir = None
+        annotated_primary_image_path = None
         if uploaded_files:
             # Create a temporary directory in the project's upload folder
             import tempfile
@@ -910,12 +911,20 @@ def edit_page_image(project_id, page_id):
             from werkzeug.utils import secure_filename
             temp_dir = Path(tempfile.mkdtemp(dir=current_app.config['UPLOAD_FOLDER']))
             try:
-                for uploaded_file in uploaded_files:
+                for upload_index, uploaded_file in enumerate(uploaded_files):
                     if uploaded_file.filename:
                         # Save to temp directory
                         temp_path = temp_dir / secure_filename(uploaded_file.filename)
                         uploaded_file.save(str(temp_path))
-                        additional_ref_images.append(str(temp_path))
+                        upload_meta = reference_metas[upload_index] if upload_index < len(reference_metas) else {}
+                        is_annotated_primary = (
+                            isinstance(upload_meta, dict)
+                            and upload_meta.get('sourceType') == 'annotated-page'
+                        ) or secure_filename(uploaded_file.filename).startswith('page-ai-annotated-')
+                        if is_annotated_primary:
+                            annotated_primary_image_path = str(temp_path)
+                        else:
+                            additional_ref_images.append(str(temp_path))
             except Exception as e:
                 # Clean up temp directory on error
                 if temp_dir and temp_dir.exists():
@@ -1018,6 +1027,7 @@ def edit_page_image(project_id, page_id):
             extra_requirements=combined_requirements if combined_requirements.strip() else None,
             language=language,
             reference_metas=reference_metas,
+            annotated_primary_image_path=annotated_primary_image_path,
         )
         
         # Return task_id immediately

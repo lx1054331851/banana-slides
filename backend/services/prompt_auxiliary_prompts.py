@@ -170,21 +170,22 @@ def get_image_edit_prompt(
     original_description: str = None,
     reference_image_count: int = 1,
     reference_image_notes: list[str] | None = None,
+    primary_image_note: str | None = None,
 ) -> str:
     """生成图片编辑 prompt"""
     ref_count = max(1, int(reference_image_count or 1))
     image_lines = [
-        "图片1：原始需要优化的 PPT 页面图，请以这张图为主进行编辑。"
+        f"主图：{primary_image_note or '原始需要优化的 PPT 页面图，请以这张图为主进行编辑。'}"
     ]
     notes = reference_image_notes or []
     for index in range(2, ref_count + 1):
         note = notes[index - 2] if index - 2 < len(notes) else None
         image_lines.append(
-            f"图片{index}：{note or '用户补充的参考图片，请结合它理解具体修改区域、插图素材或修改方式。'}"
+            f"素材{index - 1}：{note or '用户补充的参考图片，仅在修改要求明确提到对应素材时使用。'}"
         )
 
     prompt = (
-        "请根据提供的图片顺序完成这张 PPT 页面图片编辑。\n"
+        "请根据提供的主图和用户上传素材完成这张 PPT 页面图片编辑。\n"
         f"{chr(10).join(image_lines)}\n\n"
         f"修改要求：\n{edit_instruction.strip()}\n\n"
         "不要额外引入新的风格提示词、页面描述或模板设定。"

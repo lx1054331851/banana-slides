@@ -16,6 +16,7 @@ from services.task_manager import (
     generate_single_page_image_task,
     get_renovation_page_sources,
 )
+from services.prompt_auxiliary_prompts import get_image_edit_prompt
 
 
 def test_get_existing_page_image_path_prefers_generated_image():
@@ -274,6 +275,78 @@ def test_edit_page_image_task_prefers_image_edit_mode_for_reference_only_updates
         assert page.status == 'COMPLETED'
         assert page.generated_image_path.endswith('.png')
         assert page.cached_image_path.endswith('.jpg')
+
+
+def test_edit_page_image_task_uses_annotated_page_as_primary_image(app):
+    with app.app_context():
+        project = Project(creation_type='idea', status='DRAFT')
+        db.session.add(project)
+        db.session.flush()
+
+        page = Page(project_id=project.id, order_index=0, status='DRAFT')
+        page.set_outline_content({'title': '首页'})
+        page.generated_image_path = 'uploads/project/page.png'
+        db.session.add(page)
+
+        task = Task(project_id=project.id, task_type='EDIT_PAGE_IMAGE', status='PENDING')
+        db.session.add(task)
+        db.session.commit()
+
+        task_id = task.id
+        page_id = page.id
+        project_id = project.id
+
+    ai_service = MagicMock()
+    ai_service.generate_image.return_value = Image.new('RGB', (1920, 1080), color='blue')
+
+    file_service = MagicMock()
+    file_service.upload_folder = app.config['UPLOAD_FOLDER']
+    file_service.get_template_path.return_value = None
+    file_service.get_absolute_path.return_value = 'D:/tmp/current-page.png'
+    file_service.save_generated_image.side_effect = (
+        lambda image, project_id, page_id, version_number, image_format='PNG':
+        f'{project_id}/pages/{page_id}_v{version_number}.png'
+    )
+    file_service.save_cached_image.side_effect = (
+        lambda image, project_id, page_id, version_number, quality=85:
+        f'{project_id}/pages/{page_id}_v{version_number}.jpg'
+    )
+
+    edit_page_image_task(
+        task_id=task_id,
+        project_id=project_id,
+        page_id=page_id,
+        edit_instruction='区域1：删除',
+        ai_service=ai_service,
+        file_service=file_service,
+        additional_ref_images=['/tmp/logo.png'],
+        app=app,
+        reference_metas=[
+            {'sourceType': 'annotated-page', 'label': '带区域标注的完整 PPT 页面图'},
+            {'sourceType': 'upload', 'label': '中国纺织信息中心 logo'},
+        ],
+        annotated_primary_image_path='/tmp/page-ai-annotated.png',
+    )
+
+    generate_args, generate_kwargs = ai_service.generate_image.call_args
+    assert generate_args[1] == '/tmp/page-ai-annotated.png'
+    assert generate_kwargs['additional_ref_images'] == ['/tmp/logo.png']
+    assert '主图：带有区域编号标注的完整 PPT 页面图' in generate_args[0]
+    assert '素材1：用户上传素材（中国纺织信息中心 logo）' in generate_args[0]
+
+
+def test_get_image_edit_prompt_uses_primary_and_material_labels():
+    prompt = get_image_edit_prompt(
+        edit_instruction='区域1：删除',
+        reference_image_count=3,
+        reference_image_notes=['中国纺织信息中心 logo', '恒田企业 logo'],
+        primary_image_note='带有区域编号标注的完整 PPT 页面图，请以这张图为主进行编辑。',
+    )
+
+    assert '主图：带有区域编号标注的完整 PPT 页面图' in prompt
+    assert '素材1：中国纺织信息中心 logo' in prompt
+    assert '素材2：恒田企业 logo' in prompt
+    assert '图片1：' not in prompt
 
 
 def test_build_image_request_snapshot_omits_page_context_for_edit_operation():

@@ -127,7 +127,7 @@ export const buildReferenceMetas = (
   regionComment: reference.regionComment,
   regionIndex: reference.sourceType === 'region'
     ? references
-      .filter((item, itemIndex) => itemIndex <= index)
+      .filter((_, itemIndex) => itemIndex <= index)
       .filter((item) => item.sourceType === 'region')
       .length
     : undefined,

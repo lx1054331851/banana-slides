@@ -40,6 +40,7 @@ import {
   createUploadedReference,
 } from './SlidePreview.pageAi';
 import {
+  buildReferenceMetas,
   buildRegionInstructionLines,
   createAnnotatedRegionImage,
 } from './pageAiRegionUtils';
@@ -1689,9 +1690,9 @@ export const SlidePreview: React.FC = () => {
   const executePageImageGeneration = useCallback(async (options?: {
     prompt?: string;
     contextImages?: {
-      useTemplate: boolean;
-      descImageUrls: string[];
-      uploadedReferences: PageAiUploadedReference[];
+      useTemplate?: boolean;
+      descImageUrls?: string[];
+      uploadedReferences?: PageAiUploadedReference[];
       referenceMetas?: import('./SlidePreview.pageAi').PageAiReferenceMeta[];
     };
     model?: string;
@@ -1704,17 +1705,32 @@ export const SlidePreview: React.FC = () => {
       handleSaveOutlineAndDescription();
       await saveAllPages();
       const nextPrompt = options?.prompt ?? editPrompt;
-      const nextContextImages = options?.contextImages ?? selectedContextImages;
+      const nextContextImages = {
+        useTemplate: options?.contextImages?.useTemplate ?? selectedContextImages.useTemplate,
+        descImageUrls: options?.contextImages?.descImageUrls ?? selectedContextImages.descImageUrls,
+        uploadedReferences: options?.contextImages?.uploadedReferences ?? selectedContextImages.uploadedReferences,
+      };
       const regionReferences = nextContextImages.uploadedReferences.filter((reference) => reference.sourceType === 'region');
-      let uploadedFiles = nextContextImages.uploadedReferences
-        .filter((reference) => reference.sourceType !== 'region')
-        .map((reference) => reference.file);
+      const assetReferences = nextContextImages.uploadedReferences.filter((reference) => reference.sourceType !== 'region');
+      let uploadedFiles = assetReferences.map((reference) => reference.file);
+      const baseReferenceMetas = options?.contextImages?.referenceMetas
+        || buildReferenceMetas(nextContextImages.uploadedReferences);
+      let requestReferenceMetas = baseReferenceMetas
+        .filter((meta) => meta.sourceType !== 'region');
       if (regionReferences.length > 0 && imageUrl) {
         const annotatedImage = await createAnnotatedRegionImage(
           imageUrl,
           regionReferences.map((reference) => ({ regionBounds: reference.regionBounds! })),
         );
         uploadedFiles = [annotatedImage, ...uploadedFiles];
+        requestReferenceMetas = [
+          {
+            clientId: 'annotated-page',
+            sourceType: 'annotated-page',
+            label: '带区域标注的完整 PPT 页面图',
+          },
+          ...requestReferenceMetas,
+        ];
       }
       const nextSelection = parseRuntimeImageModelValue(options?.model ?? editRunImageModel);
       const normalizedEditModel = normalizeProjectDefaultImageModel(nextSelection.model || projectDefaultImageModel);
@@ -1760,7 +1776,7 @@ export const SlidePreview: React.FC = () => {
           uploadedFiles: uploadedFiles.length > 0
             ? uploadedFiles
             : undefined,
-          referenceMetas: options?.contextImages?.referenceMetas,
+          referenceMetas: requestReferenceMetas,
         },
         editGenerationOverride
       );
