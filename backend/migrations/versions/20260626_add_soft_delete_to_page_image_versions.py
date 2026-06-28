@@ -7,6 +7,7 @@ Create Date: 2026-06-26 17:30:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
@@ -17,14 +18,23 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'page_image_versions',
-        sa.Column('is_deleted', sa.Boolean(), nullable=False, server_default=sa.false()),
-    )
-    op.add_column(
-        'page_image_versions',
-        sa.Column('deleted_at', sa.DateTime(), nullable=True),
-    )
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    existing_columns = {
+        column["name"] for column in inspector.get_columns("page_image_versions")
+    }
+
+    if "is_deleted" not in existing_columns:
+        op.add_column(
+            'page_image_versions',
+            sa.Column('is_deleted', sa.Boolean(), nullable=False, server_default=sa.false()),
+        )
+
+    if "deleted_at" not in existing_columns:
+        op.add_column(
+            'page_image_versions',
+            sa.Column('deleted_at', sa.DateTime(), nullable=True),
+        )
 
 
 def downgrade() -> None:
