@@ -9,6 +9,8 @@ This module centralizes that decision to avoid duplicating logic across provider
 
 from __future__ import annotations
 
+import os
+from contextlib import contextmanager
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -101,6 +103,61 @@ def _normalize_openai_base_url(api_base: Optional[str]) -> Optional[str]:
     return api_base.rstrip("/")
 
 
+def _sanitize_no_proxy_value(value: Optional[str]) -> Optional[str]:
+    """
+    Normalize NO_PROXY entries so bare IPv6 literals do not confuse httpx.
+
+    httpx expects IPv6 hosts to be wrapped in brackets. A common local setup uses
+    `NO_PROXY=127.0.0.1,localhost,::1,::1/128`, which otherwise raises
+    `InvalidURL: Invalid port ':1'` during client initialization.
+    """
+    if value is None:
+        return None
+
+    sanitized_entries: list[str] = []
+    for raw_entry in value.split(","):
+        entry = raw_entry.strip()
+        if not entry:
+            continue
+
+        host, sep, suffix = entry.partition("/")
+        if host.count(":") >= 2 and not host.startswith("["):
+            entry = f"[{host}]"
+            if sep:
+                entry = f"{entry}/{suffix}"
+
+        sanitized_entries.append(entry)
+
+    return ",".join(sanitized_entries)
+
+
+@contextmanager
+def _sanitized_proxy_env():
+    """
+    Temporarily sanitize proxy bypass environment variables for SDK startup.
+    """
+    original_values = {}
+    changed_keys = []
+
+    for key in ("NO_PROXY", "no_proxy"):
+        original = os.environ.get(key)
+        original_values[key] = original
+        sanitized = _sanitize_no_proxy_value(original)
+        if sanitized is not None and sanitized != original:
+            os.environ[key] = sanitized
+            changed_keys.append(key)
+
+    try:
+        yield
+    finally:
+        for key in changed_keys:
+            original = original_values[key]
+            if original is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = original
+
+
 def make_openai_client(
     *,
     api_key: str,
@@ -121,17 +178,19 @@ def make_openai_client(
     azure_endpoint = _normalize_azure_endpoint(azure_endpoint) or _infer_azure_endpoint(api_base)
 
     if azure_endpoint:
-        return AzureOpenAI(
+        with _sanitized_proxy_env():
+            return AzureOpenAI(
+                api_key=api_key,
+                azure_endpoint=azure_endpoint,
+                api_version=azure_api_version,
+                timeout=timeout,
+                max_retries=max_retries,
+            )
+
+    with _sanitized_proxy_env():
+        return OpenAI(
             api_key=api_key,
-            azure_endpoint=azure_endpoint,
-            api_version=azure_api_version,
+            base_url=_normalize_openai_base_url(api_base),
             timeout=timeout,
             max_retries=max_retries,
         )
-
-    return OpenAI(
-        api_key=api_key,
-        base_url=_normalize_openai_base_url(api_base),
-        timeout=timeout,
-        max_retries=max_retries,
-    )
