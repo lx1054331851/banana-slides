@@ -105,10 +105,10 @@ def _normalize_openai_base_url(api_base: Optional[str]) -> Optional[str]:
 
 def _sanitize_no_proxy_value(value: Optional[str]) -> Optional[str]:
     """
-    Normalize NO_PROXY entries so bare IPv6 literals do not confuse httpx.
+    Normalize NO_PROXY entries so IPv6 literals do not confuse httpx.
 
-    httpx expects IPv6 hosts to be wrapped in brackets. A common local setup uses
-    `NO_PROXY=127.0.0.1,localhost,::1,::1/128`, which otherwise raises
+    Current httpx URL pattern parsing rejects common IPv6 loopback entries such as
+    `::1` and `::1/128`, which otherwise raises
     `InvalidURL: Invalid port ':1'` during client initialization.
     """
     if value is None:
@@ -120,11 +120,9 @@ def _sanitize_no_proxy_value(value: Optional[str]) -> Optional[str]:
         if not entry:
             continue
 
-        host, sep, suffix = entry.partition("/")
-        if host.count(":") >= 2 and not host.startswith("["):
-            entry = f"[{host}]"
-            if sep:
-                entry = f"{entry}/{suffix}"
+        host, _, _ = entry.partition("/")
+        if host.count(":") >= 2:
+            continue
 
         sanitized_entries.append(entry)
 
