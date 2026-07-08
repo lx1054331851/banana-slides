@@ -294,6 +294,49 @@ def test_profile_model_capability_normalizes_variant_metadata(monkeypatch):
     assert route.metadata["model_capability"]["locked_params"]["gpt_image_quality"] == "high"
 
 
+def test_profile_openai_images_request_mode_overrides_gemini_provider(monkeypatch):
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("PROVIDER_ROUTING_STRICT", "true")
+    monkeypatch.setenv("IMAGE_API_KEY", "profile-image-key")
+    monkeypatch.setenv(
+        "PROVIDER_PROFILES_JSON",
+        json.dumps(
+            [
+                {
+                    "id": "147ai",
+                    "channel": "147ai",
+                    "provider": "gemini",
+                    "api_base": "https://nn.147ai.com",
+                    "api_key_env": "IMAGE_API_KEY",
+                    "adapter": "native",
+                    "capabilities": ["image"],
+                    "models": ["gpt-image-2-high"],
+                    "model_capabilities": {
+                        "gpt-image-2-high": {
+                            "schema": "gpt-image-2",
+                            "request_mode": "openai-images",
+                            "locked_params": {
+                                "gpt_image_quality": "high"
+                            },
+                        }
+                    },
+                }
+            ]
+        ),
+    )
+
+    route = resolve_provider_route(
+        "image",
+        generation_override={"image": {"source": "profile:147ai", "model": "gpt-image-2-high"}},
+    )
+
+    assert route.provider == "openai"
+    assert route.adapter == "openai_image_compat"
+    assert route.adapter_options["endpoint_mode"] == "images"
+    assert route.adapter_options["path_style"] == "plural"
+    assert route.metadata["gpt_image_quality"] == "high"
+
+
 def test_profile_capability_mismatch_raises_when_strict(monkeypatch):
     _clear_env(monkeypatch)
     monkeypatch.setenv("PROVIDER_ROUTING_STRICT", "true")

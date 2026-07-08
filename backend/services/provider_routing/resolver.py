@@ -318,8 +318,23 @@ def _resolve_route_from_profile(
                 model_capability = dict(capability_value)
                 break
 
+    request_mode = str(model_capability.get("request_mode") or "").strip().lower()
+    if role == "image" and request_mode in {"openai-images", "openai-compat-google-chat"}:
+        provider = "openai"
+        adapter = "openai_image_compat"
+        if request_mode == "openai-images":
+            adapter_options.setdefault("endpoint_mode", "images")
+        elif request_mode == "openai-compat-google-chat":
+            adapter_options.setdefault("endpoint_mode", "chat")
+            adapter_options.setdefault("extra_body_mode", "google_image_config")
+
     if provider == "openai" and azure_endpoint and not azure_api_version and strict:
         raise ValueError(f"Profile '{profile_id}' is missing Azure API version")
+
+    metadata = {"model_capability": model_capability} if model_capability else {}
+    locked_params = model_capability.get("locked_params") if model_capability else None
+    if isinstance(locked_params, dict):
+        metadata.update(locked_params)
 
     route = ResolvedProviderRoute(
         role=role,
@@ -334,7 +349,7 @@ def _resolve_route_from_profile(
         adapter=adapter,
         adapter_options=adapter_options,
         source_trace=traces + [f"profile:{profile_id}"],
-        metadata={"model_capability": model_capability} if model_capability else {},
+        metadata=metadata,
     )
     return _apply_adapter_and_finalize(route)
 
