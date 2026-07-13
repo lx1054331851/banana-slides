@@ -7,7 +7,8 @@ import { useSlidePreviewRegionComments } from '@/pages/hooks/useSlidePreviewRegi
 
 describe('useSlidePreviewRegionComments', () => {
   it('commits a pending region comment into the page AI context', () => {
-    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:region-placeholder')
+    const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:region-placeholder')
+    const previewImageUrl = '/files/project-1/pages/page-1.png'
 
     const { result } = renderHook(() => {
       const [editPrompt, setEditPrompt] = useState('')
@@ -29,6 +30,7 @@ describe('useSlidePreviewRegionComments', () => {
         setPendingRegionEscStep,
         setSelectedContextImages,
         setEditPrompt,
+        previewImageUrl,
         clearSelectionPreview: vi.fn(),
         setIsRegionSelectionMode: vi.fn(),
       })
@@ -59,9 +61,10 @@ describe('useSlidePreviewRegionComments', () => {
     expect(result.current.selectedContextImages.uploadedReferences).toEqual([
       expect.objectContaining({
         sourceType: 'region',
-        previewUrl: 'blob:region-placeholder',
+        previewUrl: previewImageUrl,
         regionComment: '移除具体数字',
       }),
     ])
+    expect(createObjectUrl).not.toHaveBeenCalled()
   })
 })

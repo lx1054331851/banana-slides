@@ -442,6 +442,7 @@ export const SlidePreview: React.FC = () => {
     setPendingRegionEscStep,
     setSelectedContextImages,
     setEditPrompt,
+    previewImageUrl: imageUrl,
     isRegionSelectionMode,
     setIsRegionSelectionMode,
     clearSelectionPreview,

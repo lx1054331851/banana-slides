@@ -18,6 +18,7 @@ type UseSlidePreviewRegionCommentsParams = {
   setPendingRegionEscStep: Dispatch<SetStateAction<number>>;
   setSelectedContextImages: Dispatch<SetStateAction<PageAiContextImages>>;
   setEditPrompt: Dispatch<SetStateAction<string>>;
+  previewImageUrl: string;
   isRegionSelectionMode: boolean;
   setIsRegionSelectionMode: Dispatch<SetStateAction<boolean>>;
   clearSelectionPreview: () => void;
@@ -33,6 +34,7 @@ export const useSlidePreviewRegionComments = ({
   setPendingRegionEscStep,
   setSelectedContextImages,
   setEditPrompt,
+  previewImageUrl,
   isRegionSelectionMode,
   setIsRegionSelectionMode,
   clearSelectionPreview,
@@ -55,14 +57,14 @@ export const useSlidePreviewRegionComments = ({
         new File([], `region-${Date.now()}.json`, { type: 'application/octet-stream' }),
         'region',
         `框选区域 ${prev.uploadedReferences.filter((item) => item.sourceType === 'region').length + 1}`,
-        { regionBounds: pendingRegionCapture.regionBounds, regionComment: comment },
+        { previewUrl: previewImageUrl, regionBounds: pendingRegionCapture.regionBounds, regionComment: comment },
       );
       const uploadedReferences = [...prev.uploadedReferences, nextReference];
       setEditPrompt(buildRegionInstructionLines(uploadedReferences).join('\n'));
       return { ...prev, uploadedReferences };
     });
     clearPendingRegionCapture();
-  }, [clearPendingRegionCapture, pendingRegionCapture, pendingRegionComment, setEditPrompt, setPendingRegionEscStep, setSelectedContextImages]);
+  }, [clearPendingRegionCapture, pendingRegionCapture, pendingRegionComment, previewImageUrl, setEditPrompt, setPendingRegionEscStep, setSelectedContextImages]);
 
   const cancelPendingRegionCapture = useCallback(() => {
     clearPendingRegionCapture();

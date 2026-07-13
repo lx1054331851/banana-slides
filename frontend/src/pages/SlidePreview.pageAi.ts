@@ -54,13 +54,14 @@ export const createPageAiMessage = (
   attachments,
 });
 
+// Build a page AI reference and create a local preview only when one was not supplied.
 export const createUploadedReference = (
   file: File,
   sourceType: PageAiUploadedReference['sourceType'],
   label: string = file.name,
-  meta?: Pick<PageAiUploadedReference, 'regionBounds' | 'markdownUrl' | 'regionComment'>,
+  meta?: Pick<PageAiUploadedReference, 'previewUrl' | 'regionBounds' | 'markdownUrl' | 'regionComment'>,
 ): PageAiUploadedReference => {
-  const previewUrl = URL.createObjectURL(file);
+  const previewUrl = meta?.previewUrl ?? URL.createObjectURL(file);
   return {
     id: `${sourceType}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     sourceType,
