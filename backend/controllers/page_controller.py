@@ -781,6 +781,7 @@ def edit_page_image(project_id, page_id):
     
     For multipart/form-data:
     - edit_instruction: text field
+    - source_image_version_id: version selected as the edit source
     - use_template: text field (true/false)
     - desc_image_urls: JSON array string
     - reference_metas: JSON array string
@@ -835,7 +836,19 @@ def edit_page_image(project_id, page_id):
                     data['reference_metas'] = []
 
         edit_instruction = normalize_user_text(data.get('edit_instruction'))
+        source_image_version_id = str(data.get('source_image_version_id') or '').strip() or None
         language = data.get('language', current_app.config.get('OUTPUT_LANGUAGE', 'zh'))
+
+        source_image_version = None
+        source_image_rel_path = None
+        if source_image_version_id:
+            source_image_version = PageImageVersion.query.filter_by(
+                id=source_image_version_id,
+                page_id=page_id,
+            ).first()
+            if not source_image_version or source_image_version.is_deleted:
+                return bad_request('source image version is unavailable')
+            source_image_rel_path = source_image_version.image_path
 
         generation_override = data.get('generation_override') or {}
         if generation_override and not isinstance(generation_override, dict):
@@ -997,7 +1010,10 @@ def edit_page_image(project_id, page_id):
                 "pages": current_part_pages
             })
 
-        current_version = PageImageVersion.query.filter_by(page_id=page_id, is_current=True).first()
+        current_version = source_image_version or PageImageVersion.query.filter_by(
+            page_id=page_id,
+            is_current=True,
+        ).first()
         page_style_json = resolve_page_style_guide_json(
             desc_content,
             image_version_id=current_version.id if current_version else None,
@@ -1055,6 +1071,7 @@ def edit_page_image(project_id, page_id):
             language=language,
             reference_metas=reference_metas,
             annotated_primary_image_path=annotated_primary_image_path,
+            source_image_rel_path=source_image_rel_path,
         )
         
         # Return task_id immediately

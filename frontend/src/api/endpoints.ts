@@ -5,14 +5,21 @@ import type {
   ApiResponse,
   CreateProjectRequest,
   Page,
-  ImageVersion,
   GenerationOverride,
   ImageChannelOption,
   ProviderProfileSummary,
 } from '@/types';
 import type { Settings } from '../types/index';
 import type { PromptTemplate } from '../types/index';
-import type { PageAiReferenceMeta } from '../pages/SlidePreview.pageAi';
+
+export {
+  deletePageImageVersion,
+  editPageImage,
+  getPageImageVersions,
+  restorePageImageVersion,
+  setCurrentImageVersion,
+  uploadPageImage,
+} from './pageImageEndpoints';
 
 const IMAGE_OPERATION_TIMEOUT_MS = 300000; // 5 minutes
 
@@ -578,136 +585,6 @@ export const generatePageImage = async (
       ...(generationOverride ? { generation_override: generationOverride } : {}),
     },
     { timeout: IMAGE_OPERATION_TIMEOUT_MS }
-  );
-  return response.data;
-};
-
-/**
- * 编辑图片（自然语言修改）
- */
-export const editPageImage = async (
-  projectId: string,
-  pageId: string,
-  editPrompt: string,
-  contextImages?: {
-    useTemplate?: boolean;
-    descImageUrls?: string[];
-    uploadedFiles?: File[];
-    referenceMetas?: PageAiReferenceMeta[];
-  },
-  generationOverride?: GenerationOverride
-): Promise<ApiResponse> => {
-  // 如果有上传的文件，使用 multipart/form-data
-  if (contextImages?.uploadedFiles && contextImages.uploadedFiles.length > 0) {
-    const formData = new FormData();
-    formData.append('edit_instruction', editPrompt);
-    formData.append('use_template', String(contextImages.useTemplate || false));
-    if (contextImages.descImageUrls && contextImages.descImageUrls.length > 0) {
-      formData.append('desc_image_urls', JSON.stringify(contextImages.descImageUrls));
-    }
-    if (contextImages.referenceMetas && contextImages.referenceMetas.length > 0) {
-      formData.append('reference_metas', JSON.stringify(contextImages.referenceMetas));
-    }
-    // 添加上传的文件
-    contextImages.uploadedFiles.forEach((file) => {
-      formData.append('context_images', file);
-    });
-    if (generationOverride) {
-      formData.append('generation_override', JSON.stringify(generationOverride));
-    }
-
-    const response = await apiClient.post<ApiResponse>(
-      `/api/projects/${projectId}/pages/${pageId}/edit/image`,
-      formData,
-      { timeout: IMAGE_OPERATION_TIMEOUT_MS }
-    );
-    return response.data;
-  } else {
-    // 使用 JSON
-    const response = await apiClient.post<ApiResponse>(
-      `/api/projects/${projectId}/pages/${pageId}/edit/image`,
-      {
-        edit_instruction: editPrompt,
-        context_images: {
-          use_template: contextImages?.useTemplate || false,
-          desc_image_urls: contextImages?.descImageUrls || [],
-          reference_metas: contextImages?.referenceMetas || [],
-        },
-        ...(generationOverride ? { generation_override: generationOverride } : {}),
-      },
-      { timeout: IMAGE_OPERATION_TIMEOUT_MS }
-    );
-    return response.data;
-  }
-};
-
-export const uploadPageImage = async (
-  projectId: string,
-  pageId: string,
-  image: File
-): Promise<ApiResponse<Page>> => {
-  const formData = new FormData();
-  formData.append('image', image);
-
-  const response = await apiClient.post<ApiResponse<Page>>(
-    `/api/projects/${projectId}/pages/${pageId}/upload/image`,
-    formData,
-    { timeout: IMAGE_OPERATION_TIMEOUT_MS }
-  );
-  return response.data;
-};
-
-/**
- * 获取页面图片历史版本
- */
-export const getPageImageVersions = async (
-  projectId: string,
-  pageId: string
-): Promise<ApiResponse<{ versions: ImageVersion[] }>> => {
-  const response = await apiClient.get<ApiResponse<{ versions: ImageVersion[] }>>(
-    `/api/projects/${projectId}/pages/${pageId}/image-versions`
-  );
-  return response.data;
-};
-
-/**
- * 设置当前使用的图片版本
- */
-export const setCurrentImageVersion = async (
-  projectId: string,
-  pageId: string,
-  versionId: string
-): Promise<ApiResponse> => {
-  const response = await apiClient.post<ApiResponse>(
-    `/api/projects/${projectId}/pages/${pageId}/image-versions/${versionId}/set-current`
-  );
-  return response.data;
-};
-
-/**
- * 删除页面图片历史版本（软删除）
- */
-export const deletePageImageVersion = async (
-  projectId: string,
-  pageId: string,
-  versionId: string
-): Promise<ApiResponse<Page>> => {
-  const response = await apiClient.delete<ApiResponse<Page>>(
-    `/api/projects/${projectId}/pages/${pageId}/image-versions/${versionId}`
-  );
-  return response.data;
-};
-
-/**
- * 恢复页面图片历史版本，并设为当前版本
- */
-export const restorePageImageVersion = async (
-  projectId: string,
-  pageId: string,
-  versionId: string
-): Promise<ApiResponse<Page>> => {
-  const response = await apiClient.post<ApiResponse<Page>>(
-    `/api/projects/${projectId}/pages/${pageId}/image-versions/${versionId}/restore`
   );
   return response.data;
 };

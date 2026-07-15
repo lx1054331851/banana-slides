@@ -140,7 +140,8 @@ interface ProjectState {
       uploadedFiles?: File[];
       referenceMetas?: PageAiReferenceMeta[];
     },
-    generationOverride?: GenerationOverride
+    generationOverride?: GenerationOverride,
+    sourceImageVersionId?: string | null,
   ) => Promise<void>;
   uploadPageImage: (pageId: string, image: File) => Promise<void>;
   
@@ -1400,7 +1401,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
   },
 
   // 编辑页面图片（异步）
-  editPageImage: async (pageId, editPrompt, contextImages, generationOverride) => {
+  editPageImage: async (pageId, editPrompt, contextImages, generationOverride, sourceImageVersionId) => {
     const { currentProject, pageGeneratingTasks } = get();
     if (!currentProject) return;
 
@@ -1417,7 +1418,8 @@ export const useProjectStore = create<ProjectState>((set, get) => {
         pageId,
         editPrompt,
         contextImages,
-        generationOverride
+        generationOverride,
+        sourceImageVersionId,
       );
       const taskId = response.data?.task_id;
       

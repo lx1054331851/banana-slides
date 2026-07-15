@@ -1727,7 +1727,8 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                          extra_requirements: Optional[str] = None,
                          language: str = 'zh',
                          reference_metas: Optional[List[Dict[str, Any]]] = None,
-                         annotated_primary_image_path: Optional[str] = None):
+                         annotated_primary_image_path: Optional[str] = None,
+                         source_image_rel_path: Optional[str] = None):
     """
     Background task for editing a page image
     
@@ -1755,7 +1756,7 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
             _remove_scoped_session()
 
             edit_instruction_text = normalize_user_text(edit_instruction)
-            current_image_rel_path = page_snapshot['current_image_rel_path']
+            current_image_rel_path = source_image_rel_path or page_snapshot['current_image_rel_path']
             template_path = file_service.get_template_path(project_id) if use_template else None
             if not current_image_rel_path:
                 raise ValueError("Page must have generated image first")

@@ -277,6 +277,57 @@ def test_edit_page_image_task_prefers_image_edit_mode_for_reference_only_updates
         assert page.cached_image_path.endswith('.jpg')
 
 
+def test_edit_page_image_task_uses_pinned_source_version_path(app):
+    """Use the request-time source path even when the page later points elsewhere."""
+    with app.app_context():
+        project = Project(creation_type='idea', status='DRAFT')
+        db.session.add(project)
+        db.session.flush()
+
+        page = Page(project_id=project.id, order_index=0, status='DRAFT')
+        page.set_outline_content({'title': '首页'})
+        page.generated_image_path = 'uploads/project/page-v8.png'
+        db.session.add(page)
+
+        task = Task(project_id=project.id, task_type='EDIT_PAGE_IMAGE', status='PENDING')
+        db.session.add(task)
+        db.session.commit()
+
+        task_id = task.id
+        page_id = page.id
+        project_id = project.id
+
+    ai_service = MagicMock()
+    ai_service.generate_image.return_value = Image.new('RGB', (1920, 1080), color='blue')
+
+    file_service = MagicMock()
+    file_service.upload_folder = app.config['UPLOAD_FOLDER']
+    file_service.get_template_path.return_value = None
+    file_service.get_absolute_path.side_effect = lambda path: f'/absolute/{path}'
+    file_service.save_generated_image.side_effect = (
+        lambda image, project_id, page_id, version_number, image_format='PNG':
+        f'{project_id}/pages/{page_id}_v{version_number}.png'
+    )
+    file_service.save_cached_image.side_effect = (
+        lambda image, project_id, page_id, version_number, quality=85:
+        f'{project_id}/pages/{page_id}_v{version_number}.jpg'
+    )
+
+    edit_page_image_task(
+        task_id=task_id,
+        project_id=project_id,
+        page_id=page_id,
+        edit_instruction='修改标题',
+        ai_service=ai_service,
+        file_service=file_service,
+        source_image_rel_path='uploads/project/page-v6.png',
+        app=app,
+    )
+
+    generate_args, _ = ai_service.generate_image.call_args
+    assert generate_args[1] == '/absolute/uploads/project/page-v6.png'
+
+
 def test_edit_page_image_task_uses_annotated_page_as_primary_image(app):
     with app.app_context():
         project = Project(creation_type='idea', status='DRAFT')

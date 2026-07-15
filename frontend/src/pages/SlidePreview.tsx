@@ -1710,8 +1710,10 @@ export const SlidePreview: React.FC = () => {
     };
   }, []);
 
+  // Submits a single-page edit with the exact image version visible at send time.
   const executePageImageGeneration = useCallback(async (options?: {
     prompt?: string;
+    sourceImageVersionId?: string | null;
     contextImages?: {
       useTemplate?: boolean;
       descImageUrls?: string[];
@@ -1801,7 +1803,8 @@ export const SlidePreview: React.FC = () => {
             : undefined,
           referenceMetas: requestReferenceMetas,
         },
-        editGenerationOverride
+        editGenerationOverride,
+        options?.sourceImageVersionId,
       );
     } catch (error: any) {
       const errorMessage =
@@ -2106,6 +2109,7 @@ export const SlidePreview: React.FC = () => {
     executePageImageGeneration,
     editRunImageModel,
     currentImageVersionId: pageAiContextVersionKey,
+    sourceImageVersionId: currentImageVersionId,
     editPrompt,
     selectedContextImages,
     bindPendingPageAiContext,

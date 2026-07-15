@@ -31,6 +31,7 @@ type UseSlidePreviewPageAiSubmitParams = {
   runGenerateFlow: (action: () => Promise<void>) => Promise<boolean>;
   executePageImageGeneration: (options?: {
     prompt?: string;
+    sourceImageVersionId?: string | null;
     contextImages?: {
       useTemplate?: boolean;
       descImageUrls?: string[];
@@ -41,11 +42,13 @@ type UseSlidePreviewPageAiSubmitParams = {
   }) => Promise<void>;
   editRunImageModel: string;
   currentImageVersionId: string | null;
+  sourceImageVersionId: string | null;
   editPrompt: string;
   selectedContextImages: PageAiContextImages;
   bindPendingPageAiContext: (pageId: string, sourceVersionId: string | null, context: PageAiContextState) => void;
 };
 
+/** Coordinates current-page AI edits and pins their source image version. */
 export const useSlidePreviewPageAiSubmit = ({
   currentProject,
   selectedIndex,
@@ -58,6 +61,7 @@ export const useSlidePreviewPageAiSubmit = ({
   executePageImageGeneration,
   editRunImageModel,
   currentImageVersionId,
+  sourceImageVersionId,
   editPrompt,
   selectedContextImages,
   bindPendingPageAiContext,
@@ -100,6 +104,7 @@ export const useSlidePreviewPageAiSubmit = ({
       const didStartGeneration = await runGenerateFlow(async () => {
         await executePageImageGeneration({
           prompt: draftText,
+          sourceImageVersionId,
           contextImages: {
             useTemplate: false,
             descImageUrls: payload.inlineImageUrls,
@@ -169,6 +174,7 @@ export const useSlidePreviewPageAiSubmit = ({
     selectedIndex,
     selectedPageAiReferences,
     setPageAiMessages,
+    sourceImageVersionId,
     t,
   ]);
 

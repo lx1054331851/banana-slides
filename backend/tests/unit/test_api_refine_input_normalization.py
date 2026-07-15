@@ -75,7 +75,7 @@ def test_edit_page_image_normalizes_invisible_edit_instruction(client, app):
 
     mock_service = MagicMock()
     routing_bundle = SimpleNamespace(
-        image=SimpleNamespace(provider='gemini', model='gemini-3.1-flash-image-preview')
+        image=SimpleNamespace(provider='gemini', model='gemini-3.1-flash-image-preview', channel=None)
     )
 
     with patch('controllers.page_controller.resolve_routing_bundle', return_value=routing_bundle), \
@@ -107,6 +107,45 @@ def test_edit_page_image_requires_existing_current_image(client, app):
 
     data = assert_error_response(response, 400)
     assert data['error']['message'] == 'page must have generated image first'
+
+
+def test_edit_page_image_pins_requested_source_version(client, app):
+    """Resolve the requested version to a fixed task source path."""
+    project_id, page_id = _create_project_with_page(app)
+    from models import Page, PageImageVersion, db
+
+    with app.app_context():
+        page = db.session.get(Page, page_id)
+        page.generated_image_path = 'uploads/project/page-v8.png'
+        selected_version = PageImageVersion(
+            page_id=page_id,
+            image_path='uploads/project/page-v6.png',
+            version_number=6,
+            is_current=False,
+        )
+        db.session.add(selected_version)
+        db.session.commit()
+        selected_version_id = selected_version.id
+
+    routing_bundle = SimpleNamespace(
+        image=SimpleNamespace(provider='gemini', model='gemini-3.1-flash-image-preview', channel=None)
+    )
+
+    with patch('controllers.page_controller.resolve_routing_bundle', return_value=routing_bundle), \
+         patch('controllers.page_controller.get_ai_service', return_value=MagicMock()), \
+         patch('controllers.page_controller.task_manager.submit_task') as mock_submit_task:
+        response = client.post(
+            f'/api/projects/{project_id}/pages/{page_id}/edit/image',
+            json={
+                'edit_instruction': '把标题改成蓝色',
+                'source_image_version_id': selected_version_id,
+                'context_images': {'use_template': False, 'desc_image_urls': []},
+            },
+        )
+
+    assert_success_response(response, 202)
+    _, submit_kwargs = mock_submit_task.call_args
+    assert submit_kwargs['source_image_rel_path'] == 'uploads/project/page-v6.png'
 
 
 def test_single_page_refine_fallbacks_to_first_when_multiple_descriptions_returned(client, app):
