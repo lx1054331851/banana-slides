@@ -63,7 +63,7 @@ def _append_extra_fields(
             parts.append(f"{name}：{value}")
     return '\n'.join(parts)
 from services.pdf_service import split_pdf_to_pages
-from services.export_helpers import maybe_compress_export_images
+from services.export_helpers import build_export_filename, maybe_compress_export_images
 
 logger = logging.getLogger(__name__)
 audit_logger = logging.getLogger("image_audit")
@@ -3387,13 +3387,19 @@ def export_images_task(
                     update_progress("打包", "导出单张图片", 80, force=True)
                     page, path = export_items[0]
                     ext = os.path.splitext(path)[1] or '.png'
-                    filename = f'slide_{page.id}_{timestamp}{ext}'
+                    filename = build_export_filename(project.project_title, ext, 'presentation')
                     output_path = os.path.join(exports_dir, filename)
+                    if os.path.exists(output_path):
+                        filename = f'{Path(filename).stem}_{timestamp}{ext}'
+                        output_path = os.path.join(exports_dir, filename)
                     shutil.copy2(path, output_path)
                 else:
                     total_items = len(export_items)
-                    filename = f'slides_{project_id}_{timestamp}.zip'
+                    filename = build_export_filename(project.project_title, '.zip', 'presentation')
                     output_path = os.path.join(exports_dir, filename)
+                    if os.path.exists(output_path):
+                        filename = f'{Path(filename).stem}_{timestamp}.zip'
+                        output_path = os.path.join(exports_dir, filename)
                     with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
                         for idx, (page, path) in enumerate(export_items, start=1):
                             percent = 60 + int((idx / total_items) * 30)

@@ -3,6 +3,7 @@ Shared helpers for export flows (sync/async).
 """
 import logging
 import os
+import re
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -13,6 +14,17 @@ from .image_compression_service import ImageCompressionService
 
 
 logger = logging.getLogger(__name__)
+
+
+def build_export_filename(project_title: str | None, extension: str, fallback: str) -> str:
+    """Build a path-safe export filename from the project title while preserving Unicode."""
+    normalized_extension = extension if extension.startswith('.') else f'.{extension}'
+    title = (project_title or '').strip()
+    title = re.sub(r'[\x00-\x1f<>:"/\\|?*]+', '_', title).strip(' ._')
+    if not title:
+        title = fallback
+    title = title[:180]
+    return title if title.lower().endswith(normalized_extension.lower()) else f'{title}{normalized_extension}'
 
 
 def _coerce_int(value, default: int) -> int:

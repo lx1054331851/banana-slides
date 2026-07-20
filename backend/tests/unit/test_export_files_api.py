@@ -40,6 +40,17 @@ def test_delete_export_removes_file_from_disk(client, app):
     assert data["data"]["files"] == []
 
 
+def test_delete_export_supports_project_title_with_chinese_characters(client, app):
+    """使用中文项目标题生成的导出文件应仍可从导出记录中删除。"""
+    project_id, export_path = _create_project_with_export(app, "年度经营汇报.pptx")
+
+    response = client.delete(f"/api/projects/{project_id}/exports/年度经营汇报.pptx")
+
+    data = assert_success_response(response)
+    assert data["data"]["filename"] == "年度经营汇报.pptx"
+    assert not os.path.exists(export_path)
+
+
 def test_delete_export_rejects_path_traversal(client, app):
     project_id, export_path = _create_project_with_export(app)
 

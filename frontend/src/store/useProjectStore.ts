@@ -1501,7 +1501,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
         throw new Error(t('store.exportLinkFailed'));
       }
 
-      downloadFromUrl(downloadUrl, `presentation_${currentProject.id}.pptx`);
+      downloadFromUrl(downloadUrl, `${currentProject.project_title?.trim() || 'presentation'}.pptx`);
     } catch (error: any) {
       set({ error: error.message || t('store.exportFailed') });
     } finally {
@@ -1525,7 +1525,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
         throw new Error(t('store.exportLinkFailed'));
       }
 
-      downloadFromUrl(downloadUrl, `presentation_${currentProject.id}.pdf`);
+      downloadFromUrl(downloadUrl, `${currentProject.project_title?.trim() || 'presentation'}.pdf`);
     } catch (error: any) {
       set({ error: error.message || t('store.exportFailed') });
     } finally {

@@ -16,12 +16,21 @@ from utils import (
     parse_page_ids_from_query, parse_page_ids_from_body, get_filtered_pages
 )
 from services import ExportService, FileService
-from services.export_helpers import maybe_compress_export_images
+from services.export_helpers import build_export_filename, maybe_compress_export_images
 from services.prompts import normalize_narration_generation_config
 
 logger = logging.getLogger(__name__)
 
 export_bp = Blueprint('export', __name__, url_prefix='/api/projects')
+
+
+def _resolve_export_filename(requested_filename, project_title, extension):
+    """Resolve a custom export filename or default to the Unicode project title."""
+    if requested_filename:
+        filename = secure_filename(requested_filename)
+        if filename:
+            return filename if filename.lower().endswith(extension) else f'{filename}{extension}'
+    return build_export_filename(project_title, extension, 'presentation')
 
 
 def _parse_pptx_transition_effects():
@@ -111,14 +120,13 @@ def delete_export(project_id, filename):
         if not project:
             return not_found('Project')
 
-        safe_filename = secure_filename(filename)
-        if not safe_filename or safe_filename != filename:
+        if not filename or filename != Path(filename).name or '\x00' in filename:
             return bad_request('Invalid export filename')
 
         exports_root = _resolve_exports_root(project_id)
         if exports_root is None:
             return bad_request('Invalid project ID')
-        file_path = (exports_root / safe_filename).resolve()
+        file_path = (exports_root / filename).resolve()
 
         try:
             file_path.relative_to(exports_root)
@@ -129,7 +137,7 @@ def delete_export(project_id, filename):
             return not_found('File')
 
         file_path.unlink()
-        return success_response(data={"filename": safe_filename}, message="Export file deleted")
+        return success_response(data={"filename": filename}, message="Export file deleted")
 
     except Exception as e:
         return error_response('SERVER_ERROR', str(e), 500)
@@ -170,11 +178,7 @@ def export_pptx(project_id):
             if not has_images:
                 return bad_request("No generated images found for project")
 
-            filename = secure_filename(data.get('filename') or f'presentation_{project_id}.pptx')
-            if not filename:
-                filename = f'presentation_{project_id}.pptx'
-            if not filename.endswith('.pptx'):
-                filename += '.pptx'
+            filename = _resolve_export_filename(data.get('filename'), project.project_title, '.pptx')
 
             task = Task(project_id=project_id, task_type='EXPORT_PPTX', status='PENDING')
             db.session.add(task)
@@ -231,9 +235,7 @@ def export_pptx(project_id):
         exports_dir = file_service._get_exports_dir(project_id)
 
         # Get filename from query params or use default
-        filename = secure_filename(request.args.get('filename', f'presentation_{project_id}.pptx'))
-        if not filename.endswith('.pptx'):
-            filename += '.pptx'
+        filename = _resolve_export_filename(request.args.get('filename'), project.project_title, '.pptx')
 
         output_path = os.path.join(exports_dir, filename)
 
@@ -302,11 +304,7 @@ def export_pdf(project_id):
             if not has_images:
                 return bad_request("No generated images found for project")
 
-            filename = secure_filename(data.get('filename') or f'presentation_{project_id}.pdf')
-            if not filename:
-                filename = f'presentation_{project_id}.pdf'
-            if not filename.endswith('.pdf'):
-                filename += '.pdf'
+            filename = _resolve_export_filename(data.get('filename'), project.project_title, '.pdf')
 
             task = Task(project_id=project_id, task_type='EXPORT_PDF', status='PENDING')
             db.session.add(task)
@@ -360,9 +358,7 @@ def export_pdf(project_id):
         exports_dir = file_service._get_exports_dir(project_id)
 
         # Get filename from query params or use default
-        filename = secure_filename(request.args.get('filename', f'presentation_{project_id}.pdf'))
-        if not filename.endswith('.pdf'):
-            filename += '.pdf'
+        filename = _resolve_export_filename(request.args.get('filename'), project.project_title, '.pdf')
 
         output_path = os.path.join(exports_dir, filename)
 
@@ -476,12 +472,18 @@ def export_images(project_id):
             if len(export_items) == 1:
                 page, path = export_items[0]
                 ext = os.path.splitext(path)[1] or '.png'
-                filename = f'slide_{page.id}_{timestamp}{ext}'
+                filename = build_export_filename(project.project_title, ext, 'presentation')
                 output_path = os.path.join(exports_dir, filename)
+                if os.path.exists(output_path):
+                    filename = f'{Path(filename).stem}_{timestamp}{ext}'
+                    output_path = os.path.join(exports_dir, filename)
                 shutil.copy2(path, output_path)
             else:
-                filename = f'slides_{s_project_id}_{timestamp}.zip'
+                filename = build_export_filename(project.project_title, '.zip', 'presentation')
                 output_path = os.path.join(exports_dir, filename)
+                if os.path.exists(output_path):
+                    filename = f'{Path(filename).stem}_{timestamp}.zip'
+                    output_path = os.path.join(exports_dir, filename)
                 with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:
                     for page, path in export_items:
                         ext = os.path.splitext(path)[1] or '.png'
@@ -562,9 +564,7 @@ def export_editable_pptx(project_id):
         
         # Get parameters from request body
         data = request.get_json() or {}
-        filename = data.get('filename', f'presentation_editable_{project_id}.pptx')
-        if not filename.endswith('.pptx'):
-            filename += '.pptx'
+        filename = _resolve_export_filename(data.get('filename'), project.project_title, '.pptx')
         
         # 递归分析参数
         # max_depth 语义：1=只处理表层不递归，2=递归一层（处理图片/图表中的子元素）
@@ -678,12 +678,7 @@ def export_video(project_id):
             return bad_request("No generated images found for project. Enable 'include pages without images' to export all pages.")
 
         # 参数 — 使用 secure_filename 防止路径遍历
-        raw_filename = data.get('filename', f'narration_{project_id}.mp4')
-        filename = secure_filename(raw_filename)
-        if not filename:
-            filename = f'narration_{project_id}.mp4'
-        if not filename.endswith('.mp4'):
-            filename += '.mp4'
+        filename = _resolve_export_filename(data.get('filename'), project.project_title, '.mp4')
 
         voice = data.get('voice', current_app.config.get('TTS_DEFAULT_VOICE_ZH', 'zh-CN-XiaoxiaoNeural'))
         rate = data.get('rate', current_app.config.get('TTS_DEFAULT_RATE', '+0%'))
