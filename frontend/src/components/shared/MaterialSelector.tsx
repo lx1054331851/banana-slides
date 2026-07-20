@@ -549,7 +549,13 @@ export const MaterialSelector: React.FC<MaterialSelectorProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={t('material.selectTitle')} size="lg">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t('material.selectTitle')}
+      size="lg"
+      contentClassName="overflow-hidden"
+    >
       <MaterialLibraryPanel
         projectId={projectId}
         selectedIds={selectedIds}

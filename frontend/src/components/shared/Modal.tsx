@@ -12,6 +12,7 @@ interface ModalProps {
   showCloseButton?: boolean;
   closeOnOverlayClick?: boolean;
   headerActions?: React.ReactNode;
+  contentClassName?: string;
 }
 
 // Renders a portal-based dialog with optional title, close button, and header actions.
@@ -24,6 +25,7 @@ export const Modal: React.FC<ModalProps> = ({
   showCloseButton = true,
   closeOnOverlayClick = true,
   headerActions,
+  contentClassName,
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -180,7 +182,8 @@ export const Modal: React.FC<ModalProps> = ({
               'relative px-7 pb-7 overflow-y-auto flex-1',
               size === 'full' ? 'max-h-[calc(100vh-8rem)]' : 'max-h-[85vh]',
               'scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600',
-              title ? '' : 'pt-7'
+              title ? '' : 'pt-7',
+              contentClassName
             )}
           >
             {children}
