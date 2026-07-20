@@ -373,7 +373,10 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
             </div>
           )}
 
-          <div className={cn('min-h-0 flex-1', cardless ? 'mx-2 mt-0 pt-5' : 'mx-4 mt-1')}>
+          <div
+            data-testid="page-ai-editor-viewport"
+            className={cn('min-h-0 flex-1 overflow-hidden', cardless ? 'mx-2 mt-0 pt-5' : 'mx-4 mt-1')}
+          >
             <MarkdownTextarea
               ref={inputRef}
               value={inputValue}
@@ -392,10 +395,13 @@ export const PageAiWorkbench: React.FC<PageAiWorkbenchProps> = ({
               className="h-full min-h-[128px] border-0 bg-transparent shadow-none focus-within:border-transparent focus-within:ring-0 dark:bg-transparent [&_[role=textbox]]:min-h-[128px] [&_[role=textbox]]:px-0 [&_[role=textbox]]:pt-0 [&_[role=textbox]]:pb-2 [&_[role=textbox]]:pr-0 [&_[role=textbox]]:text-sm [&_[role=textbox]]:leading-6"
             />
           </div>
-          <div className={cn(
-            'border-t border-slate-100 dark:border-border-primary',
-            cardless ? 'px-2 pt-1.5 pb-0.5' : 'px-4 pt-2 pb-1',
-          )}>
+          <div
+            data-testid="page-ai-toolbar"
+            className={cn(
+              'relative z-10 shrink-0 border-t border-slate-100 bg-white dark:border-border-primary dark:bg-background-primary',
+              cardless ? 'px-2 pt-1.5 pb-0.5' : 'px-4 pt-2 pb-1',
+            )}
+          >
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"

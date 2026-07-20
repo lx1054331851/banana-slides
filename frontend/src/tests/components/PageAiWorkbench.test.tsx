@@ -67,6 +67,13 @@ describe('PageAiWorkbench', () => {
     expect(sendButton).toBeEnabled()
   })
 
+  it('keeps overflowing editor content inside the scroll area above the send toolbar', () => {
+    render(<PageAiWorkbench {...baseProps} inputValue={'很多文字\n'.repeat(40)} cardless />)
+
+    expect(screen.getByTestId('page-ai-editor-viewport')).toHaveClass('overflow-hidden')
+    expect(screen.getByTestId('page-ai-toolbar')).toHaveClass('shrink-0')
+  })
+
   it('shows model picker control by default', () => {
     render(<PageAiWorkbench {...baseProps} />)
 
