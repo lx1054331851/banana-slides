@@ -118,6 +118,16 @@ describe('Settings image quality tier', () => {
     });
   });
 
+  it('restores and saves the text output limit', async () => {
+    getSettings.mockResolvedValueOnce({ data: { ...baseSettings, text_max_output_tokens: 16384 } });
+    renderSettings();
+    const input = await screen.findByDisplayValue('16384');
+    await userEvent.clear(input);
+    await userEvent.type(input, '65536');
+    await userEvent.click(screen.getByRole('button', { name: /保存设置|Save Settings/ }));
+    await waitFor(() => expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({ text_max_output_tokens: 65536 })));
+  });
+
   it('restores the saved quality tier when the page reloads', async () => {
     getSettings.mockResolvedValueOnce({
       data: { ...baseSettings, image_quality: 'xhigh' },
