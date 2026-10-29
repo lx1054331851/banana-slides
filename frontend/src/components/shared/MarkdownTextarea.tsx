@@ -864,6 +864,10 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     e.preventDefault();
     e.stopPropagation();
     const files = Array.from(e.dataTransfer.files);
+    if (!onDocumentFiles) {
+      if (files.length) onFiles?.(files);
+      return;
+    }
     const images = files.filter((file) => file.type.startsWith('image/'));
     const documents = files.filter((file) => !file.type.startsWith('image/'));
     if (images.length) onFiles?.(images);

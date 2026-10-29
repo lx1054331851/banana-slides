@@ -165,7 +165,10 @@ def test_material_caption_endpoint_explicitly_requests_non_stream(tmp_path):
         IMAGE_CAPTION_MODEL_SOURCE="",
     )
 
-    with app.app_context(), patch("openai.OpenAI", return_value=client):
+    provider = OpenAITextProvider.__new__(OpenAITextProvider)
+    provider.client = client
+    provider.model = "gpt-5.6-luna"
+    with app.app_context(), patch("controllers.material_controller.get_caption_provider", return_value=provider):
         assert _generate_image_caption(str(image_path)) == ("desc", None)
 
     assert client.chat.completions.create.call_args.kwargs["stream"] is False
