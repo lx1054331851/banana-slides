@@ -60,6 +60,8 @@ def _classify_caption_error(error: Exception) -> str:
 
 def _generate_image_caption(filepath: str) -> tuple[str, str | None]:
     """Generate AI caption for an uploaded image. Returns (caption, error_code)."""
+    if not Path(filepath).is_file():
+        return '', 'invalid_image'
     if filepath.lower().endswith('.svg'):
         return "", None
     try:

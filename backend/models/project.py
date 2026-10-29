@@ -26,6 +26,10 @@ class Project(db.Model):
     template_style = db.Column(db.Text, nullable=True)  # 风格描述文本（无模板图模式）
     template_style_json = db.Column(db.Text, nullable=True)  # 风格指导 JSON（字符串，优先级高于 template_style）
     scenario = db.Column(db.String(50), nullable=False, default='ppt')  # ppt|data_report
+
+    template_mode = db.Column(
+        db.String(10), nullable=False, server_default='single', default='single'
+    )  # 'single' | 'multi'，仅 UI 渲染分支，不影响页级字段读写
     # 导出设置
     export_extractor_method = db.Column(db.String(50), nullable=True, default='hybrid')  # 组件提取方法: mineru, hybrid
     export_inpaint_method = db.Column(db.String(50), nullable=True, default='hybrid')  # 背景图获取方法: generative, baidu, hybrid
@@ -53,6 +57,13 @@ class Project(db.Model):
                            cascade='all, delete-orphan')
     materials = db.relationship('Material', back_populates='project', lazy='select',
                            cascade='all, delete-orphan')
+    template_assets = db.relationship(
+        'ProjectTemplateAsset',
+        back_populates='project',
+        lazy='select',
+        cascade='all, delete-orphan',
+        order_by='ProjectTemplateAsset.sort_order',
+    )
     
     def to_dict(self, include_pages=False):
         """Convert to dictionary"""
@@ -90,6 +101,8 @@ class Project(db.Model):
             'template_style': self.template_style,
             'template_style_json': self.template_style_json,
             'scenario': self.scenario or 'ppt',
+
+            'template_mode': self.template_mode or 'single',
             'export_extractor_method': self.export_extractor_method or 'hybrid',
             'export_inpaint_method': self.export_inpaint_method or 'hybrid',
             'export_allow_partial': self.export_allow_partial or False,

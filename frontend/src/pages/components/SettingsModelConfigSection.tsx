@@ -300,6 +300,9 @@ function SettingsImageModelGroup({
             className="w-full h-10 px-4 rounded-lg border border-gray-200 dark:border-border-primary bg-white dark:bg-background-secondary focus:outline-none focus:ring-2 focus:ring-banana-500 focus:border-transparent"
           >
             <option value="">{item.placeholder}</option>
+            {currentModelValue && !selectableImageModels.some((option) => option.model === currentModelValue) && selectableImageModels.length > 0 && (
+              <option value={currentModelValue}>{currentModelValue}</option>
+            )}
             {(selectableImageModels.length > 0 ? selectableImageModels : fallbackImageModelOptions).map((option) => (
               <option
                 key={('model' in option ? `${option.source}:${option.model}` : option.value)}

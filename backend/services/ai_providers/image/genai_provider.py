@@ -36,6 +36,8 @@ def _should_retry_genai_image_exception(exception: Exception) -> bool:
         "当前分组上游负载已饱和",
         "负载已饱和",
         "too many requests",
+        "不接受 image_size",
+        "no image found in api response",
     )
     if any(hint in message for hint in non_retry_hints):
         return False
@@ -188,6 +190,8 @@ class GenAIImageProvider(ImageProvider):
                     )
                     response = _call_generate_content(include_image_size)
                 elif self._should_retry_without_image_size(first_error):
+                    if resolution in ('2K', '4K'):
+                        raise ValueError(f'当前生图接口不接受 image_size={resolution}，请使用支持该分辨率的接口。') from first_error
                     logger.warning(
                         "GenAI image call failed with image_size=%s, retrying without image_size. "
                         "model=%s, aspect_ratio=%s, error=%s",

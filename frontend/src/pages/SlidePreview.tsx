@@ -43,6 +43,7 @@ import {
   createAnnotatedRegionImage,
 } from './pageAiRegionUtils';
 import { PreviewStatusBar } from './components/PreviewStatusBar';
+import { SlidePreviewUpstreamPanels } from './components/SlidePreviewUpstreamPanels';
 import { SlidePreviewHeader } from './components/SlidePreviewHeader';
 import { SlidePreviewSidebarShell } from './components/SlidePreviewSidebarShell';
 import { SlidePreviewSidebarContent } from './components/SlidePreviewSidebarContent';
@@ -960,6 +961,7 @@ export const SlidePreview: React.FC = () => {
   } = useSlidePreviewMultiSelect({ pagesWithImages });
   const { handleExport } = useSlidePreviewExport({
     projectId,
+    pages: currentProject?.pages || [],
     t,
     show,
     addTask,
@@ -2178,7 +2180,8 @@ export const SlidePreview: React.FC = () => {
     );
   }
 
-  const hasAllImages = currentProject.pages.every(
+  const exportPageIds = getSelectedPageIdsForExport();
+  const hasAllImages = currentProject.pages.filter((page) => !exportPageIds || (page.id && exportPageIds.includes(page.id))).every(
     (p) => p.generated_image_path || p.preview_image_path
   );
   const isSidebarCompact = !isMobileView && !isSidebarCollapsed && sidebarWidthPx <= 200;
@@ -2896,6 +2899,9 @@ export const SlidePreview: React.FC = () => {
               showToast={show}
             />
             <div className="mx-auto w-full max-w-6xl">
+              <SlidePreviewUpstreamPanels project={currentProject} selectedIndex={selectedIndex}
+                versionCount={imageVersions.length} extraFieldNames={extraFieldNames} imagePromptFields={imagePromptFields}
+                onSelectIndex={handleSelectPageByIndex} showToast={show} />
               <SlidePreviewEditorToolbar
                 isDescriptionStreaming={isDescriptionStreaming}
                 isDescriptionProgressVisible={isDescriptionProgressVisible}

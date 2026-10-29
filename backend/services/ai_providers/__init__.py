@@ -12,6 +12,7 @@ Configuration priority (highest → lowest):
 Supported provider formats:
     gemini    — Google AI Studio (API key auth)
     openai    — OpenAI-compatible endpoints
+    volcengine — Volcengine ModelArk Agent Plans (OpenAI-compatible)
     anthropic — Anthropic (Claude) API
     vertex    — Google Cloud Vertex AI (service-account auth)
     lazyllm   — LazyLLM multi-vendor framework
@@ -24,6 +25,8 @@ from .text import TextProvider, GenAITextProvider, OpenAITextProvider, Anthropic
 from .image import ImageProvider, GenAIImageProvider, OpenAIImageProvider, AnthropicImageProvider, LazyLLMImageProvider, CodexImageProvider
 from services.provider_routing.types import ResolvedProviderRoute
 
+from .lazyllm_env import TEXT2IMAGE_CAPABLE_LAZYLLM_VENDORS
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -34,7 +37,7 @@ __all__ = [
 ]
 
 # LazyLLM vendor names (used to distinguish from gemini/openai formats)
-LAZYLLM_VENDORS = {'qwen', 'doubao', 'deepseek', 'glm', 'siliconflow', 'sensenova', 'minimax', 'kimi'}
+LAZYLLM_VENDORS = {'qwen', 'doubao', 'deepseek', 'glm', 'siliconflow', 'sensenova', 'minimax', 'kimi', 'ppio', 'aiping'}
 AZURE_OPENAI_SOURCES = {'azure-openai', 'azure'}
 
 
@@ -153,12 +156,16 @@ def get_provider_format() -> str:
         # Not in Flask application context
         pass
 
-    # Fallback to environment variable
-    return os.getenv('AI_PROVIDER_FORMAT', 'gemini').lower()
+    # Fallback to environment variable (treat empty string as unset)
+    return (os.getenv('AI_PROVIDER_FORMAT') or 'gemini').lower()
 
 
 def _resolve_setting(key: str, fallback: Optional[str] = None) -> Optional[str]:
     """Look up a configuration value using the standard priority chain.
+
+    Empty-string values are treated as unset at every level: a blank value
+    (e.g. ``VOLCENGINE_API_BASE=`` left over in .env) must fall through to the
+    next level instead of reaching providers as a broken base URL.
 
     Resolution order:
         1. Flask ``app.config`` (populated from the database Settings page)
@@ -170,7 +177,7 @@ def _resolve_setting(key: str, fallback: Optional[str] = None) -> Optional[str]:
         from flask import current_app
         if current_app and hasattr(current_app, 'config') and key in current_app.config:
             val = current_app.config[key]
-            if val is not None:
+            if val:
                 logger.debug("Setting %s resolved from app.config", key)
                 return str(val)
     except RuntimeError:
@@ -178,7 +185,7 @@ def _resolve_setting(key: str, fallback: Optional[str] = None) -> Optional[str]:
 
     # 2) Try environment
     env_val = os.getenv(key)
-    if env_val is not None:
+    if env_val:
         logger.debug("Setting %s resolved from environment", key)
         return env_val
 
@@ -192,7 +199,7 @@ def _build_provider_config() -> Dict[str, Any]:
     """Assemble provider-specific configuration dict.
 
     Returns a dict always containing ``'format'`` plus format-specific keys:
-        - gemini / openai / anthropic → ``api_key``, ``api_base``
+        - gemini / openai / volcengine / anthropic → ``api_key``, ``api_base``
         - vertex          → ``project_id``, ``location``
         - lazyllm         → ``text_source``, ``image_source``
 
@@ -230,6 +237,20 @@ def _build_provider_config() -> Dict[str, Any]:
         else:
             logger.info("Provider config — format: openai, api_base: %s", cfg['api_base'])
 
+    elif fmt == 'volcengine':
+        cfg['api_key'] = (
+            _resolve_setting('VOLCENGINE_API_KEY')
+            or _resolve_setting('ARK_API_KEY')
+        )
+        cfg['api_base'] = _resolve_setting('VOLCENGINE_API_BASE', 'https://ark.cn-beijing.volces.com/api/plan/v3')
+
+        if not cfg['api_key']:
+            raise ValueError(
+                "VOLCENGINE_API_KEY or ARK_API_KEY (from database settings or environment) "
+                "is required when AI_PROVIDER_FORMAT=volcengine."
+            )
+        logger.info("Provider config — format: volcengine, api_base: %s", cfg['api_base'])
+
     elif fmt == 'anthropic':
         cfg['api_key'] = _resolve_setting('ANTHROPIC_API_KEY') or _resolve_setting('OPENAI_API_KEY')
         cfg['api_base'] = _resolve_setting('ANTHROPIC_API_BASE', 'https://api.anthropic.com')
@@ -266,7 +287,11 @@ def _build_provider_config() -> Dict[str, Any]:
         vendor = fmt if fmt in LAZYLLM_VENDORS else None
         cfg['format'] = 'lazyllm'
         cfg['text_source'] = _resolve_setting('TEXT_MODEL_SOURCE') or vendor or 'deepseek'
-        cfg['image_source'] = _resolve_setting('IMAGE_MODEL_SOURCE') or vendor or 'doubao'
+        # Vendors without a text2image supplier (kimi/ppio/deepseek/...) cannot
+        # generate images; fall back to a capable vendor like text does.
+        cfg['image_source'] = _resolve_setting('IMAGE_MODEL_SOURCE') or (
+            vendor if vendor in TEXT2IMAGE_CAPABLE_LAZYLLM_VENDORS else None
+        ) or 'doubao'
         logger.info("Provider config — format: lazyllm, vendor: %s, text_source: %s, image_source: %s",
                      vendor, cfg['text_source'], cfg['image_source'])
 
@@ -293,6 +318,7 @@ def _get_model_type_provider_config(model_type: str) -> Dict[str, Any]:
     via {MODEL_TYPE}_MODEL_SOURCE. The source can be:
       - 'gemini': uses {MODEL_TYPE}_API_KEY + {MODEL_TYPE}_API_BASE, fallback to global
       - 'openai': uses {MODEL_TYPE}_API_KEY + {MODEL_TYPE}_API_BASE, fallback to global
+      - 'volcengine': uses {MODEL_TYPE}_API_KEY + {MODEL_TYPE}_API_BASE, fallback to Volcengine/global
       - 'anthropic': uses {MODEL_TYPE}_API_KEY + {MODEL_TYPE}_API_BASE, fallback to global
       - A LazyLLM vendor name (qwen, doubao, etc.): uses lazyllm with that vendor
       - None/empty: falls back to global _build_provider_config()
@@ -396,6 +422,21 @@ def _get_model_type_provider_config(model_type: str) -> Dict[str, Any]:
             'azure_api_version': azure_api_version,
         }
 
+    elif source_lower == 'volcengine':
+        api_key = (_resolve_setting(f'{prefix}_API_KEY')
+                   or _resolve_setting('VOLCENGINE_API_KEY')
+                   or _resolve_setting('ARK_API_KEY'))
+        api_base = (_resolve_setting(f'{prefix}_API_BASE')
+                    or _resolve_setting('VOLCENGINE_API_BASE', 'https://ark.cn-beijing.volces.com/api/plan/v3'))
+
+        if not api_key:
+            raise ValueError(
+                f"API key is required for {model_type} model with Volcengine AgentPlans provider. "
+                f"Set {prefix}_API_KEY, VOLCENGINE_API_KEY, or ARK_API_KEY."
+            )
+        logger.info("Per-model config — %s: volcengine, api_base: %s", model_type, api_base)
+        return {'format': 'volcengine', 'api_key': api_key, 'api_base': api_base}
+
     elif source_lower == 'codex':
         oauth_token = _get_openai_oauth_token()
         if not oauth_token:
@@ -464,14 +505,13 @@ def get_caption_provider(model: str = "gemini-3-flash-preview", route: Optional[
     if fmt == 'anthropic':
         logger.info("Caption provider: Anthropic, model=%s", model)
         return AnthropicTextProvider(api_key=config['api_key'], api_base=config['api_base'], model=model)
-    elif fmt == 'openai':
+    elif fmt in ('openai', 'volcengine'):
         logger.info("Caption provider: OpenAI, model=%s", model)
         return OpenAITextProvider(
             api_key=config['api_key'],
             api_base=config['api_base'],
             model=model,
-            azure_endpoint=config.get('azure_endpoint'),
-            azure_api_version=config.get('azure_api_version'),
+            **({key: config[key] for key in ('azure_endpoint', 'azure_api_version') if config.get(key)}),
         )
     elif fmt == 'vertex':
         logger.info("Caption provider: Vertex AI, model=%s", model)
@@ -523,14 +563,13 @@ def get_text_provider(model: str = "gemini-3-flash-preview", route: Optional[Res
     if fmt == 'anthropic':
         logger.info("Text provider: Anthropic, model=%s", model)
         return AnthropicTextProvider(api_key=config['api_key'], api_base=config['api_base'], model=model)
-    elif fmt == 'openai':
+    elif fmt in ('openai', 'volcengine'):
         logger.info("Text provider: OpenAI, model=%s", model)
         return OpenAITextProvider(
             api_key=config['api_key'],
             api_base=config['api_base'],
             model=model,
-            azure_endpoint=config.get('azure_endpoint'),
-            azure_api_version=config.get('azure_api_version'),
+            **({key: config[key] for key in ('azure_endpoint', 'azure_api_version') if config.get(key)}),
         )
     elif fmt == 'vertex':
         logger.info("Text provider: Vertex AI, model=%s, project=%s", model, config['project_id'])
@@ -554,15 +593,16 @@ def get_text_provider(model: str = "gemini-3-flash-preview", route: Optional[Res
 def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Optional[ResolvedProviderRoute] = None) -> ImageProvider:
     """Factory: return the appropriate image-generation provider.
 
-    Note: OpenAI format does NOT support 4K resolution — only 1K is available.
-    Use Gemini or Vertex AI for higher resolution output.
+    Note: Generic OpenAI-compatible image APIs may not support 2K/4K; provider
+    limits are applied. SenseNova U1.5 Lite supports 1K/2K/4K through its
+    native JSON image endpoints.
 
     Note: Anthropic format doesn't natively support image generation yet.
     This is intended for use with third-party Anthropic-compatible endpoints.
     """
     if route:
         effective_model = route.model or model
-        if route.provider == 'openai':
+        if route.provider == 'openai' or route.adapter == 'openai_image_compat':
             opts = route.adapter_options or {}
             gpt_image_settings = _get_gpt_image_settings()
             route_gpt_image_settings = {
@@ -597,6 +637,8 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
                 gpt_image_output_format=gpt_image_settings['gpt_image_output_format'],
                 gpt_image_output_compression=gpt_image_settings['gpt_image_output_compression'],
                 gpt_image_quality=gpt_image_settings['gpt_image_quality'],
+                image_api_protocol=(route.metadata or {}).get('image_api_protocol') or _resolve_setting('OPENAI_IMAGE_API_PROTOCOL') or 'auto',
+                image_quality=_resolve_setting('IMAGE_QUALITY') or 'auto',
             )
         if route.provider == 'lazyllm':
             return LazyLLMImageProvider(
@@ -625,21 +667,25 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
         logger.info("Image provider: Anthropic, model=%s", model)
         logger.warning("Anthropic format is for compatible endpoints only (official API doesn't support image generation)")
         return AnthropicImageProvider(api_key=config['api_key'], api_base=config['api_base'], model=model)
-    elif fmt == 'openai':
-        logger.info("Image provider: OpenAI, model=%s", model)
-        logger.warning("OpenAI format only supports 1K resolution, 4K is not available")
+    elif fmt in ('openai', 'volcengine'):
+        logger.info("Image provider: %s, model=%s", fmt, model)
+        logger.warning("%s format may not support all resolution settings; provider limits apply", fmt)
+        image_api_protocol = _resolve_setting('OPENAI_IMAGE_API_PROTOCOL') or 'auto'
+        image_quality = _resolve_setting('IMAGE_QUALITY') or 'auto'
         gpt_image_settings = _get_gpt_image_settings()
         return OpenAIImageProvider(
             api_key=config['api_key'],
             api_base=config['api_base'],
             model=model,
-            azure_endpoint=config.get('azure_endpoint'),
-            azure_api_version=config.get('azure_api_version'),
+            **({key: config[key] for key in ('azure_endpoint', 'azure_api_version') if config.get(key)}),
             gpt_image_background=gpt_image_settings['gpt_image_background'],
             gpt_image_size=gpt_image_settings['gpt_image_size'],
             gpt_image_output_format=gpt_image_settings['gpt_image_output_format'],
             gpt_image_output_compression=gpt_image_settings['gpt_image_output_compression'],
             gpt_image_quality=gpt_image_settings['gpt_image_quality'],
+
+            image_api_protocol=image_api_protocol,
+            image_quality=image_quality,
         )
     elif fmt == 'vertex':
         logger.info("Image provider: Vertex AI, model=%s, project=%s", model, config['project_id'])
@@ -653,8 +699,14 @@ def get_image_provider(model: str = "gemini-3.1-flash-image-preview", route: Opt
         return LazyLLMImageProvider(source=source, model=model)
     elif fmt == 'codex':
         resolution = _resolve_setting('DEFAULT_RESOLUTION', '2K') or '2K'
-        logger.info("Image provider: Codex (OAuth), model=%s, resolution=%s", model, resolution)
-        return CodexImageProvider(api_key=config['api_key'], model=model, resolution=resolution)
+        image_quality = _resolve_setting('IMAGE_QUALITY') or 'auto'
+        logger.info("Image provider: Codex (OAuth), model=%s, resolution=%s, quality=%s", model, resolution, image_quality)
+        return CodexImageProvider(
+            api_key=config['api_key'],
+            model=model,
+            resolution=resolution,
+            image_quality=image_quality,
+        )
     else:
         # gemini (default)
         logger.info("Image provider: Gemini, model=%s", model)

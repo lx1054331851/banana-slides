@@ -85,23 +85,24 @@ DETAIL_LEVEL_SPECS = {
 }
 
 _OUTLINE_JSON_FORMAT = """\
-1. 简单格式（适用于没有主要章节的短 PPT）：
-[{"title": "标题1", "page_type": "封面页", "points": ["要点1", "要点2"]}, {"title": "标题2", "page_type": "标准图文页", "points": ["要点1", "要点2"]}]
+1. Simple format (for short PPTs without major sections):
+[{"title": "title1", "points": ["point1", "point2"]}, {"title": "title2", "points": ["point1", "point2"]}]
 
-2. 章节格式（适用于有主要章节的长 PPT）：
+2. Part-based format (for longer PPTs with major sections). The cover (and TOC, if any) are \
+flat top-level entries — they belong to the deck as a whole, never inside a "part" group:
 [
+    {"title": "Welcome", "page_type": "封面页", "points": ["point1", "point2"]},
     {
-    "part": "第一部分：引言",
+    "part": "Part 1: Introduction",
     "pages": [
-        {"title": "欢迎", "page_type": "封面页", "points": ["要点1", "要点2"]},
-        {"title": "概览", "page_type": "目录页", "points": ["要点1", "要点2"]}
+        {"title": "Overview", "page_type": "标准图文页", "points": ["point1", "point2"]}
     ]
     },
     {
-    "part": "第二部分：主体内容",
+    "part": "Part 2: Main Content",
     "pages": [
-        {"title": "主题1", "page_type": "标准图文页", "points": ["要点1", "要点2"]},
-        {"title": "主题2", "page_type": "图表页", "points": ["要点1", "要点2"]}
+        {"title": "Topic 1", "points": ["point1", "point2"]},
+        {"title": "Topic 2", "points": ["point1", "point2"]}
     ]
     }
 ]"""
@@ -200,6 +201,13 @@ _PAGE_DETAIL_MARKDOWN_OUTPUT_FORMAT = """\
 
 def _build_prompt(prompt_text: str, reference_files_content=None, *, tag: str = '') -> str:
     """Prepend reference files XML and log the final prompt."""
+    if tag in {'get_outline_generation_prompt', 'get_outline_generation_prompt_markdown', 'get_outline_refinement_prompt', 'get_description_to_outline_prompt', 'get_description_to_outline_prompt_markdown'}:
+        if tag.startswith('get_description_to_outline'):
+            prompt_text += "\nIf a page argues something, use a takeaway assertion found in or implied by the user's text. Functional pages are exempt; the cover and TOC belong to the deck as a whole, never to a part."
+        else:
+            prompt_text += '\n\n' + _OUTLINE_TAKEAWAY_RULE
+    if tag == 'get_outline_generation_prompt_markdown':
+        prompt_text += '\nDo not output a deck-level document title. Use H1 only for part headers; the cover is a regular H2 page.'
     files_xml = _format_reference_files_xml(reference_files_content)
     final = _resolve_prompt_override(tag, files_xml + prompt_text)
     if tag:
@@ -266,11 +274,15 @@ def _get_previous_requirements_text(previous_requirements: Optional[List[str]]) 
 
 
 def _format_extra_field_instructions(extra_fields: list | None) -> str:
-    """将额外字段列表格式化为 prompt 中的输出要求。"""
+    """将额外字段列表格式化为 prompt 中的输出要求。预置字段用定义好的指令，自定义/旧字段用通用格式。"""
     if not extra_fields:
         return ''
-    parts = [f'{f}：[关于{f}的建议]' for f in extra_fields]
+    parts = [
+        EXTRA_FIELD_INSTRUCTIONS.get(f, f'{f}：[关于{f}的建议，只写其他字段未覆盖的信息]')
+        for f in extra_fields
+    ]
     return '\n'.join([''] + parts)  # 前导换行
+
 
 
 def _format_reference_files_xml(reference_files_content: Optional[List[Dict[str, str]]]) -> str:
@@ -625,8 +637,6 @@ def get_description_to_outline_prompt_markdown(project_context: 'ProjectContext'
 
 --- 页面文字结束 ---
 
-图片素材：
-[如果参考文件或用户输入中存在相关图片素材，以 markdown 格式引用，如 ![描述](/files/xxx/image.png)；否则省略此部分。]
 {_format_extra_field_instructions(extra_fields)}
 """
 
@@ -665,7 +675,7 @@ def get_description_to_outline_prompt_markdown(project_context: 'ProjectContext'
 
 --- 页面文字结束 ---
 
-图片素材：
+配图与素材：
 使用趋势图展示增长曲线，整体保持专业克制的商务风格
 <!-- PAGE_END -->
 
@@ -750,13 +760,6 @@ def get_page_description_prompt(project_context: 'ProjectContext', outline: list
     """生成单个页面描述的 prompt"""
     original_input = _get_original_input(project_context)
 
-    # 单页版使用简短的 concise 描述（与流式版略有不同）
-    detail_level_specs = {
-        'concise': '文字极致地压缩和精简',
-        'default': '清晰明了，每条要点控制在15-20字以内, 避免冗长的句子和复杂的表述',
-        'detailed': '忠于原文的基础上做到内容详实，逻辑清晰。',
-    }
-
     prompt = (f"""\
 我们正在为PPT的每一页生成内容描述。
 用户的原始需求是：\n{original_input}\n
@@ -765,26 +768,25 @@ def get_page_description_prompt(project_context: 'ProjectContext', outline: list
 {page_outline}
 {"**除非特殊要求，第一页的内容需要保持极简，只放标题副标题以及演讲人等（输出到标题后）, 不添加任何素材。**" if page_index == 1 else ""}
 ## 重要提示
-生成的"页面文字"部分会直接渲染到PPT页面上，因此请务必不要包含任何额外的说明性文字或注释，也不要把用户的设计意图显式地放在页面文字中。
+- "页面文字"中的内容会被逐字渲染到 PPT 页面上：只写真正要出现在页面上的文字，不要包含任何说明性文字、注释或设计意图（设计意图写入下方对应字段）。
+- 标题规则：内容页的标题优先写成论断句——一句话陈述本页结论（如"算力瓶颈才是历次 AI 寒冬的根因"），而不是话题短语（如"AI 寒冬回顾"）。大纲中该页的第一条 takeaway 要点是标题的首选来源。封面、目录、章节过渡等功能页保持简短标题。
 
 ## 输出格式
 
 --- 页面文字 ---
 
-[此处使用markdown直接放置正文文字, 细致程度要求：{detail_level_specs[detail_level]}\n\n, 可包含latex公式、表格等内容, 不要重复添加]
+[此处使用markdown直接放置正文文字, 细致程度要求：{DETAIL_LEVEL_SPECS[detail_level]}\n\n, 可包含latex公式、表格等内容, 不要重复添加]
 
 --- 页面文字结束 ---
-
-图片素材:
-[如果文件中存在图片请积极添加； 否则忽略图片素材字段]
 {_format_extra_field_instructions(extra_fields)}
 
-## 关于图片
-如果参考文件中包含以 /files/ 开头的本地文件URL图片（例如 /files/mineru/xxx/image.png），请将这些图片以markdown格式输出，例如：![图片描述](/files/mineru/xxx/image.png)。这些图片会被包含在PPT页面中。
+## 关于素材图片
+如果参考文件中包含以 /files/ 开头的本地文件URL图片（例如 /files/mineru/xxx/image.png），请以 markdown 格式引用（如 ![图片描述](/files/mineru/xxx/image.png)），写入"配图与素材"字段；若该字段未启用，则直接附在页面文字之后。这些图片会被包含在PPT页面中。
 {get_language_instruction(language)}
 """)
 
     return _build_prompt(prompt, project_context.reference_files_content, tag='get_page_description_prompt')
+
 
 
 def get_page_description_markdown_prompt(project_context: 'ProjectContext', outline: list,
@@ -845,11 +847,11 @@ def get_page_description_markdown_prompt(project_context: 'ProjectContext', outl
 - 页面正文优先包含：页面标题、核心结论、页面内容。
 - 封面页内容极简，只保留标题、副标题、汇报信息；不要补正文段落。
 - 若页面适合图表表达，可在正文中说明“建议用图表呈现什么关系”，但不要伪造精确数据。
-- `视觉建议` 优先使用视觉隐喻，不要平铺直叙；并且必须写清主体、意境、风格、画面重点。
+- `配图与素材` 优先使用视觉隐喻，不要平铺直叙；并且必须写清主体、意境、风格、画面重点。
 - 文末必须保留以下三个字段名，单独成行：
-  - `排版建议：...`
-  - `视觉建议：...`
-  - `备注：...`
+  - `版式与重点：...`
+  - `配图与素材：...`
+  - `演讲者备注：...`
 
 # 输出示例
 {_PAGE_DETAIL_MARKDOWN_OUTPUT_FORMAT}
@@ -890,22 +892,20 @@ def get_all_descriptions_stream_prompt(project_context: 'ProjectContext',
 {_format_requirements(project_context.description_requirements, "description")}请为每一页依次生成描述。先输出 `<!-- BEGIN -->` 标记开始，然后逐页输出内容，每页用 `<!-- PAGE_END -->` 结束，全部完成后输出 `<!-- END -->`。
 
 ## 重要提示
-- 生成的页面文字会直接渲染到PPT页面上，请务必不要包含任何额外的说明性文字或注释。
+- "页面文字"中的内容会被逐字渲染到 PPT 页面上：只写真正要出现在页面上的文字，不要包含任何说明性文字、注释或设计意图（设计意图写入下方对应字段）。
+- 标题规则：内容页的标题优先写成论断句——一句话陈述本页结论（如"算力瓶颈才是历次 AI 寒冬的根因"），而不是话题短语（如"AI 寒冬回顾"）。大纲中该页的第一条 takeaway 要点是标题的首选来源。封面、目录、章节过渡等功能页保持简短标题。
 - **第一页（封面页）保持极简**，只放标题、副标题、演讲人等信息，不添加任何素材。
 - 细致程度要求：{DETAIL_LEVEL_SPECS[detail_level]}
 
 ## 输出格式
-每页默认包含"页面文字"和"图片素材"两个部分。图片素材用于引用参考文件中的图片（以 /files/ 开头的本地路径），如果参考文件中没有相关图片则省略该部分。
+每页包含"页面文字"与下列额外字段。素材图片（以 /files/ 开头的本地路径）以 markdown 格式引用，优先写入"配图与素材"字段。
 ```
 <!-- BEGIN -->
 
 --- 页面文字 ---
-[第1页文字内容，可包含标题、副标题、要点、latex公式、表格等，根据实际需求选择，避免堆砌和重复. 不要把用户的设计意图显式地放在页面文字中]
+[第1页文字内容，可包含标题、副标题、要点、latex公式、表格等，根据实际需求选择，避免堆砌和重复. 不要把用户的设计意图显式地放在页面文字中。]
 
 --- 页面文字结束 ---
-
-图片素材：
-[如果参考文件中存在相关图片，以markdown格式引用，如 ![描述](/files/xxx/image.png)；否则省略此部分。如果用户上传了图片素材请积极地添加]
 {_format_extra_field_instructions(extra_fields)}
 <!-- PAGE_END -->
 
@@ -913,9 +913,6 @@ def get_all_descriptions_stream_prompt(project_context: 'ProjectContext',
 [第2页文字内容]
 
 --- 页面文字结束 ---
-
-图片素材：
-[同上]
 {_format_extra_field_instructions(extra_fields)}
 <!-- PAGE_END -->
 ...
@@ -927,6 +924,7 @@ def get_all_descriptions_stream_prompt(project_context: 'ProjectContext',
 """)
 
     return _build_prompt(prompt, project_context.reference_files_content, tag='get_all_descriptions_stream_prompt')
+
 
 
 def get_description_split_prompt(project_context: 'ProjectContext',
@@ -1011,7 +1009,8 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
         title = desc.get('title', '未命名')
         content = desc.get('description_content', '')
         if isinstance(content, dict):
-            content = content.get('text', '')
+            extra_fields = content.get('extra_fields') or {}
+            content = (content.get('text') or '') + '\n' + '\n'.join(f'{key}：{value}' for key, value in extra_fields.items() if value)
         if not isinstance(content, str):
             content = str(content or '')
 
@@ -1041,7 +1040,7 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
         all_descriptions_text = "当前所有页面的描述：\n\n(当前没有内容，需要基于大纲生成新的描述)\n\n"
 
     # 单页 AI 文本优化默认走结构化 JSON 模式，和“从大纲生成页面详情”的输出要求保持一致。
-    force_structured_for_single_page = len(current_descriptions or []) == 1
+    force_structured_for_single_page = len(current_descriptions or []) == 1 and (structured_count > 0 or not any(isinstance(item.get('description_content'), dict) and item['description_content'].get('extra_fields') for item in current_descriptions))
     structured_mode = (
         is_renovation_project
         and structured_count > 0
@@ -1112,6 +1111,7 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
 - 添加或删除要点
 - 调整描述的结构和表达
 - 确保所有页面描述都符合用户的要求
+- 不要凭空删除已有的附加字段；仅按用户要求更新其内容
 - 如果当前没有内容，请根据大纲和用户要求创建新的描述
 
 请为每个页面生成修改后的描述，格式如下：
@@ -1122,7 +1122,7 @@ def get_descriptions_refinement_prompt(current_descriptions: List[Dict], user_re
 - [要点1]
 - [要点2]
 ...
-其他页面素材（如果有请加上，包括markdown图片链接等）
+{_format_extra_field_instructions(list(EXTRA_FIELD_INSTRUCTIONS))}
 
 提示：如果参考文件中包含以 /files/ 开头的本地文件URL图片（例如 /files/mineru/xxx/image.png），请将这些图片以markdown格式输出，例如：![图片描述](/files/mineru/xxx/image.png)，而不是作为普通文本。
 
@@ -1154,8 +1154,11 @@ def get_image_generation_prompt(page_desc: str, outline_text: str,
                                 language: str = None,
                                 has_template: bool = True,
                                 page_index: int = 1,
-                                aspect_ratio: str = "16:9") -> str:
+                                aspect_ratio: str = "16:9",
+                                page_style_text: str = None) -> str:
     """生成图片生成 prompt"""
+    if page_style_text:
+        extra_requirements = "\n\n".join(filter(None, [extra_requirements, "<page_style>\n" + page_style_text + "\n</page_style>"]))
     material_images_note = ""
     if has_material_images:
         material_images_note = (
@@ -1218,3 +1221,429 @@ from services.prompt_auxiliary_prompts import (  # noqa: E402,F401
     parse_narration_generation_result,
     get_narration_generation_prompt,
 )
+
+
+def get_style_from_content_prompt(content: str, language: str = 'zh') -> str:
+    """
+    根据用户输入的 PPT 内容/大纲/主题，自动构思并建模生成专业的 PPT 风格描述。
+    格式与范式参考 4 大经典预设风格（简约商务、现代科技、严谨学术、活泼创意等）。
+    """
+    is_zh = (language or 'zh').lower().startswith('zh')
+    # 截断过长内容，避免不必要的 token 消耗
+    trimmed_content = content.strip()[:3000]
+
+    if is_zh:
+        prompt = f"""\
+你是一位拥有顶级视觉审美与专业幻灯片设计经验的资深 PPT 设计总监。
+请根据用户提供的 PPT 主题、大纲或内容，深度分析其行业领域、受众群体、表达情绪与应用场景，为其量身打造一套最契合的 PPT 视觉风格建模描述。
+
+【输入内容】：
+{trimmed_content}
+
+【风格建模设计规范】：
+你生成的风格描述必须参照以下 4 个核心维度，输出为结构清晰、指令具体、可直接作为 AI 生图/设计 Prompt 的段落文本（请包含以下4个小标题段落，不要输出任何多余的前言、解释或总结）：
+
+1. **视觉描述**：界定全局视觉语言与设计范式（如极致扁平、极简留白、未来科技流体、杂志排版、手绘亲和等），阐述整体设计氛围、光照环境（如均匀演播室漫射光、暗调霓虹辉光、自然漫射光等）与基调。
+2. **配色与材质**：明确背景色（给出具体建议十六进制色值，如 #0B1F3B 或 #F8F7F2）、正文/标题文字色、核心强调色（注明占比限制，如不超过 3%~5%）及次要辅助色；明确材质表现（如平滑矢量色块、哑光纸质颗粒、玻璃拟态等）与阴影规则（如禁止阴影/极弱软阴影）。
+3. **内容与排版**：明确网格对齐规范、页面分区结构（几何分区/模块化卡片/留白比例）、装饰线条与边框粗细色值，以及中英文字体调性（无衬线体、衬线体、圆体等字重与层级逻辑）。
+4. **插图与渲染要求**：明确插画/图形资产形态（如统一白色线稿、2D扁平矢量、手绘插画、玻璃微拟态等）、图表配色与要求，以及最终渲染质量和美学风格（如超高清矢量插画与商务信息图风格，边缘锐利无锯齿）。
+
+【参考经典范例格式】：
+范例一（简约商务）：
+视觉描述：全局视觉语言严格对齐国际顶级咨询公司通用商务范式，强调专业、稳重、克制与可复用。全稿采用极致扁平化与强秩序网格，以信息清晰传达为唯一优先级。禁止渐变、发光、高光、拟物纹理与非必要装饰。光照固定为均匀演播室漫射光，无硬阴影。
+配色与材质：背景色锁定为海军蓝（#0B1F3B），文字颜色固定为纯白（#FFFFFF），唯一强调色为天蓝（#38BDF8，面积不超过3%），辅助分割线使用浅灰（#E5E7EB）。材质为平滑矢量色块，不使用阴影与复杂材质。
+内容与排版：遵循严格模块化网格系统，页面几何分区清晰，边界使用1px细线（#E5E7EB）划分。字体为现代无衬线体（如思源黑体/Roboto），层级分明。
+插图与渲染要求：所有视觉素材统一为白色矢量线稿（#FFFFFF），关键路径用天蓝点亮；输出超高清矢量插画与商务信息图风格，边缘锐利无锯齿。
+
+范例二（现代科技）：
+视觉描述：全局视觉语言融合深邃未来感与现代SaaS产品美学。整体氛围神秘、深邃且富有动感，光照采用暗调环境下的自发光与辉光效果。
+配色与材质：背景色采用午夜黑（#0B0F19），主色调使用电光蓝（#00A3FF）与赛博紫（#7C3AED）线性渐变，材质运用半透明磨砂玻璃与微发光网格线。
+内容与排版：采用不对称动态平衡排版，融入轻量3D线框几何或芯片结构，使用科技感等宽字体或现代无衬线体。
+插图与渲染要求：高精度渲染风格，强调光线追踪、辉光与景深控制，粒子特效细腻且充满视觉冲击力。
+
+【输出要求】：
+- 直接输出上述规范格式的风格描述文本（包含 视觉描述、配色与材质、内容与排版、插图与渲染要求）。
+- 严禁包含任何前缀闲聊（如"好的，为您生成如下风格："）或后缀说明。
+"""
+    else:
+        prompt = f"""\
+You are a senior PPT visual design director. Analyze the given presentation topic/outline/content and generate a tailored, professional visual style description for this presentation.
+
+[Input Content]:
+{trimmed_content}
+
+[Style Modeling Requirements]:
+Your generated style description MUST cover these 4 core dimensions:
+1. **Visual Description**: Global visual language, design paradigm (e.g. flat, minimalist, futuristic, editorial), lighting, and overall mood.
+2. **Color & Material**: Background color (with exact hex codes e.g. #0B1F3B), text color, primary accent color (with usage cap e.g. <=3%), secondary colors, material finish (flat color block, matte paper, frosted glass), and shadow rules.
+3. **Content & Typography**: Grid alignment, page partitioning, divider lines, and font classification (serif, sans-serif, weight hierarchy).
+4. **Illustration & Rendering**: Illustration style (vector line art, flat 2D, 3D clay, etc.), chart specifications, and final rendering aesthetic quality.
+
+Output ONLY the structured style description text without any conversational preamble or markdown code blocks.
+"""
+    logger.debug(f"[get_style_from_content_prompt] Final prompt:\n{prompt}")
+    return prompt
+
+
+def get_template_analysis_prompt(language: str = 'zh') -> str:
+    """
+    PRD §5.3 9-field schema. Returns markdown-fenced JSON; parsed by
+    AIService.generate_json_with_image (3x soft retry).
+
+    On unrecognizable input the model must return {"error": "not_a_slide"};
+    the caller flips analysis_status='failed' (decision 2).
+    """
+    is_zh = language.lower().startswith('zh')
+
+    if is_zh:
+        return """你是一名 PPT 模板视觉分析师。仔细观察这张幻灯片图像，提取它作为"模板"的结构化特征。
+
+# 输出要求
+
+严格返回**一个** JSON 对象，包裹在 ```json 代码块中。**禁止**输出代码块以外的任何文字。
+
+如果这张图根本不是幻灯片（例如是一张照片、表情包、自拍），返回：
+```json
+{"error": "not_a_slide"}
+```
+
+# JSON Schema (10 字段)
+
+```json
+{
+  "template_role": "cover | content | section_divider | summary | data | comparison | timeline | other",
+  "layout_structure": "用 kebab-case 概括版式，如 title-top-two-column / hero-image-bottom-text",
+  "extracted_text": "模板图上可见的真实文字：主标题 + 关键要点，≤80 字；若全是 Lorem ipsum 等占位文字则留空字符串",
+  "content_capacity": "low | medium | high",
+  "text_regions": [
+    {"name": "title", "position": "top | center | bottom | left | right", "size": "small | medium | large"}
+  ],
+  "image_regions": [
+    {"name": "hero", "position": "top | center | bottom | left | right", "size": "small | medium | large"}
+  ],
+  "visual_density": "low | medium | high",
+  "style_keywords": ["最多 5 个英文形容词，如 academic / clean / minimalist / bold / playful"],
+  "color_palette": ["最多 5 个主色 hex，#RRGGBB"],
+  "notes": "用一两句话补充任何 schema 字段未覆盖的视觉特征，如固定 logo、装饰元素、特殊版式约束"
+}
+```
+
+# 示例 1 — 封面页
+
+```json
+{
+  "template_role": "cover",
+  "layout_structure": "centered-title-large-hero-bg",
+  "extracted_text": "智慧城市数据平台发布会 · 2025 产品战略",
+  "content_capacity": "low",
+  "text_regions": [
+    {"name": "title", "position": "center", "size": "large"},
+    {"name": "subtitle", "position": "center", "size": "medium"}
+  ],
+  "image_regions": [
+    {"name": "background", "position": "center", "size": "large"}
+  ],
+  "visual_density": "low",
+  "style_keywords": ["bold", "modern", "high-contrast"],
+  "color_palette": ["#0E1A2B", "#F4B400"],
+  "notes": "底部 1/4 处有半透明渐变蒙版，便于叠加白色标题"
+}
+```
+
+# 示例 2 — 双栏正文
+
+```json
+{
+  "template_role": "content",
+  "layout_structure": "title-top-two-column",
+  "extracted_text": "研究方法与数据来源：问卷调查 / 深度访谈",
+  "content_capacity": "medium",
+  "text_regions": [
+    {"name": "title", "position": "top", "size": "medium"},
+    {"name": "left_body", "position": "left", "size": "medium"},
+    {"name": "right_body", "position": "right", "size": "medium"}
+  ],
+  "image_regions": [],
+  "visual_density": "medium",
+  "style_keywords": ["academic", "clean", "blue"],
+  "color_palette": ["#FFFFFF", "#1F4E79", "#4472C4"],
+  "notes": "右下角有固定 logo 区域，左栏与右栏之间有 4px 浅灰分割线"
+}
+```
+
+# 示例 3 — 时间线
+
+```json
+{
+  "template_role": "timeline",
+  "layout_structure": "horizontal-timeline-five-nodes",
+  "extracted_text": "项目实施路线图：启动 / 调研 / 开发 / 试点 / 推广",
+  "content_capacity": "high",
+  "text_regions": [
+    {"name": "title", "position": "top", "size": "medium"},
+    {"name": "node_labels", "position": "center", "size": "small"}
+  ],
+  "image_regions": [
+    {"name": "node_icons", "position": "center", "size": "small"}
+  ],
+  "visual_density": "high",
+  "style_keywords": ["infographic", "timeline", "professional"],
+  "color_palette": ["#2E75B6", "#A9D18E", "#FFC000", "#ED7D31"],
+  "notes": "贯穿水平的箭头主线，5 个等距节点，节点上方放图标、下方放文字"
+}
+```
+
+# 关键约束
+
+- `style_keywords` 与 `color_palette` 最多 5 项
+- `text_regions` / `image_regions` 数组可空，但必须存在
+- 所有 enum 字段严格使用上述候选值，不得自创
+- `notes` 字段是你主观补充的"AI 观察"，鼓励填写但不超过 80 字"""
+
+    return """You are a slide-template visual analyst. Inspect this slide image and extract structured features that describe it **as a template**.
+
+# Output
+
+Return exactly **one** JSON object inside a ```json fenced code block. Do NOT emit any text outside the code block.
+
+If the image is clearly not a slide (e.g. a photo, meme, selfie), return:
+```json
+{"error": "not_a_slide"}
+```
+
+# JSON Schema (10 fields)
+
+```json
+{
+  "template_role": "cover | content | section_divider | summary | data | comparison | timeline | other",
+  "layout_structure": "kebab-case layout label, e.g. title-top-two-column / hero-image-bottom-text",
+  "extracted_text": "real text visible on the template: main title + key bullets, <= 80 chars; empty string if it is all placeholder text (Lorem ipsum etc.)",
+  "content_capacity": "low | medium | high",
+  "text_regions": [
+    {"name": "title", "position": "top | center | bottom | left | right", "size": "small | medium | large"}
+  ],
+  "image_regions": [
+    {"name": "hero", "position": "top | center | bottom | left | right", "size": "small | medium | large"}
+  ],
+  "visual_density": "low | medium | high",
+  "style_keywords": ["up to 5 English adjectives, e.g. academic / clean / minimalist / bold / playful"],
+  "color_palette": ["up to 5 dominant hex colors, #RRGGBB"],
+  "notes": "one or two sentences capturing visual specifics not covered by other fields, e.g. fixed logo, decorative motifs, layout constraints"
+}
+```
+
+# Example 1 — cover
+
+```json
+{
+  "template_role": "cover",
+  "layout_structure": "centered-title-large-hero-bg",
+  "extracted_text": "Smart City Data Platform — 2025 Product Strategy",
+  "content_capacity": "low",
+  "text_regions": [
+    {"name": "title", "position": "center", "size": "large"},
+    {"name": "subtitle", "position": "center", "size": "medium"}
+  ],
+  "image_regions": [
+    {"name": "background", "position": "center", "size": "large"}
+  ],
+  "visual_density": "low",
+  "style_keywords": ["bold", "modern", "high-contrast"],
+  "color_palette": ["#0E1A2B", "#F4B400"],
+  "notes": "Translucent gradient overlay on the lower quarter to host white title text"
+}
+```
+
+# Example 2 — two-column content
+
+```json
+{
+  "template_role": "content",
+  "layout_structure": "title-top-two-column",
+  "extracted_text": "Research Methods & Data Sources: surveys / interviews",
+  "content_capacity": "medium",
+  "text_regions": [
+    {"name": "title", "position": "top", "size": "medium"},
+    {"name": "left_body", "position": "left", "size": "medium"},
+    {"name": "right_body", "position": "right", "size": "medium"}
+  ],
+  "image_regions": [],
+  "visual_density": "medium",
+  "style_keywords": ["academic", "clean", "blue"],
+  "color_palette": ["#FFFFFF", "#1F4E79", "#4472C4"],
+  "notes": "Fixed logo area at bottom-right, 4px light-gray divider between columns"
+}
+```
+
+# Example 3 — timeline
+
+```json
+{
+  "template_role": "timeline",
+  "layout_structure": "horizontal-timeline-five-nodes",
+  "extracted_text": "Implementation Roadmap: kickoff / research / build / pilot / rollout",
+  "content_capacity": "high",
+  "text_regions": [
+    {"name": "title", "position": "top", "size": "medium"},
+    {"name": "node_labels", "position": "center", "size": "small"}
+  ],
+  "image_regions": [
+    {"name": "node_icons", "position": "center", "size": "small"}
+  ],
+  "visual_density": "high",
+  "style_keywords": ["infographic", "timeline", "professional"],
+  "color_palette": ["#2E75B6", "#A9D18E", "#FFC000", "#ED7D31"],
+  "notes": "Horizontal arrow spine, 5 evenly-spaced nodes, icons above, labels below"
+}
+```
+
+# Constraints
+
+- `style_keywords` and `color_palette`: up to 5 items
+- `text_regions` / `image_regions` may be empty arrays but must be present
+- All enum fields must use the listed candidates only
+- `notes` is your subjective "AI observation"; encouraged but max ~80 words"""
+
+
+def get_template_auto_match_prompt(templates: list, pages: list, language: str = 'zh') -> str:
+    """
+    Decision 5 prompt. Returns the full instruction string ready for
+    generate_json. The caller is responsible for input trimming
+    (page summary <= 100 chars, notes <= 200 chars, style_keywords <= 5).
+    """
+    is_zh = language.lower().startswith('zh')
+
+    templates_json = json.dumps(templates, ensure_ascii=False, indent=2)
+    pages_json = json.dumps(pages, ensure_ascii=False, indent=2)
+
+    if is_zh:
+        return f"""你是一名 PPT 模板调度师。给定一组项目内的"模板"和一份按 order_index 排序的页面摘要，请为每页选择最合适的模板。
+
+# 候选模板（asset_id 必须从这里挑选，禁止编造）
+
+```json
+{templates_json}
+```
+
+# 待匹配页面
+
+```json
+{pages_json}
+```
+
+# 输出要求
+
+严格返回**一个** JSON 数组，包裹在 ```json 代码块中。每个元素对应一页：
+
+```json
+[
+  {{
+    "page_id": "<必须等于输入页面的 page_id>",
+    "template_asset_id": "<候选模板里的 asset_id；status=undecided 时为 null>",
+    "status": "matched | undecided",
+    "confidence": 0.0,
+    "reason": "≤80 字，解释为什么选这张/为什么放弃"
+  }}
+]
+```
+
+# 选择原则
+
+按以下优先级依次考量：
+
+1. **角色对齐**：封面必须分到 `template_role=cover`，目录、分章节、总结同理。角色错配是最严重的错误。
+2. **排版结构匹配**：主要依据——页面的图文构成（`layout_hint`、`summary`）应与模板的 `layout_structure` / `text_regions` / `image_regions` 吻合；`content_density` 与 `content_capacity` / `visual_density` 对应（low↔low, high↔high）。
+3. **文字对应辅助消歧**：在角色与排版都合适的候选之间，若模板的 `extracted_text` 与该页 `title`/`summary` 明显对应（模板很可能就是这一页的草稿/成稿），优先选它并提高 confidence；由此定案时不受第 5 条节奏限制，整库逐页对应时自然形成一对一。它只辅助消歧，不得为迁就文字对应而选排版不合适的模板。`sort_order` 与 `order_index` 一致可作佐证；占位文字（空 `extracted_text`）不参与。
+4. **风格连贯（tie-break）**：模板库风格通常统一，且生成时模板会把风格强加给内容，风格只在库内风格不一时用于收尾——保持全篇连贯，避免相邻页风格跳变。
+5. **节奏感**：避免连续 5 页用同一张模板；同一模板间至少留 1 页间隔（除非候选数量不足）。
+6. **不确定时**：宁可返回 `status=undecided`（`template_asset_id=null`），让用户手动决定，也不要乱猜。`confidence < 0.5` 时建议改用 undecided。
+7. **绝不**返回不在候选列表里的 `asset_id`。
+
+# 输出长度
+
+数组长度必须严格等于待匹配页面数量；`page_id` 顺序应与输入一致。"""
+
+    return f"""You are a slide-template assigner. Given a project's template library and a page-summary list (sorted by order_index), pick the best template for each page.
+
+# Candidate templates (asset_id MUST come from this list; never invent)
+
+```json
+{templates_json}
+```
+
+# Pages to match
+
+```json
+{pages_json}
+```
+
+# Output
+
+Return exactly **one** JSON array inside a ```json fenced code block. One element per page:
+
+```json
+[
+  {{
+    "page_id": "<must match an input page_id>",
+    "template_asset_id": "<an asset_id from the candidates; null when status=undecided>",
+    "status": "matched | undecided",
+    "confidence": 0.0,
+    "reason": "<= 80 chars: why this template, or why undecided"
+  }}
+]
+```
+
+# Principles
+
+Weigh candidates in this order:
+
+1. **Role alignment**: covers must get `template_role=cover`; TOC, section dividers and summaries likewise. A role mismatch is the worst possible error.
+2. **Layout fit**: the main criterion — the page's text/image mix (`layout_hint`, `summary`) should fit the template's `layout_structure` / `text_regions` / `image_regions`; `content_density` should align with `content_capacity` / `visual_density` (low↔low, high↔high).
+3. **Text correspondence as disambiguator**: among candidates that already fit role and layout, if a template's `extracted_text` clearly corresponds to the page's `title`/`summary` (the template is likely this page's draft), prefer it and raise confidence; a choice settled this way is exempt from principle 5, so a fully corresponding library naturally maps one-to-one. This is auxiliary only — never pick a layout-unsuitable template just to honor text correspondence. Matching `sort_order` vs `order_index` is supporting evidence; placeholder text (empty `extracted_text`) never counts.
+4. **Style cohesion (tie-break)**: a project library is usually style-uniform, and generation imposes the template's style onto the content anyway; use style only when the library mixes styles — keep the deck cohesive and avoid jarring switches between adjacent pages.
+5. **Rhythm**: avoid 5 consecutive pages with the same template; keep at least 1 page gap when candidates allow.
+6. **When unsure**: prefer `status=undecided` (template_asset_id=null) over guessing. confidence<0.5 should be undecided.
+7. **Never** return an asset_id outside the candidate list.
+
+# Length
+
+Array length must equal the number of input pages; `page_id` order must match the input."""
+
+
+
+_OUTLINE_TAKEAWAY_RULE = """\
+Takeaway rule:
+- For content pages, the FIRST point must be the page's takeaway: one complete assertion \
+sentence stating the conclusion the audience should remember (e.g. "Compute limits, not \
+lack of ideas, caused every AI winter"), never a topic phrase (e.g. "AI winter review").
+- State the conclusion ITSELF; do not merely announce that a conclusion exists. Write \
+"Self-hosting breaks even within 12-18 months once daily requests pass the threshold", NOT \
+"The break-even analysis reveals when to switch" — the latter looks like a sentence but only \
+names the topic while hiding the actual answer.
+- Follow the takeaway with 1-2 points giving the EVIDENCE behind it — concrete data, examples, \
+or mechanisms — not a reworded restatement of the takeaway itself.
+- For functional pages (cover, table of contents, section divider, thank-you/Q&A), points \
+only describe what the page contains — do not force assertions.
+- The cover and table of contents page belong to the deck as a whole, never to a part: do \
+not nest them under a `# Part` heading, and do not give them a "part" value.
+- Read in order, the takeaways should form a coherent storyline of the whole deck."""
+
+
+EXTRA_FIELD_INSTRUCTIONS = {
+    '配图与素材': (
+        '配图与素材：[本页除文字外要展示什么：需要绘制的图表/图示/插画，写明类型与要表达的内容'
+        '（如"折线图：2020-2025 营收增长，突出 2023 年拐点"）；'
+        '要使用的真实素材图片以 markdown 引用（如 ![说明](/files/xxx/image.png)）。'
+        '不要写正文文字（属于页面文字），不要写摆放位置（属于版式与重点）。最多 3 项；无需配图时省略此字段]'
+    ),
+    '版式与重点': (
+        '版式与重点：[不超过两句：第一句写版式结构'
+        '（如：上标题下两栏 / 左文右图 / 横向时间线 / 大图铺底文字浮层 / 居中大标题），'
+        '第二句写视觉重点（观众第一眼应看到什么、哪个元素放大或强调）。'
+        '只描述已有内容如何编排，不引入新内容，不复述页面文字]'
+    ),
+    '演讲者备注': (
+        '演讲者备注：[演讲时的口头讲解要点：推理展开、页间过渡、补充例子。'
+        '此字段不会渲染到页面上，也不影响生图]'
+    ),
+}

@@ -68,10 +68,13 @@ export const LAZYLLM_SOURCES = [
   { value: 'minimax', label: 'MiniMax' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'kimi', label: 'Kimi' },
+  { value: 'ppio', label: 'PPIO' },
+  { value: 'aiping', label: 'AIPing' },
 ];
 
 // 全局 provider 下拉（不含 profile:*）
 export const GLOBAL_PROVIDER_SOURCES = [
+  { value: 'volcengine', label: '火山 AgentPlans' },
   { value: 'gemini', label: 'Gemini' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'azure-openai', label: 'Azure OpenAI' },
@@ -98,6 +101,8 @@ export const initialFormData = {
   mineru_api_base: '',
   mineru_token: '',
   image_resolution: '2K',
+  image_quality: 'auto',
+  enable_image_quality_control: false,
   max_description_workers: 5,
   max_image_workers: 8,
   output_language: 'zh' as OutputLanguage,
@@ -238,6 +243,8 @@ export const formDataFromSettings = (data: SettingsType): typeof initialFormData
   azure_openai_api_version: data.azure_openai_api_version || '2024-10-21',
   api_key: '',
   image_resolution: data.image_resolution || '2K',
+  image_quality: data.image_quality || 'auto',
+  enable_image_quality_control: data.enable_image_quality_control || false,
   max_description_workers: data.max_description_workers || 5,
   max_image_workers: data.max_image_workers || 8,
   text_model: data.text_model || '',

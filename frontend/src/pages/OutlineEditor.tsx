@@ -2,109 +2,12 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Save, ArrowRight, Plus, FileText, Sparkle, Download, Upload, PanelLeftClose, PanelLeftOpen, LayoutGrid, List, ArrowUp, Trash2, X } from 'lucide-react';
 import { useT } from '@/hooks/useT';
+import { OutlineEditorImportModal } from './components/OutlineEditorImportModal';
 import mammoth from 'mammoth/mammoth.browser';
 
 // 组件内翻译
-const outlineI18n = {
-  zh: {
-    home: { title: '蕉幻' },
-    outline: {
-      title: "编辑大纲", pageCount: "共 {{count}} 页", addPage: "添加页面",
-      generateDescriptions: "生成描述", generating: "生成中...", chapter: "章节",
-      page: "第 {{num}} 页", titleLabel: "标题", keyPoints: "要点",
-      keyPointsPlaceholder: "要点（每行一个）", addKeyPoint: "添加要点",
-      deletePage: "删除页面", confirmDeletePage: "确定要删除这一页吗？",
-      preview: "预览", clickToPreview: "点击左侧卡片查看详情",
-      noPages: "还没有页面", noPagesHint: "点击「添加页面」手动创建，或「自动生成大纲」让 AI 帮你完成",
-      noPagesGenerating: "正在连接模型并生成大纲...",
-      noPagesGeneratingHint: "已开始流式生成，第一页返回前会短暂等待，请勿重复点击生成按钮。",
-      parseOutline: "解析大纲", autoGenerate: "自动生成大纲",
-      reParseOutline: "重新解析大纲", reGenerate: "重新生成大纲", export: "导出大纲", import: "导入",
-      multiSelectDelete: "多选删除", cancelMultiSelect: "取消选择", deleteSelected: "删除已选", selectedCount: "已选 {{count}} 项",
-      aiPlaceholder: "例如：增加一页关于XXX的内容、删除第3页、合并前两页... · Ctrl+Enter提交",
-      aiPlaceholderShort: "例如：增加/删除页面... · Ctrl+Enter",
-      viewMode: { list: "列表", grid: "网格" },
-      contextLabels: { idea: "PPT构想", outline: "大纲", description: "描述" },
-      inputLabel: { idea: "PPT 构想", outline: "原始大纲", description: "页面描述", ppt_renovation: "原始 PPT 内容" },
-      inputPlaceholder: { idea: "输入你的 PPT 构想...", outline: "输入大纲内容...", description: "输入页面描述...", ppt_renovation: "已从 PDF 中提取内容" },
-      backToTop: "返回顶部",
-      rawInputLabel: "原文内容",
-      rawInputPlaceholder: "上传文档后会在这里显示原文，也可以直接粘贴",
-      selectSourceFile: "选择文件",
-      parseSource: "解析文档",
-      parsingSource: "解析中...",
-      messages: {
-        outlineEmpty: "大纲不能为空", generateSuccess: "描述生成完成", generateFailed: "生成描述失败",
-        generateIncomplete: "大纲生成可能不完整，请检查后重试",
-        confirmRegenerate: "重新生成将更新所有页面标题。已有的描述和图片会按位置保留，但如果新大纲页数减少，多出的页面及其内容将被删除。确定继续吗？",
-        confirmRegenerateTitle: "确认重新生成",
-        lockPageCount: "锁定页面数量（不允许减少，用空白页填补）",
-        refineSuccess: "大纲修改成功",
-        refineFailed: "修改失败，请稍后重试", exportSuccess: "导出成功",
-        importSuccess: "导入成功", importFailed: "导入失败，请检查文件格式", importEmpty: "文件中未找到有效页面",
-        loadingProject: "加载项目中...", generatingOutline: "生成大纲中...",
-        parseSourceSuccess: "解析完成",
-        parseSourceFailed: "解析失败",
-        parseSourceEmpty: "请先选择文件或粘贴原文",
-        unsupportedFile: "仅支持 .docx / .txt / .md 文件",
-        saveFailed: "保存失败",
-        deleteFailed: "删除页面失败",
-        confirmDeleteSelected: "确定删除选中的 {{count}} 页吗？此操作不可撤销。",
-        confirmDeleteSelectedTitle: "确认批量删除",
-        deleteSelectedSuccess: "已删除 {{count}} 页",
-      }
-    }
-  },
-  en: {
-    home: { title: 'Banana Slides' },
-    outline: {
-      title: "Edit Outline", pageCount: "{{count}} pages", addPage: "Add Page",
-      generateDescriptions: "Generate Descriptions", generating: "Generating...", chapter: "Chapter",
-      page: "Page {{num}}", titleLabel: "Title", keyPoints: "Key Points",
-      keyPointsPlaceholder: "Key points (one per line)", addKeyPoint: "Add Key Point",
-      deletePage: "Delete Page", confirmDeletePage: "Are you sure you want to delete this page?",
-      preview: "Preview", clickToPreview: "Click a card on the left to view details",
-      noPages: "No pages yet", noPagesHint: "Click \"Add Page\" to create manually, or \"Auto Generate\" to let AI help you",
-      noPagesGenerating: "Connecting to the model and generating the outline...",
-      noPagesGeneratingHint: "Streaming has started. There may be a short wait before the first page appears. Please avoid clicking generate again.",
-      parseOutline: "Parse Outline", autoGenerate: "Auto Generate Outline",
-      reParseOutline: "Re-parse Outline", reGenerate: "Regenerate Outline", export: "Export Outline", import: "Import",
-      multiSelectDelete: "Multi-delete", cancelMultiSelect: "Cancel", deleteSelected: "Delete Selected", selectedCount: "{{count}} selected",
-      aiPlaceholder: "e.g., Add a page about XXX, delete page 3, merge first two pages... · Ctrl+Enter to submit",
-      aiPlaceholderShort: "e.g., Add/delete pages... · Ctrl+Enter",
-      viewMode: { list: "List", grid: "Grid" },
-      contextLabels: { idea: "PPT Idea", outline: "Outline", description: "Description" },
-      inputLabel: { idea: "PPT Idea", outline: "Original Outline", description: "Page Descriptions", ppt_renovation: "Original PPT Content" },
-      inputPlaceholder: { idea: "Enter your PPT idea...", outline: "Enter outline content...", description: "Enter page descriptions...", ppt_renovation: "Content extracted from PDF" },
-      backToTop: "Back to top",
-      rawInputLabel: "Source Text",
-      rawInputPlaceholder: "Upload a document to show the source text, or paste it here",
-      selectSourceFile: "Choose File",
-      parseSource: "Parse Document",
-      parsingSource: "Parsing...",
-      messages: {
-        outlineEmpty: "Outline cannot be empty", generateSuccess: "Descriptions generated successfully", generateFailed: "Failed to generate descriptions",
-        generateIncomplete: "Outline generation may be incomplete, please review and retry",
-        confirmRegenerate: "Regenerating will update all page titles. Existing descriptions and images are preserved by position, but if the new outline has fewer pages, extra pages and their content will be removed. Continue?",
-        confirmRegenerateTitle: "Confirm Regenerate",
-        lockPageCount: "Lock page count (prevent reduction, fill with blank pages)",
-        refineSuccess: "Outline modified successfully",
-        refineFailed: "Modification failed, please try again", exportSuccess: "Export successful",
-        importSuccess: "Import successful", importFailed: "Import failed, please check file format", importEmpty: "No valid pages found in file",
-        loadingProject: "Loading project...", generatingOutline: "Generating outline...",
-        parseSourceSuccess: "Parsing complete",
-        parseSourceFailed: "Parsing failed",
-        parseSourceEmpty: "Please choose a file or paste source text first",
-        unsupportedFile: "Only .docx, .txt, or .md files are supported",
-        saveFailed: "Save failed",
-        deleteFailed: "Failed to delete page",
-        confirmDeleteSelected: "Delete the selected {{count}} page(s)? This cannot be undone.",
-        confirmDeleteSelectedTitle: "Confirm Bulk Delete",
-        deleteSelectedSuccess: "{{count}} page(s) deleted",
-      }
-    }
-  }
-};
+import { outlineI18n } from './OutlineEditor.i18n';
+
 import {
   DndContext,
   closestCenter,
@@ -129,7 +32,7 @@ import { OutlineCard } from '@/components/outline/OutlineCard';
 import { useProjectStore } from '@/store/useProjectStore';
 import { refineOutline, updateProject, addPage, parseDescriptionToPages, type Material } from '@/api/endpoints';
 import { useImagePaste, buildMaterialsMarkdown } from '@/hooks/useImagePaste';
-import { exportProjectToMarkdown, parseMarkdownPages } from '@/utils/projectUtils';
+import { exportProjectToMarkdown } from '@/utils/projectUtils';
 import type { Page } from '@/types';
 
 // 可排序的卡片包装器
@@ -196,8 +99,11 @@ export const OutlineEditor: React.FC = () => {
     generateOutline,
     generateOutlineStream,
     isGlobalLoading,
-    isOutlineStreaming,
+    outlineStreamingProjectIds,
   } = useProjectStore();
+
+  const isOutlineStreaming = Boolean(currentProject?.id && outlineStreamingProjectIds.includes(currentProject.id));
+  const isBlankProject = currentProject?.creation_type === 'blank';
 
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
@@ -284,7 +190,7 @@ export const OutlineEditor: React.FC = () => {
   // the shared-ref bug where insertAtCursor targets the wrong (hidden) instance.
   const desktopTextareaRef = useRef<MarkdownTextareaRef>(null);
   const mobileTextareaRef = useRef<MarkdownTextareaRef>(null);
-  const importFileRef = useRef<HTMLInputElement>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
   const sourceFileRef = useRef<HTMLInputElement>(null);
   const getInputText = useCallback((project: typeof currentProject) => {
     if (!project) return '';
@@ -462,7 +368,7 @@ export const OutlineEditor: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!currentProject?.id || currentProject.pages.length > 0 || isOutlineStreaming) return;
+    if (isBlankProject || !currentProject?.id || currentProject.pages.length > 0 || isOutlineStreaming) return;
     if (!['idea', 'outline', 'descriptions'].includes(currentProject.creation_type || 'idea')) return;
     if (autoGenerateStartedRef.current === currentProject.id) return;
 
@@ -509,34 +415,6 @@ export const OutlineEditor: React.FC = () => {
     exportProjectToMarkdown(currentProject, { outline: true, description: false });
     show({ message: t('outline.messages.exportSuccess'), type: 'success' });
   }, [currentProject, show]);
-
-  // 导入大纲 Markdown 文件（追加新页面）
-  const handleImportOutline = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (importFileRef.current) importFileRef.current.value = '';
-    if (!file || !currentProject || !projectId) return;
-    try {
-      const text = await file.text();
-      const parsed = parseMarkdownPages(text);
-      if (parsed.length === 0) {
-        show({ message: t('outline.messages.importEmpty'), type: 'error' });
-        return;
-      }
-      const startIndex = currentProject.pages.reduce((max, p) => Math.max(max, (p.order_index ?? 0) + 1), 0);
-      await Promise.all(parsed.map(({ title, page_type, points, text: desc, part, extra_fields }, i) =>
-        addPage(projectId, {
-          outline_content: { title, page_type: page_type || '标准图文页', points },
-          description_content: desc ? { text: desc, ...(extra_fields ? { extra_fields } : {}) } : undefined,
-          part,
-          order_index: startIndex + i,
-        })
-      ));
-      await syncProject(projectId);
-      show({ message: t('outline.messages.importSuccess'), type: 'success' });
-    } catch {
-      show({ message: t('outline.messages.importFailed'), type: 'error' });
-    }
-  }, [currentProject, projectId, syncProject, show, t]);
 
   const formatPageDescriptions = useCallback((pageDescriptions: string[]) => {
     const cleaned = pageDescriptions.map((desc) => desc.trim()).filter(Boolean);
@@ -766,7 +644,7 @@ export const OutlineEditor: React.FC = () => {
             >
               {t('outline.addPage')}
             </Button>
-            {currentProject.pages.length === 0 ? (
+            {isBlankProject ? null : currentProject.pages.length === 0 ? (
               <Button
                 variant="secondary"
                 onClick={handleGenerateOutline}
@@ -801,7 +679,7 @@ export const OutlineEditor: React.FC = () => {
             <Button
               variant="secondary"
               icon={<Upload size={16} className="md:w-[18px] md:h-[18px]" />}
-              onClick={() => importFileRef.current?.click()}
+              onClick={() => setShowImportModal(true)}
               className="flex-1 sm:flex-initial text-sm md:text-base"
             >
               {t('outline.import')}
@@ -837,7 +715,7 @@ export const OutlineEditor: React.FC = () => {
                 {t('outline.multiSelectDelete')}
               </Button>
             )}
-            <input ref={importFileRef} type="file" accept=".md,.txt" className="hidden" onChange={handleImportOutline} />
+            <OutlineEditorImportModal isOpen={showImportModal} project={currentProject} onClose={() => setShowImportModal(false)} onImported={() => syncProject(projectId)} />
             {/* 手机端：保存按钮 */}
             <Button
               variant="secondary"
@@ -893,7 +771,7 @@ export const OutlineEditor: React.FC = () => {
       >
         {/* 左侧：可编辑文本区域（可收起） */}
         <div
-          className="flex-shrink-0 transition-[width] duration-300 ease-in-out hidden md:block"
+          className={`flex-shrink-0 transition-[width] duration-300 ease-in-out ${isBlankProject ? 'hidden' : 'hidden md:block'}`}
           style={{ width: isPanelOpen ? undefined : 0 }}
         >
           <div
@@ -1001,7 +879,7 @@ export const OutlineEditor: React.FC = () => {
         )}
 
         {/* 移动端：始终显示卡片 */}
-        <div className="md:hidden w-full flex-shrink-0">
+        <div className={`${isBlankProject ? 'hidden' : 'md:hidden'} w-full flex-shrink-0`}>
           {isDescriptionsProject && (
             <div className="bg-white dark:bg-background-secondary rounded-card shadow-md border border-gray-100 dark:border-border-primary overflow-hidden">
               <div className="px-4 py-2.5 flex items-center gap-2 border-b border-gray-100 dark:border-border-secondary">

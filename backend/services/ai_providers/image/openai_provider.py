@@ -27,7 +27,21 @@ from openai import APIConnectionError, APITimeoutError, APIStatusError, RateLimi
 
 from config import get_config
 from ..openai_client import _normalize_openai_base_url, make_openai_client
+from openai import OpenAI
 from .base import ImageProvider
+from .native_openai_images import (
+    NativeOpenAIImageMixin,
+    _EXTENDED_IMAGE_QUALITY_TIERS,
+    _IMAGE_QUALITY_TIERS,
+    _is_gpt_image_model,
+    _gpt_image_supports_extended_quality,
+    _DOUBAO_SEEDREAM_PREFIX,
+    _DOUBAO_SEEDREAM_MAX_PIXELS,
+    _DOUBAO_SEEDREAM_MIN_PIXELS,
+    _DOUBAO_SEEDREAM_SIZE_PRESETS,
+    _scale_size_to_pixel_range,
+    _compute_gpt_image_size,
+ )
 
 logger = logging.getLogger(__name__)
 audit_logger = logging.getLogger("image_audit")
@@ -41,33 +55,6 @@ _GPT_IMAGE_SIZE_LONG_EDGE = {
 _GPT_IMAGE_SIZE_MAX_EDGE = 3840
 _GPT_IMAGE_SIZE_MULTIPLE = 16
 _RETRYABLE_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
-
-
-def _compute_gpt_image_size(aspect_ratio: str, resolution: str = "2K") -> str:
-    """Compute a WxH size string for image requests from aspect ratio and target resolution."""
-    parts = str(aspect_ratio or "").split(":")
-    if len(parts) != 2:
-        return "auto"
-    try:
-        ratio_w, ratio_h = int(parts[0]), int(parts[1])
-    except ValueError:
-        return "auto"
-    if ratio_w <= 0 or ratio_h <= 0:
-        return "auto"
-
-    long_edge = _GPT_IMAGE_SIZE_LONG_EDGE.get(str(resolution or "").upper(), _GPT_IMAGE_SIZE_LONG_EDGE["2K"])
-    if ratio_w >= ratio_h:
-        width = long_edge
-        height = round(width * ratio_h / ratio_w)
-    else:
-        height = long_edge
-        width = round(height * ratio_w / ratio_h)
-
-    width = min(width, _GPT_IMAGE_SIZE_MAX_EDGE)
-    height = min(height, _GPT_IMAGE_SIZE_MAX_EDGE)
-    width = max(_GPT_IMAGE_SIZE_MULTIPLE, round(width / _GPT_IMAGE_SIZE_MULTIPLE) * _GPT_IMAGE_SIZE_MULTIPLE)
-    height = max(_GPT_IMAGE_SIZE_MULTIPLE, round(height / _GPT_IMAGE_SIZE_MULTIPLE) * _GPT_IMAGE_SIZE_MULTIPLE)
-    return f"{width}x{height}"
 
 
 def _is_retryable_openai_error(exc: Exception) -> bool:
@@ -136,7 +123,7 @@ class ImageApiRequestError(Exception):
         self.url = url
 
 
-class OpenAIImageProvider(ImageProvider):
+class OpenAIImageProvider(NativeOpenAIImageMixin, ImageProvider):
     """Image generation using OpenAI SDK + direct image-endpoint HTTP calls."""
 
     _VALID_ENDPOINT_MODES = {"auto", "images", "chat"}
@@ -183,7 +170,10 @@ class OpenAIImageProvider(ImageProvider):
         gpt_image_output_format: Optional[str] = None,
         gpt_image_output_compression: Optional[int] = None,
         gpt_image_quality: Optional[str] = None,
+        image_api_protocol: Optional[str] = None,
+        image_quality: str = "auto",
     ):
+        """Initialize relay options and native image protocol settings."""
         cfg = get_config()
         azure_endpoint = (azure_endpoint or "").strip() or None
         azure_api_version = (azure_api_version or "").strip() or None
@@ -196,6 +186,10 @@ class OpenAIImageProvider(ImageProvider):
             timeout=cfg.OPENAI_TIMEOUT,
             max_retries=cfg.OPENAI_MAX_RETRIES,
         )
+        self.image_api_protocol = image_api_protocol or "auto"
+        self.image_quality = image_quality or "auto"
+        self._quality_warning_logged = False
+        self._native_protocol_configured = image_api_protocol is not None
         self.api_key = api_key
         self.api_base = (_normalize_openai_base_url(api_base) or "").rstrip("/")
         self.azure_endpoint = azure_endpoint.rstrip("/") if azure_endpoint else ""
@@ -436,6 +430,8 @@ class OpenAIImageProvider(ImageProvider):
 
     def _get_gpt_image_2_quality(self, resolution: str) -> str:
         """Return explicit GPT Image 2 quality when configured, otherwise fall back to resolution mapping."""
+        if self.image_quality != "auto":
+            return self._resolve_quality()
         if self.gpt_image_quality in {"low", "medium", "high"}:
             return self.gpt_image_quality
         return self._select_gpt_image_2_quality(resolution)
@@ -894,34 +890,23 @@ class OpenAIImageProvider(ImageProvider):
                             return image
 
             elif isinstance(content, str):
-                content_str = content
-
-                markdown_matches = re.findall(r"!\[.*?\]\((https?://[^\s\)]+)\)", content_str)
-                if markdown_matches:
-                    image_url = markdown_matches[0]
-                    response = requests.get(image_url, timeout=self.timeout, stream=True)
-                    response.raise_for_status()
-                    image = Image.open(BytesIO(response.content))
-                    image.load()
-                    return image
-
-                url_matches = re.findall(
-                    r"(https?://[^\s\)\]]+\.(?:png|jpg|jpeg|gif|webp|bmp)(?:\?[^\s\)\]]*)?)",
-                    content_str,
-                    re.IGNORECASE,
-                )
-                if url_matches:
-                    image_url = url_matches[0]
-                    response = requests.get(image_url, timeout=self.timeout, stream=True)
-                    response.raise_for_status()
-                    image = Image.open(BytesIO(response.content))
-                    image.load()
-                    return image
-
+                # A single signed URL is valid even when it has no image extension.
+                content_str = content.strip()
+                markdown = re.search(r"!\[.*?\]\((https?://[^\s\)]+)\)", content_str)
+                direct = re.fullmatch(r"https?://[^\s]+", content_str)
+                image_url = markdown.group(1) if markdown else (direct.group(0) if direct else None)
+                if image_url:
+                    try:
+                        response = requests.get(image_url, timeout=self.timeout, stream=True)
+                        response.raise_for_status()
+                        image = Image.open(BytesIO(response.content))
+                        image.load()
+                        return image
+                    except Exception as exc:
+                        raise ValueError("No valid multimodal response received from OpenAI API") from exc
                 base64_matches = re.findall(r"data:image/[^;]+;base64,([A-Za-z0-9+/=]+)", content_str)
                 if base64_matches:
-                    image_data = base64.b64decode(base64_matches[0])
-                    image = Image.open(BytesIO(image_data))
+                    image = Image.open(BytesIO(base64.b64decode(base64_matches[0])))
                     image.load()
                     return image
 
@@ -1003,6 +988,7 @@ class OpenAIImageProvider(ImageProvider):
                         {"role": "system", "content": f"aspect_ratio={aspect_ratio}, resolution={resolution}"},
                         {"role": "user", "content": content},
                     ],
+                    stream=False,
                     modalities=["text", "image"],
                     extra_body=extra_body,
                 )
@@ -1031,7 +1017,7 @@ class OpenAIImageProvider(ImageProvider):
 
         raw_content = str(message.get("content", "N/A") if isinstance(message, dict) else getattr(message, "content", "N/A"))
         raise ValueError(
-            "No valid image found in chat response. "
+            "No valid multimodal response received from OpenAI API. "
             f"content_type={type(message.get('content', None) if isinstance(message, dict) else getattr(message, 'content', None))}, "
             f"content_preview={raw_content[:300]}"
         )
@@ -1053,6 +1039,17 @@ class OpenAIImageProvider(ImageProvider):
         """
         del enable_thinking, thinking_budget
         refs = ref_images or []
+        if self._is_sensenova_image_model():
+            return self._generate_with_sensenova_images_api(prompt, refs, aspect_ratio, resolution)
+        native_model = self._is_native_images_api_model()
+        protocol = self.image_api_protocol
+        if protocol == 'chat' and self._native_protocol_configured:
+            return self._call_via_chat_completions(prompt, refs, aspect_ratio, resolution)
+        if ((self._native_protocol_configured and (protocol == 'images' or (protocol == 'auto' and native_model)))
+                or (native_model and not self.channel and not self.azure_endpoint and not self._is_gpt_image_2(self.model))):
+            if refs and self.model.lower().startswith(_DOUBAO_SEEDREAM_PREFIX):
+                return self._call_via_chat_completions(prompt, refs, aspect_ratio, resolution)
+            return self._generate_with_images_api(prompt, refs, aspect_ratio, resolution)
 
         logger.debug(
             "OpenAI image call - channel=%s, mode=%s, path_style=%s, extra_body_mode=%s, model=%s, refs=%s, aspect_ratio=%s, resolution=%s, source_trace=%s",

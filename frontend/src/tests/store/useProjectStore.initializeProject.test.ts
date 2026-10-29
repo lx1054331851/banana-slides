@@ -59,6 +59,7 @@ vi.mock('@/api/auth', () => ({
 
 vi.mock('@/utils', () => ({
   debounce: (fn: any) => fn,
+  isDesktop: false,
   normalizeProject: (data: any) => data,
   normalizeErrorMessage: (msg: string) => msg,
 }))
@@ -145,6 +146,29 @@ describe('initializeProject - reference file association', () => {
     expect(mockGenerateOutline).not.toHaveBeenCalled()
     expect(mockGenerateFromDescription).not.toHaveBeenCalled()
     expect(localStorage.getItem('currentProjectId')).toBe('proj-001')
+  })
+
+  it('should trim project content before sending it to the API', async () => {
+    const { result } = renderHook(() => useProjectStore())
+
+    await act(async () => {
+      await result.current.initializeProject('outline', '  Slide 1\n- Point  ')
+    })
+
+    expect(mockCreateProject).toHaveBeenCalledWith({
+      outline_text: 'Slide 1\n- Point',
+      scenario: 'ppt',
+    })
+  })
+
+  it('should safely normalize an unexpected non-string content value', async () => {
+    const { result } = renderHook(() => useProjectStore())
+
+    await act(async () => {
+      await result.current.initializeProject('idea', null as unknown as string)
+    })
+
+    expect(mockCreateProject).toHaveBeenCalledWith({ idea_prompt: '', scenario: 'ppt' })
   })
 
   it('should not call associateFileToProject when no file IDs provided', async () => {

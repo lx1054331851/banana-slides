@@ -31,3 +31,7 @@ from .preset_template import PresetTemplate
 from .prompt_template import PromptTemplate
 
 __all__ = ['db', 'Project', 'Page', 'Task', 'UserTemplate', 'PageImageVersion', 'Material', 'ReferenceFile', 'Settings', 'StyleTemplate', 'UserStyleTemplate', 'StylePreset', 'PresetTemplate', 'PromptTemplate']
+
+from .project_template_asset import ProjectTemplateAsset
+
+__all__ += ['ProjectTemplateAsset']

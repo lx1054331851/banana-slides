@@ -1,4 +1,5 @@
 export { Button } from './Button';
+export { IconButton } from './IconButton';
 export { Input } from './Input';
 export { Select } from './Select';
 export { Textarea } from './Textarea';
@@ -38,3 +39,6 @@ export { StyleWorkflowPanel } from './StyleWorkflowPanel';
 export { ImageLightbox } from './ImageLightbox';
 export { Pagination } from './Pagination';
 export { PageHeader, PAGE_CONTAINER_CLASS } from './PageHeader';
+
+export { DesktopTitleBar } from './DesktopTitleBar';
+export { UpdateChecker } from './UpdateChecker';

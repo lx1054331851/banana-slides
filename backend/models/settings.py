@@ -20,6 +20,7 @@ class Settings(db.Model):
     api_key = db.Column(db.String(500), nullable=True)             # API密钥
     image_resolution = db.Column(db.String(20), nullable=True)     # 图像清晰度: 1K, 2K, 4K (NULL=use .env)
     image_aspect_ratio = db.Column(db.String(10), nullable=True)   # 图像比例: 16:9, 4:3, 1:1 (NULL=use .env)
+    image_quality = db.Column(db.String(10), nullable=True)        # 图像质量档位: auto/low/medium/high/xhigh/max (NULL=use .env)
     max_description_workers = db.Column(db.Integer, nullable=True)  # 描述生成最大工作线程数 (NULL=use .env)
     max_image_workers = db.Column(db.Integer, nullable=True)        # 图像生成最大工作线程数 (NULL=use .env)
 
@@ -33,14 +34,16 @@ class Settings(db.Model):
     
     # 推理模式配置（分别控制文本和图像生成）
     enable_text_reasoning = db.Column(db.Boolean, nullable=False, default=False)  # 文本生成是否开启推理
+    text_max_output_tokens = db.Column(db.Integer, nullable=True)  # NULL = environment/default 32768
     text_thinking_budget = db.Column(db.Integer, nullable=False, default=1024)  # 文本推理思考负载 (1-8192)
     enable_image_reasoning = db.Column(db.Boolean, nullable=False, default=False)  # 图像生成是否开启推理
     image_thinking_budget = db.Column(db.Integer, nullable=False, default=1024)  # 图像推理思考负载 (1-8192)
+    enable_image_quality_control = db.Column(db.Boolean, nullable=False, default=False)  # 生成图片落库前是否开启视觉质检
     
     # 描述生成模式: streaming / parallel (NULL=默认 streaming)
     description_generation_mode = db.Column(db.String(20), nullable=True)
 
-    # 描述额外字段配置: JSON 数组如 ["排版布局", "视觉素材"] (NULL=默认 DEFAULT_EXTRA_FIELDS)
+    # 描述额外字段配置: JSON 数组如 ["配图与素材", "版式与重点"] (NULL=默认 DEFAULT_EXTRA_FIELDS)
     description_extra_fields = db.Column(db.Text, nullable=True)
     image_prompt_extra_fields = db.Column(db.Text, nullable=True)  # JSON array: 哪些额外字段传入文生图 prompt
 
@@ -98,8 +101,17 @@ class Settings(db.Model):
         v = getattr(self, attr)
         return v if v is not None else defaults.get(attr)
 
-    DEFAULT_EXTRA_FIELDS = ['视觉元素', '视觉焦点', '排版布局', '演讲者备注']
-    DEFAULT_IMAGE_PROMPT_FIELDS = ['视觉元素', '视觉焦点', '排版布局']  # 演讲者备注默认不传入图片生成
+    # 字段契约：页面文字（逐字上屏）/ 配图与素材（放什么）/ 版式与重点（怎么排）/ 演讲者备注（怎么讲）
+    DEFAULT_EXTRA_FIELDS = ['配图与素材', '版式与重点', '演讲者备注']
+    DEFAULT_IMAGE_PROMPT_FIELDS = ['配图与素材', '版式与重点']  # 演讲者备注默认不传入图片生成
+
+    # 旧字段名 → 新字段名。存量数据不迁移，靠此映射保持行为不回退
+    LEGACY_FIELD_EQUIV = {
+        '视觉元素': '配图与素材',
+        '视觉焦点': '版式与重点',
+        '排版布局': '版式与重点',
+        '排版建议': '版式与重点',
+    }
 
     def get_description_extra_fields(self):
         """Return parsed extra fields list."""
@@ -126,20 +138,51 @@ class Settings(db.Model):
     def to_dict(self):
         """Convert to dictionary, merging .env defaults for None fields."""
         d = Settings._get_config_defaults()
-        api_key = self._val('api_key', d)
+        effective_provider = self._val('ai_provider_format', d)
+        provider_defaults = Settings._get_api_defaults_for_provider(effective_provider)
+        api_base_url = self.api_base_url if self.api_base_url is not None else provider_defaults['api_base_url']
+        api_key = self.api_key if self.api_key is not None else provider_defaults['api_key']
         mineru_token = self._val('mineru_token', d)
         baidu_api_key = self._val('baidu_api_key', d)
         elevenlabs_api_key = self._val('elevenlabs_api_key', d)
-        text_api_key = self._val('text_api_key', d)
-        image_api_key = self._val('image_api_key', d)
-        image_caption_api_key = self._val('image_caption_api_key', d)
+        text_model_source = self._val('text_model_source', d)
+        image_model_source = self._val('image_model_source', d)
+        image_caption_model_source = self._val('image_caption_model_source', d)
+        text_api_defaults = Settings._get_api_defaults_for_provider(text_model_source, 'TEXT')
+        image_api_defaults = Settings._get_api_defaults_for_provider(image_model_source, 'IMAGE')
+        image_caption_api_defaults = Settings._get_api_defaults_for_provider(
+            image_caption_model_source, 'IMAGE_CAPTION'
+        )
+        text_api_key = self.text_api_key if self.text_api_key is not None else text_api_defaults['api_key']
+        image_api_key = self.image_api_key if self.image_api_key is not None else image_api_defaults['api_key']
+        image_caption_api_key = (
+            self.image_caption_api_key
+            if self.image_caption_api_key is not None
+            else image_caption_api_defaults['api_key']
+        )
+        text_api_base_url = (
+            self.text_api_base_url
+            if self.text_api_base_url is not None
+            else text_api_defaults['api_base_url']
+        )
+        image_api_base_url = (
+            self.image_api_base_url
+            if self.image_api_base_url is not None
+            else image_api_defaults['api_base_url']
+        )
+        image_caption_api_base_url = (
+            self.image_caption_api_base_url
+            if self.image_caption_api_base_url is not None
+            else image_caption_api_defaults['api_base_url']
+        )
         return {
             'id': self.id,
-            'ai_provider_format': self._val('ai_provider_format', d),
-            'api_base_url': self._val('api_base_url', d),
+            'ai_provider_format': effective_provider,
+            'api_base_url': api_base_url,
             'api_key_length': len(api_key) if api_key else 0,
             'image_resolution': self._val('image_resolution', d),
             'image_aspect_ratio': self._val('image_aspect_ratio', d),
+            'image_quality': self._val('image_quality', d) or 'auto',
             'max_description_workers': self._val('max_description_workers', d),
             'max_image_workers': self._val('max_image_workers', d),
             'text_model': self._val('text_model', d),
@@ -152,24 +195,26 @@ class Settings(db.Model):
             'description_extra_fields': self.get_description_extra_fields(),
             'image_prompt_extra_fields': self.get_image_prompt_extra_fields(),
             'enable_text_reasoning': self.enable_text_reasoning,
+            'text_max_output_tokens': self._val('text_max_output_tokens', d),
             'text_thinking_budget': self.text_thinking_budget,
             'enable_image_reasoning': self.enable_image_reasoning,
             'image_thinking_budget': self.image_thinking_budget,
+            'enable_image_quality_control': self.enable_image_quality_control,
             'baidu_api_key_length': len(baidu_api_key) if baidu_api_key else 0,
-            'text_model_source': self._val('text_model_source', d),
-            'image_model_source': self._val('image_model_source', d),
-            'image_caption_model_source': self._val('image_caption_model_source', d),
+            'text_model_source': text_model_source,
+            'image_model_source': image_model_source,
+            'image_caption_model_source': image_caption_model_source,
             'lazyllm_api_keys_info': self._get_lazyllm_api_keys_info(self._val('lazyllm_api_keys', d)),
             'text_api_key_length': len(text_api_key) if text_api_key else 0,
-            'text_api_base_url': self._val('text_api_base_url', d),
+            'text_api_base_url': text_api_base_url,
             'text_azure_openai_endpoint': self._val('text_azure_openai_endpoint', d),
             'text_azure_openai_api_version': self._val('text_azure_openai_api_version', d),
             'image_api_key_length': len(image_api_key) if image_api_key else 0,
-            'image_api_base_url': self._val('image_api_base_url', d),
+            'image_api_base_url': image_api_base_url,
             'image_azure_openai_endpoint': self._val('image_azure_openai_endpoint', d),
             'image_azure_openai_api_version': self._val('image_azure_openai_api_version', d),
             'image_caption_api_key_length': len(image_caption_api_key) if image_caption_api_key else 0,
-            'image_caption_api_base_url': self._val('image_caption_api_base_url', d),
+            'image_caption_api_base_url': image_caption_api_base_url,
             'image_caption_azure_openai_endpoint': self._val('image_caption_azure_openai_endpoint', d),
             'image_caption_azure_openai_api_version': self._val('image_caption_azure_openai_api_version', d),
             'azure_openai_endpoint': self._val('azure_openai_endpoint', d),
@@ -187,6 +232,44 @@ class Settings(db.Model):
             'openai_oauth_account_id': self.openai_oauth_account_id if self.is_openai_oauth_connected() else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+    @staticmethod
+    def _get_api_defaults_for_provider(provider, prefix=None):
+        """Return API defaults for an explicit provider/source selection."""
+        from config import Config
+
+        provider = (provider or '').lower()
+        if not provider:
+            return {
+                'api_base_url': None,
+                'api_key': None,
+            }
+        specific_key = getattr(Config, f'{prefix}_API_KEY', None) if prefix else None
+        specific_base = getattr(Config, f'{prefix}_API_BASE', None) if prefix else None
+        if provider == 'gemini':
+            return {
+                'api_base_url': specific_base or Config.GOOGLE_API_BASE or None,
+                'api_key': specific_key or Config.GOOGLE_API_KEY or None,
+            }
+        if provider == 'openai':
+            return {
+                'api_base_url': specific_base or Config.OPENAI_API_BASE or None,
+                'api_key': specific_key or Config.OPENAI_API_KEY or None,
+            }
+        if provider == 'volcengine':
+            return {
+                'api_base_url': specific_base or Config.VOLCENGINE_API_BASE or None,
+                'api_key': specific_key or Config.VOLCENGINE_API_KEY or None,
+            }
+        if provider == 'lazyllm':
+            return {
+                'api_base_url': None,
+                'api_key': None,
+            }
+        return {
+            'api_base_url': None,
+            'api_key': None,
         }
 
     def _get_lazyllm_api_keys_info(self, raw=None):
@@ -284,6 +367,9 @@ class Settings(db.Model):
         if provider in {'openai', 'azure-openai', 'azure'}:
             api_base = Config.OPENAI_API_BASE or None
             api_key = Config.AZURE_OPENAI_API_KEY or Config.OPENAI_API_KEY or None
+        elif provider == 'volcengine':
+            api_base = Config.VOLCENGINE_API_BASE or None
+            api_key = Config.VOLCENGINE_API_KEY or None
         elif provider == 'lazyllm':
             api_base = None
             api_key = None
@@ -319,8 +405,10 @@ class Settings(db.Model):
             'api_key': api_key,
             'image_resolution': Config.DEFAULT_RESOLUTION,
             'image_aspect_ratio': Config.DEFAULT_ASPECT_RATIO,
+            'image_quality': Config.IMAGE_QUALITY,
             'max_description_workers': Config.MAX_DESCRIPTION_WORKERS,
             'max_image_workers': Config.MAX_IMAGE_WORKERS,
+            'text_max_output_tokens': Config.TEXT_MAX_OUTPUT_TOKENS,
             'text_model': Config.TEXT_MODEL,
             'image_model': Config.IMAGE_MODEL,
             'mineru_api_base': Config.MINERU_API_BASE,

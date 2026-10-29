@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, getBaseURL } from './client';
 import type {
   Project,
   Task,
@@ -6,8 +6,9 @@ import type {
   CreateProjectRequest,
   Page,
   GenerationOverride,
-  ImageChannelOption,
   ProviderProfileSummary,
+  TemplateAsset,
+  Material,
 } from '@/types';
 import type { Settings } from '../types/index';
 import type { PromptTemplate } from '../types/index';
@@ -47,12 +48,14 @@ export const verifyAccessCode = async (code: string): Promise<ApiResponse<{ vali
  * 创建项目
  */
 export const createProject = async (data: CreateProjectRequest): Promise<ApiResponse<Project>> => {
-  // 根据输入类型确定 creation_type
-  let creation_type = 'idea';
-  if (data.description_text) {
-    creation_type = 'descriptions';
-  } else if (data.outline_text) {
-    creation_type = 'outline';
+  // 优先使用显式传入的 creation_type（空白项目没有任何文本内容，无法推断）
+  let creation_type: string = data.creation_type ?? 'idea';
+  if (!data.creation_type) {
+    if (data.description_text) {
+      creation_type = 'descriptions';
+    } else if (data.outline_text) {
+      creation_type = 'outline';
+    }
   }
 
   const response = await apiClient.post<ApiResponse<Project>>('/api/projects', {
@@ -193,7 +196,7 @@ export const generateOutlineStream = async (
   const lang = language || await getStoredOutputLanguage();
   const accessCode = localStorage.getItem('banana-access-code');
 
-  const response = await fetch(`/api/projects/${projectId}/generate/outline/stream`, {
+  const response = await fetch(`${getBaseURL()}/api/projects/${projectId}/generate/outline/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -382,7 +385,7 @@ export const generateDescriptionsStream = async (
   const accessCode = localStorage.getItem('banana-access-code');
   const trimmedOverride = (descriptionRequirementsOverride || '').trim();
 
-  const response = await fetch(`/api/projects/${projectId}/generate/descriptions/stream`, {
+  const response = await fetch(`${getBaseURL()}/api/projects/${projectId}/generate/descriptions/stream`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -703,6 +706,17 @@ export const addPage = async (projectId: string, data: Partial<Page>): Promise<A
   return response.data;
 };
 
+/**
+ * 批量添加页面
+ */
+export const addPages = async (projectId: string, pages: Partial<Page>[]): Promise<ApiResponse<Page[]>> => {
+  const response = await apiClient.post<ApiResponse<Page[]>>(
+    `/api/projects/${projectId}/pages/batch`,
+    { pages }
+  );
+  return response.data;
+};
+
 // ===== 任务查询 =====
 
 /**
@@ -793,6 +807,7 @@ const buildExportQuery = (params: Record<string, string | string[] | boolean | u
  * 导出为PPTX
  * @param projectId 项目ID
  * @param pageIds 可选的页面ID列表，如果不提供则导出所有页面
+ * @param clientTaskId 可选的幂等任务ID，用于创建请求响应丢失后的恢复
  */
 export const exportPPTX = async (
   projectId: string,
@@ -909,13 +924,15 @@ export const exportImagesTask = async (
 export const exportEditablePPTX = async (
   projectId: string,
   filename?: string,
-  pageIds?: string[]
+  pageIds?: string[],
+  clientTaskId?: string,
 ): Promise<ApiResponse<{ task_id: string }>> => {
   const response = await apiClient.post<
     ApiResponse<{ task_id: string }>
   >(`/api/projects/${projectId}/export/editable-pptx`, {
     filename,
-    page_ids: pageIds
+    page_ids: pageIds,
+    client_task_id: clientTaskId,
   });
   return response.data;
 };
@@ -1093,25 +1110,6 @@ export const processMaterialImage = async (
   return response.data;
 };
 
-/**
- * 素材信息接口
- */
-export interface Material {
-  id: string;
-  project_id?: string | null;
-  filename: string;
-  url: string;
-  relative_path: string;
-  caption?: string | null;
-  caption_status?: 'generated' | 'fallback_filename';
-  caption_error_code?: 'invalid_api_key' | 'generation_failed' | null;
-  created_at: string;
-  // 可选的附加信息：用于展示友好名称
-  prompt?: string;
-  original_filename?: string;
-  source_filename?: string;
-  name?: string;
-}
 
 /**
  * 获取素材列表
@@ -1695,6 +1693,7 @@ export interface TestSettingsOverride {
   baidu_api_key?: string;
   ai_provider_format?: string;
   image_resolution?: string;
+  image_quality?: string;
   enable_text_reasoning?: boolean;
   text_thinking_budget?: number;
   enable_image_reasoning?: boolean;
@@ -2009,6 +2008,188 @@ export const startStyleRecommendations = async (
   return response.data;
 };
 
+/**
+ * 根据内容生成风格描述（通用，不绑定项目）
+ */
+export const generateStyleFromContent = async (
+  content: string,
+  language: string = 'zh'
+): Promise<ApiResponse<{ style_description: string }>> => {
+  const response = await apiClient.post<ApiResponse<{ style_description: string }>>(
+    '/api/generate-style-from-content',
+    { content, language }
+  );
+  return response.data;
+};
+
+// ===== 每页模板（per-page template）API =====
+
+/**
+ * 列出项目模板库
+ */
+export const listTemplateAssets = async (
+  projectId: string
+): Promise<ApiResponse<{ assets: TemplateAsset[] }>> => {
+  const response = await apiClient.get<ApiResponse<{ assets: TemplateAsset[] }>>(
+    `/api/projects/${projectId}/template-assets`
+  );
+  return response.data;
+};
+
+/**
+ * 上传单张模板图片（异步触发解析）
+ * @param opts.bindToPageId 上传后自动绑定到该页（PRD §10.3）
+ */
+export const uploadTemplateAsset = async (
+  projectId: string,
+  image: File,
+  opts?: { userLabel?: string; bindToPageId?: string }
+): Promise<ApiResponse<{ asset: TemplateAsset; analyze_task_id: string }>> => {
+  const formData = new FormData();
+  formData.append('image', image);
+  if (opts?.userLabel) formData.append('user_label', opts.userLabel);
+  const query = opts?.bindToPageId
+    ? `?bind_to_page=${encodeURIComponent(opts.bindToPageId)}`
+    : '';
+  const response = await apiClient.post<
+    ApiResponse<{ asset: TemplateAsset; analyze_task_id: string }>
+  >(`/api/projects/${projectId}/template-assets${query}`, formData);
+  return response.data;
+};
+
+/**
+ * 上传 PDF 拆页（异步，返回 task_id 供轮询）
+ */
+export const uploadTemplatePdf = async (
+  projectId: string,
+  pdf: File
+): Promise<ApiResponse<{ task_id: string }>> => {
+  const formData = new FormData();
+  formData.append('pdf', pdf);
+  const response = await apiClient.post<ApiResponse<{ task_id: string }>>(
+    `/api/projects/${projectId}/template-assets/upload-pdf`,
+    formData
+  );
+  return response.data;
+};
+
+/**
+ * 编辑模板资产（用户标记 / 修正解析）
+ */
+export const updateTemplateAsset = async (
+  projectId: string,
+  assetId: string,
+  patch: {
+    user_label?: string | null;
+    analysis_json?: TemplateAsset['analysis_json'];
+    analysis_notes?: string | null;
+    sort_order?: number;
+  }
+): Promise<ApiResponse<{ asset: TemplateAsset }>> => {
+  const response = await apiClient.patch<ApiResponse<{ asset: TemplateAsset }>>(
+    `/api/projects/${projectId}/template-assets/${assetId}`,
+    patch
+  );
+  return response.data;
+};
+
+/**
+ * 删除模板资产（引用页字段被后端置空）
+ */
+export const deleteTemplateAsset = async (
+  projectId: string,
+  assetId: string
+): Promise<ApiResponse<{ deleted: boolean; cleared_page_ids: string[] }>> => {
+  const response = await apiClient.delete<
+    ApiResponse<{ deleted: boolean; cleared_page_ids: string[] }>
+  >(`/api/projects/${projectId}/template-assets/${assetId}`);
+  return response.data;
+};
+
+/**
+ * 手动重新解析模板资产
+ */
+export const reanalyzeTemplateAsset = async (
+  projectId: string,
+  assetId: string
+): Promise<ApiResponse<{ analyze_task_id: string }>> => {
+  const response = await apiClient.post<ApiResponse<{ analyze_task_id: string }>>(
+    `/api/projects/${projectId}/template-assets/${assetId}/reanalyze`
+  );
+  return response.data;
+};
+
+/**
+ * 单页设置模板（asset / 文字风格 / 清空）
+ */
+export const updatePageTemplate = async (
+  projectId: string,
+  pageId: string,
+  patch: {
+    template_asset_id?: string | null;
+    template_style_text?: string | null;
+    selection_source?: 'manual' | 'auto' | 'batch_apply';
+  }
+): Promise<ApiResponse<{ page: Page }>> => {
+  const response = await apiClient.patch<ApiResponse<{ page: Page }>>(
+    `/api/projects/${projectId}/pages/${pageId}/template`,
+    patch
+  );
+  return response.data;
+};
+
+/**
+ * 切换模板模式（JSON 路径，决策 7）
+ * 单→多：{ mode: 'multi' }
+ * 多→单：{ mode: 'single', unified_asset_id? , unified_style_text? }
+ */
+export const switchTemplateMode = async (
+  projectId: string,
+  payload:
+    | { mode: 'multi' }
+    | { mode: 'single'; unified_asset_id?: string | null; unified_style_text?: string | null }
+): Promise<ApiResponse<{ project: Project }>> => {
+  const response = await apiClient.patch<ApiResponse<{ project: Project }>>(
+    `/api/projects/${projectId}/template-mode`,
+    payload
+  );
+  return response.data;
+};
+
+/**
+ * 多→单 + 新上传统一模板（multipart 路径）
+ */
+export const switchTemplateModeSingleWithUpload = async (
+  projectId: string,
+  image: File,
+  unifiedStyleText?: string
+): Promise<ApiResponse<{ asset: TemplateAsset; project: Project; analyze_task_id: string }>> => {
+  const formData = new FormData();
+  formData.append('image', image);
+  if (unifiedStyleText) formData.append('unified_style_text', unifiedStyleText);
+  const response = await apiClient.post<
+    ApiResponse<{ asset: TemplateAsset; project: Project; analyze_task_id: string }>
+  >(`/api/projects/${projectId}/template-mode/single-with-upload`, formData);
+  return response.data;
+};
+
+/**
+ * 全项目自动匹配（决策 5）
+ */
+export const autoMatchAllTemplates = async (
+  projectId: string,
+  opts?: { overwrite_existing?: boolean; preserve_non_empty?: boolean }
+): Promise<ApiResponse<{ task_id: string }>> => {
+  const response = await apiClient.post<ApiResponse<{ task_id: string }>>(
+    `/api/projects/${projectId}/template-assets/auto-match`,
+    {
+      overwrite_existing: opts?.overwrite_existing ?? true,
+      preserve_non_empty: opts?.preserve_non_empty ?? false,
+    }
+  );
+  return response.data;
+};
+
 export const regenerateStyleRecommendationPreviews = async (
   projectId: string | null | undefined,
   recId: string,
@@ -2029,6 +2210,19 @@ export const regenerateStyleRecommendationPreviews = async (
       language: lang,
       ...(data.generation_override ? { generation_override: data.generation_override } : {}),
     }
+  );
+  return response.data;
+};
+
+/**
+ * 单页自动匹配（PRD §9）
+ */
+export const autoMatchPageTemplate = async (
+  projectId: string,
+  pageId: string
+): Promise<ApiResponse<{ task_id: string }>> => {
+  const response = await apiClient.post<ApiResponse<{ task_id: string }>>(
+    `/api/projects/${projectId}/pages/${pageId}/template/auto-match`
   );
   return response.data;
 };

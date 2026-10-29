@@ -40,6 +40,8 @@ interface MarkdownTextareaProps {
   onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
   /** Called when files are dropped or selected via upload button */
   onFiles?: (files: File[]) => void;
+  /** Handle dropped documents separately from image attachments. */
+  onDocumentFiles?: (files: File[]) => void;
   onBlur?: (value: string) => void;
   onFocus?: () => void;
   placeholder?: string;
@@ -300,6 +302,7 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
   onChange,
   onPaste,
   onFiles,
+  onDocumentFiles,
   onBlur,
   onFocus,
   placeholder,
@@ -856,14 +859,16 @@ export const MarkdownTextarea = forwardRef<MarkdownTextareaRef, MarkdownTextarea
     e.dataTransfer.dropEffect = 'copy';
   }, []);
 
+  // Route image attachments and documents to their respective import workflows.
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    dragCountRef.current = 0;
-    setIsDragging(false);
-    if (onFiles && e.dataTransfer.files.length > 0) {
-      onFiles(Array.from(e.dataTransfer.files));
-    }
-  }, [onFiles]);
+    e.stopPropagation();
+    const files = Array.from(e.dataTransfer.files);
+    const images = files.filter((file) => file.type.startsWith('image/'));
+    const documents = files.filter((file) => !file.type.startsWith('image/'));
+    if (images.length) onFiles?.(images);
+    if (documents.length) onDocumentFiles?.(documents);
+  }, [onFiles, onDocumentFiles]);
 
   const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;

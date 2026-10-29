@@ -209,7 +209,9 @@ def test_generate_single_page_image_task_retries_failed_generation(app):
 
         assert attempts['count'] == 3
         assert task.status == 'COMPLETED'
-        assert task.get_progress() == {'total': 1, 'completed': 1, 'failed': 0}
+        progress = task.get_progress()
+        assert {key: progress[key] for key in ('total', 'completed', 'failed')} == {'total': 1, 'completed': 1, 'failed': 0}
+        assert progress.get('heartbeat_at')
         assert page.status == 'COMPLETED'
 
 

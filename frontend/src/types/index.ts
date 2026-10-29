@@ -174,9 +174,54 @@ export interface Material {
   caption_error_code?: 'invalid_api_key' | 'generation_failed' | null;
   created_at: string;
   prompt?: string;
-  original_filename?: string;
+  original_filename?: string | null;
   source_filename?: string;
   name?: string;
+}
+
+// 模板模式
+export type TemplateMode = 'single' | 'multi';
+
+// 模板选择来源
+export type TemplateSelectionSource = 'manual' | 'auto' | 'batch_apply';
+
+// 模板资产解析状态
+export type TemplateAnalysisStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+// 模板解析区域（文本/图片）
+export interface TemplateRegion {
+  name: string;
+  position: string;
+  size: string;
+}
+
+// 模板解析结果（PRD §5.3 九字段 schema）
+export interface TemplateAnalysis {
+  template_role: string;
+  layout_structure: string;
+  content_capacity: 'low' | 'medium' | 'high';
+  text_regions: TemplateRegion[];
+  image_regions: TemplateRegion[];
+  visual_density: 'low' | 'medium' | 'high';
+  style_keywords: string[];
+  color_palette: string[];
+  notes: string;
+}
+
+// 项目模板库中的一张模板资产
+export interface TemplateAsset {
+  id: string;
+  image_url: string;
+  thumb_url: string | null;
+  analysis_status: TemplateAnalysisStatus;
+  analysis_json: TemplateAnalysis | null;
+  analysis_notes: string | null;
+  analysis_error: string | null;
+  user_label: string | null;
+  user_edited_analysis: boolean;
+  source: 'upload' | 'pdf_split' | 'system_preset';
+  sort_order: number;
+  referenced_page_ids?: string[];
 }
 
 // 页面
@@ -184,6 +229,7 @@ export interface Page {
   page_id: string;  // 后端返回 page_id
   id?: string;      // 前端使用的别名
   order_index: number;
+  narration_text?: string | null;
   part?: string; // 章节名
   outline_content: OutlineContent | null;
   description_content?: DescriptionContent;
@@ -197,6 +243,12 @@ export interface Page {
   created_at?: string;
   updated_at?: string;
   image_versions?: ImageVersion[]; // 历史版本列表
+  // 页级模板（per-page template）
+  template_asset_id?: string | null;
+  template_style_text?: string | null;
+  template_selection_source?: TemplateSelectionSource | null;
+  template_match_reason?: string | null;
+  template_match_confidence?: number | null;
 }
 
 // 导出设置 - 组件提取方法
@@ -224,6 +276,8 @@ export interface Project {
   template_image_path?: string; // 前端使用的别名
   template_style?: string; // 风格描述文本（无模板图模式）
   template_style_json?: string; // 风格指导 JSON（字符串，优先级高于 template_style）
+
+  template_mode?: TemplateMode; // 统一/每页独立模板模式（UI hint，底层始终每页一个模板）
   // 导出设置
   export_extractor_method?: ExportExtractorMethod; // 组件提取方法
   export_inpaint_method?: ExportInpaintMethod; // 背景图获取方法
@@ -241,23 +295,6 @@ export interface Project {
   updated_at: string;
 }
 
-/**
- * 素材信息
- */
-export interface Material {
-  id: string;
-  project_id?: string | null;
-  filename: string;
-  url: string;
-  relative_path: string;
-  created_at: string;
-  updated_at: string;
-  prompt?: string;
-  original_filename?: string | null;
-  source_filename?: string;
-  name?: string;
-  caption?: string | null;
-}
 
 // 任务状态
 export type TaskStatus = 'PENDING' | 'PROCESSING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
@@ -283,6 +320,7 @@ export interface Task {
 
 // 创建项目请求
 export interface CreateProjectRequest {
+  creation_type?: 'idea' | 'outline' | 'descriptions' | 'blank';
   idea_prompt?: string;
   outline_text?: string;
   description_text?: string;
@@ -308,6 +346,7 @@ export interface Settings {
   api_base_url?: string;
   api_key_length: number;
   image_resolution: string;
+  image_quality?: string;
   image_aspect_ratio: string;
   max_description_workers: number;
   max_image_workers: number;
@@ -324,9 +363,11 @@ export interface Settings {
   image_prompt_extra_fields?: string[];
   // 推理模式配置（分别控制文本和图像）
   enable_text_reasoning: boolean;
+  text_max_output_tokens: number;
   text_thinking_budget: number;
   enable_image_reasoning: boolean;
   image_thinking_budget: number;
+  enable_image_quality_control: boolean;
   baidu_api_key_length: number;
   // LazyLLM 配置
   text_model_source?: string;
@@ -357,7 +398,10 @@ export interface Settings {
   gpt_image_quality?: string;
   // OpenAI Codex OAuth
   openai_oauth_connected: boolean;
-  openai_oauth_account_id?: string;
+  openai_oauth_account_id?: string | null;
+  elevenlabs_enabled: boolean;
+  elevenlabs_api_key_length: number;
+  elevenlabs_voice_id?: string;
   created_at?: string;
   updated_at?: string;
 }

@@ -245,11 +245,14 @@ class TestGenerateMaterialImage:
 class TestGenerateImageCaption:
     """Unit tests for _generate_image_caption function"""
 
-    def test_caption_returns_empty_on_missing_gemini_key(self, app):
+    @patch('controllers.material_controller.get_caption_provider', side_effect=ValueError('API key is required'))
+    def test_caption_returns_empty_on_missing_gemini_key(self, _provider, app):
         """Caption returns empty when Gemini API key is not configured"""
         with app.app_context():
             app.config['AI_PROVIDER_FORMAT'] = 'gemini'
             app.config['GOOGLE_API_KEY'] = ''
+            app.config['IMAGE_CAPTION_API_KEY'] = ''
+            app.config['IMAGE_CAPTION_MODEL_SOURCE'] = 'gemini'
             from controllers.material_controller import _generate_image_caption
             # Create a temp image
             import tempfile
@@ -259,16 +262,19 @@ class TestGenerateImageCaption:
                 tmp_path = f.name
             try:
                 result = _generate_image_caption(tmp_path)
-                assert result == ''
+                assert result[0] == ''
             finally:
                 import os
                 os.unlink(tmp_path)
 
-    def test_caption_returns_empty_on_missing_openai_key(self, app):
+    @patch('controllers.material_controller.get_caption_provider', side_effect=ValueError('API key is required'))
+    def test_caption_returns_empty_on_missing_openai_key(self, _provider, app):
         """Caption returns empty when OpenAI API key is not configured"""
         with app.app_context():
             app.config['AI_PROVIDER_FORMAT'] = 'openai'
             app.config['OPENAI_API_KEY'] = ''
+            app.config['IMAGE_CAPTION_API_KEY'] = ''
+            app.config['IMAGE_CAPTION_MODEL_SOURCE'] = 'openai'
             from controllers.material_controller import _generate_image_caption
             import tempfile
             with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
@@ -277,7 +283,7 @@ class TestGenerateImageCaption:
                 tmp_path = f.name
             try:
                 result = _generate_image_caption(tmp_path)
-                assert result == ''
+                assert result[0] == ''
             finally:
                 import os
                 os.unlink(tmp_path)
@@ -289,14 +295,15 @@ class TestGenerateImageCaption:
             app.config['GOOGLE_API_KEY'] = 'fake-key'
             from controllers.material_controller import _generate_image_caption
             result = _generate_image_caption('/nonexistent/path/image.png')
-            assert result == ''
+            assert result[0] == ''
 
-    @patch('google.genai.Client')
+    @patch('controllers.material_controller.get_caption_provider')
     def test_caption_gemini_success(self, mock_client_class, app):
         """Caption with Gemini provider returns expected text"""
         with app.app_context():
             app.config['AI_PROVIDER_FORMAT'] = 'gemini'
             app.config['GOOGLE_API_KEY'] = 'test-key'
+            app.config['IMAGE_CAPTION_MODEL_SOURCE'] = 'gemini'
             app.config['GOOGLE_API_BASE'] = ''
             app.config['IMAGE_CAPTION_MODEL'] = 'test-model'
 
@@ -304,7 +311,7 @@ class TestGenerateImageCaption:
             mock_client_class.return_value = mock_client
             mock_result = MagicMock()
             mock_result.text = '  一张测试图片  '
-            mock_client.models.generate_content.return_value = mock_result
+            mock_client.generate_with_image.return_value = '  一张测试图片  '
 
             from controllers.material_controller import _generate_image_caption
             import tempfile
@@ -314,8 +321,8 @@ class TestGenerateImageCaption:
                 tmp_path = f.name
             try:
                 result = _generate_image_caption(tmp_path)
-                assert result == '一张测试图片'
-                mock_client.models.generate_content.assert_called_once()
+                assert result == ('一张测试图片', None)
+                mock_client.generate_with_image.assert_called_once()
             finally:
                 import os
                 os.unlink(tmp_path)

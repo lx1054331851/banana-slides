@@ -26,6 +26,7 @@
 import { test, expect } from '@playwright/test'
 import * as fs from 'fs'
 import * as path from 'path'
+import { downloadPptx } from './helpers/download-pptx'
 
 test.describe('UI-driven E2E test: From user interface to PPT export', () => {
   // Increase timeout to 25 minutes (image generation may need retries on API disconnects)
@@ -347,9 +348,9 @@ test.describe('UI-driven E2E test: From user interface to PPT export', () => {
     // ====================================
     console.log('🎨 Step 11: Selecting template...')
     
-    // Click "选择模版" button to open template selection modal
-    // The button might be hidden on small screens, so try multiple selectors
-    const changeTemplateBtn = page.locator('button:has-text("选择模版"), button[title="选择模版"]').first()
+    // Open the template menu, then click "更换模板" to open the template selection modal
+    await page.getByTestId('template-menu').click()
+    const changeTemplateBtn = page.locator('button:has-text("更换模板"), button[title="更换模板"]').first()
     await changeTemplateBtn.waitFor({ state: 'visible', timeout: 10000 })
     await changeTemplateBtn.scrollIntoViewIfNeeded()
     await changeTemplateBtn.click()
@@ -456,11 +457,11 @@ test.describe('UI-driven E2E test: From user interface to PPT export', () => {
       // Helper: Precise selector for "生成中" StatusBadge (orange background)
       // StatusBadge structure: <span class="bg-orange-100 text-orange-600 animate-pulse ...">生成中</span>
       // We use CSS class selector which is more reliable than text matching
-      const generatingBadgeSelector = 'span.bg-orange-100.text-orange-600'
+      const generatingBadgeSelector = 'aside:first-of-type span.bg-orange-100.text-orange-600'
       // Helper: Selector for failed status badges (red background)
-      const failedBadgeSelector = 'span.bg-red-100.text-red-600'
+      const failedBadgeSelector = 'aside:first-of-type span.bg-red-100.text-red-600'
       // Helper: Selector for completed status badges (green background)
-      const _completedBadgeSelector = 'span.bg-green-100.text-green-600'
+      const _completedBadgeSelector = 'aside:first-of-type span.bg-green-100.text-green-600'
       // Helper: Image selector for generated slide images
       // Generated images are stored at: /files/{project_id}/pages/{page_id}_v{version}.png
       // Template images are at: /files/{project_id}/template/template.png (excluded)
@@ -603,101 +604,11 @@ test.describe('UI-driven E2E test: From user interface to PPT export', () => {
     // ====================================
     console.log('📦 Step 14: Exporting PPT file...')
     
-    const responsePromise = new Promise<{ kind: 'response', payload: { url: string, headers: Record<string, string> } }>((resolve, reject) => {
-      const onResponse = (response: any) => {
-        try {
-          const pathname = new URL(response.url()).pathname
-          const isPptxFileResponse = /\/files\/.*\/exports\/.*\.pptx/.test(pathname)
-          if (
-            response.request().method() === 'GET' &&
-            response.status() === 200 &&
-            isPptxFileResponse
-          ) {
-            page.context().off('response', onResponse)
-            clearTimeout(timeoutId)
-            resolve({
-              kind: 'response' as const,
-              payload: {
-                url: response.url(),
-                headers: response.headers()
-              }
-            })
-          }
-        } catch (error) {
-          // Ignore parse/URL errors and continue waiting
-          void error
-        }
-      }
+    const download = await downloadPptx(page)
+    const downloadPath = path.join('test-results', path.basename(download.suggestedFilename()))
+    await download.saveAs(downloadPath)
+    expect(await download.failure()).toBeNull()
 
-      const timeoutId = setTimeout(() => {
-        page.context().off('response', onResponse)
-        reject(new Error('Timeout waiting for PPTX export response'))
-      }, 60000)
-
-      page.context().on('response', onResponse)
-    })
-    
-    // Step 1: Wait for export button to be enabled (it's disabled until all images are generated)
-    const exportBtn = page.locator('button:has-text("导出")')
-    await exportBtn.waitFor({ state: 'visible', timeout: 10000 })
-    await expect(exportBtn).toBeEnabled({ timeout: 5000 })
-    
-    await exportBtn.first().click()
-    console.log('✓ Clicked export button, opening menu...')
-    
-    // Wait for dropdown menu to appear
-    await page.waitForTimeout(500)
-    
-    // Step 2: Click "导出为 PPTX" in the dropdown menu
-    const exportPptxBtn = page.locator('button:has-text("导出为 PPTX")')
-    await exportPptxBtn.waitFor({ state: 'visible', timeout: 5000 })
-    await exportPptxBtn.click()
-    console.log('✓ Clicked "导出为 PPTX" button\n')
-
-    // Step 3: In the PPTX export settings panel, click "开始导出"
-    // The dropdown only opens export options; actual download request is sent after clicking this button.
-    await expect(page.getByText('PPTX 导出设置')).toBeVisible({ timeout: 5000 })
-    await page.getByRole('button', { name: '开始导出' }).click()
-    console.log('✓ Clicked "开始导出" button')
-    
-    // Wait for download to complete (prefer download event, fallback to direct response body)
-    console.log('⏳ Waiting for PPT file download...')
-    const downloadResult = await Promise.any([
-      page.context().waitForEvent('download', { timeout: 60000 }).then((download) => ({
-        kind: 'download' as const,
-        payload: download
-      })),
-      responsePromise
-    ]).catch((error) => {
-      throw new Error(`Timeout waiting for PPT export: ${error instanceof Error ? error.message : 'unknown error'}`)
-    })
-    
-    // Save file
-    let downloadPath = path.join('test-results', 'e2e-test-output.pptx')
-    if (downloadResult.kind === 'download') {
-      const suggestedFilename = downloadResult.payload.suggestedFilename?.()
-      if (suggestedFilename) {
-        downloadPath = path.join('test-results', path.basename(suggestedFilename))
-      }
-      await downloadResult.payload.saveAs(downloadPath)
-    } else {
-      const requestResponse = await page.request.get(downloadResult.payload.url)
-      if (!requestResponse.ok()) {
-        throw new Error(`Fallback export response request failed: HTTP ${requestResponse.status()}`)
-      }
-      const body = Buffer.from(await requestResponse.body())
-      const contentDisposition = downloadResult.payload.headers['content-disposition'] || requestResponse.headers()['content-disposition'] || ''
-      const filenameMatch = /filename\*?=['"]?(?:UTF-8''([^;"']+)|([^;"']+))/i.exec(contentDisposition)
-      const encodedFilename = filenameMatch?.[1] || filenameMatch?.[2]
-      if (encodedFilename) {
-        const decoded = decodeURIComponent(encodedFilename.replace(/"/g, '').replace(/^UTF-8''/i, ''))
-        if (decoded.trim().toLowerCase().endsWith('.pptx')) {
-          downloadPath = path.join('test-results', path.basename(decoded))
-        }
-      }
-      await fs.promises.writeFile(downloadPath, body)
-    }
-    
     // Verify file exists and is not empty
     const fileExists = fs.existsSync(downloadPath)
     expect(fileExists).toBeTruthy()

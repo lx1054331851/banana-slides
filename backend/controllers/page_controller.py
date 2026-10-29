@@ -26,6 +26,8 @@ from services.task_manager import (
     get_renovation_page_sources,
     get_image_prompt_field_names,
     save_image_with_version,
+
+    resolve_page_template,
 )
 from datetime import datetime
 from pathlib import Path
@@ -76,6 +78,23 @@ def _validate_image_generation_override(generation_override):
         return bad_request("image generation override must include both channel and source")
     return None
 
+def _build_page_from_payload(project_id, data, order_index):
+    page = Page(
+        project_id=project_id,
+        order_index=order_index,
+        part=data.get('part'),
+        status='DRAFT'
+    )
+
+    if data.get('outline_content') is not None:
+        page.set_outline_content(data['outline_content'])
+
+    if data.get('description_content') is not None:
+        page.set_description_content(data['description_content'])
+        page.status = 'DESCRIPTION_GENERATED'
+
+    return page
+
 
 @page_bp.route('/<project_id>/pages', methods=['POST'])
 def create_page(project_id):
@@ -101,23 +120,20 @@ def create_page(project_id):
         if not data or 'order_index' not in data:
             return bad_request("order_index is required")
         
-        # Create new page
-        page = Page(
-            project_id=project_id,
-            order_index=data['order_index'],
-            part=data.get('part'),
-            status='DRAFT'
-        )
-        
-        if 'outline_content' in data:
-            page.set_outline_content(data['outline_content'])
-
-        if 'description_content' in data:
-            page.set_description_content(data['description_content'])
-            page.status = 'DESCRIPTION_GENERATED'
+        # Only an omitted part inherits context. Explicit null/blank values
+        # intentionally create an ungrouped page, and batch imports stay literal.
+        if 'part' not in data:
+            previous_page = Page.query.filter(
+                Page.project_id == project_id,
+                Page.order_index < data['order_index'],
+            ).order_by(Page.order_index.desc()).first()
+            if previous_page is not None:
+                data = {**data, 'part': previous_page.part}
+        page = _build_page_from_payload(project_id, data, data['order_index'])
         if 'json_refine_context' in data:
             page.set_json_refine_context(data['json_refine_context'])
 
+        page = _build_page_from_payload(project_id, data, data['order_index'])
         db.session.add(page)
         
         # Update other pages' order_index if necessary
@@ -135,6 +151,85 @@ def create_page(project_id):
         
         return success_response(page.to_dict(), status_code=201)
     
+    except Exception as e:
+        db.session.rollback()
+        return error_response('SERVER_ERROR', str(e), 500)
+
+
+@page_bp.route('/<project_id>/pages/batch', methods=['POST'])
+def create_pages_batch(project_id):
+    """
+    POST /api/projects/{project_id}/pages/batch - Add multiple pages atomically
+
+    Request body:
+    {
+        "pages": [
+            {
+                "order_index": 2,
+                "part": "optional",
+                "outline_content": {"title": "...", "points": []},
+                "description_content": {"text": "..."}
+            }
+        ]
+    }
+    """
+    try:
+        project = Project.query.get(project_id)
+
+        if not project:
+            return not_found('Project')
+
+        data = request.get_json()
+        pages_data = data.get('pages') if data else None
+
+        if not isinstance(pages_data, list) or len(pages_data) == 0:
+            return bad_request("pages must be a non-empty array")
+
+        for index, page_data in enumerate(pages_data):
+            if not isinstance(page_data, dict):
+                return bad_request(f"pages[{index}] must be an object")
+            if 'order_index' not in page_data:
+                return bad_request(f"pages[{index}].order_index is required")
+            if not isinstance(page_data['order_index'], int):
+                return bad_request(f"pages[{index}].order_index must be an integer")
+            if (
+                'outline_content' in page_data
+                and page_data['outline_content'] is not None
+                and not isinstance(page_data['outline_content'], dict)
+            ):
+                return bad_request(f"pages[{index}].outline_content must be an object")
+            if (
+                'description_content' in page_data
+                and page_data['description_content'] is not None
+                and not isinstance(page_data['description_content'], dict)
+            ):
+                return bad_request(f"pages[{index}].description_content must be an object")
+
+        ordered_pages = sorted(
+            enumerate(pages_data),
+            key=lambda item: (item[1]['order_index'], item[0])
+        )
+        insert_at = ordered_pages[0][1]['order_index']
+
+        Page.query.filter(
+            Page.project_id == project_id,
+            Page.order_index >= insert_at
+        ).update(
+            {Page.order_index: Page.order_index + len(pages_data)},
+            synchronize_session=False
+        )
+
+        created_pages = []
+        for offset, (_original_index, page_data) in enumerate(ordered_pages):
+            page = _build_page_from_payload(project_id, page_data, insert_at + offset)
+            db.session.add(page)
+            created_pages.append(page)
+
+        project.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return success_response([page.to_dict() for page in created_pages], status_code=201)
+
     except Exception as e:
         db.session.rollback()
         return error_response('SERVER_ERROR', str(e), 500)
@@ -659,9 +754,11 @@ def generate_page_image(project_id, page_id):
         file_service = FileService(current_app.config['UPLOAD_FOLDER'])
         
         # Get template path
-        ref_image_path = None
-        if use_template:
-            ref_image_path = file_service.get_template_path(project_id)
+        ref_image_path, page_style_text = resolve_page_template(page, project, file_service)
+        if not use_template:
+            ref_image_path = None
+        if ref_image_path and not Path(ref_image_path).is_file():
+            ref_image_path = None
         has_template = bool(ref_image_path)
         use_template = has_template  # normalize by actual presence
 
@@ -674,8 +771,8 @@ def generate_page_image(project_id, page_id):
         
         # 检查是否有模板图片或风格描述/风格JSON
         # 如果都没有，则返回错误
-        if not has_template and not project.template_style and not effective_style_json:
-            return bad_request("No template image or style description found for project")
+        if not has_template and not page_style_text and not project.template_style and not effective_style_json:
+            return bad_request("No template image or style description found for page")
         
         # Generate prompt
         page_data = page.get_outline_content() or {}

@@ -6,6 +6,7 @@ import {
   exportEditablePPTX as apiExportEditablePPTX,
   exportVideo as apiExportVideo,
 } from '@/api/endpoints';
+import type { Page } from '@/types';
 import type { ExportTask, ExportTaskType } from '@/store/useExportTasksStore';
 import { normalizeErrorMessage } from '@/utils';
 
@@ -13,6 +14,7 @@ type ToastType = 'success' | 'error' | 'warning' | 'info';
 
 type UseSlidePreviewExportParams = {
   projectId?: string;
+  pages: Page[];
   t: (key: string, options?: Record<string, unknown>) => string;
   show: (options: { message: string; type?: ToastType | string; duration?: number }) => void;
   addTask: (task: Omit<ExportTask, 'createdAt'>) => void;
@@ -29,6 +31,7 @@ type UseSlidePreviewExportParams = {
 
 export const useSlidePreviewExport = ({
   projectId,
+  pages,
   t,
   show,
   addTask,
@@ -44,6 +47,12 @@ export const useSlidePreviewExport = ({
     if (!projectId) return;
 
     const pageIds = getSelectedPageIdsForExport();
+    const selectedPages = pages.filter((page) => !pageIds || (page.id && pageIds.includes(page.id)));
+    const missingCount = selectedPages.filter((page) => !page.generated_image_path && !page.preview_image_path).length;
+    if (missingCount && !(type === 'video' && videoExportOptions?.includeNoImagePages)) {
+      show({ message: `导出范围内有 ${missingCount} 页尚未生成图片，请先生成图片。`, type: 'warning' });
+      return;
+    }
     const exportTaskId = `export-${Date.now()}`;
 
     try {
@@ -111,6 +120,7 @@ export const useSlidePreviewExport = ({
     getSelectedPageIdsForExport,
     pollExportTask,
     projectId,
+    pages,
     setShowExportMenu,
     setShowExportTasksPanel,
     show,

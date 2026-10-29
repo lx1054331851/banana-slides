@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { History as HistoryIcon, LayoutGrid, List, RefreshCw, Trash2 } from 'lucide-react';
+import { History as HistoryIcon, LayoutGrid, List, RefreshCw, Trash2, AlertTriangle, Inbox } from 'lucide-react';
 import { Button, Loading, Card, PageHeader, PAGE_CONTAINER_CLASS, Pagination, useToast, useConfirm } from '@/components/shared';
 import { ProjectCard } from '@/components/history/ProjectCard';
 import { useProjectStore } from '@/store/useProjectStore';
@@ -128,7 +128,7 @@ export const History: React.FC = () => {
 
   useEffect(() => {
     loadProjects(currentPage);
-  }, [currentPage, pageSize]);
+  }, [currentPage, loadProjects]);
 
   const handleBack = useCallback(() => {
     if (typeof window !== 'undefined' && window.history.length > 1) {
@@ -505,7 +505,7 @@ export const History: React.FC = () => {
           </div>
         ) : error ? (
           <Card className="p-8 text-center">
-            <div className="text-6xl mb-4">⚠️</div>
+            <AlertTriangle size={48} className="mx-auto mb-4 text-amber-500" strokeWidth={1.5} />
             <p className="text-gray-600 dark:text-foreground-tertiary mb-4">{error}</p>
             <Button variant="primary" onClick={() => loadProjects(currentPage)}>
               {t('common.retry')}
@@ -513,7 +513,7 @@ export const History: React.FC = () => {
           </Card>
         ) : projects.length === 0 ? (
           <Card className="p-12 text-center">
-            <div className="text-6xl mb-4">📭</div>
+            <Inbox size={48} className="mx-auto mb-4 text-gray-400 dark:text-foreground-tertiary" strokeWidth={1.5} />
             <h3 className="text-xl font-semibold text-gray-700 dark:text-foreground-secondary mb-2">
               {t('history.noProjects')}
             </h3>

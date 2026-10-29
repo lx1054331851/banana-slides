@@ -1,4 +1,6 @@
-export const settingsI18n = {
+import { settingsI18n as upstreamSettingsI18n } from '@/components/settings/settingsI18n';
+
+const customSettingsI18n = {
   zh: {
     nav: { back: '返回', home: '主页', refresh: '刷新', loading: '刷新中...' },
     settings: {
@@ -376,3 +378,5 @@ export const settingsI18n = {
     }
   }
 };
+
+export const settingsI18n = Object.fromEntries(Object.entries(customSettingsI18n).map(([language, messages]) => [language, { ...messages, settings: { ...messages.settings, about: { ...(upstreamSettingsI18n as any)[language]?.settings?.about, ...(messages.settings as any).about } } }]));

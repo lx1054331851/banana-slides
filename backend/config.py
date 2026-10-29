@@ -95,9 +95,9 @@ class Config:
     
     # AI服务配置
     GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY', '')
-    GOOGLE_API_BASE = os.getenv('GOOGLE_API_BASE', '')
+    GOOGLE_API_BASE = os.getenv('GOOGLE_API_BASE') or ''
     
-    # Provider format: gemini | openai | vertex | lazyllm
+    # Provider format: gemini | openai | volcengine | vertex | lazyllm
     AI_PROVIDER_FORMAT = os.getenv('AI_PROVIDER_FORMAT', 'gemini')
 
     # Google Cloud Vertex AI (requires AI_PROVIDER_FORMAT=vertex)
@@ -136,13 +136,20 @@ class Config:
     AZURE_OPENAI_ENDPOINT = os.getenv('AZURE_OPENAI_ENDPOINT', '')  # 例如 https://{resource}.openai.azure.com
     AZURE_OPENAI_API_VERSION = os.getenv('AZURE_OPENAI_API_VERSION', '2024-10-21')
 
+    # Global output limit for text and image-understanding responses.
+    TEXT_MAX_OUTPUT_TOKENS = int(os.getenv("TEXT_MAX_OUTPUT_TOKENS", os.getenv("ANTHROPIC_MAX_TOKENS", "32768")))
+
+    # 火山方舟 Agent Plans（OpenAI-compatible）
+    VOLCENGINE_API_KEY = os.getenv('VOLCENGINE_API_KEY', '') or os.getenv('ARK_API_KEY', '')
+    VOLCENGINE_API_BASE = os.getenv('VOLCENGINE_API_BASE') or 'https://ark.cn-beijing.volces.com/api/plan/v3'
+
     # Anthropic 格式专用配置（当 AI_PROVIDER_FORMAT=anthropic 时使用）
     # 支持 ANTHROPIC_AUTH_TOKEN 作为 ANTHROPIC_API_KEY 的别名
     # 支持 ANTHROPIC_BASE_URL 作为 ANTHROPIC_API_BASE 的别名
     ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '') or os.getenv('ANTHROPIC_AUTH_TOKEN', '')
     ANTHROPIC_API_BASE = os.getenv('ANTHROPIC_API_BASE', '') or os.getenv('ANTHROPIC_BASE_URL', 'https://api.anthropic.com')
     ANTHROPIC_VERSION = os.getenv('ANTHROPIC_VERSION', '2023-06-01')
-    ANTHROPIC_MAX_TOKENS = int(os.getenv('ANTHROPIC_MAX_TOKENS', '8192'))
+    ANTHROPIC_MAX_TOKENS = TEXT_MAX_OUTPUT_TOKENS  # legacy alias
 
     # Lazyllm 格式专用配置（当 AI_PROVIDER_FORMAT=lazyllm 时使用）
     TEXT_MODEL_SOURCE = os.getenv('TEXT_MODEL_SOURCE', '')                   # 文本生成模型厂商（留空则跟随全局 AI_PROVIDER_FORMAT）
@@ -198,9 +205,14 @@ class Config:
     STYLE_PREVIEW_SLIDE_RETRIES = int(os.getenv('STYLE_PREVIEW_SLIDE_RETRIES', '1'))
     # 风格推荐（文本 JSON）重试次数（不含 provider 内部重试）
     STYLE_PREVIEW_RECOMMENDATION_RETRIES = int(os.getenv('STYLE_PREVIEW_RECOMMENDATION_RETRIES', '5'))
+
+    # 图片质量档位（OpenAI 兼容图片模型: auto/low/medium/high/xhigh/max）
+    # xhigh / max 需要 gpt-image-2.5 及更新模型，旧模型会自动回落到 high
+    IMAGE_QUALITY = os.getenv('IMAGE_QUALITY', 'auto')
     
     # 日志配置
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+    WERKZEUG_LOG_LEVEL = (os.getenv('WERKZEUG_LOG_LEVEL') or 'INFO').strip().upper()
     LOG_GENERATION_DETAILS = os.getenv('LOG_GENERATION_DETAILS', 'true').lower() in ('1', 'true', 'yes', 'y', 'on')
     IMAGE_AUDIT_LOG_PATH = os.getenv('IMAGE_AUDIT_LOG_PATH', os.path.join(BASE_DIR, 'image_audit.log'))
     

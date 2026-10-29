@@ -7,7 +7,7 @@ import os
 import time
 from typing import Generator, Any
 from openai import APIConnectionError, APITimeoutError, APIStatusError, RateLimitError
-from .base import TextProvider, strip_think_tags
+from .base import get_text_output_limit, TextProvider, strip_think_tags
 from config import get_config
 from ..openai_client import make_openai_client
 
@@ -82,7 +82,7 @@ class OpenAITextProvider(TextProvider):
         
         Args:
             api_key: API key
-            api_base: API base URL (e.g., https://aihubmix.com/v1)
+            api_base: API base URL (e.g., https://api.inferera.com/v1)
             model: Model name to use
         """
         cfg = get_config()
@@ -101,7 +101,15 @@ class OpenAITextProvider(TextProvider):
         self.azure_endpoint = azure_endpoint
         self.max_attempts = max(int(getattr(cfg, "OPENAI_MAX_RETRIES", 0)) + 1, 1)
         self.text_api_mode = str(getattr(cfg, "OPENAI_TEXT_API_MODE", "chat_completions") or "chat_completions").strip().lower()
+        self.request_timeout_seconds = cfg.OPENAI_TIMEOUT
     
+    def _output_limit_params(self) -> dict:
+        # OpenAI reasoning families use max_completion_tokens; compatible
+        # Claude/Gemini and older chat models use max_tokens.
+        model = self.model.lower().rsplit('/', 1)[-1]
+        key = 'max_completion_tokens' if model.startswith(('gpt-5', 'o1', 'o3', 'o4')) else 'max_tokens'
+        return {key: get_text_output_limit()}
+
     def generate_text(self, prompt: str, thinking_budget: int = 0) -> str:
         """
         Generate text using OpenAI SDK
@@ -113,20 +121,23 @@ class OpenAITextProvider(TextProvider):
         Returns:
             Generated text
         """
-        for attempt in range(1, self.max_attempts + 1):
+        for attempt in range(1, getattr(self, 'max_attempts', 1) + 1):
             try:
-                if self.text_api_mode == "responses":
+                if getattr(self, 'text_api_mode', 'chat_completions') == "responses":
                     response = self.client.responses.create(
                         model=self.model,
+                        max_output_tokens=get_text_output_limit(),
                         input=prompt,
                     )
                     return strip_think_tags(_extract_responses_output_text(response))
 
                 response = self.client.chat.completions.create(
                     model=self.model,
+                    **self._output_limit_params(),
                     messages=[
                         {"role": "user", "content": prompt}
-                    ]
+                    ],
+                    stream=False,
                 )
                 return strip_think_tags(response.choices[0].message.content)
             except Exception as exc:
@@ -143,15 +154,16 @@ class OpenAITextProvider(TextProvider):
                     )
                     time.sleep(delay)
                     continue
-                raise _rewrite_openai_text_error(exc, azure_endpoint=self.azure_endpoint, model=self.model) from exc
+                raise _rewrite_openai_text_error(exc, azure_endpoint=getattr(self, 'azure_endpoint', None), model=self.model) from exc
 
     def generate_text_stream(self, prompt: str, thinking_budget: int = 0) -> Generator[str, None, None]:
         """Stream text using OpenAI SDK with stream=True."""
-        for attempt in range(1, self.max_attempts + 1):
+        for attempt in range(1, getattr(self, 'max_attempts', 1) + 1):
             emitted_any_chunk = False
             try:
                 response = self.client.chat.completions.create(
                     model=self.model,
+                    **self._output_limit_params(),
                     messages=[{"role": "user", "content": prompt}],
                     stream=True,
                 )
@@ -180,7 +192,7 @@ class OpenAITextProvider(TextProvider):
                     )
                     time.sleep(delay)
                     continue
-                raise _rewrite_openai_text_error(exc, azure_endpoint=self.azure_endpoint, model=self.model) from exc
+                raise _rewrite_openai_text_error(exc, azure_endpoint=getattr(self, 'azure_endpoint', None), model=self.model) from exc
 
     def stream_text(self, prompt: str, thinking_budget: int = 0) -> Generator[str, None, None]:
         """Backward-compatible alias for legacy call sites."""
@@ -208,6 +220,7 @@ class OpenAITextProvider(TextProvider):
 
         response = self.client.chat.completions.create(
             model=self.model,
+            **self._output_limit_params(),
             messages=[{
                 "role": "user",
                 "content": [
@@ -216,6 +229,7 @@ class OpenAITextProvider(TextProvider):
                 ],
             }],
             temperature=0.3,
+            stream=False,
         )
         message_content = response.choices[0].message.content
         if isinstance(message_content, str):
