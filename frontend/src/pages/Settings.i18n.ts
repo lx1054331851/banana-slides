@@ -379,4 +379,7 @@ const customSettingsI18n = {
   }
 };
 
-export const settingsI18n = Object.fromEntries(Object.entries(customSettingsI18n).map(([language, messages]) => [language, { ...messages, settings: { ...messages.settings, about: { ...(upstreamSettingsI18n as any)[language]?.settings?.about, ...(messages.settings as any).about } } }]));
+export const settingsI18n = {
+  zh: { ...customSettingsI18n.zh, settings: { ...customSettingsI18n.zh.settings, about: { ...upstreamSettingsI18n.zh.settings.about, ...(customSettingsI18n.zh.settings as any).about } } },
+  en: { ...customSettingsI18n.en, settings: { ...customSettingsI18n.en.settings, about: { ...upstreamSettingsI18n.en.settings.about, ...(customSettingsI18n.en.settings as any).about } } },
+};

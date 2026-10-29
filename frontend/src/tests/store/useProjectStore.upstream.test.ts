@@ -287,7 +287,7 @@ describe('useProjectStore 流式大纲项目隔离', () => {
     let emitDone!: (data: any) => void
     let resolveStream!: () => void
     vi.mocked(generateOutlineStream).mockImplementationOnce(
-      ((projectId: string, callbacks: any) => new Promise<void>((resolve) => {
+      ((_projectId: string, callbacks: any) => new Promise<void>((resolve) => {
         emitPage = callbacks.onPage
         emitDone = callbacks.onDone
         resolveStream = resolve
@@ -321,7 +321,7 @@ describe('useProjectStore 流式大纲项目隔离', () => {
     let emitError!: (message: string) => void
     let resolveStream!: () => void
     vi.mocked(generateOutlineStream).mockImplementationOnce(
-      ((projectId: string, callbacks: any) => new Promise<void>((resolve) => {
+      ((_projectId: string, callbacks: any) => new Promise<void>((resolve) => {
         emitError = callbacks.onError
         resolveStream = resolve
       })) as any

@@ -660,9 +660,9 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
             {activePreviewUrl ? (
               <img
                 src={getImageUrl(activePreviewUrl)}
-                alt={displaySelection.name}
+                alt={displaySelection?.name || ''}
                 className={`w-full h-full ${
-                  displaySelection.kind === 'material'
+                  displaySelection?.kind === 'material'
                     ? 'object-cover'
                     : 'object-contain bg-white p-3'
                 }`}

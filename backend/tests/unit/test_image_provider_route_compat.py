@@ -22,7 +22,8 @@ def test_gemini_profile_with_openai_image_compat_uses_openai_provider():
 
     provider = get_image_provider(route=route)
 
-    assert isinstance(provider, OpenAIImageProvider)
+    from services import ai_providers
+    assert isinstance(provider, ai_providers.OpenAIImageProvider)
     assert provider.model == 'gemini-3.1-flash-image-preview'
     assert provider.endpoint_mode == 'chat'
     assert provider.extra_body_mode == 'google_image_config'

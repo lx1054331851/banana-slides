@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowUp, ArrowUpRight, Info, RefreshCw, CheckCircle } from 'lucide-react';
-import { useT } from '@/hooks/useT';
 import { appVersion } from '@/utils/appVersion';
 import { isDesktop } from '@/utils';
 import type { DesktopAutoUpdateSettings, DesktopUpdateCheckResult, DesktopUpdateElectronApi } from '@/types/desktopUpdate';
@@ -8,7 +7,7 @@ import { Button, Markdown, Modal } from '@/components/shared';
 import * as api from '@/api/endpoints';
 import type { UpdateCheckInfo } from '@/api/endpoints';
 
-type SettingsTranslator = ReturnType<typeof useT>;
+type SettingsTranslator = (key: string, vars?: Record<string, string>) => string;
 
 interface UpdateResultView {
   status: 'up_to_date' | 'update_available' | 'downloading' | 'update_downloaded' | 'unknown';

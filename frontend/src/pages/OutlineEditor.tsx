@@ -30,7 +30,7 @@ import { Button, Loading, useConfirm, useToast, AiRefineInput, FilePreviewModal,
 import { MarkdownTextarea, type MarkdownTextareaRef } from '@/components/shared/MarkdownTextarea';
 import { OutlineCard } from '@/components/outline/OutlineCard';
 import { useProjectStore } from '@/store/useProjectStore';
-import { refineOutline, updateProject, addPage, parseDescriptionToPages, type Material } from '@/api/endpoints';
+import { refineOutline, updateProject, parseDescriptionToPages, type Material } from '@/api/endpoints';
 import { useImagePaste, buildMaterialsMarkdown } from '@/hooks/useImagePaste';
 import { exportProjectToMarkdown } from '@/utils/projectUtils';
 import type { Page } from '@/types';
@@ -40,6 +40,7 @@ const SortableCard: React.FC<{
   page: Page;
   index: number;
   projectId?: string;
+  scenario?: 'ppt' | 'data_report';
   showToast: (props: { message: string; type: 'success' | 'error' | 'info' | 'warning' }) => void;
   onUpdate: (data: Partial<Page>) => void;
   onDelete: () => void;

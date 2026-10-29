@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Key, Zap, Save, RotateCcw, Globe, FileText, Brain, HelpCircle, Link2, RefreshCw } from 'lucide-react';
+import { Key, Zap, Save, RotateCcw, Globe, FileText, Brain, HelpCircle, Link2 } from 'lucide-react';
 import { useT } from '@/hooks/useT';
 
 import { settingsI18n } from './Settings.i18n';
 import { getActiveSettingsSectionId, type SettingsSectionBounds } from './Settings.scrollSpy';
 import { Button, Input, Card, Loading, useToast, useConfirm } from '@/components/shared';
 import * as api from '@/api/endpoints';
-import type { ProviderProfileSummary } from '@/api/endpoints';
+import type { ProviderProfileSummary } from '@/types';
 import { OUTPUT_LANGUAGE_OPTIONS } from '@/api/endpoints';
 import type { Settings as SettingsType } from '@/types';
 import {
@@ -16,7 +16,7 @@ import {
   getSourceForImageChannel,
   getSupportedResolutionsForChannelModel,
 } from '@/config/projectAiChannels';
-import { getSupportedResolutionsForModel } from '@/config/projectAiDefaults';
+import { getImageSourceForModel, getSupportedResolutionsForModel } from '@/config/projectAiDefaults';
 import { SettingsOpenAIOAuthSection } from './components/SettingsOpenAIOAuthSection';
 import { SettingsUpstreamOptions } from './components/SettingsUpstreamOptions';
 import { SettingsModelConfigSection } from './components/SettingsModelConfigSection';
@@ -25,7 +25,6 @@ import { useSettingsOpenAIOAuth } from './hooks/useSettingsOpenAIOAuth';
 import {
   API_KEY_PROVIDERS,
   GLOBAL_PROVIDER_SOURCES,
-  LAZYLLM_SOURCES,
   SETTINGS_SECTION_IDS,
   GlobalVendorKeyInput,
   formDataFromSettings,
@@ -1081,6 +1080,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
             ),
           })}
 
+          <SettingsAbout t={t} />
           <SettingsUpstreamOptions values={formData} onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))} />
           <Card className="p-4 md:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

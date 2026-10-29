@@ -119,6 +119,7 @@ def test_image_profile_source_can_supply_azure_endpoint(monkeypatch):
 
 
 def test_openai_image_provider_uses_only_explicit_azure_params(monkeypatch):
+    from services.ai_providers.image.openai_provider import OpenAIImageProvider
     captured = {}
 
     def fake_make_openai_client(**kwargs):
