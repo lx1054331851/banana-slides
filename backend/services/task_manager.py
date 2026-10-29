@@ -69,13 +69,18 @@ def _append_extra_fields(
     if not extra_fields or not isinstance(extra_fields, dict):
         return safe_desc
     allowed = allowed_fields if allowed_fields is not None else get_image_prompt_field_names()
+    legacy_equiv = {
+        **Settings.LEGACY_FIELD_EQUIV,
+        '视觉建议': '配图与素材',
+        '备注': '演讲者备注',
+    }
     parts = []
     if safe_desc:
         parts.append(safe_desc)
     for name, value in extra_fields.items():
         if value is None or str(value).strip() == "":
             continue
-        if name in allowed or Settings.LEGACY_FIELD_EQUIV.get(name) in allowed:
+        if name in allowed or legacy_equiv.get(name) in allowed:
             parts.append(f"{name}：{value}")
     return '\n'.join(parts)
 

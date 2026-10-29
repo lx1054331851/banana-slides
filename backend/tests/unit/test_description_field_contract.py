@@ -307,7 +307,7 @@ def test_parse_outline_keeps_opening_chapter_without_cover():
     assert pages[1].get('part') == '第一章'
 
 
-@pytest.mark.parametrize('legacy_name', ['视觉元素', '视觉焦点', '排版布局', '排版建议'])
+@pytest.mark.parametrize('legacy_name', ['视觉元素', '视觉焦点', '排版布局', '排版建议', '视觉建议'])
 def test_legacy_fields_still_reach_image_prompt(legacy_name):
     """存量项目重新生图时，旧字段名不能因为改名而静默失效。"""
     result = _append_extra_fields(
@@ -320,9 +320,10 @@ def test_legacy_fields_still_reach_image_prompt(legacy_name):
 
 
 def test_legacy_speaker_notes_still_excluded():
+    """新旧演讲备注均不应默认进入生图提示词。"""
     result = _append_extra_fields(
         '页面正文',
-        {'extra_fields': {'演讲者备注': '口头补充'}},
+        {'extra_fields': {'演讲者备注': '口头补充', '备注': '旧版口头补充'}},
         set(Settings.DEFAULT_IMAGE_PROMPT_FIELDS),
     )
 

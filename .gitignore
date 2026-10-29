@@ -136,3 +136,7 @@ frontend/cap-real.mjs
 
 # Isolated issue regression evidence
 /output/issue-verification/
+
+# 二开同步核对与原有说明
+!docs/lee-upstream-sync-20261029.md
+!docs/lee-new-original-readme.md
