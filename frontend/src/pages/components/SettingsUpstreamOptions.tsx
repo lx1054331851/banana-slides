@@ -21,7 +21,7 @@ interface SettingsUpstreamOptionsProps {
 /** Expose upstream generation controls while retaining the custom settings layout. */
 export const SettingsUpstreamOptions: React.FC<SettingsUpstreamOptionsProps> = ({ values, onChange }) => {
   const source = values.image_model_source || values.ai_provider_format;
-  const showProtocol = ['openai', 'azure', 'volcengine', 'ppio', 'aiping'].includes(source);
+  const showProtocol = ['openai', 'azure', 'azure-openai', 'volcengine', 'ppio', 'aiping'].includes(source);
   const showQuality = (showProtocol || source === 'codex') && values.image_model.toLowerCase().startsWith('gpt-image');
   return (
   <Card className="p-4 md:p-5 space-y-4">

@@ -1081,7 +1081,7 @@ export const Settings: React.FC<SettingsProps> = ({ refreshToken = 0, onLoadingC
           })}
 
           <SettingsAbout t={t} />
-          <SettingsUpstreamOptions values={formData} onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))} />
+          <SettingsUpstreamOptions values={{ ...formData, image_model_source: providerProfiles.find((profile) => `profile:${profile.id}` === formData.image_model_source)?.provider || formData.image_model_source }} onChange={(patch) => setFormData((prev) => ({ ...prev, ...patch }))} />
           <Card className="p-4 md:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Button

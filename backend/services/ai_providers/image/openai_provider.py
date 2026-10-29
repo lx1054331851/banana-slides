@@ -1045,7 +1045,7 @@ class OpenAIImageProvider(NativeOpenAIImageMixin, ImageProvider):
         protocol = self.image_api_protocol
         if protocol == 'chat' and self._native_protocol_configured:
             return self._call_via_chat_completions(prompt, refs, aspect_ratio, resolution)
-        if ((self._native_protocol_configured and (protocol == 'images' or (protocol == 'auto' and native_model)))
+        if ((self._native_protocol_configured and (protocol == 'images' or (protocol == 'auto' and native_model and not self.channel and not self.azure_endpoint)))
                 or (native_model and not self.channel and not self.azure_endpoint and not self._is_gpt_image_2(self.model))):
             if refs and self.model.lower().startswith(_DOUBAO_SEEDREAM_PREFIX):
                 return self._call_via_chat_completions(prompt, refs, aspect_ratio, resolution)

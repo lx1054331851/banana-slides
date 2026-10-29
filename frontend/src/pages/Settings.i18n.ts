@@ -380,6 +380,6 @@ const customSettingsI18n = {
 };
 
 export const settingsI18n = {
-  zh: { ...customSettingsI18n.zh, settings: { ...customSettingsI18n.zh.settings, about: { ...upstreamSettingsI18n.zh.settings.about, ...(customSettingsI18n.zh.settings as any).about } } },
-  en: { ...customSettingsI18n.en, settings: { ...customSettingsI18n.en.settings, about: { ...upstreamSettingsI18n.en.settings.about, ...(customSettingsI18n.en.settings as any).about } } },
+  zh: { ...customSettingsI18n.zh, settings: { ...customSettingsI18n.zh.settings, sections: { ...upstreamSettingsI18n.zh.settings.sections, ...customSettingsI18n.zh.settings.sections }, about: { ...upstreamSettingsI18n.zh.settings.about, ...(customSettingsI18n.zh.settings as any).about } } },
+  en: { ...customSettingsI18n.en, settings: { ...customSettingsI18n.en.settings, sections: { ...upstreamSettingsI18n.en.settings.sections, ...customSettingsI18n.en.settings.sections }, about: { ...upstreamSettingsI18n.en.settings.about, ...(customSettingsI18n.en.settings as any).about } } },
 };
