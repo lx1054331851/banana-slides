@@ -130,10 +130,8 @@ def test_openai_image_provider_uses_only_explicit_azure_params(monkeypatch):
     monkeypatch.setenv(
         "AZURE_OPENAI_ENDPOINT", "https://example.cognitiveservices.azure.com"
     )
-    monkeypatch.setattr(
-        "services.ai_providers.image.openai_provider.make_openai_client",
-        fake_make_openai_client,
-    )
+    # Other tests reload provider modules; patch the globals used by this constructor.
+    monkeypatch.setitem(OpenAIImageProvider.__init__.__globals__, "make_openai_client", fake_make_openai_client)
 
     OpenAIImageProvider(
         api_key="image-key",
